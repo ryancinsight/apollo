@@ -33,6 +33,7 @@ thiserror = { workspace = true }
 apollo-bench = { path = "../apollo-bench" }
 proptest.workspace = true
 rustfft.workspace = true
+themis = { workspace = true }
 phastft.workspace = true
 realfft.workspace = true
 

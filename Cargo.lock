@@ -148,6 +148,7 @@ dependencies = [
  "rustc-hash 2.1.3",
  "rustfft",
  "serde",
+ "themis-topology",
  "thiserror 2.0.20",
 ]
 
@@ -2363,7 +2364,7 @@ dependencies = [
 [[package]]
 name = "themis-topology"
 version = "0.10.1"
-source = "git+https://github.com/ryancinsight/themis#9fd113fd03bb8006f6a8e4c3e6ac683f7910628a"
+source = "git+https://github.com/ryancinsight/themis#1f55611b2ea7dd6f8402b839d7f19bba2bd950fb"
 dependencies = [
  "melinoe",
 ]

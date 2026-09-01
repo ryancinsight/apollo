@@ -10,7 +10,7 @@
 
 use super::route::{FourStep, PotRoute};
 use super::strategies::StockhamAutosort;
-use crate::application::execution::kernel::core_class;
+use crate::application::execution::kernel::measurement_cores;
 use crate::application::execution::kernel::mixed_radix::MixedRadixScalar;
 use eunomia::Complex64;
 use hermes_simd::{ProcessorBinding, ProcessorIndex};
@@ -38,7 +38,7 @@ fn route_cost_by_core_type() {
     let mut work = src.clone();
     let tw = <f64 as MixedRadixScalar>::cached_twiddle_fwd(n);
 
-    let Some(selection) = core_class::selected() else {
+    let Some(selection) = measurement_cores::selected() else {
         eprintln!("host reports no processor class information; core matrix not measurable");
         return;
     };
@@ -56,7 +56,7 @@ fn route_cost_by_core_type() {
         let four_step = best::<FourStep>(&src, &mut work, &tw);
         println!(
             "CORE cpu={landed:<2} ({}) stockham={stockham:>9.0}ns four_step={four_step:>9.0}ns",
-            core.class().label(),
+            core.label(),
         );
     }
 }

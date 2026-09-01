@@ -54,6 +54,15 @@ Change-class tags: [patch] backward-compatible fix, [minor] additive non-breakin
 
 ### Changed
 
+- [patch] `apollo-fft`'s pinned measurement instruments select their processors
+  through themis (`themis-topology` 0.10.1) instead of the interim
+  `kernel::core_class` module, which is deleted with its hand-rolled
+  `GetLogicalProcessorInformationEx` query and its non-Windows arm. Core
+  efficiency class now has one home across the stack. Selection, census
+  printing, and skip-on-absence behaviour are unchanged; the census additionally
+  prints each processor's themis rank and now precedes the three single-core
+  probes that omitted it. Test-only surface; no public API change. See ADR 0043.
+
 - [patch] [perf] `apollo-mellin` passes real log-grid samples directly to
   Hermes' real-by-interleaved-complex reduction instead of retaining a second
   2N-lane f64 scratch buffer. This removes 16N retained bytes per active worker

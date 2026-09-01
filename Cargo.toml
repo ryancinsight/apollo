@@ -97,6 +97,10 @@ moirai = { package = "moirai-runtime", version = "0.5.0", git = "https://github.
 serde = { version = "1.0.228", features = ["derive"] }
 serde_json = "1.0.150"
 syn = { version = "2.0.118", features = ["full"] }
+# themis owns CPU topology across the stack: NUMA nodes, cache levels, and the
+# per-processor efficiency class the pinned measurement instruments select on
+# (ADR 0043). `std` supplies the platform detection backends.
+themis = { package = "themis-topology", version = "0.10.1", git = "https://github.com/ryancinsight/themis", default-features = false, features = ["std"] }
 thiserror = "2.0.18"
 # Hephaestus 0.15 owns Apollo's WGPU 30 device contract.
 

@@ -19,16 +19,21 @@
   that lands — `ATLAS-APOLLO-CORE-CLASS-UPSTREAM-2026-09-01`.
 - **Integrator:** Claude session 5050c72a.
 
-## ATLAS-APOLLO-CORE-CLASS-UPSTREAM-2026-09-01 — Consume themis core efficiency class [patch] — blocked
+## ATLAS-APOLLO-CORE-CLASS-UPSTREAM-2026-09-01 — Consume themis core efficiency class [patch] — done 2026-09-01
 
-- **Outcome:** `kernel::core_class`'s Windows query is deleted and the probes
-  bind processors selected through the themis topology API, so core class has
-  one home across the stack instead of a hand-rolled constant per repository.
-- **Blocker:** `themis-topology` does not yet expose core efficiency class.
-  **Re-open trigger:** that API lands and apollo's themis requirement advances
-  to it.
-- **Non-goals:** widening apollo's interim module in the meantime; it stays
-  minimal precisely so it can be deleted outright.
+- **Delivered:** `kernel::core_class` is deleted outright — Windows FFI,
+  non-Windows arm, and local class enum — and apollo takes a direct
+  `themis-topology` 0.10.1 dev-dependency. The nine probe sites select through
+  `kernel::measurement_cores`, which holds only what themis does not own:
+  the representative-per-class rule and the census print. No shim, wrapper, or
+  re-export of the old name. ADR 0043 carries the discharge note.
+- **Verified:** `backend_matrix` re-run reproduces ADR 0042's selection
+  (cpu 1 performance, cpu 3 efficiency) and its table — f64 s/a 0.227–0.542 on
+  the performance core, scalar beating AVX at every probed size; all ten pinned
+  probes select cpu 1 / cpu 3 and never cpu 2. `-D warnings` clippy clean on
+  both `x86_64-pc-windows-msvc` and `x86_64-unknown-linux-gnu`; the
+  `expect(dead_code)` the interim module needed on non-Windows is gone with it.
+- **Integrator:** Claude session 5050c72a.
 
 ## ATLAS-APOLLO-INVERTED-CORE-CLAIMS-2026-09-01 — Sweep merged claims resting on the swapped core labels [patch] — todo
 
