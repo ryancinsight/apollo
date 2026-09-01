@@ -206,8 +206,10 @@ fn gather_sum_slice<F: MixedRadixScalar<Complex = eunomia::Complex<F>>>(
     padded: &mut [F::Complex],
     gather: &[usize],
 ) -> F::Complex {
-    debug_assert!(padded.len() >= gather.len());
-    debug_assert!(data.len() > gather.len());
+    assert!(
+        padded.len() >= gather.len() && data.len() > gather.len(),
+        "invariant: the Rader gather addresses data[1..=len] and padded[..len]"
+    );
 
     let len = gather.len();
 
@@ -219,6 +221,7 @@ fn gather_sum_slice<F: MixedRadixScalar<Complex = eunomia::Complex<F>>>(
     let mut s3 = F::complex(0.0, 0.0);
     let mut i = 0usize;
     while i < len4 {
+        // SAFETY: `i + 4 <= len4 <= len < data.len()` by the entry assert.
         unsafe {
             s0 += *data.get_unchecked(1 + i);
             s1 += *data.get_unchecked(2 + i);
@@ -229,6 +232,7 @@ fn gather_sum_slice<F: MixedRadixScalar<Complex = eunomia::Complex<F>>>(
     }
     let mut sum_x = (s0 + s1) + (s2 + s3);
     while i < len {
+        // SAFETY: `1 + i <= len < data.len()` by the entry assert.
         unsafe {
             sum_x += *data.get_unchecked(1 + i);
         }
@@ -249,14 +253,19 @@ fn scatter_slice<F: MixedRadixScalar<Complex = eunomia::Complex<F>>>(
     x0: F::Complex,
     generator_order: &[usize],
 ) {
-    debug_assert!(padded.len() >= generator_order.len());
-    debug_assert!(data.len() > generator_order.len());
+    assert!(
+        padded.len() >= generator_order.len() && data.len() > generator_order.len(),
+        "invariant: the Rader scatter addresses data[1..=len] and padded[..len]"
+    );
 
     let len = generator_order.len();
     if len == 0 {
         return;
     }
 
+    // SAFETY: every `generator_order` value lies in `1..n` with
+    // `n = len + 1 <= data.len()` (asserted where the table is built), and
+    // the `padded` index `q` stays below `len` by the loop bounds.
     unsafe {
         *data.get_unchecked_mut(*generator_order.get_unchecked(0)) = x0 + *padded.get_unchecked(0);
     }
@@ -264,6 +273,8 @@ fn scatter_slice<F: MixedRadixScalar<Complex = eunomia::Complex<F>>>(
     let len4 = 1 + ((len - 1) / 4) * 4;
     let mut q = 1usize;
     while q < len4 {
+        // SAFETY: as above; `1 <= q + 3 < len4 <= len` keeps `len - q - 3`
+        // and `q + 3` inside both tables.
         unsafe {
             *data.get_unchecked_mut(*generator_order.get_unchecked(len - q)) =
                 x0 + *padded.get_unchecked(q);
@@ -277,6 +288,7 @@ fn scatter_slice<F: MixedRadixScalar<Complex = eunomia::Complex<F>>>(
         q += 4;
     }
     while q < len {
+        // SAFETY: as above, for the tail `1 <= q < len`.
         unsafe {
             *data.get_unchecked_mut(*generator_order.get_unchecked(len - q)) =
                 x0 + *padded.get_unchecked(q);
@@ -319,6 +331,12 @@ fn build_generator_order(n: usize, g: usize) -> Vec<usize> {
         order.push(g_idx);
         g_idx = (g_idx * g) % n;
     }
+    // The scatter and gather index `data` with these values unchecked; the
+    // build-time check is the release-mode half of that contract.
+    assert!(
+        order.iter().all(|&index| (1..n).contains(&index)),
+        "invariant: generator powers modulo a prime stay in 1..n"
+    );
     order
 }
 

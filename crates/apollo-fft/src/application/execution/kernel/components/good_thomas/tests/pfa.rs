@@ -1,5 +1,6 @@
 use super::super::{ordered_rader_n1_config, pfa_fft_natural_inplace, ORDERED_RADER_SKIP_PRIMES};
 use crate::application::execution::kernel::direct::{dft_forward, dft_inverse};
+use crate::application::execution::kernel::mixed_radix::caches::cached_pfa_perm;
 use crate::application::execution::kernel::test_utils::max_abs_err_64;
 use eunomia::Complex64;
 use proptest::prelude::*;
@@ -204,5 +205,36 @@ proptest! {
         check_pfa(7, 5)?;
         check_pfa(5, 8)?;
         check_pfa(8, 5)?;
+    }
+}
+
+/// The natural PFA guards its table-driven unchecked scatter with a release
+/// assert, so a buffer shorter than `n1 * n2` panics instead of writing past
+/// the slice -- in release builds as well as debug.
+#[test]
+#[should_panic(expected = "invariant: the PFA buffer and permutation tables cover n")]
+fn natural_pfa_rejects_a_short_buffer_in_release() {
+    let mut short = vec![Complex64::new(0.0, 0.0); 3 * 5 - 1];
+    pfa_fft_natural_inplace::<f64, false>(&mut short, 3, 5);
+}
+
+/// Both PFA permutations index `n`-sample buffers unchecked, so every entry
+/// must lie below `n` and each must be a bijection of `0..n`.
+#[test]
+fn pfa_permutations_are_bijections_below_n() {
+    for (n1, n2) in [(3usize, 5usize), (4, 9), (7, 8), (5, 11), (9, 16)] {
+        let n = n1 * n2;
+        let (input, output) = cached_pfa_perm(n1, n2);
+        for (label, perm) in [("input", &input), ("output", &output)] {
+            assert_eq!(perm.len(), n, "{label} perm length for {n1}x{n2}");
+            let mut seen = vec![false; n];
+            for &index in perm.iter() {
+                assert!(index < n, "{label} perm entry {index} >= {n} for {n1}x{n2}");
+                assert!(
+                    !std::mem::replace(&mut seen[index], true),
+                    "{label} perm repeats {index} for {n1}x{n2}"
+                );
+            }
+        }
     }
 }

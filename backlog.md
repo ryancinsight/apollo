@@ -923,10 +923,13 @@
   `many_single_char_names` or `too_many_arguments` site at all —
   `too_many_arguments` is already in the workspace's curated noise-allow set
   (`Cargo.toml` `[workspace.lints]`), and no butterfly identifier trips the
-  other. The four per-site `#[allow(clippy::wildcard_imports)]` on the
-  `std::arch::x86_64::*` imports were dead likewise (converted to `#[expect]`,
-  all four reported unfulfilled) and are deleted. Net: zero suppressions in
-  the butterfly kernels, no `#[expect]` needed. Clippy warning-clean.
+  other. Of the four per-site `#[allow(clippy::wildcard_imports)]` on the
+  `std::arch::x86_64::*` imports, the two on test-gated kernels were dead and
+  are deleted; the two on production kernels fire in the plain library build
+  and not under the test cfg, where clippy skips the lint -- so no static
+  `#[expect]` holds in both compilations and those two sites carry a per-site
+  `#[allow]` with the reason and that explanation. Corrected 2026-09-01 after
+  the plain build surfaced them; clippy warning-clean on both.
 
 
 ## ATLAS-APOLLO-BENCH-GATE-NOISE-2026-08-28 — The benchmark gate times on shared runners [patch] — todo
@@ -1417,7 +1420,7 @@
   error common to the fast and direct paths. Tolerance is `N^2 eps max|x|`,
   derived from the direct sum's sequential accumulation.
 
-## ATLAS-APOLLO-KERNEL-ENTRY-ASSERTS — Promote kernel-entry guards to release asserts [patch] — todo
+## ATLAS-APOLLO-KERNEL-ENTRY-ASSERTS — Promote kernel-entry guards to release asserts [patch] — done 2026-09-01
 
 - **Outcome:** debug_assert-only length/range guards at safe `pub(crate)`
   kernel entry boundaries become release asserts — one predictable branch per
@@ -1430,6 +1433,18 @@
   `.../components/good_thomas/cook_toom_gt.rs` 34-38 (`dft84`);
   `crates/apollo-fft/src/application/execution/kernel/twiddle_table.rs`
   173-208 (`build_twiddle_table` n validation is debug-only).
+- **Delivered (2026-09-01, Claude `/root`).** Release asserts now guard every
+  cited boundary -- `gather_unroll8`, the Rader gather and scatter, both PFA
+  drivers (natural and ordered-Rader), the four Cook-Toom kernels, and the
+  twiddle-table builder -- one predictable branch per call. The two
+  permutation-table builders (`build_pfa_perm`, `build_generator_order`)
+  assert their value ranges at build time, which is the release-mode half of
+  the unchecked-index contract; each table-indexed `unsafe` block in those
+  kernels now carries a `// SAFETY:` comment citing both halves (eleven
+  sites, advancing `ATLAS-APOLLO-SAFETY-COMMENT-RATCHET` on exactly the
+  table-indexed cluster it names first). Coverage: `should_panic` entry tests
+  for the gather, the natural PFA, and DFT-84, plus bijection tests for both
+  table builders, all run in the release suite too.
 
 ## ATLAS-APOLLO-SAFETY-COMMENT-RATCHET — Ratchet SAFETY-comment coverage over unsafe sites [patch] — todo
 

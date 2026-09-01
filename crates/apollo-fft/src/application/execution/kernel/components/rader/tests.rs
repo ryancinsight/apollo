@@ -314,3 +314,24 @@ fn static_rader_primes_are_in_primitive_roots() {
         );
     }
 }
+
+/// The Rader gather and scatter index `data` with generator-order values
+/// unchecked, so every entry must lie in `1..n` and enumerate the group once.
+#[test]
+fn generator_order_enumerates_the_multiplicative_group() {
+    for (n, g) in [(7usize, 3usize), (11, 2), (13, 2), (17, 3), (67, 2)] {
+        let order = super::cached_generator_order(n, g);
+        assert_eq!(order.len(), n - 1, "order length for n={n}");
+        let mut seen = vec![false; n];
+        for &index in order.iter() {
+            assert!(
+                (1..n).contains(&index),
+                "generator power {index} outside 1..{n}"
+            );
+            assert!(
+                !std::mem::replace(&mut seen[index], true),
+                "generator power {index} repeats for n={n}, g={g}"
+            );
+        }
+    }
+}

@@ -374,6 +374,13 @@ unsafe fn fixed_len8_reduced_avx_fma(
     scratch: &mut [Complex32],
     twiddles: &[Complex32],
 ) {
+    // `allow`, not `expect`: clippy evaluates `wildcard_imports` only in the
+    // plain library build and skips it under the test cfg, so no static
+    // expectation holds in both compilations.
+    #[allow(
+        clippy::wildcard_imports,
+        reason = "the intrinsic set is this kernel's vocabulary"
+    )]
     use std::arch::x86_64::*;
     // Pass 1: radix 1, groups 4
     for j in 0..1 {
@@ -436,6 +443,13 @@ unsafe fn fixed_len4_reduced_avx_fma(
     scratch: &mut [Complex32],
     twiddles: &[Complex32],
 ) {
+    // `allow`, not `expect`: clippy evaluates `wildcard_imports` only in the
+    // plain library build and skips it under the test cfg, so no static
+    // expectation holds in both compilations.
+    #[allow(
+        clippy::wildcard_imports,
+        reason = "the intrinsic set is this kernel's vocabulary"
+    )]
     use std::arch::x86_64::*;
     // Pass 1: radix 1, groups 2
     for j in 0..1 {

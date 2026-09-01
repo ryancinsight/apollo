@@ -115,12 +115,15 @@ fn pfa_fft_natural_inplace<
     n2: usize,
 ) {
     let n = n1 * n2;
-    debug_assert!(data.len() >= n);
-
     let (input_perm, output_perm) =
         crate::application::execution::kernel::mixed_radix::caches::cached_pfa_perm(n1, n2);
-    debug_assert_eq!(input_perm.len(), n);
-    debug_assert_eq!(output_perm.len(), n);
+    // One predictable branch per call guards the table-driven unchecked
+    // column extraction and scatter below; the tables' value range is
+    // asserted where they are built.
+    assert!(
+        data.len() >= n && input_perm.len() == n && output_perm.len() == n,
+        "invariant: the PFA buffer and permutation tables cover n = n1 * n2"
+    );
 
     F::with_pfa_scratch(n + n1, |scratch| {
         let (matrix, col_buf) = scratch.split_at_mut(n);
@@ -131,6 +134,9 @@ fn pfa_fft_natural_inplace<
         for i2 in 0..n2 {
             // Extract column - strided access (extended unroll to 8 for ILP on GT columns; helps md-worst GT like 198/90/84/106+ which use PFA).
             // Additive zero-cost; same loads as before, just unrolled for compiler.
+            // SAFETY: `matrix` holds `n = n1 * n2` samples and `col_buf`
+            // `n1`, so `i1 * n2 + i2 < n` and `i1 < n1` for every branch
+            // taken below (`n1 >= 8` gates the unrolled slots).
             unsafe {
                 *col_buf.get_unchecked_mut(0) = *matrix.get_unchecked(i2);
                 *col_buf.get_unchecked_mut(1) = *matrix.get_unchecked(n2 + i2);
@@ -167,6 +173,9 @@ fn pfa_fft_natural_inplace<
             }
 
             // Scatter directly to data using output_perm (extended unroll to 8 for ILP, matches extract).
+            // SAFETY: `i2 * n1 + i1 < n = output_perm.len()` for every slot
+            // taken, each table value lies below `n <= data.len()` (asserted
+            // at build and at entry), and `col_buf` holds `n1` samples.
             unsafe {
                 if n1 > 0 {
                     let out_idx = *output_perm.get_unchecked(i2 * n1);
@@ -220,14 +229,22 @@ fn pfa_fft_ordered_rader_n1<
     generator_inverse: usize,
 ) {
     let n = n1 * n2;
-    debug_assert!(data.len() >= n);
-
     let (input_perm, output_perm) =
         crate::application::execution::kernel::mixed_radix::caches::cached_pfa_perm(n1, n2);
     let input_order =
         crate::application::execution::kernel::components::rader::cached_generator_order(
             n1, generator,
         );
+    // One predictable branch per call guards the table-driven unchecked
+    // column extraction and scatter below; both tables' value ranges are
+    // asserted where they are built.
+    assert!(
+        data.len() >= n
+            && input_perm.len() == n
+            && output_perm.len() == n
+            && input_order.len() + 1 == n1,
+        "invariant: the ordered-Rader PFA buffer and tables cover n = n1 * n2"
+    );
 
     F::with_pfa_scratch(n + n1, |scratch| {
         let (matrix, col_buf) = scratch.split_at_mut(n);
@@ -237,6 +254,9 @@ fn pfa_fft_ordered_rader_n1<
         // Transform cols from `scratch` (with Rader order), output directly to `data`
         for i2 in 0..n2 {
             // Extract column with ordered Rader input mapping
+            // SAFETY: `i2 < n2` and every `input_order` value lies in
+            // `1..n1`, so `i1 * n2 + i2 < n = matrix.len()`; `col_buf` holds
+            // `n1` samples and `1 + q < n1`.
             unsafe {
                 *col_buf.get_unchecked_mut(0) = *matrix.get_unchecked(i2);
                 for (q, &i1) in input_order.iter().enumerate() {
@@ -251,6 +271,9 @@ fn pfa_fft_ordered_rader_n1<
             >(col_buf, n1, generator_inverse);
 
             // Scatter column directly to final positions in `data`
+            // SAFETY: `i2 * n1 + i1 < n = output_perm.len()` and each table
+            // value lies below `n <= data.len()` (asserted at build and at
+            // entry); `col_buf` holds `n1` samples.
             unsafe {
                 let out_idx_0 = *output_perm.get_unchecked(i2 * n1);
                 *data.get_unchecked_mut(out_idx_0) = *col_buf.get_unchecked(0);

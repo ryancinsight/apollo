@@ -39,11 +39,21 @@ pub(crate) fn mul_conj<F: MixedRadixScalar<Complex = eunomia::Complex<F>>>(
 /// and expose more parallelism for md-worst GT sizes (198/90/84/106+ etc. that use PFA gather).
 #[inline]
 pub(crate) fn gather_unroll8<T: Copy>(src: &[T], perm: &[usize], dst: &mut [T]) {
-    debug_assert!(dst.len() >= perm.len());
+    // One predictable branch per call guards every table-driven unchecked
+    // access below; the value range of `perm` is the table builders'
+    // contract (`build_pfa_perm`, `build_generator_order`), asserted where
+    // each table is built.
+    assert!(
+        dst.len() >= perm.len(),
+        "invariant: the gather destination holds every permuted sample"
+    );
     let len = perm.len();
     let len8 = (len / 8) * 8;
     let mut q = 0usize;
     while q < len8 {
+        // SAFETY: `q + 7 < len8 <= perm.len() <= dst.len()` bounds the
+        // table reads and destination writes; each table value indexes
+        // `src` within the length its builder asserted against.
         unsafe {
             *dst.get_unchecked_mut(q) = *src.get_unchecked(*perm.get_unchecked(q));
             *dst.get_unchecked_mut(q + 1) = *src.get_unchecked(*perm.get_unchecked(q + 1));
@@ -57,9 +67,37 @@ pub(crate) fn gather_unroll8<T: Copy>(src: &[T], perm: &[usize], dst: &mut [T]) 
         q += 8;
     }
     while q < len {
+        // SAFETY: as the unrolled loop, for the tail `q < len`.
         unsafe {
             *dst.get_unchecked_mut(q) = *src.get_unchecked(*perm.get_unchecked(q));
         }
         q += 1;
+    }
+}
+
+#[cfg(test)]
+mod gather_tests {
+    use super::gather_unroll8;
+
+    /// The gather's length guard is a release assert: a destination shorter
+    /// than the permutation panics instead of writing past it.
+    #[test]
+    #[should_panic(expected = "invariant: the gather destination holds every permuted sample")]
+    fn gather_rejects_a_short_destination_in_release() {
+        let src = [1u32, 2, 3, 4];
+        let perm = [3usize, 2, 1, 0];
+        let mut dst = [0u32; 3];
+        gather_unroll8(&src, &perm, &mut dst);
+    }
+
+    /// Both the unrolled body and the tail apply the permutation.
+    #[test]
+    fn gather_applies_the_permutation_across_unroll_and_tail() {
+        let src: Vec<u32> = (0..11).collect();
+        let perm: Vec<usize> = (0..11).rev().collect();
+        let mut dst = vec![0u32; 11];
+        gather_unroll8(&src, &perm, &mut dst);
+        let expected: Vec<u32> = (0..11).rev().collect();
+        assert_eq!(dst, expected);
     }
 }

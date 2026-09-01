@@ -294,6 +294,15 @@ fn build_pfa_perm(n1: usize, n2: usize) -> (Arc<[usize]>, Arc<[usize]>) {
             output_perm[k2 * n1 + k1] = k_idx;
         }
     }
+    // The PFA kernel gathers and scatters through these values unchecked;
+    // the build-time check is the release-mode half of that contract.
+    assert!(
+        input_perm
+            .iter()
+            .chain(&output_perm)
+            .all(|&index| index < n),
+        "invariant: PFA permutation entries stay below n = n1 * n2"
+    );
     (Arc::from(input_perm), Arc::from(output_perm))
 }
 
