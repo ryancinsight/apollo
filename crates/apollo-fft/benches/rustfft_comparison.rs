@@ -19,9 +19,13 @@
 //! ## Runtime budget
 //!
 //! ```text
-//! per case  = WARM_UP_MS + MEASUREMENT_MS         = 20 ms + 80 ms = 100 ms
+//! per case  = WARM_UP_MS + MEASUREMENT_MS         = 20 ms + 80 ms = 100 ms (base)
+//!             sizes at and above 1024 scale the measurement window by
+//!             len / 512, so a 1024-point case gets 20 + 160 = 180 ms,
+//!             a 2048 gets 20 + 320 = 340 ms, etc., stabilizing the
+//!             100-sample median against scheduler noise.
 //! cases     = 4 per size (Apollo/RustFFT x f64/f32)
-//! default   = 22 sizes x 4 x 100 ms               ~ 8.8 s
+//! default   = 26 sizes x 4 x ~120 ms (avg)        ~ 12 s
 //! full      = 500 sizes x 4 x 100 ms              ~ 200 s   (opt-in)
 //! ```
 //!
@@ -54,8 +58,21 @@ use std::hint::black_box;
 const BUDGET_SECS: u64 = 30;
 /// Per-case warm-up.
 const WARM_UP_MS: u64 = 20;
-/// Per-case measurement window.
+/// Per-case base measurement window, scaled for sizes at and above
+/// [`LARGE_SIZE_THRESHOLD`] so the 100-sample median collects enough
+/// iterations to resist scheduler noise.
 const MEASUREMENT_MS: u64 = 80;
+/// Sizes at and above this threshold get a scaled measurement budget.
+/// Below it the flat 80 ms window admits enough iterations per sample
+/// for a stable median; at and above it the per-iteration cost is large
+/// enough that 80 ms / 100 samples leaves each sample with too few
+/// iterations, and the median swings 3x between runs.
+const LARGE_SIZE_THRESHOLD: usize = 1024;
+/// The base size for scaling: a transform of this length gets the base
+/// measurement window, and larger lengths get a proportionally larger
+/// window. Set below [`LARGE_SIZE_THRESHOLD`] so the threshold itself
+/// gets a 2x budget rather than 1x.
+const SCALE_BASE: usize = 512;
 /// Largest length in the opt-in full sweep.
 const FULL_SWEEP_MAX: usize = 500;
 /// Environment switch selecting the dense 1..=FULL_SWEEP_MAX sweep.
@@ -63,10 +80,12 @@ const FULL_SWEEP_VAR: &str = "APOLLO_BENCH_FULL_SWEEP";
 
 /// Representative lengths spanning the regimes Apollo dispatches differently:
 /// identity, short Winograd codelets, power-of-two Stockham, odd primes that
-/// reach Rader, prime-power and smooth composites, and a few larger sizes where
-/// asymptotics rather than codelet quality dominate.
-const DEFAULT_SIZES: [usize; 22] = [
-    1, 2, 3, 4, 5, 7, 8, 11, 13, 16, 19, 31, 32, 53, 64, 67, 96, 121, 128, 200, 256, 512,
+/// reach Rader, prime-power and smooth composites, and the sizes where the
+/// per-length specializations at 1024, 2048, 4096, and 8192 live — which a
+/// sweep stopping at 512 could not see.
+const DEFAULT_SIZES: [usize; 26] = [
+    1, 2, 3, 4, 5, 7, 8, 11, 13, 16, 19, 31, 32, 53, 64, 67, 96, 121, 128, 200, 256, 512, 1024,
+    2048, 4096, 8192,
 ];
 
 /// Deterministic complex signal; identical values feed both engines.
@@ -107,8 +126,37 @@ fn sizes() -> Vec<usize> {
     }
 }
 
-fn bench_size(suite: &mut BenchmarkSuite, config: BenchmarkConfig, len: usize) {
+/// Returns the measurement configuration for `len`, scaling the base budget
+/// at and above [`LARGE_SIZE_THRESHOLD`] so the 100-sample median collects
+/// enough iterations to resist scheduler noise. The mode (smoke vs measurement)
+/// is preserved from `base`.
+fn config_for(len: usize, base: BenchmarkConfig, mode: BenchmarkMode) -> BenchmarkConfig {
+    if len < LARGE_SIZE_THRESHOLD {
+        return base;
+    }
+    // Scale the measurement window by the transform-length ratio above the
+    // scale base, so a 1024-point case gets 2x the base (160 ms), a 2048
+    // gets 4x (320 ms), etc. This keeps iterations per sample roughly
+    // constant across sizes rather than inversely proportional to length.
+    let scale = len / SCALE_BASE;
+    let scaled_measurement = MEASUREMENT_MS.saturating_mul(scale as u64);
+    mode.apply(
+        BenchmarkConfig::try_with_budgets(
+            Duration::from_millis(WARM_UP_MS),
+            Duration::from_millis(scaled_measurement),
+        )
+        .expect("invariant: scaled budgets are non-zero"),
+    )
+}
+
+fn bench_size(
+    suite: &mut BenchmarkSuite,
+    base_config: BenchmarkConfig,
+    mode: BenchmarkMode,
+    len: usize,
+) {
     const GROUP: &str = "fft_forward_clone_inclusive";
+    let config = config_for(len, base_config, mode);
 
     let source64 = signal(len);
     let source32 = narrow(&source64);
@@ -176,7 +224,7 @@ fn main() -> Result<(), apollo_bench::BenchmarkModeError> {
     );
 
     eprintln!(
-        "rustfft_comparison: {mode:?} mode, {} sweep, {} sizes, measurement configuration warm-up {WARM_UP_MS}ms and measurement {MEASUREMENT_MS}ms",
+        "rustfft_comparison: {mode:?} mode, {} sweep, {} sizes, base measurement warm-up {WARM_UP_MS}ms and measurement {MEASUREMENT_MS}ms (scaled at and above {LARGE_SIZE_THRESHOLD})",
         if full { "full" } else { "default" },
         lengths.len()
     );
@@ -190,7 +238,7 @@ fn main() -> Result<(), apollo_bench::BenchmarkModeError> {
 
     let mut suite = BenchmarkSuite::new(config);
     for len in lengths {
-        bench_size(&mut suite, config, len);
+        bench_size(&mut suite, config, mode, len);
     }
     suite.emit();
 

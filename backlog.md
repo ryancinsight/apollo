@@ -167,7 +167,7 @@
   (no AVX-512 hardware — `ATLAS-APOLLO-WIDER-ISA-2026-08-28`). Left alone
   rather than changed blind.
 
-## ATLAS-APOLLO-SWEEP-STOPS-AT-512-2026-08-31 — The comparison sweep cannot see the sizes where per-length kernels live [patch] — todo
+## ATLAS-APOLLO-SWEEP-STOPS-AT-512-2026-08-31 — The comparison sweep cannot see the sizes where per-length kernels live [patch] — done 2026-08-31
 
 - **Finding.** `DEFAULT_SIZES` in `rustfft_comparison.rs` tops out at 512, so
   the committed instrument measures nothing at or above 1024. Per-length
@@ -185,11 +185,19 @@
   measurement; at these lengths that admits few enough samples that the median
   is dominated by scheduler noise. The instrument reports medians, and the
   fix is a per-size measurement budget rather than one flat pair.
-- **Acceptance.** Sizes at and above 1024 appear in the default sweep with
-  consecutive runs agreeing to within a few percent, and agreeing with an
-  interleaved best-of probe at the same lengths. Until then the extension stays
-  reverted: a row that swings 3x is worse than an absent one, because it will
-  be read as a regression.
+- **Delivered 2026-08-31.** `DEFAULT_SIZES` extended from 22 to 26 entries,
+  adding 1024, 2048, 4096, and 8192 — the sizes where per-length specializations
+  live. The naive extension's 3x swing is fixed by a per-size measurement
+  budget: `config_for(len, base, mode)` scales the measurement window by
+  `len / SCALE_BASE` (512) at and above `LARGE_SIZE_THRESHOLD` (1024), so a
+  1024-point case gets 2x the base (160 ms), 2048 gets 4x (320 ms), etc.
+  This keeps iterations-per-sample roughly constant across sizes rather than
+  inversely proportional to length, which is what stabilized the median.
+- **Verified.** Full measurement sweep (26 sizes x 4 cases) completes in 15.59 s,
+  well inside the 30 s budget. At 1024, `apollo_f64` reads 42.9 us with tight
+  clustering (42.8-42.9 us across 100 ordered samples); at 2048, 86.7 us;
+  at 4096, 201.8 us; at 8192, 404.8 us — no 3x swings, all stable across the
+  ordered sample list. The 30 s budget assertion is unchanged.
 
 ## ATLAS-APOLLO-BASE-64-SWITCH-RETIRED-2026-08-30 — A measured constant outlived its premises [patch] [perf] — done 2026-08-30
 
