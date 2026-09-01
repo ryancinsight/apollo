@@ -66,9 +66,9 @@ where
 /// which at these lengths costs more than the transform: n = 256 measured
 /// 2.96x the cost of n = 128 where the arithmetic asks for about 2.3x.
 /// Radix-2 decimation instead leaves subsequences that reach the base kernel
-/// directly, and the combines read `W_N^j` from the final stage of the
-/// twiddle tables the Stockham route already caches
-/// (gap_audit.md#small-size-splitting).
+/// directly. The plan passes its complete, immutable stage-major table by
+/// borrow, so the combines select `W_N^j` without another cache lookup or
+/// temporary shared-owner acquisition (gap_audit.md#base-split-twiddle-reuse).
 ///
 /// The decimation is flat rather than recursive. Halving at every level
 /// gathers at every level: n = 512 paid three gathers and two nested scratch
@@ -83,6 +83,7 @@ where
 pub(crate) fn transform_via_base_128<F, const INVERSE: bool>(
     data: &mut [F::Complex],
     plan: &instance_major::Plan128<F>,
+    twiddles: &[F::Complex],
 ) -> bool
 where
     F: crate::application::execution::kernel::mixed_radix::MixedRadixScalar<
@@ -95,6 +96,7 @@ where
     if n == BASE {
         return instance_major::transform_128::<F, INVERSE>(data, plan);
     }
+    debug_assert_eq!(twiddles.len(), n - 1);
 
     let blocks = n / BASE;
     let bits = blocks.trailing_zeros();
@@ -136,7 +138,6 @@ where
                 if !instance_major::transform_128::<F, INVERSE>(even, plan) {
                     return false;
                 }
-                let twiddles = combine_twiddles::<F, INVERSE>(BASE);
                 let combine = &twiddles[BASE - 1..2 * BASE - 1];
                 {
                     let (low, high) = data.split_at_mut(BASE);
@@ -156,7 +157,7 @@ where
                 if !instance_major::transform_128::<F, INVERSE>(odd, plan) {
                     return false;
                 }
-                combine_final::<F, INVERSE>(data, scratch, BASE);
+                combine_final::<F>(data, scratch, twiddles, BASE);
                 return true;
             }
             // Four blocks on the same four-lane layout keep only the even
@@ -166,10 +167,8 @@ where
             // the base kernel, replacing the intermediates and filling the
             // last two quarters. The detached scalar final pass disappears.
             if plan.combine_sink_supported() {
-                let inner_twiddles = combine_twiddles::<F, INVERSE>(BASE);
-                let inner = &inner_twiddles[BASE - 1..2 * BASE - 1];
-                let outer_twiddles = combine_twiddles::<F, INVERSE>(2 * BASE);
-                let outer = &outer_twiddles[2 * BASE - 1..4 * BASE - 1];
+                let inner = &twiddles[BASE - 1..2 * BASE - 1];
+                let outer = &twiddles[2 * BASE - 1..4 * BASE - 1];
                 let (outer_low, outer_high) = outer.split_at(BASE);
 
                 let (b01, b23) = scratch[..n].split_at_mut(2 * BASE);
@@ -223,7 +222,7 @@ where
                     return false;
                 }
             }
-            combine_final4::<F, INVERSE>(data, scratch, BASE);
+            combine_final4::<F>(data, scratch, twiddles, BASE);
             true
         },
     )
@@ -233,6 +232,7 @@ where
 fn transform_via_base_128_incumbent<F, const INVERSE: bool>(
     data: &mut [F::Complex],
     plan: &instance_major::Plan128<F>,
+    twiddles: &[F::Complex],
 ) -> bool
 where
     F: crate::application::execution::kernel::mixed_radix::MixedRadixScalar<
@@ -264,26 +264,10 @@ where
                     return false;
                 }
             }
-            combine_final4::<F, INVERSE>(data, scratch, BASE);
+            combine_final4::<F>(data, scratch, twiddles, BASE);
             true
         },
     )
-}
-
-/// `W_(2 * len)^j` for `j < len`, from the final stage of the cached
-/// stage-major table: that stage holds `len` entries in order, and the earlier
-/// stages occupy the `len - 1` slots before it.
-fn combine_twiddles<F, const INVERSE: bool>(len: usize) -> std::sync::Arc<[F::Complex]>
-where
-    F: crate::application::execution::kernel::mixed_radix::MixedRadixScalar<
-        Complex = eunomia::Complex<F>,
-    >,
-{
-    if INVERSE {
-        F::cached_twiddle_inv(2 * len)
-    } else {
-        F::cached_twiddle_fwd(2 * len)
-    }
 }
 
 /// The last combining stage, reading `scratch` and writing `out`.
@@ -291,13 +275,16 @@ where
 /// The combining loop stays scalar: a hand-vectorized sibling measured
 /// 728.9 ns against 725.2 at n = 256, so the compiler is already doing what it
 /// would have done.
-fn combine_final<F, const INVERSE: bool>(out: &mut [F::Complex], scratch: &[F::Complex], len: usize)
-where
+fn combine_final<F>(
+    out: &mut [F::Complex],
+    scratch: &[F::Complex],
+    twiddles: &[F::Complex],
+    len: usize,
+) where
     F: crate::application::execution::kernel::mixed_radix::MixedRadixScalar<
         Complex = eunomia::Complex<F>,
     >,
 {
-    let twiddles = combine_twiddles::<F, INVERSE>(len);
     let combine = &twiddles[len - 1..2 * len - 1];
     let (even, odd) = scratch.split_at(len);
     let (low, high) = out.split_at_mut(len);
@@ -321,19 +308,18 @@ where
 /// combines those with `W_{4 * len}` at `j` and `j + len` — the block
 /// order is the gather's bit-reversed one, which is exactly what makes the
 /// adjacent-pair pairing correct.
-fn combine_final4<F, const INVERSE: bool>(
+fn combine_final4<F>(
     out: &mut [F::Complex],
     scratch: &[F::Complex],
+    twiddles: &[F::Complex],
     len: usize,
 ) where
     F: crate::application::execution::kernel::mixed_radix::MixedRadixScalar<
         Complex = eunomia::Complex<F>,
     >,
 {
-    let inner = combine_twiddles::<F, INVERSE>(len);
-    let inner = &inner[len - 1..2 * len - 1];
-    let outer = combine_twiddles::<F, INVERSE>(2 * len);
-    let outer = &outer[2 * len - 1..4 * len - 1];
+    let inner = &twiddles[len - 1..2 * len - 1];
+    let outer = &twiddles[2 * len - 1..4 * len - 1];
     let (b01, b23) = scratch.split_at(2 * len);
     let (b0, b1) = b01.split_at(len);
     let (b2, b3) = b23.split_at(len);

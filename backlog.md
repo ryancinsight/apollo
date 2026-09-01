@@ -1,6 +1,44 @@
 # Apollo Backlog
 
-## ATLAS-APOLLO-HARDWARE-LANE-LINK-2026-08-31 — Remove the redundant portable combine specialization [patch] [perf] — review
+## ATLAS-APOLLO-BASE-SPLIT-TWIDDLE-REUSE-2026-08-31 — Retain selected split twiddles in the plan [patch] [perf] — review
+
+- **Outcome.** Remove the per-execution global twiddle-cache lookup and
+  temporary `Arc` acquisition from the f64 N = 256/512 base-split route by
+  borrowing the complete selected table already retained by `FftPlan1D`.
+- **Scope / non-goals.** Reuse the existing plan-owned forward slot and lazy
+  inverse slot; pass their borrowed tables through the private base executors.
+  Do not add table bytes, change base arithmetic, routing, normalization,
+  scratch, public API, benchmark inputs, estimator, or the timed whole-plan
+  instrument. Mechanically migrate the private final-store probe to the
+  retained-table call contract without using it as performance evidence.
+- **Acceptance.** N = 256/512 forward and inverse values match the independent
+  direct oracle; clones share the retained table; warmed execution remains
+  allocation-free; code inspection shows no cache lookup or `Arc` clone in the
+  base-split executor. Two adjacent exact-processor comparisons improve both
+  target rows with N = 64/128 controls neutral. Reject the source candidate if
+  the paired latency intervals do not reproduce.
+- **Entry model.** The pinned split probe records N = 256 at 514.5 ns
+  (55.0 ns gather, 364.1 ns bases, 95.4 ns residual) and N = 512 at 1,299.2 ns
+  (116.2 ns gather, 727.4 ns bases, 455.6 ns residual). The current executor
+  calls `cached_twiddle_fwd` once at N = 256 and twice at N = 512 per execution;
+  the full N table contains every smaller split stage already.
+- **Candidate evidence.** The plan now retains the complete cached table only
+  above the 128-point leaf and passes borrowed stage slices to both directions;
+  this moves the forward cache acquisition from first execution to plan
+  construction but introduces no second table allocation, while inverse
+  construction remains lazy and clones share each `Arc`. Two adjacent
+  processor-2 comparisons report N = 256 at 510.181/509.533 ns and N = 512 at
+  1,286.979/1,282.901 ns; N = 64/128 controls remain within 1%. The warmed
+  f32/f64 N = 64/128/256/512 census reports zero global and direct-Mnemosyne
+  allocations with zero retained bytes. Apollo FFT Nextest passes 507/507;
+  warning-denied all-target/all-feature host Clippy and AArch64 Windows check,
+  Rustdoc, doctest, formatting, diff, and the 36-source standalone lock guard
+  pass.
+- **Integrator / lease:** `/root`; lease none. Exact source `ef612116`;
+  independent review and hosted comparison/merge remain. Last update
+  2026-08-31.
+
+## ATLAS-APOLLO-HARDWARE-LANE-LINK-2026-08-31 — Remove the redundant portable combine specialization [patch] [perf] — blocked
 
 - **Outcome.** Use Hermes' hardware-only exact-width selector at the planar
   combine boundary, where Apollo already owns the portable scalar fallback, so
@@ -26,8 +64,14 @@
   the unchanged benchmark smoke, formatting, diff, and the 36-source
   standalone-lock guard pass. Paired N = 64/256 timings are inconclusive and
   are not performance evidence for this item.
-- **Integrator / lease:** `/root`; lease none. Exact source `e01cadca`; hosted
-  repository gates, PR, and merge remain. Last update 2026-08-31.
+- **Hosted blocker.** PR #221 merged without squash as `fcc306a5`; lock,
+  workspace, bindings, both artifacts, executable identity, and all four pair
+  jobs pass. The final comparator is red on unrelated f64 N = 107 Rader
+  `auto` and `half_cyclic` rows, slower in all four comparisons. Re-open on a
+  measured fix-forward that clears the unchanged comparator; do not weaken its
+  oracle.
+- **Integrator / lease:** `/root`; lease none. Exact source `e01cadca`; merge
+  `fcc306a5`. Last update 2026-08-31.
 
 ## ATLAS-APOLLO-F64-BASE128-ATTRIBUTION-2026-08-31 — Re-establish the f64 256/512 bottleneck [patch] [perf] — done 2026-08-31
 

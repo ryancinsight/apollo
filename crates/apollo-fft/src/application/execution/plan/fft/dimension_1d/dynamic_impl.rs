@@ -39,6 +39,7 @@ pub struct FftPlan1D<F: MixedRadixScalar> {
     pub(crate) n1: usize,
     pub(crate) n2: usize,
     pub(crate) radices: Option<Cow<'static, [usize]>>,
+    /// Complete forward table for Stockham or a split base route above 128.
     pub(crate) twiddle_fwd: Option<Arc<[F::Complex]>>,
     /// Inverse table, built on the first inverse execution rather than at
     /// construction: the retained-footprint attribution measured the eager
@@ -125,6 +126,19 @@ impl<F: MixedRadixScalar<Complex = Complex<F>>> FftPlan1D<F> {
             .inverse()
     }
 
+    #[inline]
+    pub(super) fn base128_twiddles<const INVERSE: bool>(&self) -> &[F::Complex] {
+        if self.n <= 128 {
+            &[]
+        } else if INVERSE {
+            self.inverse_twiddles().as_ref()
+        } else {
+            self.twiddle_fwd
+                .as_deref()
+                .expect("invariant: split base route retains forward twiddles")
+        }
+    }
+
     /// Create a new 1D plan.
     #[must_use]
     pub fn new(shape: Shape1D) -> Self {
@@ -151,7 +165,7 @@ impl<F: MixedRadixScalar<Complex = Complex<F>>> FftPlan1D<F> {
         } else if n.is_power_of_two() {
             let log2 = n.trailing_zeros();
             PlanStrategy::PowerOfTwo {
-                twiddle_fwd: (base128.is_none() && base64.is_none())
+                twiddle_fwd: (base64.is_none() && (base128.is_none() || n > 128))
                     .then(|| F::cached_twiddle_fwd(n)),
                 log2,
                 pot: PhantomData,

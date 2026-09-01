@@ -1,3 +1,41 @@
+## Base splits now borrow their retained complete twiddle table (2026-08-31) <a id="base-split-twiddle-reuse"></a>
+
+The selected f64 base route left `FftPlan1D::twiddle_fwd` empty even though
+N = 256/512 combines still need the final stage of the corresponding power-of-
+two table. Each N = 256 execution therefore entered the process cache and
+temporarily cloned one `Arc`; N = 512 did that independently for the N = 256
+and N = 512 tables. The complete N table is stage-major and already contains
+the smaller split stage, so the second lookup and owner were redundant.
+
+Split plans above the 128-point leaf now retain the complete forward table in
+the existing slot and pass it by slice borrow through the private executor.
+The inverse slot remains a lazy `OnceLock`; its full table is built only on the
+first inverse execution. N = 128 still retains no split table. Plan/clone tests
+prove that forward and initialized inverse state share the process-cache
+allocation, and direct-DFT plus normalized round-trip tests cover both split
+lengths. The forward cache acquisition moves from first execution to plan
+construction; no second table allocation or table copy is introduced. Code
+inspection leaves no cache access or `Arc` clone in the base executor.
+
+Two adjacent runs of the unchanged exact-processor release probe report P-core
+medians in nanoseconds:
+
+| N | Entry | Candidate 1 | Candidate 2 |
+| ---: | ---: | ---: | ---: |
+| 64 | 89.3--89.4 | 89.890 | 89.401 |
+| 128 | 199.9 | 201.241 | 201.218 |
+| 256 | 514.5 | 510.181 | 509.533 |
+| 512 | 1,299.2 | 1,286.979 | 1,282.901 |
+
+The N = 64/128 controls remain within 1%; both target rows improve in both
+runs. The warmed N = 64/128/256/512 census for f32 and f64 reports zero global
+allocations, zero direct Mnemosyne allocations, and zero retained bytes in
+every execution window. Exact source `ef612116` also passes 507/507 package
+Nextest tests, warning-denied all-target/all-feature host Clippy and AArch64
+Windows compilation, Rustdoc, and doctest. This is local Windows AVX2 timing
+evidence on logical processor 2; it does not establish AArch64, AVX-512, or
+cross-machine latency.
+
 ## Portable exact-width fallback was linked behind a hardware-only probe (2026-08-31) <a id="hardware-lane-link-footprint"></a>
 
 Apollo's planar combine tries exact eight lanes, then exact four lanes, before
@@ -20,6 +58,16 @@ census passes 1/1 with zero global allocations, zero direct Mnemosyne
 allocations, and zero retained bytes. Two paired N = 64/256 measurements are
 inconclusive; this result establishes linked code-footprint reduction only and
 does not resolve the hosted latency regression.
+
+Apollo PR #221 merged as `fcc306a5`. Its lock, workspace, Python binding,
+artifact, executable-identity, and all four paired measurement jobs passed.
+The final comparator nevertheless rejected two f64 N = 107 Rader rows:
+`auto_f64` was slower in all four comparisons by 0.47--4.08%, and
+`half_cyclic_f64` by 0.26--11.92% (the 11.92% sample is the outlier; the other
+three are 0.26--0.45%). Those rows do not execute the changed planar combine,
+so this is an unresolved whole-binary layout or measurement effect rather than
+evidence for the linked-footprint mechanism. The repository gate is red and
+must be closed by a measured fix-forward; it is not omitted from the record.
 
 ## Quarter-turn twiddle reuse regresses the final base-128 sink (2026-08-31) <a id="base128-quarter-turn"></a>
 

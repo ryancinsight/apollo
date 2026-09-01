@@ -54,6 +54,15 @@ Change-class tags: [patch] backward-compatible fix, [minor] additive non-breakin
 
 ### Changed
 
+- [patch] [perf] `apollo-fft` base-split plans at N = 256/512 now borrow the
+  complete stage-major twiddle table retained in the existing plan slot. This
+  removes one or two process-cache lookups and temporary `Arc` acquisitions
+  from each execution while preserving lazy inverse construction. Two adjacent
+  exact-processor Windows AVX2 comparisons reduced the f64 N = 256 median from
+  514.5 ns to 510.18/509.53 ns and N = 512 from 1,299.2 ns to
+  1,286.98/1,282.90 ns; N = 64/128 controls remained within 1%. Warm f32/f64
+  execution at all four lengths remains allocation-free through the global
+  allocator and direct Mnemosyne hooks. No cross-machine timing is claimed.
 - [patch] [perf] `apollo-fft` now uses Hermes' hardware-only exact-width
   selector for the planar combine when Apollo's existing scalar loop already
   owns the portable fallback. The unchanged local optimized `kernel_strategy`

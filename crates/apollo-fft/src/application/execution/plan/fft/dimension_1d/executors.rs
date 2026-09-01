@@ -329,7 +329,11 @@ pub(super) fn exec_base128_forward<F: MixedRadixScalar<Complex = Complex<F>>>(
     slice: &mut [F::Complex],
 ) {
     assert!(
-        transform_via_base_128::<F, false>(slice, plan.base128_forward_plan()),
+        transform_via_base_128::<F, false>(
+            slice,
+            plan.base128_forward_plan(),
+            plan.base128_twiddles::<false>(),
+        ),
         "invariant: the selected base-128 capability remains available"
     );
 }
@@ -339,7 +343,11 @@ pub(super) fn exec_base128_inverse<F: MixedRadixScalar<Complex = Complex<F>>>(
     slice: &mut [F::Complex],
 ) {
     assert!(
-        transform_via_base_128::<F, true>(slice, plan.base128_inverse_plan()),
+        transform_via_base_128::<F, true>(
+            slice,
+            plan.base128_inverse_plan(),
+            plan.base128_twiddles::<true>(),
+        ),
         "invariant: the selected base-128 capability remains available"
     );
     // The base-128 route serves n = 128, 256, and 512 (log2n 7, 8, 9 in
@@ -353,7 +361,11 @@ pub(super) fn exec_base128_inverse_unnorm<F: MixedRadixScalar<Complex = Complex<
     slice: &mut [F::Complex],
 ) {
     assert!(
-        transform_via_base_128::<F, true>(slice, plan.base128_inverse_plan()),
+        transform_via_base_128::<F, true>(
+            slice,
+            plan.base128_inverse_plan(),
+            plan.base128_twiddles::<true>(),
+        ),
         "invariant: the selected base-128 capability remains available"
     );
 }
