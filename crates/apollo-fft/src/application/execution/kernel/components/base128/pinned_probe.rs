@@ -7,17 +7,21 @@ use eunomia::Complex64;
 use hermes_simd::{ProcessorBinding, ProcessorIndex};
 use rustfft::num_complex::Complex as RustComplex;
 
-type BenchTransform = fn(&mut [Complex64], &super::instance_major::Plan128<f64>) -> bool;
+use crate::application::execution::kernel::mixed_radix::MixedRadixScalar;
+
+type BenchTransform =
+    fn(&mut [Complex64], &super::instance_major::Plan128<f64>, &[Complex64]) -> bool;
 
 #[inline(never)]
 fn run_bench_transform(
     source: &[Complex64],
     work: &mut [Complex64],
     plan: &super::instance_major::Plan128<f64>,
+    twiddles: &[Complex64],
     transform: BenchTransform,
 ) {
     work.copy_from_slice(source);
-    std::hint::black_box(transform)(std::hint::black_box(work), plan);
+    std::hint::black_box(transform)(std::hint::black_box(work), plan, twiddles);
 }
 
 fn phase_attribution(
@@ -154,19 +158,23 @@ fn final_store_sink_against_incumbent_by_core_type() {
             let mut candidate = source.clone();
             let mut incumbent = source.clone();
             let mut work = source.clone();
+            let twiddles = <f64 as MixedRadixScalar>::cached_twiddle_fwd(n);
             assert!(super::transform_via_base_128::<f64, false>(
                 &mut candidate,
-                &plan
+                &plan,
+                &twiddles,
             ));
             if n == 512 {
                 assert!(super::transform_via_base_128_incumbent::<f64, false>(
                     &mut incumbent,
-                    &plan
+                    &plan,
+                    &twiddles,
                 ));
             } else {
                 assert!(super::transform_via_base_128::<f64, false>(
                     &mut incumbent,
-                    &plan
+                    &plan,
+                    &twiddles,
                 ));
             }
             let error = candidate
@@ -192,16 +200,16 @@ fn final_store_sink_against_incumbent_by_core_type() {
                 candidate_transform
             };
             suite.run(BenchmarkCase::new(core, "final-store-a", n), || {
-                run_bench_transform(&source, &mut work, &plan, candidate_transform);
+                run_bench_transform(&source, &mut work, &plan, &twiddles, candidate_transform);
             });
             suite.run(BenchmarkCase::new(core, "incumbent-a", n), || {
-                run_bench_transform(&source, &mut work, &plan, incumbent_transform);
+                run_bench_transform(&source, &mut work, &plan, &twiddles, incumbent_transform);
             });
             suite.run(BenchmarkCase::new(core, "incumbent-b", n), || {
-                run_bench_transform(&source, &mut work, &plan, incumbent_transform);
+                run_bench_transform(&source, &mut work, &plan, &twiddles, incumbent_transform);
             });
             suite.run(BenchmarkCase::new(core, "final-store-b", n), || {
-                run_bench_transform(&source, &mut work, &plan, candidate_transform);
+                run_bench_transform(&source, &mut work, &plan, &twiddles, candidate_transform);
             });
         }
         println!("SINK cpu={landed} ({core})");

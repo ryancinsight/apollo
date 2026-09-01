@@ -366,6 +366,62 @@ fn dynamic_plan_owns_forward_and_lazily_initializes_inverse() {
 }
 
 #[test]
+fn dynamic_split_plans_share_complete_twiddle_tables() {
+    for n in [256usize, 512] {
+        let plan = crate::FftPlan1D::<f64>::new(crate::Shape1D { n });
+        let Some(_) = plan.base128.as_ref() else {
+            assert!(
+                plan.twiddle_fwd.is_some(),
+                "the incumbent route retains its forward twiddles"
+            );
+            continue;
+        };
+        let forward = plan
+            .twiddle_fwd
+            .as_ref()
+            .expect("a split base route retains its complete forward table");
+        assert_eq!(forward.len(), n - 1);
+        let cached = <f64 as crate::application::execution::kernel::mixed_radix::MixedRadixScalar>::cached_twiddle_fwd(n);
+        assert!(
+            std::sync::Arc::ptr_eq(forward, &cached),
+            "the plan must share the process cache allocation"
+        );
+        assert!(plan.twiddle_inv.get().is_none());
+
+        let clone = plan.clone();
+        assert!(std::sync::Arc::ptr_eq(
+            forward,
+            clone
+                .twiddle_fwd
+                .as_ref()
+                .expect("a split-plan clone shares its forward table")
+        ));
+
+        let source = signal(n);
+        let mut data = source.clone();
+        plan.forward_complex_slice_inplace(&mut data);
+        assert!(
+            plan.twiddle_inv.get().is_none(),
+            "forward execution must not initialize inverse twiddles"
+        );
+        plan.inverse_complex_slice_inplace(&mut data);
+        let inverse = plan
+            .twiddle_inv
+            .get()
+            .expect("inverse execution initializes the complete inverse table");
+        assert_eq!(inverse.len(), n - 1);
+        let initialized_clone = plan.clone();
+        assert!(std::sync::Arc::ptr_eq(
+            inverse,
+            initialized_clone
+                .twiddle_inv
+                .get()
+                .expect("an initialized split-plan clone shares inverse twiddles")
+        ));
+    }
+}
+
+#[test]
 fn dynamic_split_plans_normalize_by_full_length() {
     for n in super::BASE_SPLIT_LENGTHS {
         let plan = crate::FftPlan1D::<f64>::new(crate::Shape1D { n });
