@@ -1,5 +1,3 @@
-#![allow(clippy::many_single_char_names)]
-#![allow(clippy::too_many_arguments)]
 use super::super::avx::fixed_len64_reduced_avx_fma;
 #[cfg(all(test, target_arch = "x86_64"))]
 use super::super::avx::{
@@ -23,7 +21,6 @@ pub(crate) unsafe fn fixed_len512_precise_avx_fma(
     scratch: &mut [Complex64],
     twiddles: &[Complex64],
 ) {
-    #[allow(clippy::wildcard_imports)]
     use std::arch::x86_64::*;
     // Pass 1: radix 1, groups 256
     for j in 0..1 {
@@ -228,7 +225,6 @@ pub(crate) unsafe fn fixed_len512_reduced_avx_fma(
     scratch: &mut [Complex32],
     twiddles: &[Complex32],
 ) {
-    #[allow(clippy::wildcard_imports)]
     use std::arch::x86_64::*;
     // Pass 1: radix 1, groups 256
     for j in 0..1 {
@@ -378,7 +374,6 @@ unsafe fn fixed_len8_reduced_avx_fma(
     scratch: &mut [Complex32],
     twiddles: &[Complex32],
 ) {
-    #[allow(clippy::wildcard_imports)]
     use std::arch::x86_64::*;
     // Pass 1: radix 1, groups 4
     for j in 0..1 {
@@ -441,7 +436,6 @@ unsafe fn fixed_len4_reduced_avx_fma(
     scratch: &mut [Complex32],
     twiddles: &[Complex32],
 ) {
-    #[allow(clippy::wildcard_imports)]
     use std::arch::x86_64::*;
     // Pass 1: radix 1, groups 2
     for j in 0..1 {

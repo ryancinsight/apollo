@@ -653,7 +653,7 @@ where
     let mut reference = vec![T::from_precise(0.0); 2 * n];
     let bits = blocks.trailing_zeros();
     for b in 0..blocks {
-        let row = (b.reverse_bits() >> (usize::BITS - bits)) as usize;
+        let row = b.reverse_bits() >> (usize::BITS - bits);
         for j in 0..128 {
             reference[(row * 128 + j) * 2] = lanes[(j * blocks + b) * 2];
             reference[(row * 128 + j) * 2 + 1] = lanes[(j * blocks + b) * 2 + 1];

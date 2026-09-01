@@ -901,7 +901,7 @@
   and was **closed**, so this is a settled decision rather than an open defect;
   re-opening it needs new numerical evidence, not a rediscovery.
 
-## ATLAS-APOLLO-BUTTERFLY-BLANKET-ALLOWS-2026-08-29 — Module-wide lint allows in the butterfly kernels [patch] — todo
+## ATLAS-APOLLO-BUTTERFLY-BLANKET-ALLOWS-2026-08-29 — Module-wide lint allows in the butterfly kernels [patch] — done 2026-09-01
 
 - **Finding.** `stockham/butterfly/fixed.rs` and `stage.rs` open with
   module-scoped `#![allow(clippy::many_single_char_names)]` and
@@ -917,6 +917,16 @@
   site carries `#[expect]` with a reason naming why the butterfly kernel's
   single-character names or argument count are the domain's form. Clippy stays
   warning-clean.
+- **Delivered (2026-09-01, Claude `/root`).** Every one of the allows was
+  dead: removing all six module-scoped allows (`fixed.rs`, `hybrid.rs`, and
+  `stage.rs` — the third file the finding missed) fires no
+  `many_single_char_names` or `too_many_arguments` site at all —
+  `too_many_arguments` is already in the workspace's curated noise-allow set
+  (`Cargo.toml` `[workspace.lints]`), and no butterfly identifier trips the
+  other. The four per-site `#[allow(clippy::wildcard_imports)]` on the
+  `std::arch::x86_64::*` imports were dead likewise (converted to `#[expect]`,
+  all four reported unfulfilled) and are deleted. Net: zero suppressions in
+  the butterfly kernels, no `#[expect]` needed. Clippy warning-clean.
 
 
 ## ATLAS-APOLLO-BENCH-GATE-NOISE-2026-08-28 — The benchmark gate times on shared runners [patch] — todo
