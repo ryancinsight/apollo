@@ -17,8 +17,10 @@
 - [x] Pass 508/508 debug and release tests, warning-denied all-target/all-feature
       host Clippy and AArch64 checks, Rustdoc, doctest, formatting, the isolated
       allocation census, assembly inspection, and the 36-source lock gate.
-- [ ] Pass exact staged-diff review and hosted gates, then merge the item
-      without squash and record the delivery revisions.
+- [x] Commit exact source `074dedee` after exact staged-diff self-review with no
+      unrelated source or lock movement.
+- [ ] Pass hosted gates, then merge the item without squash and record the
+      delivery revisions.
 
 ## ATLAS-APOLLO-BASE-SPLIT-TWIDDLE-REUSE-2026-08-31 [perf] — Codex
 

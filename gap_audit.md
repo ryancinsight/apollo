@@ -43,8 +43,9 @@ entry and are 1.366x RustFFT in both runs. The f64 N = 96 ratio remains
 1.509x/1.509x, and the N = 64/128 controls do not show a candidate-specific
 regression. Release assembly for the three-row AVX2 specialization contains
 no calls or runtime capability probes and one backward branch for the row
-loop. The result is local Windows AVX2 evidence only. AArch64 validation is a
-compile gate; no AVX-512 execution or cross-machine throughput is established.
+loop. Exact source is `074dedee`. The result is local Windows AVX2 evidence
+only. AArch64 validation is a compile gate; no AVX-512 execution or
+cross-machine throughput is established.
 
 ## Base splits now borrow their retained complete twiddle table (2026-08-31) <a id="base-split-twiddle-reuse"></a>
 
