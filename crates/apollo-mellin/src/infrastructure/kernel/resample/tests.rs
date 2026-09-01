@@ -134,20 +134,31 @@ fn hermes_log_frequency_row_first_use_retains_only_weight_lanes() {
 
         let (actual, allocations) =
             count_thread_allocations(|| log_frequency_coeff_hermes(&samples, factor, scale, row));
+        let (warm_actual, warm_allocations) =
+            count_thread_allocations(|| log_frequency_coeff_hermes(&samples, factor, scale, row));
         let retained_lanes =
             LOG_FREQUENCY_WEIGHT_LANE_SCRATCH.with(mnemosyne::scratch::ScratchPool::capacity);
 
-        (actual, expected, allocations, retained_lanes)
+        (
+            actual,
+            warm_actual,
+            expected,
+            allocations,
+            warm_allocations,
+            retained_lanes,
+        )
     });
-    let (actual, expected, allocations, retained_lanes) =
+    let (actual, warm_actual, expected, allocations, warm_allocations, retained_lanes) =
         thread.join().expect("allocation census thread panicked");
 
     assert_abs_diff_eq!(actual.re, expected.re, epsilon = 1.0e-10);
     assert_abs_diff_eq!(actual.im, expected.im, epsilon = 1.0e-10);
+    assert_eq!(warm_actual, actual);
     assert_eq!(
         allocations, 1,
         "the first real-input row must allocate only its interleaved weight buffer"
     );
+    assert_eq!(warm_allocations, 0);
     assert_eq!(retained_lanes, LEN * 2);
 }
 
