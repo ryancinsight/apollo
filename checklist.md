@@ -19,8 +19,8 @@
       allocation census, assembly inspection, and the 36-source lock gate.
 - [x] Commit exact source `074dedee` after exact staged-diff self-review with no
       unrelated source or lock movement.
-- [ ] Pass hosted gates, then merge the item without squash and record the
-      delivery revisions.
+- [x] Merge PR #225 without squash as `eea29fd3`; hosted CI run `33471701498`
+      and benchmark run `33471700946` pass every repository gate.
 
 ## ATLAS-APOLLO-BASE-SPLIT-TWIDDLE-REUSE-2026-08-31 [perf] — Codex
 
