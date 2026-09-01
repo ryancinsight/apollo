@@ -161,7 +161,7 @@
   port-saturated, so boundary shuffles cost more inside it than in the
   gather's streaming loop. Third boundary-fusion falsification.
 
-## ATLAS-APOLLO-WIDE-STRIDED-LOADS-2026-09-01 — Strided phase-one loads at eight lanes [patch] [perf] — todo
+## ATLAS-APOLLO-WIDE-STRIDED-LOADS-2026-09-01 — Strided phase-one loads at eight lanes [patch] [perf] — done 2026-09-01
 
 - **Outcome:** the eight-lane kernel gains the complex-granularity strided
   load network, deleting the gather fallback, the external
@@ -173,8 +173,18 @@
   falsification: the value is a vectorized eight-lane *gather* (the f32
   route runs the blend network in the scalar-emulated frame today), not
   load fusion into phase one, which measured slower at four lanes.
+- **Delivered** (`gap_audit.md#wide-gather`): the gather dispatches at the
+  base plan's native width through hermes' pair deinterleaves — two-way
+  (PR #118) plus the fused four-way (PR #119) after the composed form
+  measured an E-core regression. ABBA pinned, fused vs pre-item: P-core
+  f32 512 **-10%** (1.45 -> 1.25 vs RustFFT), E-core **-5.4%**
+  (1.36 -> 1.29); f32 256 and f64 flat-to-slightly-better. Width asserted
+  by a mutation-hardened reference test at both dispatch widths.
+- **Integrator:** Claude `/root`.
 - **Baseline:** f32 256/512 after the shared column pass:
-  294.2 / 694.8 ns P-core (1.31 / 1.37 vs RustFFT).
+  294.2 / 694.8 ns — measured by the pre-`core_class` probe on cpu 2,
+  an efficiency core per ATLAS-APOLLO-INVERTED-CORE-CLAIMS-2026-09-01
+  (1.31 / 1.37 vs RustFFT).
 
 ## ATLAS-APOLLO-COLUMN-PASS-CONSOLIDATION-2026-09-01 — One column pass at every width, sinks included [patch] [perf] — done 2026-09-01
 

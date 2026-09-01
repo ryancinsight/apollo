@@ -636,3 +636,80 @@ fn f32_dynamic_plan_clones_execute_inverse_concurrently() {
         "second concurrent clone differs by {second_error:.3e} > {second_bound:.3e}"
     );
 }
+
+/// The gather must run at the plan's native width, not merely produce the
+/// right answer: a wrong-width dispatch falls back and still passes value
+/// checks, so this asserts the dispatched width handled the pass and that
+/// its output matches the scalar strided reference for both block counts.
+fn assert_gather_matches_reference<T>(blocks: usize)
+where
+    T: crate::application::execution::kernel::mixed_radix::MixedRadixScalar
+        + hermes_simd::LaneScalar,
+{
+    let n = blocks * 128;
+    let lanes: Vec<T> = (0..2 * n)
+        .map(|i| T::from_precise(((i * 37) % 97) as f64 * 0.125 - 4.0))
+        .collect();
+    let mut reference = vec![T::from_precise(0.0); 2 * n];
+    let bits = blocks.trailing_zeros();
+    for b in 0..blocks {
+        let row = (b.reverse_bits() >> (usize::BITS - bits)) as usize;
+        for j in 0..128 {
+            reference[(row * 128 + j) * 2] = lanes[(j * blocks + b) * 2];
+            reference[(row * 128 + j) * 2 + 1] = lanes[(j * blocks + b) * 2 + 1];
+        }
+    }
+    let mut narrow = vec![T::from_precise(0.0); 2 * n];
+    let mut wide = vec![T::from_precise(0.0); 2 * n];
+    let (narrow_handled, wide_handled) = if blocks == 2 {
+        (
+            hermes_simd::vectorize_lanes::<4, T, _>(super::split_boundary::GatherBlocks::<T, 2> {
+                src: &lanes,
+                dst: &mut narrow,
+            })
+            .unwrap_or(false),
+            hermes_simd::vectorize_lanes::<8, T, _>(super::split_boundary::GatherBlocks::<T, 2> {
+                src: &lanes,
+                dst: &mut wide,
+            })
+            .unwrap_or(false),
+        )
+    } else {
+        (
+            hermes_simd::vectorize_lanes::<4, T, _>(super::split_boundary::GatherBlocks::<T, 4> {
+                src: &lanes,
+                dst: &mut narrow,
+            })
+            .unwrap_or(false),
+            hermes_simd::vectorize_lanes::<8, T, _>(super::split_boundary::GatherBlocks::<T, 4> {
+                src: &lanes,
+                dst: &mut wide,
+            })
+            .unwrap_or(false),
+        )
+    };
+    // The four-lane request lands on a native or emulated four-lane frame
+    // everywhere this suite runs; it must handle and match bit-exactly
+    // (the pass moves values, computing nothing).
+    assert!(narrow_handled, "four-lane gather must be handled");
+    assert_eq!(narrow, reference, "four-lane gather output mismatch");
+    // The eight-lane request is handled exactly where the base plan selects
+    // the eight-lane layout; there it must match the same reference.
+    let plan_is_wide = super::instance_major::Plan128::<T>::new_if_supported::<false>()
+        .is_some_and(|plan| plan.native_eight_lanes());
+    if plan_is_wide {
+        assert!(
+            wide_handled,
+            "the eight-lane gather must handle where the plan is eight-lane"
+        );
+        assert_eq!(wide, reference, "eight-lane gather output mismatch");
+    }
+}
+
+#[test]
+fn gather_matches_the_strided_reference_at_both_widths() {
+    assert_gather_matches_reference::<f64>(2);
+    assert_gather_matches_reference::<f64>(4);
+    assert_gather_matches_reference::<f32>(2);
+    assert_gather_matches_reference::<f32>(4);
+}
