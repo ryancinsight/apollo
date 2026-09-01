@@ -1,6 +1,6 @@
 # Apollo Backlog
 
-## ATLAS-APOLLO-BASE-SPLIT-TWIDDLE-REUSE-2026-08-31 — Retain selected split twiddles in the plan [patch] [perf] — review
+## ATLAS-APOLLO-BASE-SPLIT-TWIDDLE-REUSE-2026-08-31 — Retain selected split twiddles in the plan [patch] [perf] — done 2026-08-31
 
 - **Outcome.** Remove the per-execution global twiddle-cache lookup and
   temporary `Arc` acquisition from the f64 N = 256/512 base-split route by
@@ -34,11 +34,11 @@
   warning-denied all-target/all-feature host Clippy and AArch64 Windows check,
   Rustdoc, doctest, formatting, diff, and the 36-source standalone lock guard
   pass.
-- **Integrator / lease:** `/root`; lease none. Exact source `ef612116`;
-  independent review and hosted comparison/merge remain. Last update
-  2026-08-31.
+- **Delivery.** PR #222 merged without squash as `01737ec4`; exact source
+  `ef612116`. Repository lock/workspace/bindings gates, executable identity,
+  all four counterbalanced pairs, and the final comparator pass; lease none.
 
-## ATLAS-APOLLO-HARDWARE-LANE-LINK-2026-08-31 — Remove the redundant portable combine specialization [patch] [perf] — blocked
+## ATLAS-APOLLO-HARDWARE-LANE-LINK-2026-08-31 — Remove the redundant portable combine specialization [patch] [perf] — done 2026-08-31
 
 - **Outcome.** Use Hermes' hardware-only exact-width selector at the planar
   combine boundary, where Apollo already owns the portable scalar fallback, so
@@ -64,12 +64,14 @@
   the unchanged benchmark smoke, formatting, diff, and the 36-source
   standalone-lock guard pass. Paired N = 64/256 timings are inconclusive and
   are not performance evidence for this item.
-- **Hosted blocker.** PR #221 merged without squash as `fcc306a5`; lock,
+- **Hosted closure.** PR #221 merged without squash as `fcc306a5`; lock,
   workspace, bindings, both artifacts, executable identity, and all four pair
   jobs pass. The final comparator is red on unrelated f64 N = 107 Rader
-  `auto` and `half_cyclic` rows, slower in all four comparisons. Re-open on a
-  measured fix-forward that clears the unchanged comparator; do not weaken its
-  oracle.
+  `auto` and `half_cyclic` rows, slower in all four comparisons. Exact
+  baseline/candidate disassembly shows identical normalized instructions and
+  sizes throughout the f64 Rader path and benchmark driver, with only function
+  addresses/alignment changed. The unchanged successor PR #222 comparator
+  passes every row, so no Rader source correction or oracle change is retained.
 - **Integrator / lease:** `/root`; lease none. Exact source `e01cadca`; merge
   `fcc306a5`. Last update 2026-08-31.
 

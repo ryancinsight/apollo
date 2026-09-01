@@ -36,6 +36,10 @@ Windows compilation, Rustdoc, and doctest. This is local Windows AVX2 timing
 evidence on logical processor 2; it does not establish AArch64, AVX-512, or
 cross-machine latency.
 
+Apollo PR #222 merged without squash as `01737ec4`. The exact hosted lock,
+workspace, Python binding, executable-identity, four counterbalanced-pair, and
+final regression-comparator jobs pass at head `1fe74a9b`.
+
 ## Portable exact-width fallback was linked behind a hardware-only probe (2026-08-31) <a id="hardware-lane-link-footprint"></a>
 
 Apollo's planar combine tries exact eight lanes, then exact four lanes, before
@@ -65,9 +69,16 @@ The final comparator nevertheless rejected two f64 N = 107 Rader rows:
 `auto_f64` was slower in all four comparisons by 0.47--4.08%, and
 `half_cyclic_f64` by 0.26--11.92% (the 11.92% sample is the outlier; the other
 three are 0.26--0.45%). Those rows do not execute the changed planar combine,
-so this is an unresolved whole-binary layout or measurement effect rather than
-evidence for the linked-footprint mechanism. The repository gate is red and
-must be closed by a measured fix-forward; it is not omitted from the record.
+so this was investigated as a whole-binary effect. Exact baseline/candidate
+ELF review finds identical normalized instruction streams and identical sizes
+for the complete f64 forward Rader kernel, half-cyclic convolution backend,
+negacyclic convolution, runtime closure, and benchmark driver; their addresses
+and cache-line offsets differ. The unchanged PR #222 comparator then passes
+every row. The failure is therefore closed as non-reproducing layout-sensitive
+measurement; no Rader source or benchmark-oracle change is retained. Local
+execution of the Linux artifacts was unavailable because the installed WSL
+distribution's virtual-disk path is broken, so the attribution is static
+codegen evidence plus the two hosted comparisons, not a local Linux rerun.
 
 ## Quarter-turn twiddle reuse regresses the final base-128 sink (2026-08-31) <a id="base128-quarter-turn"></a>
 

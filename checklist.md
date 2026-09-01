@@ -13,8 +13,8 @@
       N = 256/512 with N = 64/128 controls neutral; otherwise record rejection.
 - [x] Commit exact source `ef612116`, regenerate/check the standalone 36-source
       lock, and discharge the source/PM lease without staging unrelated dirt.
-- [ ] Obtain independent exact-object review, pass the unchanged hosted
-      comparison, and merge without squash.
+- [x] Complete exact staged-diff self-review, pass the unchanged hosted
+      comparison, and merge PR #222 without squash as `01737ec4`.
 
 ## ATLAS-APOLLO-HARDWARE-LANE-LINK-2026-08-31 [perf] — Codex
 
@@ -34,8 +34,9 @@
       exact staged-diff self-review with no unrelated source or lock movement.
 - [x] Merge PR #221 without squash as `fcc306a5`; lock, workspace, bindings,
       artifacts, executable identity, and all four pair jobs pass.
-- [ ] Close the post-merge final-comparator failure on f64 N = 107 Rader
-      `auto` and `half_cyclic` without changing the benchmark oracle.
+- [x] Close the post-merge N = 107 Rader failure without changing source or the
+      benchmark oracle: PR #221 instructions are identical modulo addresses,
+      and the unchanged PR #222 comparator passes every row.
 
 ## ATLAS-APOLLO-F64-BASE128-ATTRIBUTION-2026-08-31 [perf] — Codex
 
