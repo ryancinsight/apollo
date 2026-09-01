@@ -21,7 +21,10 @@ pub(crate) unsafe fn fixed_len512_precise_avx_fma(
     scratch: &mut [Complex64],
     twiddles: &[Complex64],
 ) {
-    use std::arch::x86_64::*;
+    use std::arch::x86_64::{
+        _mm256_add_pd, _mm256_addsub_pd, _mm256_loadu_pd, _mm256_mul_pd, _mm256_permute2f128_pd,
+        _mm256_permute_pd, _mm256_set1_pd, _mm256_set_pd, _mm256_storeu_pd, _mm256_sub_pd,
+    };
     // Pass 1: radix 1, groups 256
     for j in 0..1 {
         let w = twiddles[j];
@@ -225,7 +228,10 @@ pub(crate) unsafe fn fixed_len512_reduced_avx_fma(
     scratch: &mut [Complex32],
     twiddles: &[Complex32],
 ) {
-    use std::arch::x86_64::*;
+    use std::arch::x86_64::{
+        _mm256_add_ps, _mm256_fmaddsub_ps, _mm256_loadu_ps, _mm256_mul_ps, _mm256_permute_ps,
+        _mm256_set1_ps, _mm256_storeu_ps, _mm256_sub_ps,
+    };
     // Pass 1: radix 1, groups 256
     for j in 0..1 {
         let w = twiddles[j];
@@ -374,14 +380,11 @@ unsafe fn fixed_len8_reduced_avx_fma(
     scratch: &mut [Complex32],
     twiddles: &[Complex32],
 ) {
-    // `allow`, not `expect`: clippy evaluates `wildcard_imports` only in the
-    // plain library build and skips it under the test cfg, so no static
-    // expectation holds in both compilations.
-    #[allow(
-        clippy::wildcard_imports,
-        reason = "the intrinsic set is this kernel's vocabulary"
-    )]
-    use std::arch::x86_64::*;
+    use std::arch::x86_64::{
+        _mm256_add_ps, _mm256_castps256_ps128, _mm256_fmaddsub_ps, _mm256_loadu_ps, _mm256_mul_ps,
+        _mm256_permute2f128_ps, _mm256_permute_ps, _mm256_set1_ps, _mm256_storeu_ps, _mm256_sub_ps,
+        _mm_storeu_ps,
+    };
     // Pass 1: radix 1, groups 4
     for j in 0..1 {
         let w = twiddles[j];
@@ -443,14 +446,10 @@ unsafe fn fixed_len4_reduced_avx_fma(
     scratch: &mut [Complex32],
     twiddles: &[Complex32],
 ) {
-    // `allow`, not `expect`: clippy evaluates `wildcard_imports` only in the
-    // plain library build and skips it under the test cfg, so no static
-    // expectation holds in both compilations.
-    #[allow(
-        clippy::wildcard_imports,
-        reason = "the intrinsic set is this kernel's vocabulary"
-    )]
-    use std::arch::x86_64::*;
+    use std::arch::x86_64::{
+        _mm256_add_ps, _mm256_castps256_ps128, _mm256_fmaddsub_ps, _mm256_loadu_ps, _mm256_mul_ps,
+        _mm256_permute2f128_ps, _mm256_permute_ps, _mm256_set1_ps, _mm256_sub_ps, _mm_storeu_ps,
+    };
     // Pass 1: radix 1, groups 2
     for j in 0..1 {
         let w = twiddles[j];
