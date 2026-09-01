@@ -312,7 +312,7 @@
 - **Outcome.** Retain the exact reusable CPU STFT benchmark at `c1853792`; reject the fused Hermes consumer and its otherwise-unused public provider surface. The source-equivalent candidate removed two retained real scratch buffers (16,384 bytes per active worker at frame length 1,024) and kept warm execution allocation-free, but it did not clear the predeclared complete-path latency gate.
 - **Evidence.** In the first adjacent pair, the scalar control moved -6.96% while the 16,384/65,536-sample target medians moved -4.46%/-10.31%; in the second, control moved -0.15% while targets moved -0.14%/-0.83%. Target confidence intervals overlap and the first-pair movement is control-confounded, so no latency win is attributed. The experimental source and allocation test were removed before commit; production source is unchanged. Timing is local Windows AVX2 evidence only. Commits `c1853792`/`4d1e5e35` delivered with the canonical lock advance; the re-open trigger (lock regeneration) fired and was executed in the same takeover. Lease none.
 
-## ATLAS-APOLLO-BATCHED-NATIVE-WIDTH-2026-09-01 — The f32 reinterleave sink ran at half the native width [patch] [perf] — review
+## ATLAS-APOLLO-BATCHED-NATIVE-WIDTH-2026-09-01 — The f32 reinterleave sink ran at half the native width [patch] [perf] — done 2026-09-01
 
 - **Outcome.** `InterleaveRows`, the last batched boundary kernel hardcoding
   four lanes, takes the f32 native eight-lane width. The f64 route is unchanged.
@@ -349,6 +349,11 @@
   `crates/apollo-fft/src/application/execution/kernel/components/batched/**`.
   Last update 2026-09-01.
 
+- **Closed by verification (2026-09-01, Claude `/root`).** Source landed
+  through PR #231 (`35672941`) and is an ancestor of main; the "hosted review
+  and merge remain" line above predates that merge. The width test
+  (`f32_reinterleave_takes_the_native_width_and_matches_the_scalar_sink`)
+  runs in the 521-test suite that passed on today's tree.
 ## ATLAS-APOLLO-HERMES-COMPLEX-TRANSPOSE-2026-09-01 — Tile multidimensional complex transposes [patch] [perf] — done 2026-09-01
 
 - **Outcome.** Apollo source `9ac833cd` delegates its private 2-D/3-D complex transpose to Leto Ops PR #135/merge `060eb7eb`, which owns the allocation-free Hermes 16/8/4-lane tile selection and generic fallback; transform, Leto-view, Mnemosyne-scratch, and Moirai-scheduling contracts remain unchanged.
@@ -784,7 +789,7 @@
   (`ATLAS-SEMVER-GATE-FLEETWIDE`); this is the apollo-specific blocker that
   would keep apollo failing even once that item lands.
 
-## ATLAS-APOLLO-WAVELET-DOC-LINKS-2026-08-29 — Three unresolved intra-doc links in apollo-wavelet [patch] — todo
+## ATLAS-APOLLO-WAVELET-DOC-LINKS-2026-08-29 — Three unresolved intra-doc links in apollo-wavelet [patch] — done 2026-09-01
 
 - **Finding.** `RUSTDOCFLAGS="-D warnings" cargo doc` fails on
   `apollo-wavelet`: unresolved links to `coefficient`, `convolution`, and
@@ -793,6 +798,14 @@
 - **Origin:** commit `e2f7ed21`, outside this session's lease. Left for the
   owner rather than fixed in an unrelated PR.
 
+- **Delivered (2026-09-01, Claude `/root`).** Both items are public and
+  documented (`fn.coefficient.html`, `convolution/` are generated), yet the
+  relative forms (`[coefficient]`, `self::`, `super::coefficient`) do not
+  resolve from these module docs under 1.97 rustdoc; fully-qualified
+  `crate::infrastructure::kernel::continuous::…` paths do, keeping the
+  links navigable rather than demoting them to code spans. Warning-denied
+  `cargo doc -p apollo-wavelet` passes; the same pass also fixed
+  `apollo-fft`'s `real_fft` private-item link (#247).
 ## ATLAS-APOLLO-SHT-FFT-2026-08-29 — SHT longitude FFT factorization [minor] — in-progress
 
 - **Outcome:** the longitude sum in both SHT directions is computed as a DFT
