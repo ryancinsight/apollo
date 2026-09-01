@@ -1,6 +1,6 @@
 # Apollo Backlog
 
-## ATLAS-APOLLO-F32-N32768-STAGES-2026-08-31 — Attribute the remaining large-f32 stage deficit [patch] [perf] — in progress
+## ATLAS-APOLLO-F32-N32768-STAGES-2026-08-31 — Attribute the remaining large-f32 stage deficit [patch] [perf] — review
 
 - **Outcome.** Attribute and reduce the remaining f32 N = 32,768 latency gap
   after the exact-eight-lane transpose correction.
@@ -19,15 +19,17 @@
   which removed the prior transpose bottleneck. Exact local Windows AVX2
   measurements are required; AArch64 remains compilation coverage unless a
   runner supplies timing evidence.
-- **Integrator / lease:** `/root`; lease `/root` on `batched/boundary.rs`, the
-  planar combine in `batched/mod.rs`, its focused `batched/tests.rs` oracle,
-  this item block, its checklist section, and the resulting
-  gap-audit/CHANGELOG entries. Three processor-2 runs place
-  f32 N = 32,768 stage set 1 at 74,559--76,138 cycles, stage set 2 at
-  78,821--79,336, transpose at 17,320--17,488, and the still-scalar fused
-  combine/output pass at 56,600--61,328. The stage sets already use Hermes'
-  native eight-lane dispatch; the combine is the remaining structural SIMD
-  gap selected for a bounded candidate. Last update 2026-08-31.
+- **Integrator / lease:** `/root`; lease none. Source `d1dda1bf` routes the
+  combine through Hermes exact-eight/exact-four lane kernels with the unchanged
+  scalar fallback. Three processor-2 runs reduce its median 40.06%
+  (57,172 -> 34,269 cycles) and the full instrumented-route median 8.66%
+  (256,514 -> 234,310 cycles); f64 moves 0.38% lower. Two unchanged
+  comparisons report Apollo f32 N = 32,768 at 66.37/66.42 microseconds versus
+  RustFFT at 66.26/67.94. Debug/release package tests pass 506/506, the focused
+  analytical oracles pass 2/2, the warm global/Mnemosyne census remains zero,
+  and warning-denied Clippy, AArch64 compilation, Rustdoc, doctest, format,
+  diff, and 36-source standalone-lock gates pass. Independent review, hosted
+  gates, PR, and non-squash merge remain. Last update 2026-08-31.
 
 ## ATLAS-APOLLO-F32-N32768-THROUGHPUT-2026-08-31 — Localize the stable f32 N=32,768 deficit [patch] [perf] — review
 
