@@ -19,10 +19,19 @@
 - **Risk / dependencies.** [patch] [perf]. Depends on merged native-width base
   lanes and sink fusion through PR #219 / `8ef1e5d3`. Local Windows AVX2 timing
   is empirical evidence; AArch64 remains compile coverage.
-- **Integrator / lease:** `/root`; lease `/root` on this item block and its
-  checklist section only while entry attribution runs. Production and
-  instrument leases will be named only after one current phase reproduces.
-  Last update 2026-08-31.
+- **Entry attribution.** Three processor-2 comparisons place f64 N = 256 at
+  1.2533--1.2564x RustFFT and N = 512 at 1.2403--1.2475x. Three release phase
+  runs place N = 256 at 54.9--55.0 ns gather, 362.7--363.8 ns base blocks,
+  and 95.3--97.1 ns fused-combine residual; N = 512 is 116.2--116.5 ns,
+  725.9--726.9 ns, and 450.7--459.2 ns respectively. The final four-block
+  sink is the largest non-base phase. Its two outer twiddle vectors differ by
+  an exact quarter turn, so a bounded candidate removes the second table load
+  and derives that turn in-register; reject unless the full comparison moves.
+- **Integrator / lease:** `/root`; lease `/root` on
+  `base128/instance_major/store.rs`, the final-sink call in `base128/mod.rs`,
+  focused base tests, this item/checklist section, and resulting
+  gap-audit/CHANGELOG entries. The existing probes remain read-only. Last
+  update 2026-08-31.
 
 ## ATLAS-APOLLO-F32-N32768-STAGES-2026-08-31 — Attribute the remaining large-f32 stage deficit [patch] [perf] — review
 
