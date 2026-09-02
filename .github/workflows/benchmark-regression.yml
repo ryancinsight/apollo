@@ -61,7 +61,14 @@ jobs:
           - candidate
     env:
       BASELINE_REF: ${{ github.event_name == 'pull_request' && github.event.pull_request.base.sha || inputs.baseline_ref }}
-      CANDIDATE_REF: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || inputs.candidate_ref }}
+      # The candidate is the pull request's merge ref, not its head. The
+      # baseline is the base branch's tip at event time; a head that has not
+      # been rebased lacks every commit main gained since it branched, so
+      # comparing the two measures main's own progress as the PR's regression.
+      # The merge ref carries the same base plus exactly the PR's change, so
+      # the pair differs by the PR alone -- and an identical pair correctly
+      # skips measurement.
+      CANDIDATE_REF: ${{ github.event_name == 'pull_request' && format('refs/pull/{0}/merge', github.event.pull_request.number) || inputs.candidate_ref }}
       CARGO_TARGET_DIR: ${{ github.workspace }}/target
       REVISION: ${{ matrix.revision }}
     steps:
