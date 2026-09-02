@@ -83,6 +83,38 @@ cells, so the +1.0–1.2% f32 rows are inside the instrument's spread and the
 −2.8%/−4.5% f64 rows are the only movements that clear it. Verdict: neutral,
 with a small f64 gain; the gate passes.
 
+## Second slice: the single stage (2026-09-02)
+
+`stockham/avx/generic/base.rs` became `butterfly/lanes/base.rs`
+(`BaseStage`), the lane kernels moved under `butterfly/lanes/` with one
+shared differential harness, and the backend trait lost the four scalar
+helpers only the retired copies called. Ratchet: 237 → 220.
+
+Same instrument, pair-slice binary as `before`, two rounds, medians in µs
+(`after/before` on the better round):
+
+| core | prec | n | before | after | after/before |
+| --- | --- | --- | --- | --- | --- |
+| performance | f32 | 1024 | 7728 | 7714 | 0.998 |
+| performance | f32 | 4096 | 4457 | 4196 | 0.941 |
+| performance | f32 | 32768 | 50685 | 51523 | 1.017 |
+| performance | f64 | 1024 | 1803 | 1896 | 1.051 |
+| performance | f64 | 4096 | 9292 | 8755 | 0.942 |
+| performance | f64 | 32768 | 103308 | 104732 | 1.014 |
+| efficiency | f32 | 1024 | 3328 | 3325 | 0.999 |
+| efficiency | f32 | 4096 | 6958 | 7042 | 1.012 |
+| efficiency | f32 | 32768 | 65941 | 65770 | 0.997 |
+| efficiency | f64 | 1024 | 3017 | 3016 | 1.000 |
+| efficiency | f64 | 4096 | 13229 | 13065 | 0.988 |
+| efficiency | f64 | 32768 | 124752 | 125584 | 1.007 |
+
+The base routes (256, 512) were controls and moved by at most 1.7%. The
+efficiency-core rows are within 1.2%; on the performance core the same
+binary spread 25% between rounds at f32 32768 (50685 vs 63203), so the
++1.4–5.1% cells there are inside the instrument and the −5.8/−5.9% cells at
+4096 are the only movements that clear it. Verdict: neutral, small gain at
+4096; the gate passes.
+
 ## Alternatives rejected
 
 - **Retire the AVX Stockham backend wholesale** onto the auto-vectorized scalar
