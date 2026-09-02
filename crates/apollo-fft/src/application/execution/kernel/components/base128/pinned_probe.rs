@@ -398,7 +398,7 @@ fn half_storage_against_its_kernel(suite: &mut BenchmarkSuite, core: &str) {
         let source32: Vec<Complex32> = (0..n)
             .map(|index| {
                 let x = index as f32;
-                Complex32::new((0.017 * x).sin(), 0.25 * (0.031 * x).cos())
+                Complex32::new((0.017_f32 * x).sin(), 0.25 * (0.031_f32 * x).cos())
             })
             .collect();
         let source16: Vec<Complex<f16>> = source32
@@ -462,6 +462,76 @@ fn half_storage_against_its_kernel(suite: &mut BenchmarkSuite, core: &str) {
     }
 }
 
+/// Two-dimensional transforms whose axis lengths the power-of-two twiddle
+/// table cannot serve.
+///
+/// `FftPlan2D` precomputes a twiddle table per axis, but only for
+/// power-of-two lengths; every other length falls through to `mixed_radix`'s
+/// free functions, which re-derive the twiddles and the radix decomposition.
+/// That fallback runs once per line, so its cost is multiplied by the axis
+/// length rather than paid once per transform. The power-of-two shape is the
+/// control: it takes the precomputed path either way and must not move.
+#[cfg(test)]
+fn two_dimensional_lane_route(suite: &mut BenchmarkSuite, core: &str) {
+    use eunomia::Complex32;
+    use leto::Array2;
+
+    for [nx, ny] in [[96usize, 96], [100, 100], [128, 128]] {
+        let source: Array2<Complex32> = Array2::from_shape_fn([nx, ny], |[row, column]| {
+            let x = (row * ny + column) as f32;
+            Complex32::new((0.017 * x).sin(), 0.25 * (0.031 * x).cos())
+        });
+        let plan = crate::FftPlan2D::<f32>::new(
+            crate::Shape2D::new(nx, ny).expect("invariant: probe shapes are non-zero"),
+        );
+        let mut work = source.clone();
+        suite.run(
+            BenchmarkCase::new(core, format!("fft2d-{nx}x{ny}"), nx * ny),
+            || {
+                work.assign(&source.view());
+                plan.forward_complex_inplace(std::hint::black_box(&mut work));
+            },
+        );
+    }
+}
+
+/// One lane of a non-power-of-two axis, through both routes, in one process.
+///
+/// This is the whole of the two-dimensional change: the lane body used to be
+/// `mixed_radix`'s free function and is now the cached 1-D plan. Measuring the
+/// substitution directly keeps both arms in one binary — a two-binary
+/// before/after at these magnitudes moves its own control by several points
+/// under peer build load.
+#[cfg(test)]
+fn non_power_of_two_lane_route(suite: &mut BenchmarkSuite, core: &str) {
+    use crate::application::execution::kernel::mixed_radix::forward_inplace;
+    use eunomia::Complex32;
+
+    for n in [96usize, 100, 128, 256, 384, 512, 1000] {
+        let source: Vec<Complex32> = (0..n)
+            .map(|index| {
+                let x = index as f32;
+                Complex32::new((0.017_f32 * x).sin(), 0.25 * (0.031_f32 * x).cos())
+            })
+            .collect();
+        let plan = crate::FftPlan1D::<f32>::new(
+            crate::Shape1D::new(n).expect("invariant: probe lengths are non-zero"),
+        );
+
+        let mut work = source.clone();
+        suite.run(BenchmarkCase::new(core, "lane-free-fn", n), || {
+            work.copy_from_slice(&source);
+            forward_inplace::<f32>(std::hint::black_box(&mut work));
+        });
+
+        let mut work_plan = source.clone();
+        suite.run(BenchmarkCase::new(core, "lane-plan", n), || {
+            work_plan.copy_from_slice(&source);
+            plan.forward_complex_slice_inplace(std::hint::black_box(&mut work_plan));
+        });
+    }
+}
+
 #[test]
 #[ignore = "measurement instrument for the half-storage promotion cost"]
 fn half_storage_promotion_cost_by_core_type() {
@@ -492,6 +562,62 @@ fn half_storage_promotion_cost_by_core_type() {
         let mut suite = BenchmarkSuite::new(BenchmarkConfig::regression());
         half_storage_against_its_kernel(&mut suite, core);
         println!("HALF cpu={landed} ({core})");
+        print!("{}", suite.report());
+    }
+}
+
+#[test]
+#[ignore = "measurement instrument for the two-dimensional lane route"]
+fn two_dimensional_lane_route_by_core_type() {
+    let Some(selection) = measurement_cores::selected() else {
+        eprintln!("host reports no processor class information; probe not measurable");
+        return;
+    };
+    print!("{}", selection.describe());
+    for core in selection.cores() {
+        let cpu = core.processor().get();
+        let _binding = ProcessorBinding::bind(core.processor())
+            .expect("measurement processor must be available");
+        std::thread::yield_now();
+        let landed = ProcessorIndex::current()
+            .expect("Windows supports processor queries")
+            .get();
+        assert_eq!(landed, cpu, "processor binding must remain exact");
+        let core = core.label();
+        let mut warmup = BenchmarkSuite::new(BenchmarkConfig::regression());
+        two_dimensional_lane_route(&mut warmup, core);
+        drop(warmup);
+        let mut suite = BenchmarkSuite::new(BenchmarkConfig::regression());
+        two_dimensional_lane_route(&mut suite, core);
+        println!("FFT2D cpu={landed} ({core})");
+        print!("{}", suite.report());
+    }
+}
+
+#[test]
+#[ignore = "measurement instrument for the non-power-of-two lane route"]
+fn non_power_of_two_lane_route_by_core_type() {
+    let Some(selection) = measurement_cores::selected() else {
+        eprintln!("host reports no processor class information; probe not measurable");
+        return;
+    };
+    print!("{}", selection.describe());
+    for core in selection.cores() {
+        let cpu = core.processor().get();
+        let _binding = ProcessorBinding::bind(core.processor())
+            .expect("measurement processor must be available");
+        std::thread::yield_now();
+        let landed = ProcessorIndex::current()
+            .expect("Windows supports processor queries")
+            .get();
+        assert_eq!(landed, cpu, "processor binding must remain exact");
+        let core = core.label();
+        let mut warmup = BenchmarkSuite::new(BenchmarkConfig::regression());
+        non_power_of_two_lane_route(&mut warmup, core);
+        drop(warmup);
+        let mut suite = BenchmarkSuite::new(BenchmarkConfig::regression());
+        non_power_of_two_lane_route(&mut suite, core);
+        println!("LANE cpu={landed} ({core})");
         print!("{}", suite.report());
     }
 }

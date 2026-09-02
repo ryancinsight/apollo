@@ -1,5 +1,43 @@
 # Apollo Backlog
 
+## ATLAS-APOLLO-PLAN-UNDERSELECTS-COMPOSITE-2026-09-02 — The cached plan is slower than the ad-hoc dispatcher for composite lengths [patch] [perf] — todo <a id="atlas-apollo-plan-underselects-composite"></a>
+
+- **Finding.** `FftPlan1D::forward_complex_slice_inplace` and
+  `mixed_radix::forward_inplace` compute the same transform by different
+  routes, and the plan — the artifact that exists precisely to hold the
+  precomputed decomposition — is the *slower* of the two for non-power-of-two
+  lengths. Both compiled into one binary, arms alternating in one process,
+  `f32` forward, performance core, minimum of 100 pinned samples:
+
+  | n | free function | plan | |
+  | --- | --- | --- | --- |
+  | 96 | 72.73 ns | 72.50 | wash |
+  | 100 | 101.40 | 130.65 | plan +29% |
+  | 128 | 112.40 | 60.93 | plan -46% |
+  | 256 | 226.16 | 146.71 | plan -35% |
+  | 384 | 281.79 | 354.34 | plan +26% |
+  | 512 | 395.69 | 323.54 | plan -18% |
+  | 1000 | 1036.65 | 1025.36 | wash |
+
+- **Why it matters beyond the entry point that found it.** A plan that selects
+  worse than the ad-hoc dispatcher inverts the reason plans exist, and the
+  workaround it forces — `is_power_of_two` at the one call site that noticed —
+  is a measured condition guarding a defect rather than a design. Every
+  consumer that holds a composite-length `FftPlan1D` (2-D and 3-D lane passes
+  among them) is paying the same difference without a predicate to route
+  around it.
+- **First question for whoever takes it:** which strategy each route selects
+  at n = 100 and n = 384, and whether the plan's construction-time choice is
+  simply different from the dispatcher's runtime choice or is the same choice
+  reached through more indirection. `PlanStrategy` is already exposed under
+  `#[cfg(test)]`, so the comparison is readable without new instrumentation.
+- **Acceptance:** the plan is no slower than the free function at every length
+  in the table above, measured in one binary with alternating arms; then the
+  `is_power_of_two` condition in `fft_precision_impl!`'s fallback is removed
+  and the entry re-measured.
+- **Instrument:** `non_power_of_two_lane_route_by_core_type` in
+  `pinned_probe.rs` runs exactly this comparison.
+
 ## ATLAS-APOLLO-ONESHOT-MISSES-THE-PLAN-2026-09-02 — The f32/f64 one-shot entry re-derived its plan on every call [patch] [perf] — done 2026-09-02
 
 - **Found while verifying the f16 storage route** (`ATLAS-APOLLO-STORAGE-ROUTE-MISSES-THE-PLAN`).
@@ -33,6 +71,20 @@
 - **Behavioral note:** `fft_forward` now populates the 1-D plan cache, which
   the rest of the public 1-D surface already did. The warm path is a
   thread-local hit, so it adds no lock traffic.
+- **Corrected in the same session, before the next increment.** Routing *all*
+  non-codelet lengths through the plan was wrong: measured with both routes in
+  one binary and the arms alternating in one process, the plan is the faster
+  route only for power-of-two lengths and the slower one for composites
+  (n = 100 free 101.40 ns against plan 130.65; n = 384 281.79 against 354.34;
+  n = 96 and n = 1000 a wash). So `b5c24364` improved 128/256/512 and
+  regressed 100/384 by 21-29% on the same entry. The fallback now tests
+  `is_power_of_two`, which keeps the measured win (n = 128 1.86x -> 1.13x of
+  the plan, 256 1.52x -> 1.09x, 512 1.21x -> 1.04x) and returns every
+  composite length to the route it had. The commit message's mechanism claim —
+  that the free functions re-derive per call — is not what the data shows: it
+  would predict the plan winning at every length, and it does not. What is
+  established is the split, and that the two routes reach different strategies
+  for composites (`#atlas-apollo-plan-underselects-composite`).
 - 547/547 native tests, doctests, clippy clean, fmt clean.
 
 ## ATLAS-APOLLO-HALF-STAGING-UNINIT-2026-09-02 — The half staging buffer was zeroed before being overwritten [patch] [perf] — done 2026-09-02
