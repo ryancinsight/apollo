@@ -35,6 +35,22 @@ jobs:
 
   # Guards the one artifact whose correctness cannot be checked from inside the
   # overlay environment that produces it. Calls the shared Atlas workflow.
+  # The shared Atlas SemVer gate (ADR 0035 family): informational against the
+  # PR base while a change is in review, blocking against the latest
+  # published version on release. The published baseline is what makes the
+  # gate reachable for this workspace at all — a tag baseline rebuilt from
+  # source cannot resolve first-party git dependencies that have since bumped
+  # (ATLAS-APOLLO-SEMVER-BASELINE-UNBUILDABLE). The package list is every
+  # member published on crates.io; apollo-bench and apollo-python are not.
+  semver:
+    name: SemVer gate
+    uses: ryancinsight/atlas/.github/workflows/semver-gate.yml@9062cfc6d78808cf1b7af60ae97f11825a6c8468
+    with:
+      package: apollo-czt,apollo-dctdst,apollo-dht,apollo-fft,apollo-fft-macros,apollo-frft,apollo-fwht,apollo-gft,apollo-hilbert,apollo-leto-interop,apollo-mellin,apollo-ntt,apollo-nufft,apollo-qft,apollo-radon,apollo-sdft,apollo-sft,apollo-sht,apollo-stft,apollo-validation,apollo-wavelet
+      rust-toolchain: 1.97.0
+    permissions:
+      contents: read
+
   lockfile:
     name: Lockfile integrity
     uses: ryancinsight/atlas/.github/workflows/lockfile-guard.yml@886d85b0e4bea20c8e5ec4b4239e6ba9cdbcf74d

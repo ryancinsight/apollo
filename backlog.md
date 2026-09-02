@@ -929,25 +929,11 @@
   this kind should name the measurement's premises, not just its number — the
   replacement comment does.
 
-## ATLAS-APOLLO-SEMVER-BASELINE-UNBUILDABLE-2026-08-29 — cargo-semver-checks cannot build the released baseline [patch] — todo
+## ✅ ATLAS-APOLLO-SEMVER-BASELINE-UNBUILDABLE-2026-08-29 — cargo-semver-checks cannot build the released baseline [patch] — done 2026-09-02
 
-- **Finding.** `cargo semver-checks check-release -p apollo-fft --baseline-rev
-  crate-apollo-fft-v0.26.0` fails before producing any verdict: the released
-  manifest requires `hermes-simd = "^0.6.0"` and the git source now publishes
-  only 0.7.0, so resolving the baseline errors out. The gate cannot run at all
-  for this crate, which means public-surface changes ship unchecked.
-- **Why it matters here.** This session removed `pub fn supports_length` and
-  `pub mod routing`. The removal is safe — neither symbol exists in the
-  v0.26.0 tree, confirmed by `git grep supports_length crate-apollo-fft-v0.26.0`
-  returning nothing — but that is a hand check standing in for the gate, and a
-  hand check does not scale to the next removal.
-- **Acceptance.** `cargo semver-checks` runs to a verdict against the newest
-  release tag. Options: publish the baseline from a registry version rather
-  than a git rev, or pin the baseline's first-party git deps to revisions that
-  still resolve.
-- **Scope note.** Fleet-wide, only 2 of 25 members gate semver at all
-  (`ATLAS-SEMVER-GATE-FLEETWIDE`); this is the apollo-specific blocker that
-  would keep apollo failing even once that item lands.
+- **Cause, confirmed:** `--baseline-rev crate-apollo-fft-v0.26.0` dies in `cargo update` for the baseline — the tag's manifest requires `hermes-simd ^0.6` and the git source resolves to 0.7. The published crate is the baseline the contract is about and it resolves from the registry: `cargo semver-checks check-release -p apollo-fft --baseline-version 0.26.0` builds both sides and reaches a verdict (0.26.0 → 0.27.0 already carries the breaking class, so its 254 checks skip as covered).
+- **Delivered:** atlas `378081ec6` — the shared gate's release job defaults to the registry baseline (`baseline-source: registry`; `tag` stays selectable for unpublished crates); this workspace adopts the shared gate over its 21 published members (PR mode informational against the base sha, release mode against the registry).
+- **Residual (filed in atlas):** every adopter calls the gate from a workflow whose `push` trigger is branch-only, so the release-mode job has never had an event to fire on; the gate's reachability from the release pipeline is `ATLAS-SEMVER-GATE-RELEASE-JOB-UNREACHABLE`.
 
 ## ATLAS-APOLLO-WAVELET-DOC-LINKS-2026-08-29 — Three unresolved intra-doc links in apollo-wavelet [patch] — done 2026-09-01
 
