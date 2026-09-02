@@ -1,8 +1,11 @@
 //! Differential tests: every lane stage against its scalar recurrence.
 
 use super::super::super::stage::stage_impl;
-use super::super::stage::stage_pair_impl;
-use super::{stage_lanes, stage_pair_lanes, stage_pair_radix_one_lanes};
+use super::super::stage::{stage_pair_impl, stage_triple_impl};
+use super::{
+    stage_lanes, stage_pair_lanes, stage_pair_radix_one_lanes, stage_triple_lanes,
+    stage_triple_radix_one_lanes,
+};
 use eunomia::Complex;
 
 /// Deterministic samples in `[-1, 1]` from a 64-bit LCG (Knuth MMIX
@@ -183,5 +186,97 @@ fn single_stage_matches_scalar_recurrence_at_both_precisions() {
         if stage_lanes::<f64, 8>(&src64, &mut got512, radix, &tw64) {
             assert_close(&got512, &want64, base_tolerance(f64::EPSILON));
         }
+    }
+}
+
+/// `(n, radix)` pairs for the triple stage: `quarter_groups = 2` (all tail
+/// at the f32 width, vector at f64), vector loops with and without a
+/// tail, and the sized routes' group counts.
+const TRIPLE_CASES: &[(usize, usize)] =
+    &[(32, 2), (64, 2), (256, 4), (1024, 2), (1024, 8), (4096, 32)];
+
+const TRIPLE_RADIX_ONE_SIZES: &[usize] = &[16, 32, 64, 256, 1024, 4096];
+
+/// Each output combines eight inputs through three twiddled levels, so
+/// `|out| ≤ 8`. Per level the lane route spends at most three roundings
+/// (one product, one FMA, one add) and the scalar route at most four;
+/// the routes' difference is bounded by the sum over three levels,
+/// 21 · ε · 8.
+fn triple_tolerance<T: Into<f64>>(epsilon: T) -> f64 {
+    21.0 * 8.0 * epsilon.into()
+}
+
+#[test]
+fn triple_stage_matches_scalar_recurrence_at_both_precisions() {
+    for &(n, radix) in TRIPLE_CASES {
+        let src32 = samples::<f32>(n, 0x7A2C_1E9B_3F5D_8A61 ^ n as u64);
+        let (f32a, f32b, f32c) = (
+            twiddles::<f32>(radix, radix),
+            twiddles::<f32>(2 * radix, 2 * radix),
+            twiddles::<f32>(4 * radix, 4 * radix),
+        );
+        let mut want32 = vec![Complex::new(0.0f32, 0.0); n];
+        stage_triple_impl::<_, 1024>(&src32, &mut want32, radix, &f32a, &f32b, &f32c);
+        let mut got32 = vec![Complex::new(0.0f32, 0.0); n];
+        assert!(
+            stage_triple_lanes::<f32, 8>(&src32, &mut got32, radix, &f32a, &f32b, &f32c),
+            "eight-lane f32 backend absent on this host"
+        );
+        assert_close(&got32, &want32, triple_tolerance(f32::EPSILON));
+
+        let src64 = samples::<f64>(n, 0x3C6E_F372_FE94_F82B ^ n as u64);
+        let (f64a, f64b, f64c) = (
+            twiddles::<f64>(radix, radix),
+            twiddles::<f64>(2 * radix, 2 * radix),
+            twiddles::<f64>(4 * radix, 4 * radix),
+        );
+        let mut want64 = vec![Complex::new(0.0f64, 0.0); n];
+        stage_triple_impl::<_, 512>(&src64, &mut want64, radix, &f64a, &f64b, &f64c);
+        let mut got64 = vec![Complex::new(0.0f64, 0.0); n];
+        assert!(
+            stage_triple_lanes::<f64, 4>(&src64, &mut got64, radix, &f64a, &f64b, &f64c),
+            "four-lane f64 backend absent on this host"
+        );
+        assert_close(&got64, &want64, triple_tolerance(f64::EPSILON));
+
+        let mut got512 = vec![Complex::new(0.0f64, 0.0); n];
+        if stage_triple_lanes::<f64, 8>(&src64, &mut got512, radix, &f64a, &f64b, &f64c) {
+            assert_close(&got512, &want64, triple_tolerance(f64::EPSILON));
+        }
+    }
+}
+
+#[test]
+fn triple_radix_one_stage_matches_scalar_recurrence_at_both_precisions() {
+    for &n in TRIPLE_RADIX_ONE_SIZES {
+        // `second[1]` and `third[2]` are the exact quarter turns the
+        // radix-one route rotates by; the scalar oracle multiplies by them.
+        let src32 = samples::<f32>(n, 0x9E6C_63D0_676A_9A99 ^ n as u64);
+        let (f32a, f32b, f32c) = (
+            twiddles::<f32>(1, 1),
+            twiddles::<f32>(2, 2),
+            twiddles::<f32>(4, 4),
+        );
+        let mut want32 = vec![Complex::new(0.0f32, 0.0); n];
+        stage_triple_impl::<_, 1024>(&src32, &mut want32, 1, &f32a, &f32b, &f32c);
+        let mut got32 = vec![Complex::new(0.0f32, 0.0); n];
+        assert!(stage_triple_radix_one_lanes::<f32, 8>(
+            &src32, &mut got32, &f32b, &f32c
+        ));
+        assert_close(&got32, &want32, triple_tolerance(f32::EPSILON));
+
+        let src64 = samples::<f64>(n, 0xB5AD_4ECE_DA1C_E2A9 ^ n as u64);
+        let (f64a, f64b, f64c) = (
+            twiddles::<f64>(1, 1),
+            twiddles::<f64>(2, 2),
+            twiddles::<f64>(4, 4),
+        );
+        let mut want64 = vec![Complex::new(0.0f64, 0.0); n];
+        stage_triple_impl::<_, 512>(&src64, &mut want64, 1, &f64a, &f64b, &f64c);
+        let mut got64 = vec![Complex::new(0.0f64, 0.0); n];
+        assert!(stage_triple_radix_one_lanes::<f64, 4>(
+            &src64, &mut got64, &f64b, &f64c
+        ));
+        assert_close(&got64, &want64, triple_tolerance(f64::EPSILON));
     }
 }

@@ -1,7 +1,8 @@
 //! The Stockham stages as hermes lane kernels.
 //!
-//! [`stage_impl`] and [`stage_pair_impl`] are the scalar recurrences (their
-//! docs derive them; the pair form fuses two radix-2 passes). This module is
+//! [`stage_impl`], [`stage_pair_impl`], and [`stage_triple_impl`] are the
+//! scalar recurrences (their docs derive them; the pair and triple forms fuse
+//! two and three radix-2 passes). This module is
 //! those recurrences vectorised: each group's `k` loop runs `A::LANE_COUNT / 2`
 //! complex samples per register through [`ComplexReg`] arithmetic, and the
 //! ragged tail (fewer samples than a register holds) runs the scalar
@@ -22,6 +23,8 @@ pub(crate) mod base;
 pub(crate) mod pair;
 #[cfg(test)]
 mod tests;
+pub(crate) mod triple;
 
 pub(crate) use base::*;
 pub(crate) use pair::*;
+pub(crate) use triple::*;
