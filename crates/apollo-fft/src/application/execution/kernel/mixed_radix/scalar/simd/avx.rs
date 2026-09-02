@@ -3,7 +3,8 @@
 //! These wrap raw intrinsics behind one home so the trait wiring in `impls`
 //! and the unrolled codelets in `small_pot` share a single definition.
 
-#[cfg(all(target_arch = "x86_64", target_feature = "avx", target_feature = "fma"))]
+#[cfg(target_arch = "x86_64")]
+#[target_feature(enable = "avx,fma")]
 #[inline]
 pub(in crate::application::execution::kernel::mixed_radix::scalar) unsafe fn avx_cmul_precise(
     a: std::arch::x86_64::__m256d,
@@ -19,7 +20,8 @@ pub(in crate::application::execution::kernel::mixed_radix::scalar) unsafe fn avx
     _mm256_fmaddsub_pd(re_a, tw, prod2)
 }
 
-#[cfg(all(target_arch = "x86_64", target_feature = "avx", target_feature = "fma"))]
+#[cfg(target_arch = "x86_64")]
+#[target_feature(enable = "avx,fma")]
 #[inline]
 pub(in crate::application::execution::kernel::mixed_radix::scalar) unsafe fn avx_fft4_parallel_precise<
     const INVERSE: bool,
@@ -52,7 +54,8 @@ pub(in crate::application::execution::kernel::mixed_radix::scalar) unsafe fn avx
     [out0, out1, out2, out3]
 }
 
-#[cfg(all(target_arch = "x86_64", target_feature = "avx", target_feature = "fma"))]
+#[cfg(target_arch = "x86_64")]
+#[target_feature(enable = "avx,fma")]
 #[inline]
 pub(in crate::application::execution::kernel::mixed_radix::scalar) unsafe fn avx_fft4_precise<
     const INVERSE: bool,
@@ -91,48 +94,8 @@ pub(in crate::application::execution::kernel::mixed_radix::scalar) unsafe fn avx
     [reg0, reg1]
 }
 
-#[cfg(all(target_arch = "x86_64", target_feature = "avx", target_feature = "fma"))]
-#[inline]
-pub(in crate::application::execution::kernel::mixed_radix::scalar) unsafe fn avx_fft4_reduced<
-    const INVERSE: bool,
->(
-    v: std::arch::x86_64::__m256,
-) -> std::arch::x86_64::__m256 {
-    use std::arch::x86_64::{
-        _mm256_add_ps, _mm256_fmadd_ps, _mm256_permute2f128_ps, _mm256_permute_ps, _mm256_set_ps,
-        _mm256_shuffle_ps, _mm256_sub_ps,
-    };
-    let v_low = _mm256_permute2f128_ps::<0x00>(v, v);
-    let v_high = _mm256_permute2f128_ps::<0x11>(v, v);
-
-    let sum = _mm256_add_ps(v_low, v_high);
-    let diff = _mm256_sub_ps(v_low, v_high);
-
-    let shuf_a0 = _mm256_shuffle_ps::<0b01000100>(sum, sum);
-    let shuf_a1 = _mm256_shuffle_ps::<0b11101110>(sum, sum);
-
-    let add_res = _mm256_add_ps(shuf_a0, shuf_a1);
-    let sub_res = _mm256_sub_ps(shuf_a0, shuf_a1);
-
-    let out0_out2 = _mm256_shuffle_ps::<0b11100100>(add_res, sub_res);
-
-    let shuf_a2 = _mm256_shuffle_ps::<0b01000100>(diff, diff);
-    let perm_diff = _mm256_permute_ps::<0b10110001>(diff);
-    let shuf_a3 = _mm256_shuffle_ps::<0b11101110>(perm_diff, perm_diff);
-
-    let sign_const = if INVERSE {
-        _mm256_set_ps(-1.0, 1.0, 1.0, -1.0, -1.0, 1.0, 1.0, -1.0)
-    } else {
-        _mm256_set_ps(1.0, -1.0, -1.0, 1.0, 1.0, -1.0, -1.0, 1.0)
-    };
-    let out1_out3 = _mm256_fmadd_ps(shuf_a3, sign_const, shuf_a2);
-
-    let low_lane = _mm256_shuffle_ps::<0b01000100>(out0_out2, out1_out3);
-    let high_lane = _mm256_shuffle_ps::<0b11101110>(out0_out2, out1_out3);
-    _mm256_permute2f128_ps::<0x20>(low_lane, high_lane)
-}
-
-#[cfg(all(target_arch = "x86_64", target_feature = "avx", target_feature = "fma"))]
+#[cfg(target_arch = "x86_64")]
+#[target_feature(enable = "avx,fma")]
 #[inline]
 pub(in crate::application::execution::kernel::mixed_radix::scalar) unsafe fn avx_fft8_parallel_precise<
     const INVERSE: bool,
@@ -189,7 +152,8 @@ pub(in crate::application::execution::kernel::mixed_radix::scalar) unsafe fn avx
     [res0, res1, res2, res3, res4, res5, res6, res7]
 }
 
-#[cfg(all(target_arch = "x86_64", target_feature = "avx", target_feature = "fma"))]
+#[cfg(target_arch = "x86_64")]
+#[target_feature(enable = "avx,fma")]
 #[inline]
 pub(in crate::application::execution::kernel::mixed_radix::scalar) unsafe fn avx_fft8_precise<
     const INVERSE: bool,
@@ -228,7 +192,8 @@ pub(in crate::application::execution::kernel::mixed_radix::scalar) unsafe fn avx
     [res0, res1, res2, res3]
 }
 
-#[cfg(all(target_arch = "x86_64", target_feature = "avx", target_feature = "fma"))]
+#[cfg(target_arch = "x86_64")]
+#[target_feature(enable = "avx,fma")]
 #[inline]
 pub(in crate::application::execution::kernel::mixed_radix::scalar) unsafe fn sse_cmul_ps(
     a: std::arch::x86_64::__m128,
@@ -245,7 +210,8 @@ pub(in crate::application::execution::kernel::mixed_radix::scalar) unsafe fn sse
     _mm_addsub_ps(prod1, prod2)
 }
 
-#[cfg(all(target_arch = "x86_64", target_feature = "avx", target_feature = "fma"))]
+#[cfg(target_arch = "x86_64")]
+#[target_feature(enable = "avx,fma")]
 #[inline]
 pub(in crate::application::execution::kernel::mixed_radix::scalar) unsafe fn rotate_minus_i_ps(
     v: std::arch::x86_64::__m128,
@@ -255,7 +221,8 @@ pub(in crate::application::execution::kernel::mixed_radix::scalar) unsafe fn rot
     _mm_xor_ps(perm, _mm_setr_ps(0.0, -0.0, 0.0, -0.0))
 }
 
-#[cfg(all(target_arch = "x86_64", target_feature = "avx", target_feature = "fma"))]
+#[cfg(target_arch = "x86_64")]
+#[target_feature(enable = "avx,fma")]
 #[inline]
 pub(in crate::application::execution::kernel::mixed_radix::scalar) unsafe fn rotate_plus_i_ps(
     v: std::arch::x86_64::__m128,
@@ -265,36 +232,18 @@ pub(in crate::application::execution::kernel::mixed_radix::scalar) unsafe fn rot
     _mm_xor_ps(perm, _mm_setr_ps(-0.0, 0.0, -0.0, 0.0))
 }
 
-#[cfg(all(target_arch = "x86_64", target_feature = "avx", target_feature = "fma"))]
+/// Whether this host executes AVX and FMA, probed once per process.
+///
+/// The sized small-transform arms dispatch on this at entry, so their vector
+/// bodies run on the hardware that has them regardless of how the crate was
+/// built; the compile-time `target_feature` cfg they replaced silently
+/// selected the scalar arm on every default x86-64 build.
+#[cfg(target_arch = "x86_64")]
 #[inline]
-pub(in crate::application::execution::kernel::mixed_radix::scalar) unsafe fn sse_cmul(
-    a: std::arch::x86_64::__m128d,
-    b: std::arch::x86_64::__m128d,
-) -> std::arch::x86_64::__m128d {
-    use std::arch::x86_64::{_mm_fmaddsub_pd, _mm_movedup_pd, _mm_mul_pd, _mm_permute_pd};
-    let re_a = _mm_movedup_pd(a);
-    let im_a_shuf = _mm_permute_pd::<0x03>(a);
-    let b_shuf = _mm_permute_pd::<0x01>(b);
-    let prod2 = _mm_mul_pd(im_a_shuf, b_shuf);
-    _mm_fmaddsub_pd(re_a, b, prod2)
-}
-
-#[cfg(all(target_arch = "x86_64", target_feature = "avx", target_feature = "fma"))]
-#[inline]
-pub(in crate::application::execution::kernel::mixed_radix::scalar) unsafe fn rotate_minus_i(
-    v: std::arch::x86_64::__m128d,
-) -> std::arch::x86_64::__m128d {
-    use std::arch::x86_64::{_mm_permute_pd, _mm_set_pd, _mm_xor_pd};
-    let perm = _mm_permute_pd::<0x01>(v);
-    _mm_xor_pd(perm, _mm_set_pd(-0.0, 0.0))
-}
-
-#[cfg(all(target_arch = "x86_64", target_feature = "avx", target_feature = "fma"))]
-#[inline]
-pub(in crate::application::execution::kernel::mixed_radix::scalar) unsafe fn rotate_plus_i(
-    v: std::arch::x86_64::__m128d,
-) -> std::arch::x86_64::__m128d {
-    use std::arch::x86_64::{_mm_permute_pd, _mm_set_pd, _mm_xor_pd};
-    let perm = _mm_permute_pd::<0x01>(v);
-    _mm_xor_pd(perm, _mm_set_pd(0.0, -0.0))
+pub(crate) fn avx_fma_available() -> bool {
+    use std::sync::OnceLock;
+    static AVX_FMA: OnceLock<bool> = OnceLock::new();
+    *AVX_FMA.get_or_init(|| {
+        std::is_x86_feature_detected!("avx") && std::is_x86_feature_detected!("fma")
+    })
 }

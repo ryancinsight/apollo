@@ -1,13 +1,16 @@
 # Apollo Backlog
 
-## ATLAS-APOLLO-COMPILE-TIME-FEATURE-GATES-2026-09-01 — Short kernels gate SIMD on compile-time target features [patch] [perf] — todo
+## ATLAS-APOLLO-COMPILE-TIME-FEATURE-GATES-2026-09-01 — Short kernels gate SIMD on compile-time target features [patch] [perf] — done 2026-09-01
 
-- **Finding.** 37 sites in apollo-fft select SSE/AVX bodies with
-  `#[cfg(all(target_arch = "x86_64", target_feature = "avx", ...))]`
-  (`winograd/short_winograd.rs` and siblings). No workspace `rustflags`
-  sets `target-cpu` or `target-feature`, so on the default x86-64 build —
-  every CI run, every consumer, every benchmark here — those bodies are
-  compiled out and the scalar fallback runs. The pinned comparison shows the
+- **Finding (scope verified 2026-09-01).** No workspace `rustflags` sets
+  `target-cpu` or `target-feature`, so `cfg(target_feature = "avx")` is
+  false on every default x86-64 build. `stockham/mod.rs` (24 sites) pairs
+  each cfg arm with a runtime `is_x86_feature_detected!` fallback and is
+  *not* affected. Five files carry no runtime fallback, so their vector
+  bodies are compiled out and the scalar arm runs on every consumer build:
+  `mixed_radix/scalar/small_pot/{reduced,precise}.rs` (35 sites),
+  `mixed_radix/scalar/simd/avx.rs` (12), `twiddle_constants.rs` (4), and
+  `winograd/short_winograd.rs` (the f32 `dft3`, 4). The pinned comparison shows the
   cost where these kernels dominate: f32 n = 121 runs 274 ns against
   RustFFT's 97 (2.8x), n = 67 407 against 212, n = 19 52 against 29, n = 31
   103 against 67, while the f64 route sits at parity or better at the same
@@ -17,8 +20,33 @@
   standards' runtime-detection rule), one dispatch per kernel entry, so the
   vector bodies run on the hardware that has them. Measure per size against
   the pinned comparison; f64 controls flat.
-- **Acceptance.** No `target_feature` cfg remains in apollo-fft kernel
-  sources; the f32 odd-size ratios above move; suite green.
+- **Acceptance.** No `cfg(target_feature)` arm without a runtime fallback
+  remains in apollo-fft kernel sources — the vector bodies run on hardware
+  that has them regardless of build flags; the affected sizes are measured
+  pinned before and after; suite green.
+- **Delivered (2026-09-01, Claude `/root`):** `gap_audit.md#runtime-vector-arms`.
+  Runtime-probed `#[target_feature]` arms in the small-transform kernels,
+  kept only where they measured as wins: f32 n = 8 **-61%**, f32 n = 64
+  **-31%** (0.85x RustFFT), f64 64 -3..-5%, f64 32 -9..-31% (noise-limited);
+  losing arms deleted with their measurements noted in place; the f32
+  n = 32 vector body (+404%) deleted and its replacement filed. Residual
+  cfgs: `stockham/mod.rs` (runtime-backed) and the 3-point Winograd pair
+  (a dispatched 3-point kernel measured as a loss). 525/525, ratchet 302.
+
+## ATLAS-APOLLO-SMALL-F32-BASES-2026-09-01 — f32 n = 16 and 32 have no live vector kernel [patch] [perf] — todo
+
+- **Finding.** Pinned comparison after the runtime-arm delivery: f32 n = 16
+  runs 19.2 ns against RustFFT's 4.4 (4.3x) through the scalar Winograd
+  `dft16`; f32 n = 32 runs 47.4 against 9.3 (5.1x) on the scalar arm — its
+  compiled-out AVX body measured 239 ns when enabled and is deleted. f32
+  n = 8 (now 4.4 ns) and n = 64 (23.8 ns, 0.85x) show what the width buys.
+- **Outcome.** Register-resident f32 kernels for 16 and 32 through the
+  hermes dispatch (`vectorize_lanes` LaneKernel, eight-lane layout), the
+  construction that already serves n = 64/128 — one instance-major
+  transform generalized over `ROWS`, not new hand kernels — measured pinned
+  against RustFFT with f64 controls.
+
+
 
 ## ATLAS-APOLLO-BENCH-REGRESSION-FALSE-POSITIVE-2026-09-01 — The regression gate flagged identical machine code [patch] [perf] — done 2026-09-01 (identity fixed; bias not reproduced)
 
