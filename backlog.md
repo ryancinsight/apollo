@@ -2468,6 +2468,9 @@
   warning-denied docs in 6.11s, while the workspace command exceeded five
   minutes with multiple rustdoc children and was terminated. That run supplies
   no workspace-doc green claim.
+- **Profile (2026-09-02, this host, 24 cores, `cargo doc --workspace --no-deps --timings`):** wall 272 s. Every crate's rustdoc unit starts together at ~50 s (after the metadata builds) and their durations form a staircase — 89, 98, 108, 119, 129, 139, 149, 159, 170, 180, 191, 200, 212, 221 s — one crate finishing every ~10 s. Alone, `apollo-nufft` documents in 20 s and `apollo-sdft` in 19 s; four crates together take 44 s, not 20. The rustdoc processes serialize on the shared `target/doc` output (rustdoc holds the doc-directory lock while it writes the shared search/static files), so the gate's time is `metadata + Σ per-crate` regardless of core count — a lock, not CPU, and a hosted runner pays the same sum slower.
+- **Options, in preference order:** (1) shard the gate across parallel jobs with disjoint target/doc directories — a `plan` job partitions `cargo metadata`'s member list at runtime (no static list to drift) into N groups and a matrix job documents each group; every crate stays covered and each shard pays metadata plus its own crates' serialized section (~50 + 6×10 s here for N = 4), at the cost of repeating the CUDA-header install the `rust` job needs for `hephaestus-cuda`'s build script; (2) rustdoc's `--merge=none` with per-crate `--parts-out-dir`, which removes the shared-file lock outright but is nightly-only today; (3) leave the gate serial and raise nothing — rejected by the item. Next increment: (1).
+
 
 ## ATLAS-APOLLO-CROSSOVER-REDERIVE-2026-08-26 — Re-derive the 1-D four-step crossover [arch] — done 2026-08-26, one part open
 
