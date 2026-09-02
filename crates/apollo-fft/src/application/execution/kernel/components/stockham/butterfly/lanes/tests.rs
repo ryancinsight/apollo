@@ -3,8 +3,9 @@
 use super::super::super::stage::stage_impl;
 use super::super::stage::{stage_pair_impl, stage_triple_impl};
 use super::{
-    stage_groups_one_lanes, stage_lanes, stage_pair_lanes, stage_pair_radix_one_lanes,
-    stage_triple_lanes, stage_triple_radix_one_lanes,
+    stage_groups_one_lanes, stage_lanes, stage_pair_groups_two_lanes, stage_pair_lanes,
+    stage_pair_radix_one_lanes, stage_triple_lanes, stage_triple_quarter_groups_one_lanes,
+    stage_triple_radix_one_lanes,
 };
 use eunomia::Complex;
 
@@ -317,5 +318,77 @@ fn groups_one_stage_matches_scalar_recurrence_at_both_precisions() {
         if stage_groups_one_lanes::<f64, 8>(&src64, &mut got512, radix, &tw64) {
             assert_close(&got512, &want64, base_tolerance(f64::EPSILON));
         }
+    }
+}
+
+/// Radices for the `groups == 2` pair stage (`n = 4 · radix`): the
+/// all-tail case at the f32 width (`radix = 2`), vector loops with and
+/// without a tail, and the sized routes' radices.
+const PAIR_GROUPS_TWO_RADICES: &[usize] = &[2, 4, 8, 16, 64, 256];
+
+#[test]
+fn pair_groups_two_stage_matches_scalar_recurrence_at_both_precisions() {
+    for &radix in PAIR_GROUPS_TWO_RADICES {
+        let n = 4 * radix;
+        let src32 = samples::<f32>(n, 0x4A7F_1C3E_9B2D_6058 ^ n as u64);
+        let first32 = twiddles::<f32>(radix, radix);
+        let second32 = twiddles::<f32>(2 * radix, 2 * radix);
+        let mut want32 = vec![Complex::new(0.0f32, 0.0); n];
+        stage_pair_impl::<_, 1024>(&src32, &mut want32, radix, &first32, &second32);
+        let mut got32 = vec![Complex::new(0.0f32, 0.0); n];
+        assert!(stage_pair_groups_two_lanes::<f32, 8>(
+            &src32, &mut got32, radix, &first32, &second32
+        ));
+        assert_close(&got32, &want32, tolerance(f32::EPSILON));
+
+        let src64 = samples::<f64>(n, 0x8E1B_2C7A_5D93_F046 ^ n as u64);
+        let first64 = twiddles::<f64>(radix, radix);
+        let second64 = twiddles::<f64>(2 * radix, 2 * radix);
+        let mut want64 = vec![Complex::new(0.0f64, 0.0); n];
+        stage_pair_impl::<_, 512>(&src64, &mut want64, radix, &first64, &second64);
+        let mut got64 = vec![Complex::new(0.0f64, 0.0); n];
+        assert!(stage_pair_groups_two_lanes::<f64, 4>(
+            &src64, &mut got64, radix, &first64, &second64
+        ));
+        assert_close(&got64, &want64, tolerance(f64::EPSILON));
+    }
+}
+
+/// Radices for the `groups == 4` triple stage (`n = 8 · radix`): the
+/// all-tail case at the f32 width (`radix = 2`), vector loops with and
+/// without a tail, and the sized routes' radices.
+const TRIPLE_QUARTER_GROUPS_ONE_RADICES: &[usize] = &[1, 2, 4, 8, 16, 128];
+
+#[test]
+fn triple_quarter_groups_one_stage_matches_scalar_recurrence_at_both_precisions() {
+    for &radix in TRIPLE_QUARTER_GROUPS_ONE_RADICES {
+        let n = 8 * radix;
+        let src32 = samples::<f32>(n, 0xC0FF_EE11_2233_4455 ^ n as u64);
+        let (f32a, f32b, f32c) = (
+            twiddles::<f32>(radix, radix),
+            twiddles::<f32>(2 * radix, 2 * radix),
+            twiddles::<f32>(4 * radix, 4 * radix),
+        );
+        let mut want32 = vec![Complex::new(0.0f32, 0.0); n];
+        stage_triple_impl::<_, 1024>(&src32, &mut want32, radix, &f32a, &f32b, &f32c);
+        let mut got32 = vec![Complex::new(0.0f32, 0.0); n];
+        assert!(stage_triple_quarter_groups_one_lanes::<f32, 8>(
+            &src32, &mut got32, radix, &f32a, &f32b, &f32c
+        ));
+        assert_close(&got32, &want32, triple_tolerance(f32::EPSILON));
+
+        let src64 = samples::<f64>(n, 0x1357_9BDF_2468_ACE0 ^ n as u64);
+        let (f64a, f64b, f64c) = (
+            twiddles::<f64>(radix, radix),
+            twiddles::<f64>(2 * radix, 2 * radix),
+            twiddles::<f64>(4 * radix, 4 * radix),
+        );
+        let mut want64 = vec![Complex::new(0.0f64, 0.0); n];
+        stage_triple_impl::<_, 512>(&src64, &mut want64, radix, &f64a, &f64b, &f64c);
+        let mut got64 = vec![Complex::new(0.0f64, 0.0); n];
+        assert!(stage_triple_quarter_groups_one_lanes::<f64, 4>(
+            &src64, &mut got64, radix, &f64a, &f64b, &f64c
+        ));
+        assert_close(&got64, &want64, triple_tolerance(f64::EPSILON));
     }
 }

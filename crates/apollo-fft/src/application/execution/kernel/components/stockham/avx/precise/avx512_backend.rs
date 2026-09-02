@@ -116,28 +116,6 @@ impl StockhamAvxBackend for Avx512BackendPrecise {
     }
 
     #[inline]
-    unsafe fn stage_triple_quarter_groups_one(
-        src: &[Complex64],
-        dst: &mut [Complex64],
-        radix: usize,
-        first_twiddles: &[Complex64],
-        second_twiddles: &[Complex64],
-        third_twiddles: &[Complex64],
-    ) {
-        crate::application::execution::kernel::components::stockham::butterfly::stage_triple_impl::<
-            _,
-            512,
-        >(
-            src,
-            dst,
-            radix,
-            first_twiddles,
-            second_twiddles,
-            third_twiddles,
-        );
-    }
-
-    #[inline]
     unsafe fn stockham_quad_groups_eight_low_live(
         src: &[Complex64],
         dst: &mut [Complex64],

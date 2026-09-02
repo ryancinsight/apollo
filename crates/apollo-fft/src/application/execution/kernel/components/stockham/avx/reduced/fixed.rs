@@ -39,11 +39,3 @@ pub(crate) unsafe fn store_reduced_low(dst: *mut Complex32, value: std::arch::x8
     use std::arch::x86_64::{_mm_castps_si128, _mm_storel_epi64};
     _mm_storel_epi64(dst.cast(), _mm_castps_si128(value));
 }
-
-#[cfg(target_arch = "x86_64")]
-#[target_feature(enable = "avx,fma")]
-#[inline]
-pub(crate) unsafe fn store_reduced_high(dst: *mut Complex32, value: std::arch::x86_64::__m128) {
-    use std::arch::x86_64::_mm_movehl_ps;
-    store_reduced_low(dst, _mm_movehl_ps(value, value));
-}

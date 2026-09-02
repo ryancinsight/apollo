@@ -243,3 +243,133 @@ where
     })
     .is_some()
 }
+
+/// The pair stage at `groups == 2`: every Stockham digit `j` owns one `k`, so
+/// its four inputs are the adjacent samples `src[4j..4j + 4]` and its four
+/// outputs the strided `dst[j + {0, n/4, n/2, 3n/4}]`.
+struct PairStageGroupsTwo<'a, T> {
+    src: &'a [Complex<T>],
+    dst: &'a mut [Complex<T>],
+    radix: usize,
+    first_twiddles: &'a [Complex<T>],
+    second_twiddles: &'a [Complex<T>],
+}
+
+impl<T> LaneKernel<T> for PairStageGroupsTwo<'_, T>
+where
+    T: LaneScalar + bytemuck::Pod,
+    Complex<T>: bytemuck::Pod
+        + Add<Output = Complex<T>>
+        + Sub<Output = Complex<T>>
+        + Mul<Output = Complex<T>>,
+{
+    type Output = ();
+
+    #[inline]
+    fn call<A: SimdArch + SimdKernel<T>>(self, simd: Simd<T, A>) {
+        let Self {
+            src,
+            dst,
+            radix,
+            first_twiddles,
+            second_twiddles,
+        } = self;
+        let n = src.len();
+        let quarter_n = n >> 2;
+        let half_n = n >> 1;
+        let per_register = A::LANE_COUNT / 2;
+        let vector_end = radix & !(per_register - 1);
+
+        if vector_end > 0 {
+            // A register of `per_register` consecutive `j` reads the
+            // `4 · per_register` consecutive inputs `src[4j..]` as four
+            // registers and splits them into the stride-4 subsequences
+            // `x0..x3`; its twiddles and outputs are contiguous in `j`, and
+            // `quarter_n = radix >= per_register` keeps every store aligned.
+            let src_view = simd.view(bytemuck::cast_slice::<Complex<T>, T>(src));
+            let first_view = simd.view(bytemuck::cast_slice::<Complex<T>, T>(first_twiddles));
+            let second_view = simd.view(bytemuck::cast_slice::<Complex<T>, T>(second_twiddles));
+            let mut dst_view = simd.view_mut(bytemuck::cast_slice_mut::<Complex<T>, T>(dst));
+            for j in (0..vector_end).step_by(per_register) {
+                let base = (4 * j) / per_register;
+                let (x0, x1, x2, x3) = Vector::from_view_chunk(&src_view, base)
+                    .deinterleave_pairs4(
+                        Vector::from_view_chunk(&src_view, base + 1),
+                        Vector::from_view_chunk(&src_view, base + 2),
+                        Vector::from_view_chunk(&src_view, base + 3),
+                    );
+                let chunk = j / per_register;
+                let w1 = ComplexReg::from_interleaved(Vector::from_view_chunk(&first_view, chunk));
+                let w2 = ComplexReg::from_interleaved(Vector::from_view_chunk(&second_view, chunk));
+                let w3 = ComplexReg::from_interleaved(Vector::from_view_chunk(
+                    &second_view,
+                    (j + radix) / per_register,
+                ));
+                let x0 = ComplexReg::from_interleaved(x0);
+                let x1 = ComplexReg::from_interleaved(x1);
+                let x2 = ComplexReg::from_interleaved(x2) * w1;
+                let x3 = ComplexReg::from_interleaved(x3) * w1;
+                let a0 = x0 + x2;
+                let a1 = x1 + x3;
+                let b0 = x0 - x2;
+                let b1 = x1 - x3;
+                let c0 = a1 * w2;
+                let c1 = b1 * w3;
+                let mut store = |offset: usize, value: ComplexReg<T, A>| {
+                    value
+                        .into_interleaved()
+                        .store_to_view_chunk(&mut dst_view, offset / per_register);
+                };
+                store(j, a0 + c0);
+                store(j + half_n, a0 - c0);
+                store(j + quarter_n, b0 + c1);
+                store(j + half_n + quarter_n, b0 - c1);
+            }
+        }
+
+        for j in vector_end..radix {
+            let x0 = src[4 * j];
+            let x1 = src[4 * j + 1];
+            let x2 = src[4 * j + 2] * first_twiddles[j];
+            let x3 = src[4 * j + 3] * first_twiddles[j];
+            let a0 = x0 + x2;
+            let a1 = x1 + x3;
+            let b0 = x0 - x2;
+            let b1 = x1 - x3;
+            let c0 = a1 * second_twiddles[j];
+            let c1 = b1 * second_twiddles[j + radix];
+            dst[j] = a0 + c0;
+            dst[j + half_n] = a0 - c0;
+            dst[j + quarter_n] = b0 + c1;
+            dst[j + half_n + quarter_n] = b0 - c1;
+        }
+    }
+}
+
+/// [`stage_pair_lanes`] for `groups == 2` (`src.len() == 4 * radix`), where
+/// each digit's inputs are adjacent and the general kernel's per-group loop
+/// would run entirely in its scalar tail.
+#[inline]
+pub(crate) fn stage_pair_groups_two_lanes<T, const LANES: usize>(
+    src: &[Complex<T>],
+    dst: &mut [Complex<T>],
+    radix: usize,
+    first_twiddles: &[Complex<T>],
+    second_twiddles: &[Complex<T>],
+) -> bool
+where
+    T: LaneScalar + bytemuck::Pod,
+    Complex<T>: bytemuck::Pod
+        + Add<Output = Complex<T>>
+        + Sub<Output = Complex<T>>
+        + Mul<Output = Complex<T>>,
+{
+    hermes_simd::vectorize_hardware_lanes::<LANES, T, _>(PairStageGroupsTwo {
+        src,
+        dst,
+        radix,
+        first_twiddles,
+        second_twiddles,
+    })
+    .is_some()
+}

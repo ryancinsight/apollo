@@ -23,46 +23,6 @@ impl StockhamAvxBackend for f64 {
     }
 
     #[inline]
-    unsafe fn stage_pair_groups_two(
-        src: &[Complex64],
-        dst: &mut [Complex64],
-        radix: usize,
-        first_twiddles: &[Complex64],
-        second_twiddles: &[Complex64],
-    ) {
-        unsafe {
-            super::pair::stage_pair_groups_two_precise_avx_fma(
-                src,
-                dst,
-                radix,
-                first_twiddles,
-                second_twiddles,
-            )
-        }
-    }
-
-    #[inline]
-    unsafe fn stage_triple_quarter_groups_one(
-        src: &[Complex64],
-        dst: &mut [Complex64],
-        radix: usize,
-        first_twiddles: &[Complex64],
-        second_twiddles: &[Complex64],
-        third_twiddles: &[Complex64],
-    ) {
-        unsafe {
-            super::triple_1::stage_triple_quarter_groups_one_precise_avx_fma(
-                src,
-                dst,
-                radix,
-                first_twiddles,
-                second_twiddles,
-                third_twiddles,
-            )
-        }
-    }
-
-    #[inline]
     unsafe fn stockham_quad_groups_eight_low_live(
         src: &[Complex64],
         dst: &mut [Complex64],

@@ -1,9 +1,9 @@
 #[cfg(target_arch = "x86_64")]
 use super::super::avx::backend::StockhamAvxBackend;
 use super::super::butterfly::{
-    stage_groups_one_lanes, stage_lanes, stage_pair_impl, stage_pair_lanes,
-    stage_pair_radix_one_lanes, stage_quad_impl, stage_triple_impl, stage_triple_lanes,
-    stage_triple_radix_one_lanes,
+    stage_groups_one_lanes, stage_lanes, stage_pair_groups_two_lanes, stage_pair_impl,
+    stage_pair_lanes, stage_pair_radix_one_lanes, stage_quad_impl, stage_triple_impl,
+    stage_triple_lanes, stage_triple_quarter_groups_one_lanes, stage_triple_radix_one_lanes,
 };
 use super::super::stage::stage_impl;
 #[cfg(target_arch = "x86_64")]
@@ -250,15 +250,15 @@ impl StockhamPrecision for ReducedStockhamAvxFma {
                 )
             };
         } else if groups == 2 {
-            unsafe {
-                <f32 as StockhamAvxBackend>::stage_pair_groups_two(
-                    src,
-                    dst,
-                    radix,
-                    first_twiddles,
-                    second_twiddles,
-                )
-            };
+            if !stage_pair_groups_two_lanes::<f32, 8>(
+                src,
+                dst,
+                radix,
+                first_twiddles,
+                second_twiddles,
+            ) {
+                stage_pair_impl::<_, 1024>(src, dst, radix, first_twiddles, second_twiddles);
+            }
         } else {
             stage_pair_impl::<_, 1024>(src, dst, radix, first_twiddles, second_twiddles);
         }
@@ -316,16 +316,23 @@ impl StockhamPrecision for ReducedStockhamAvxFma {
                 )
             };
         } else if groups == 4 {
-            unsafe {
-                <f32 as StockhamAvxBackend>::stage_triple_quarter_groups_one(
+            if !stage_triple_quarter_groups_one_lanes::<f32, 8>(
+                src,
+                dst,
+                radix,
+                first_twiddles,
+                second_twiddles,
+                third_twiddles,
+            ) {
+                stage_triple_impl::<_, 1024>(
                     src,
                     dst,
                     radix,
                     first_twiddles,
                     second_twiddles,
                     third_twiddles,
-                )
-            };
+                );
+            }
         } else {
             stage_triple_impl::<_, 1024>(
                 src,
