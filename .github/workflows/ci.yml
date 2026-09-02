@@ -27,7 +27,7 @@ jobs:
     name: ADR index is current
     # atlas owns the one generator; this replaces the copy that lived in
     # scripts/adr-index.py and the step that ran it (ATLAS-ADR-INDEX-GUARD-2026-09-01).
-    uses: ryancinsight/atlas/.github/workflows/adr-index-guard.yml@8585a1ade6045b5851b0cc9dab5b08bb75554519
+    uses: ryancinsight/atlas/.github/workflows/adr-index-guard.yml@191617bffed5f78de9d840fee8755963fccaaa67
     permissions:
       contents: read
     with:
@@ -44,7 +44,7 @@ jobs:
   # member published on crates.io; apollo-bench and apollo-python are not.
   semver:
     name: SemVer gate
-    uses: ryancinsight/atlas/.github/workflows/semver-gate.yml@9062cfc6d78808cf1b7af60ae97f11825a6c8468
+    uses: ryancinsight/atlas/.github/workflows/semver-gate.yml@806949a176cc139efe7c514d7e42c9b9a9447f45
     with:
       package: apollo-czt,apollo-dctdst,apollo-dht,apollo-fft,apollo-fft-macros,apollo-frft,apollo-fwht,apollo-gft,apollo-hilbert,apollo-leto-interop,apollo-mellin,apollo-ntt,apollo-nufft,apollo-qft,apollo-radon,apollo-sdft,apollo-sft,apollo-sht,apollo-stft,apollo-validation,apollo-wavelet
       rust-toolchain: 1.97.0

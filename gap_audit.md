@@ -1,3 +1,48 @@
+## Half-storage transforms paid more to convert than to transform (2026-09-02) <a id="half-storage-bulk-bridge"></a>
+
+`Complex<f16>` has no native kernel: `precision_bridge` promotes the buffer to
+`Complex32`, runs the f32 route, and demotes it back. That contract is right —
+x86-64 without AVX512-FP16 has no half arithmetic, so the alternative is
+emulation, and the promotion is where the precision decision belongs. What was
+wrong is that both halves of it ran one lane at a time, `f16::to_f32()` per
+element, while eunomia — the stack's owner of the `binary16` conversion
+vocabulary — has carried F16C bulk converters (`F16::widen_slice` /
+`narrow_slice`, one `vcvtph2ps`/`vcvtps2ph` per eight lanes, runtime-dispatched,
+verified bit-for-bit against `half`) as public API the whole time.
+
+The bridge trait now has `widen_slice`/`narrow_slice` methods whose defaults are
+the element-wise loops; `Complex<f16>` overrides both with eunomia's bulk
+conversion. An interleaved complex buffer needs no shuffling to get there: a
+`Complex<f16>` is two adjacent `binary16` lanes and a `Complex32` two adjacent
+`f32`, so both sides reinterpret as flat lane arrays (`half::f16`,
+`eunomia::F16` and the complex wrappers are all `#[repr(transparent)]`/`repr(C)`
+plain-old-data, and enabling `half`'s `bytemuck` feature makes that a checked
+cast rather than a transmute).
+
+**Measured pinned, paired same-session arms (element-wise vs bulk, medians ns):**
+
+| n | performance core | efficiency core | promotion cost, perf (was → is) |
+| --- | --- | --- | --- |
+| 8 | 42.1 → **18.5** (−56%) | 44.8 → **15.9** (−65%) | 30.2 → 6.3 |
+| 16 | 60.5 → **10.7** (−82%) | 78.6 → **20.7** (−74%) | 54.6 → 5.7 |
+| 32 | 103.1 → **15.0** (−85%) | 174.7 → **33.7** (−81%) | 91.8 → 3.7 |
+| 64 | 658.2 → **495.4** (−25%) | 474.9 → **197.3** (−59%) | 174.1 → 11.5 |
+| 128 | 1361 → **975** (−28%) | 958 → **406** (−58%) | 404 → ~0 |
+| 256 | 2626 → **1930** (−27%) | 1899 → **799** (−58%) | 721 → 13 |
+| 512 | 5476 → **3918** (−29%) | 3887 → **1701** (−56%) | 1586 → 23 |
+
+The promotion is no longer the transform's dominant term at any size: at
+n = 512 it fell 69x, and at n = 16 it stopped costing eleven times the kernel
+it feeds. The residual at n ≥ 64 is the f32 route itself, which the probe
+measures beside it as the floor.
+
+Correctness is asserted against the definition it accelerates, not against a
+tolerance: the bulk widen and narrow must agree with the element-wise bridge
+**bit for bit** over every third `binary16` pattern (subnormals, infinities and
+NaN payloads included) and over f32 values chosen for rounding ties, overflow to
+infinity and flush-to-subnormal; a third test round-trips every storage pattern.
+Proven to bite by offsetting the widen source by one lane (eight failures).
+
 ## Runtime vector arms for the small transforms (2026-09-01) <a id="runtime-vector-arms"></a>
 
 `ATLAS-APOLLO-COMPILE-TIME-FEATURE-GATES-2026-09-01`. Five files selected

@@ -57,6 +57,11 @@ where
 {
     type Output = ();
 
+    #[expect(
+        clippy::inline_always,
+        reason = "large LaneKernel::call body must fold into the dispatcher's target-feature scope"
+    )]
+    #[inline(always)]
     fn call<A: SimdArch + SimdKernel<T>>(self, simd: Simd<T, A>) {
         let lanes = <A as SimdStorage<T>>::LANE_COUNT;
         let b = self.batch;

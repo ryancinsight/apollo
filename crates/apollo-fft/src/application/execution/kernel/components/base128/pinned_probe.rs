@@ -374,3 +374,69 @@ fn split_pieces_by_size() {
         );
     }
 }
+
+/// Half-storage transforms against their own `f32` execution kernel.
+///
+/// `Complex<f16>` has no native kernel: the storage promotes to `Complex32`,
+/// runs the f32 route, and demotes back (`precision_bridge`). This probe
+/// separates the two halves of that cost — the same length through the f32
+/// kernel directly is the floor, and the difference is what the promotion and
+/// demotion pay.
+#[cfg(test)]
+fn half_storage_against_its_kernel(suite: &mut BenchmarkSuite, core: &str) {
+    use crate::application::execution::kernel::mixed_radix::dispatch::{
+        dispatch_inplace, forward_compact_storage,
+    };
+    use eunomia::{Complex, Complex32};
+    use half::f16;
+
+    for n in [8usize, 16, 32, 64, 128, 256, 512] {
+        let source32: Vec<Complex32> = (0..n)
+            .map(|index| {
+                let x = index as f32;
+                Complex32::new((0.017 * x).sin(), 0.25 * (0.031 * x).cos())
+            })
+            .collect();
+        let source16: Vec<Complex<f16>> = source32
+            .iter()
+            .map(|value| Complex::new(f16::from_f32(value.re), f16::from_f32(value.im)))
+            .collect();
+
+        let mut work16 = source16.clone();
+        suite.run(BenchmarkCase::new(core, "half-storage", n), || {
+            work16.copy_from_slice(&source16);
+            forward_compact_storage(std::hint::black_box(&mut work16));
+        });
+
+        let mut work32 = source32.clone();
+        suite.run(BenchmarkCase::new(core, "f32-kernel", n), || {
+            work32.copy_from_slice(&source32);
+            dispatch_inplace::<f32, false, false>(std::hint::black_box(&mut work32), None);
+        });
+    }
+}
+
+#[test]
+#[ignore = "measurement instrument for the half-storage promotion cost"]
+fn half_storage_promotion_cost_by_core_type() {
+    let Some(selection) = measurement_cores::selected() else {
+        eprintln!("host reports no processor class information; probe not measurable");
+        return;
+    };
+    print!("{}", selection.describe());
+    for core in selection.cores() {
+        let cpu = core.processor().get();
+        let _binding = ProcessorBinding::bind(core.processor())
+            .expect("measurement processor must be available");
+        std::thread::yield_now();
+        let landed = ProcessorIndex::current()
+            .expect("Windows supports processor queries")
+            .get();
+        assert_eq!(landed, cpu, "processor binding must remain exact");
+        let core = core.label();
+        let mut suite = BenchmarkSuite::new(BenchmarkConfig::regression());
+        half_storage_against_its_kernel(&mut suite, core);
+        println!("HALF cpu={landed} ({core})");
+        suite.emit();
+    }
+}

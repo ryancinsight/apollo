@@ -1,5 +1,45 @@
 # Apollo Backlog
 
+## ATLAS-APOLLO-HALF-STORAGE-BULK-BRIDGE-2026-09-02 — Half-storage promotion ran one lane at a time [patch] [perf] — done 2026-09-02
+
+- **Delivered** (`gap_audit.md#half-storage-bulk-bridge`): the `Complex32Bridge`
+  trait gains `widen_slice`/`narrow_slice` with element-wise defaults, and
+  `Complex<f16>` overrides both with eunomia's F16C bulk converters — the
+  upstream owner of the `binary16` conversion vocabulary, whose public
+  `F16::widen_slice`/`narrow_slice` apollo simply was not calling. Interleaved
+  complex buffers convert as flat lane arrays with no shuffling; `half`'s
+  `bytemuck` feature makes the reinterpret a checked cast.
+- **Measured pinned, paired arms:** performance core n = 16 60.5 → **10.7** ns
+  (−82%), n = 32 103.1 → **15.0** (−85%), n = 8 −56%, n ≥ 64 −25 to −29%;
+  efficiency core −56 to −81% at every size. The promotion cost itself fell
+  1586 → 23 ns at n = 512 (69x) and 54.6 → 5.7 at n = 16.
+- **Coverage:** bit-for-bit agreement with the element-wise bridge over every
+  third `binary16` pattern and over rounding-tie/overflow/subnormal f32 inputs,
+  plus a storage round trip; mutation-proven. 530/530 debug and release,
+  doctests, warning-denied clippy and rustdoc, ratchet unchanged at 302.
+- **Next:** with promotion at ~5 ns and the n = 16/32 f32 codelets at ~5/11 ns,
+  fusing the conversion into those register-resident kernels' loads and stores
+  would remove a pass but saves single-digit nanoseconds — filed as
+  `ATLAS-APOLLO-F16-FUSED-SMALL-BASES-2026-09-02` behind its own measurement,
+  not assumed.
+
+## ATLAS-APOLLO-F16-FUSED-SMALL-BASES-2026-09-02 — Fuse half conversion into the register-resident codelets [patch] [perf] — todo
+
+- **Outcome:** at the sizes whose whole transform is register-resident (the
+  hermes-dispatched `dft16`/`dft32` codelets, and `dft8`), a half-storage
+  transform loads `binary16` straight into the kernel's registers
+  (`vcvtph2ps`), runs, and rounds back on store — no `Complex32` scratch buffer
+  and no separate conversion pass, the load/store-strategy shape the base
+  kernel already uses for its split sinks.
+- **Why it is filed rather than built:** after the bulk bridge the promotion is
+  ~5 ns against a 5–11 ns kernel, so the ceiling is single-digit nanoseconds at
+  n = 16/32 and nothing at larger n. It also removes the pooled scratch
+  acquisition for those sizes, which is the memory-efficiency half of the case.
+  Worth one measured attempt; not worth assuming.
+- **Acceptance:** paired pinned measurement at 8/16/32 against the bulk-bridge
+  baseline above, f32 controls flat, value parity unchanged; keep only what
+  measures as a win, per the runtime-arm precedent.
+
 ## ATLAS-APOLLO-COMPILE-TIME-FEATURE-GATES-2026-09-01 — Short kernels gate SIMD on compile-time target features [patch] [perf] — done 2026-09-01
 
 - **Finding (scope verified 2026-09-01).** No workspace `rustflags` sets
@@ -1776,16 +1816,11 @@
   hand out `from_raw_parts_mut` slices from the TLS arena with no miri
   coverage.
 
-## ATLAS-APOLLO-LETO-INPLACE-TYPED-ERROR — Migrate leto-inplace panics to typed errors [major] — todo
+## ✅ ATLAS-APOLLO-LETO-INPLACE-TYPED-ERROR — Migrate leto-inplace panics to typed errors [major] — done 2026-09-02 as [patch]
 
-- **Outcome:** the `*_leto_inplace` `expect("Array must be contiguous")`
-  panics on `FftPlan1D` and `StaticFftPlan1D` become typed `ApolloResult`
-  returns. Breaking: needs the consumer sweep (coeus consumes apollo-fft)
-  and 0.x minor coordination. `# Panics` sections were made honest under
-  ATLAS-APOLLO-PLAN-LENGTH-SAFETY-2026-08-27 as the interim contract.
-- **Evidence:**
-  `crates/apollo-fft/src/application/execution/plan/fft/dimension_1d/dynamic_impl.rs`
-  and `static_impl.rs` leto entry points.
+- **Dissent from the filed direction:** the contiguity panic did not need a typed error — it needed the contract the 2-D and 3-D plans already have. `with_c_order_view` stages any non-C-dense view through a rank-disjoint scratch role and writes it back in logical order; the 1-D leto entries now use it (rank one borrows the 3-D Y role, which no 1-D pass touches). No signature changes, no consumer sweep, no `ApolloResult` on a path whose only failure was a layout the plan can serve.
+- **Delivered:** six entries (`forward`/`inverse`/`inverse_unnorm` × dynamic and static) accept strided views; `# Panics` now names only the length mismatch (the `PLAN-LENGTH-SAFETY` interim contract). Test: a stride-2 view transforms bitwise-equal to the contiguous transform of the same values, forward and inverse, with the interleaved filler untouched, for both plans.
+- **Evidence:** apollo-fft clippy `-D warnings`, 533/533, rustdoc clean.
 
 ## ✅ ATLAS-APOLLO-SHAPE1D-PRIVACY — Privatize Shape1D.n behind its validating constructor [major] — done 2026-09-02
 
