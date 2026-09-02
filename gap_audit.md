@@ -1,3 +1,59 @@
+## The fused half codelet is falsified, and the instrument that said otherwise (2026-09-02) <a id="half-fusion-not-established"></a>
+
+`ATLAS-APOLLO-F16-FUSED-SMALL-BASES-2026-09-02`, **built end to end across
+three repositories and then falsified**. Two findings, and the second is the
+more valuable one.
+
+**The fusion does not pay.** With the upstream pieces in place — hermes'
+kernel-declared F16C frame and eunomia's inlinable bulk converters — apollo
+gained a `LaneKernel<f32>` body that widens `binary16` into a stack buffer,
+runs the existing register-resident codelet, and narrows back, all in one
+`#[target_feature]` scope. It is correct (the full suite passes, 547/547) and
+it is not faster. Measured with both paths compiled into **one binary** and
+the arms alternating inside a single process, performance core, two runs:
+
+| n | fused | staged (the shipped path) |
+| --- | --- | --- |
+| 16 | 9.50 / 9.72 ns | **9.09 / 8.65** |
+| 32 | 14.78 / 14.77 | **14.70 / 15.58** |
+
+Fusion is slightly *slower* at n = 16 and a wash at n = 32. The predicted
+ceiling assumed the three passes over the staging buffer were three trips to
+memory; at 128 to 256 bytes they are three trips to L1 behind a store buffer,
+and removing two of them buys less than the fused body costs in register
+pressure — the codelet already fills the register file, and the conversion
+needs its own live values across the same span.
+
+**The instrument was the real defect.** Before that in-process comparison, the
+same question was answered twice by rebuilding between arms and measuring each
+build once, warm-protocol and all: the first said fusion won by **-22.7%** at
+n = 16, the second said it lost by **+6.9%** — on unchanged code, with the
+`f32` plan control flat to within 2% in both. A cell of seven to fifteen
+nanoseconds cannot survive a fresh executable behind each arm: the
+`#first-run-after-build` correction earlier today removed the worst of that by
+discarding a warm-up pass, and this shows what it did not remove. Rebuilding
+between arms leaves per-binary variation — layout, page mapping, whatever the
+loader and the scanner do to a newly linked file — that no amount of in-process
+warm-up touches, and at this scale it exceeds the effect under test.
+
+**The rule this leaves:** a comparison at these magnitudes belongs in one
+binary, with the arms alternating in one process. Where a change cannot be
+expressed as two arms of one build, the difference has to clear the spread
+between two builds of identical code, which this session measured at about
+thirty points. That is a high bar, and it is the honest one.
+
+**What is reverted and what stands.** Apollo's fused codelet, its bridge hook
+and its dispatch wiring are removed: they measured no gain, and an unused
+kernel is not kept for the story it tells. Eunomia's `#[inline]` on the bulk
+dispatch stands — it is a thin probe-and-call that consumers should be able to
+place, it measured neutral (9.34 against 9.30 at n = 16 with and without), and
+nothing about the conversion changed. Hermes' `CONVERTS_BINARY16` is reverted
+in the same spirit as the apollo code: it exists for exactly this consumer,
+that consumer measured no gain, and a capability with no user is speculative
+generality however small and however zero-cost when unused. The ceiling
+analysis in `#half-fusion-blocked-upstream` stays as the record for whoever
+revisits this with a workload where the buffer genuinely leaves L1.
+
 ## What fusing the half conversion into the codelets would take (2026-09-02) <a id="half-fusion-blocked-upstream"></a>
 
 `ATLAS-APOLLO-F16-FUSED-SMALL-BASES-2026-09-02`, attempted and **blocked on an
