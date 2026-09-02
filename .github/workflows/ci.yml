@@ -60,27 +60,7 @@ jobs:
       # when no device is present. Install only that header closure: the full
       # toolkit exhausts the hosted runner without adding coverage to this
       # compile and test gate.
-      - name: Install CUDA toolkit
-        run: |
-          wget --no-verbose -O /tmp/cuda-keyring.deb \
-            https://developer.download.nvidia.com/compute/cuda/repos/ubuntu2404/x86_64/cuda-keyring_1.1-1_all.deb
-          sudo dpkg -i /tmp/cuda-keyring.deb
-          sudo apt-get update
-          sudo apt-get install --no-install-recommends --yes \
-            cuda-cudart-dev-13-3 cuda-driver-dev-13-3 cuda-nvcc-13-3 \
-            libcurand-dev-13-3
-          test -f /usr/local/cuda-13.3/include/cuda.h
-          cuda_stub="$(find /usr/local/cuda-13.3 -path '*/stubs/libcuda.so' -print -quit)"
-          test -n "$cuda_stub"
-          cuda_lib_path="$(dirname "$cuda_stub")"
-          cuda_runtime_path="$RUNNER_TEMP/cuda-driver-stubs"
-          mkdir -p "$cuda_runtime_path"
-          ln -sf "$cuda_stub" "$cuda_runtime_path/libcuda.so.1"
-          {
-            echo "CUDA_TOOLKIT_PATH=/usr/local/cuda-13.3"
-            echo "CUDA_LIB_PATH=$cuda_lib_path"
-            echo "LD_LIBRARY_PATH=$cuda_runtime_path${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
-          } >> "$GITHUB_ENV"
+      - uses: ./apollo/.github/actions/cuda-headers
       - uses: taiki-e/install-action@b20dedce73af6905cdc30d6611090c9b67557c8d
         with:
           tool: cargo-nextest@0.9.140,cargo-audit@0.22.2,cargo-deny@0.20.2
@@ -144,14 +124,66 @@ jobs:
           --bench buffer_reuse
       - name: Doctests
         run: cargo test --locked --doc --workspace --exclude apollo-python
-      - name: Documentation
-        run: cargo doc --locked --workspace --exclude apollo-python --no-deps
       - name: Provider audit
         run: cargo run --locked -p xtask -- provider-audit
       - name: RustSec audit
         run: cargo audit --deny warnings
       - name: Dependency policy
         run: cargo deny check
+
+  # Warning-denied rustdoc over every published member. rustdoc holds the
+  # shared target/doc directory for most of each crate's run, so one
+  # workspace invocation serializes the crates (metadata + sum of per-crate:
+  # 272 s on a 24-core host, past the five-minute budget on a hosted runner;
+  # ATLAS-APOLLO-WORKSPACE-RUSTDOC-RUNTIME). The plan job partitions the
+  # member list from cargo metadata at run time, so a new crate is covered
+  # without editing this file, and each shard documents its group into its
+  # own doc directory.
+  docs-plan:
+    name: rustdoc shards
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    outputs:
+      shards: ${{ steps.plan.outputs.shards }}
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803
+      - uses: dtolnay/rust-toolchain@889fac408b4da0905346410f253f0c55fbcb6613
+      - id: plan
+        run: |
+          shards="$(cargo metadata --locked --no-deps --format-version=1 | jq -c '[.packages[].name | select(. != "apollo-python")] | sort | to_entries | group_by(.key % 4) | map(map(.value) | join(","))')"
+          echo "shards=$shards" >> "$GITHUB_OUTPUT"
+          echo "$shards"
+
+  docs:
+    name: rustdoc (${{ matrix.shard }})
+    needs: docs-plan
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: ${{ fromJSON(needs.docs-plan.outputs.shards) }}
+    defaults:
+      run:
+        working-directory: apollo
+    env:
+      RUSTDOCFLAGS: -D warnings
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803
+        with:
+          path: apollo
+      - uses: dtolnay/rust-toolchain@889fac408b4da0905346410f253f0c55fbcb6613
+      - uses: ./apollo/.github/actions/cuda-headers
+      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6
+        with:
+          workspaces: apollo
+          cache-targets: false
+      - name: Document the shard
+        run: |
+          IFS=, read -r -a packages <<< "${{ matrix.shard }}"
+          args=()
+          for package in "${packages[@]}"; do args+=(-p "$package"); done
+          cargo doc --locked --no-deps "${args[@]}"
 
   python:
     name: python bindings
