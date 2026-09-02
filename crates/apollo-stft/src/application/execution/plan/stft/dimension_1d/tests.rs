@@ -1,5 +1,5 @@
 use super::{
-    forward_window_workspace_capacity, inverse_wola_workspace_capacities,
+    inverse_real_lane_workspace_capacity, inverse_wola_workspace_capacities,
     typed_workspace_capacities, window_complex_real_frame_into, window_signal_frame_into, StftPlan,
     HERMES_WINDOW_FRAME_THRESHOLD,
 };
@@ -160,7 +160,6 @@ fn hermes_forward_windowing_matches_scalar_formula_at_threshold() {
 
     window_signal_frame_into(start, &signal, &window, &mut actual);
 
-    assert!(forward_window_workspace_capacity() >= HERMES_WINDOW_FRAME_THRESHOLD);
     for (n, actual) in actual.iter().enumerate() {
         let signal_index = start + n as isize;
         let expected = if signal_index >= 0 && (signal_index as usize) < signal.len() {
@@ -171,6 +170,46 @@ fn hermes_forward_windowing_matches_scalar_formula_at_threshold() {
         assert_relative_eq!(actual.re, expected, epsilon = 1.0e-12);
         assert_eq!(actual.im.to_bits(), 0.0f64.to_bits());
     }
+}
+
+#[test]
+fn interior_frame_windowing_is_fused_and_bit_exact_with_the_scalar_formula() {
+    // A frame wholly inside the signal takes the provider's fused
+    // multiply-and-interleave straight from the signal slice. The product is
+    // the same single rounding the scalar formula performs, so the comparison
+    // is bit-exact, and the imaginary lane must be exactly zero.
+    let len = HERMES_WINDOW_FRAME_THRESHOLD * 4;
+    let signal: Vec<f64> = (0..len * 3).map(|i| (i as f64 * 0.17).cos()).collect();
+    let window: Vec<f64> = (0..len)
+        .map(|i| 0.5 - 0.5 * (std::f64::consts::TAU * i as f64 / (len - 1) as f64).cos())
+        .collect();
+    let start = (len / 3) as isize;
+    let mut actual = vec![Complex64::new(7.0, 7.0); len];
+    window_signal_frame_into(start, &signal, &window, &mut actual);
+    for (n, actual) in actual.iter().enumerate() {
+        let expected = signal[start as usize + n] * window[n];
+        assert_eq!(actual.re.to_bits(), expected.to_bits(), "lane {n}");
+        assert_eq!(actual.im.to_bits(), 0.0f64.to_bits(), "lane {n}");
+    }
+}
+
+#[test]
+fn forward_windowing_retains_no_real_scratch() {
+    // Both forward real pools are gone: after interior and overhanging frames
+    // at a provider-sized length, the only remaining real-lane pool -- the
+    // inverse path's -- has never grown on this thread.
+    let len = HERMES_WINDOW_FRAME_THRESHOLD * 8;
+    let signal: Vec<f64> = (0..len * 2).map(|i| (i as f64 * 0.05).sin()).collect();
+    let window = vec![0.75; len];
+    let mut out = vec![Complex64::new(0.0, 0.0); len];
+    window_signal_frame_into(0, &signal, &window, &mut out);
+    window_signal_frame_into(-(len as isize / 2), &signal, &window, &mut out);
+    window_signal_frame_into((len + len / 2) as isize, &signal, &window, &mut out);
+    assert_eq!(
+        inverse_real_lane_workspace_capacity(),
+        0,
+        "forward windowing must not touch the inverse real-lane pool"
+    );
 }
 
 #[test]

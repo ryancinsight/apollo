@@ -398,7 +398,49 @@
 - **Risk / dependency.** [patch] [perf]. Hermes provider PR #113 merged as `2e993503`. Integrator `/root`; lease `/root` on Apollo Mellin CPU kernel/tests/benchmark and this item's PM/doc hunks. The peer-owned canonical `Cargo.lock` remains outside this lease. Last update 2026-09-01.
 - **Current evidence.** Benchmark `6f0d9ff1`, source `d3410c13`, and allocation census after `cb00aa51`: one 2N f64 real-lane buffer is deleted (16N retained bytes per active worker), a fresh thread observes one remaining 2N weight-buffer allocation, and the warmed row allocates zero times while matching an independent complex-value oracle. Controlled same-provider pairs reduce N = 128 medians by 1.96%/1.49% and N = 256 by 1.46%/0.83%, while N = 64 moves -0.28%/+0.82%. Provider head `59c89431` merged through Hermes PR #113 as `2e993503`; a disposable standalone Apollo lock resolves 36 first-party Git sources to that merge and passes warning-denied all-target Clippy, 27/27 debug and 27/27 release Nextest, Rustdoc, one doctest, and benchmark smoke. Canonical lock advanced past the provider merge (first-party pins to origin mains, standalone resolution verified); mellin/stft gates green on the delivered revision (clippy -D warnings, 27+45 nextest, doctests). Collected from the stale lane and integrated by takeover.
 
-## ATLAS-APOLLO-STFT-WINDOW-INTERLEAVE-2026-09-01 — Measure forward-frame fusion [patch] [perf] — done 2026-09-01 (fusion rejected)
+## ATLAS-APOLLO-STFT-WINDOW-INTERLEAVE-2026-09-01 — Measure forward-frame fusion [patch] [perf] — re-adjudicated 2026-09-01: fusion adopted under the memory criterion
+
+- **Re-adjudication (2026-09-01, Claude session 03d80d33).** The rejection
+  below applied a predeclared *latency-improvement* gate. The stack's current
+  directive is memory efficiency, under which the acceptance is: latency not
+  regressed, retained per-worker scratch reduced, values identical. Rebuilt the
+  candidate rather than reviving the deleted source: interior frames (every
+  frame wholly inside the signal) now call the provider's fused
+  `real_mul_to_interleaved_complex` straight from the signal slice into the
+  complex output viewed as its `2n` real lanes (`Complex` is `repr(C)`); only
+  the frames overhanging either end take the scalar path. Both forward real
+  pools are deleted; the one real-lane pool that remains serves the inverse
+  path and is named for it.
+- **Evidence — per-frame, isolated.** In-process interleaved A/B of the
+  windowing pass alone at n = 1024, best of 15 blocks of 4000, three rounds:
+  old three-pass 238/232/224 ns per frame, fused 173/164/173 ns — **0.71x to
+  0.77x**, output bit-exact (one rounding of `x * w` either way).
+- **Evidence — STFT level.** The peer's exact `stft_cpu_forward` instrument,
+  two adjacent before/after pairs on a quiet host (0 rustc), medians in us:
+
+  | row | pair 1 before → after | pair 2 before → after |
+  |---|---|---|
+  | frame_32 control (scalar path, unchanged) | 12.06 → 12.48 | 13.40 → 11.51 |
+  | frame_1024 / 16384 | 17.09 → 16.42 (-3.9%) | 16.14 → 15.34 (-5.0%) |
+  | frame_1024 / 65536 | 40.26 → 40.22 | 49.04 → 36.52 |
+
+  The unchanged control swings ±14% between runs, so this instrument's floor
+  is wider than the effect; within it the target rows moved favorably in both
+  pairs and never regressed, consistent with the isolated per-frame result.
+  No latency *win* is claimed from this table — that was the peer's finding
+  too — and none is required by the criterion applied here.
+- **Memory.** Forward-only workloads retain no real scratch per worker where
+  they retained two `ScratchPool<f64>` buffers of the frame length (16 KiB per
+  worker at frame 1024, 64 KiB at 4096); `forward_windowing_retains_no_real_
+  scratch` pins it and `interior_frame_windowing_is_fused_and_bit_exact_with_
+  the_scalar_formula` pins the values. Closes the hermes
+  `HS-REAL-WINDOW-INTERLEAVE-2026-09-01` consumer half; its provider surface
+  is no longer unused.
+- **Gates.** fmt; `clippy --locked -p apollo-stft --all-targets --all-features
+  -D warnings`; nextest 52/52 (two new); doctests.
+
+### Original adjudication (latency gate) — superseded
+
 
 - **Outcome.** Retain the exact reusable CPU STFT benchmark at `c1853792`; reject the fused Hermes consumer and its otherwise-unused public provider surface. The source-equivalent candidate removed two retained real scratch buffers (16,384 bytes per active worker at frame length 1,024) and kept warm execution allocation-free, but it did not clear the predeclared complete-path latency gate.
 - **Evidence.** In the first adjacent pair, the scalar control moved -6.96% while the 16,384/65,536-sample target medians moved -4.46%/-10.31%; in the second, control moved -0.15% while targets moved -0.14%/-0.83%. Target confidence intervals overlap and the first-pair movement is control-confounded, so no latency win is attributed. The experimental source and allocation test were removed before commit; production source is unchanged. Timing is local Windows AVX2 evidence only. Commits `c1853792`/`4d1e5e35` delivered with the canonical lock advance; the re-open trigger (lock regeneration) fired and was executed in the same takeover. Lease none.
