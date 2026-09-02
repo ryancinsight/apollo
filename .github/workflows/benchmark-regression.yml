@@ -164,9 +164,22 @@ jobs:
             --bench prime_compose
             --bench half_cyclic_rader
           )
+          # The baseline leg resolves against the candidate lock it was seeded
+          # with, not under --locked: the seed already pins every shared
+          # version, and a candidate that adds or removes a dependency on a
+          # crate this step does not copy leaves the seed one edge out of
+          # step with the baseline manifests, which --locked refuses to
+          # reconcile (exit 101 before anything compiles). Reproduced locally
+          # by adding a dev-dependency to apollo-leto-interop: locked fails,
+          # unlocked resolves with a one-line lock delta. The candidate leg
+          # keeps --locked, since its lock and manifests are one revision.
+          locked=()
+          if [[ "$REVISION" == candidate ]]; then
+            locked=(--locked)
+          fi
           cargo bench --profile release \
             --manifest-path apollo-measurement/Cargo.toml \
-            --locked \
+            "${locked[@]}" \
             -p apollo-fft \
             --features kernel-strategy-bench \
             "${target_args[@]}" \

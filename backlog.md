@@ -237,26 +237,10 @@
   `expect(dead_code)` the interim module needed on non-Windows is gone with it.
 - **Integrator:** Claude session 5050c72a.
 
-## ATLAS-APOLLO-BENCH-BASELINE-LOCKFILE-2026-09-01 — Benchmark baseline leg cannot build a PR that adds a dependency [patch] — todo
+## ✅ ATLAS-APOLLO-BENCH-BASELINE-LOCKFILE-2026-09-01 — Benchmark baseline leg cannot build a PR that adds a dependency [patch] — done 2026-09-02
 
-- **Outcome:** `benchmark-regression.yml`'s baseline leg builds any PR,
-  including one whose candidate adds or removes a dependency.
-- **Evidence:** the "Pin candidate benchmark instrument" step copies the
-  *candidate's* `Cargo.lock` onto the *baseline's* `Cargo.toml`
-  (`cp apollo-candidate-source/Cargo.lock apollo-measurement/Cargo.lock`), and
-  "Compile measured benchmark executables" then runs `cargo bench --locked`.
-  When the candidate adds a dependency the copied lock records it against a
-  manifest that does not declare it, so `--locked` refuses to re-resolve and
-  the step exits 101 in ~15s before compiling anything. First observed on
-  PR #236, which adds `themis-topology` to `apollo-fft`'s dev-dependencies;
-  the candidate leg is unaffected. Pre-existing: the step predates that PR and
-  fails for any dependency-adding change.
-- **Scope:** the pinning step exists to hold the instrument and workloads
-  constant across the two revisions, which is correct; only its lock handling
-  over-constrains. Options are pinning the instrument sources without the lock,
-  or dropping `--locked` for the baseline leg alone. Not: skipping the leg.
-- **Non-goals:** re-tuning any benchmark; this is a build defect, not a
-  measurement one.
+- **Delivered:** the baseline leg's `cargo bench` resolves against the seeded candidate lock without `--locked`; the candidate leg keeps it. `0abf3b83` had already cured the workspace-inherited half (the pin script); the residual class was a dependency added to a crate the step never copies (`apollo-bench`, `apollo-fft-macros`, `apollo-leto-interop` — the non-consumers of `apollo-fft`).
+- **Evidence:** local reproduction on two `git archive` copies of `main` — a `[dev-dependencies] anyhow` edge on `apollo-leto-interop` in the candidate, the step's own copy/pin sequence applied to the baseline: `cargo metadata --locked` exits 101 ("cannot update the lock file"), unlocked resolution succeeds and the lock delta is that single edge, every version unchanged. The gate run on this PR exercises the changed leg end to end.
 
 ## ATLAS-APOLLO-INVERTED-CORE-CLAIMS-2026-09-01 — Sweep merged claims resting on the swapped core labels [patch] — done 2026-09-01
 
