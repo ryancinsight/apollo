@@ -13,13 +13,6 @@ pub(crate) trait StockhamAvxBackend: Copy + Sized + 'static {
         unsafe { Self::fmaddsub(wr, b, Self::mul(wi, swapped)) }
     }
 
-    unsafe fn stage_groups_one(
-        src: &[Self::Complex],
-        dst: &mut [Self::Complex],
-        radix: usize,
-        twiddles: &[Self::Complex],
-    );
-
     unsafe fn stage_pair_groups_two(
         src: &[Self::Complex],
         dst: &mut [Self::Complex],

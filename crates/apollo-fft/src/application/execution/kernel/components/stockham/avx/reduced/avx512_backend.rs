@@ -31,53 +31,6 @@ impl StockhamAvxBackend for Avx512BackendReduced {
     }
 
     #[inline]
-    unsafe fn stage_groups_one(
-        src: &[Complex32],
-        dst: &mut [Complex32],
-        radix: usize,
-        twiddles: &[Complex32],
-    ) {
-        let half_n = radix;
-        let vector_end = radix & !7usize;
-        let src_ptr = src.as_ptr();
-        let dst_ptr = dst.as_mut_ptr();
-        let twiddle_ptr = twiddles.as_ptr();
-
-        let idx_a = _mm512_set_epi64(14, 12, 10, 8, 6, 4, 2, 0);
-        let idx_b = _mm512_set_epi64(15, 13, 11, 9, 7, 5, 3, 1);
-
-        let mut j = 0usize;
-        while j < vector_end {
-            let d0 = _mm512_castps_pd(_mm512_loadu_ps(src_ptr.add(j << 1).cast::<f32>()));
-            let d1 = _mm512_castps_pd(_mm512_loadu_ps(src_ptr.add((j << 1) + 8).cast::<f32>()));
-
-            let a = _mm512_castpd_ps(_mm512_permutex2var_pd(d0, idx_a, d1));
-            let b = _mm512_castpd_ps(_mm512_permutex2var_pd(d0, idx_b, d1));
-
-            let w = _mm512_loadu_ps(twiddle_ptr.add(j).cast::<f32>());
-            let wr = _mm512_moveldup_ps(w);
-            let wi = _mm512_movehdup_ps(w);
-
-            let product = Self::cmul(wr, wi, b);
-
-            let s = _mm512_add_ps(a, product);
-            let t = _mm512_sub_ps(a, product);
-
-            _mm512_storeu_ps(dst_ptr.add(j).cast::<f32>(), s);
-            _mm512_storeu_ps(dst_ptr.add(half_n + j).cast::<f32>(), t);
-
-            j += 8;
-        }
-        while j < radix {
-            let a = src[j << 1];
-            let b = src[(j << 1) + 1] * twiddles[j];
-            dst[j] = a + b;
-            dst[half_n + j] = a - b;
-            j += 1;
-        }
-    }
-
-    #[inline]
     unsafe fn stage_pair_groups_two(
         src: &[Complex32],
         dst: &mut [Complex32],

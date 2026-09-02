@@ -29,50 +29,6 @@ impl StockhamAvxBackend for Avx512BackendPrecise {
     }
 
     #[inline]
-    unsafe fn stage_groups_one(
-        src: &[Complex64],
-        dst: &mut [Complex64],
-        radix: usize,
-        twiddles: &[Complex64],
-    ) {
-        let half_n = radix;
-        let vector_end = radix & !3usize;
-        let src_ptr = src.as_ptr();
-        let dst_ptr = dst.as_mut_ptr();
-        let twiddle_ptr = twiddles.as_ptr();
-
-        let mut j = 0usize;
-        while j < vector_end {
-            let d01 = _mm512_loadu_pd(src_ptr.add(j << 1).cast::<f64>());
-            let d23 = _mm512_loadu_pd(src_ptr.add((j << 1) + 4).cast::<f64>());
-
-            let a = _mm512_shuffle_f64x2::<0x88>(d01, d23);
-            let b = _mm512_shuffle_f64x2::<0xdd>(d01, d23);
-
-            let w = _mm512_loadu_pd(twiddle_ptr.add(j).cast::<f64>());
-            let wr = _mm512_permute_pd::<0x00>(w);
-            let wi = _mm512_permute_pd::<0xFF>(w);
-
-            let product = Self::cmul(wr, wi, b);
-
-            let s = _mm512_add_pd(a, product);
-            let t = _mm512_sub_pd(a, product);
-
-            _mm512_storeu_pd(dst_ptr.add(j).cast::<f64>(), s);
-            _mm512_storeu_pd(dst_ptr.add(half_n + j).cast::<f64>(), t);
-
-            j += 4;
-        }
-        while j < radix {
-            let a = src[j << 1];
-            let b = src[(j << 1) + 1] * twiddles[j];
-            dst[j] = a + b;
-            dst[half_n + j] = a - b;
-            j += 1;
-        }
-    }
-
-    #[inline]
     unsafe fn stage_pair_groups_two(
         src: &[Complex64],
         dst: &mut [Complex64],

@@ -23,16 +23,6 @@ impl StockhamAvxBackend for f32 {
     }
 
     #[inline]
-    unsafe fn stage_groups_one(
-        src: &[Complex32],
-        dst: &mut [Complex32],
-        radix: usize,
-        twiddles: &[Complex32],
-    ) {
-        unsafe { super::base::stage_reduced_groups_one_avx_fma(src, dst, radix, twiddles) }
-    }
-
-    #[inline]
     unsafe fn stage_pair_groups_two(
         src: &[Complex32],
         dst: &mut [Complex32],

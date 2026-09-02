@@ -3,8 +3,8 @@
 use super::super::super::stage::stage_impl;
 use super::super::stage::{stage_pair_impl, stage_triple_impl};
 use super::{
-    stage_lanes, stage_pair_lanes, stage_pair_radix_one_lanes, stage_triple_lanes,
-    stage_triple_radix_one_lanes,
+    stage_groups_one_lanes, stage_lanes, stage_pair_lanes, stage_pair_radix_one_lanes,
+    stage_triple_lanes, stage_triple_radix_one_lanes,
 };
 use eunomia::Complex;
 
@@ -278,5 +278,44 @@ fn triple_radix_one_stage_matches_scalar_recurrence_at_both_precisions() {
             &src64, &mut got64, &f64b, &f64c
         ));
         assert_close(&got64, &want64, triple_tolerance(f64::EPSILON));
+    }
+}
+
+/// Radices for the final stage (`n = 2 · radix`): the all-tail case at
+/// the f32 width (`radix = 2`), vector loops with and without a tail,
+/// and the sized routes' final-stage radices.
+const GROUPS_ONE_RADICES: &[usize] = &[2, 4, 8, 16, 64, 512];
+
+/// Each output is `a ± w·b`: one product (lane: product + FMA; scalar:
+/// two products and an add) and one add — at most 3 and 4 roundings,
+/// `|out| ≤ 2`, so `7 · ε · 2`.
+#[test]
+fn groups_one_stage_matches_scalar_recurrence_at_both_precisions() {
+    for &radix in GROUPS_ONE_RADICES {
+        let n = 2 * radix;
+        let src32 = samples::<f32>(n, 0x2B99_2DDF_A232_49D6 ^ n as u64);
+        let tw32 = twiddles::<f32>(radix, radix);
+        let mut want32 = vec![Complex::new(0.0f32, 0.0); n];
+        stage_impl::<_, 1024>(&src32, &mut want32, radix, &tw32);
+        let mut got32 = vec![Complex::new(0.0f32, 0.0); n];
+        assert!(stage_groups_one_lanes::<f32, 8>(
+            &src32, &mut got32, radix, &tw32
+        ));
+        assert_close(&got32, &want32, base_tolerance(f32::EPSILON));
+
+        let src64 = samples::<f64>(n, 0x6F4A_7F4F_E1D9_8B3C ^ n as u64);
+        let tw64 = twiddles::<f64>(radix, radix);
+        let mut want64 = vec![Complex::new(0.0f64, 0.0); n];
+        stage_impl::<_, 512>(&src64, &mut want64, radix, &tw64);
+        let mut got64 = vec![Complex::new(0.0f64, 0.0); n];
+        assert!(stage_groups_one_lanes::<f64, 4>(
+            &src64, &mut got64, radix, &tw64
+        ));
+        assert_close(&got64, &want64, base_tolerance(f64::EPSILON));
+
+        let mut got512 = vec![Complex::new(0.0f64, 0.0); n];
+        if stage_groups_one_lanes::<f64, 8>(&src64, &mut got512, radix, &tw64) {
+            assert_close(&got512, &want64, base_tolerance(f64::EPSILON));
+        }
     }
 }

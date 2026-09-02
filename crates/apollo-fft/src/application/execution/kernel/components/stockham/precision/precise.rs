@@ -3,8 +3,9 @@ use super::super::avx::backend::StockhamAvxBackend;
 #[cfg(target_arch = "x86_64")]
 use super::super::avx::precise::triple_2::stage_triple_groups_eight_precise_avx_fma;
 use super::super::butterfly::{
-    stage_lanes, stage_pair_impl, stage_pair_lanes, stage_pair_radix_one_lanes, stage_quad_impl,
-    stage_triple_impl, stage_triple_lanes, stage_triple_radix_one_lanes,
+    stage_groups_one_lanes, stage_lanes, stage_pair_impl, stage_pair_lanes,
+    stage_pair_radix_one_lanes, stage_quad_impl, stage_triple_impl, stage_triple_lanes,
+    stage_triple_radix_one_lanes,
 };
 use super::super::stage::stage_impl;
 
@@ -241,7 +242,9 @@ impl StockhamPrecision for PreciseStockhamAvxFma {
     fn stage(src: &[Complex64], dst: &mut [Complex64], radix: usize, twiddles: &[Complex64]) {
         let groups = src.len() / (radix << 1);
         if groups == 1 && radix >= 2 {
-            unsafe { <f64 as StockhamAvxBackend>::stage_groups_one(src, dst, radix, twiddles) };
+            if !stage_groups_one_lanes::<f64, 4>(src, dst, radix, twiddles) {
+                stage_impl::<_, 512>(src, dst, radix, twiddles);
+            }
         } else if groups < 2 || !stage_lanes::<f64, 4>(src, dst, radix, twiddles) {
             stage_impl::<_, 512>(src, dst, radix, twiddles);
         }
@@ -419,9 +422,9 @@ impl StockhamPrecision for PreciseStockhamAvx512 {
     fn stage(src: &[Complex64], dst: &mut [Complex64], radix: usize, twiddles: &[Complex64]) {
         let groups = src.len() / (radix << 1);
         if groups == 1 && radix >= 2 {
-            unsafe {
-                <crate::application::execution::kernel::components::stockham::avx::precise::avx512_backend::Avx512BackendPrecise as StockhamAvxBackend>::stage_groups_one(src, dst, radix, twiddles)
-            };
+            if !stage_groups_one_lanes::<f64, 8>(src, dst, radix, twiddles) {
+                <PreciseStockhamAvxFma as StockhamPrecision>::stage(src, dst, radix, twiddles);
+            }
         } else if groups < 4 || !stage_lanes::<f64, 8>(src, dst, radix, twiddles) {
             <PreciseStockhamAvxFma as StockhamPrecision>::stage(src, dst, radix, twiddles);
         }

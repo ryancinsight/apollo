@@ -23,16 +23,6 @@ impl StockhamAvxBackend for f64 {
     }
 
     #[inline]
-    unsafe fn stage_groups_one(
-        src: &[Complex64],
-        dst: &mut [Complex64],
-        radix: usize,
-        twiddles: &[Complex64],
-    ) {
-        unsafe { super::base::stage_precise_groups_one_avx_fma(src, dst, radix, twiddles) }
-    }
-
-    #[inline]
     unsafe fn stage_pair_groups_two(
         src: &[Complex64],
         dst: &mut [Complex64],
