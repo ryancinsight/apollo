@@ -3140,7 +3140,7 @@
   `ATLAS-APOLLO-POT-PLANAR-2026-08-25` and
   `ATLAS-APOLLO-AVX-STOCKHAM-AUDIT-2026-08-25`.
 
-## ATLAS-APOLLO-ISA-FORK-2026-08-25 — Retire the per-ISA fork onto the Hermes seam [arch] — todo (unblocked 2026-09-01)
+## ATLAS-APOLLO-ISA-FORK-2026-08-25 — Retire the per-ISA fork onto the Hermes seam [arch] — in-progress (first slice; integrator Claude, 2026-09-02; lease: `stockham/butterfly/pair_lanes.rs`, `stockham/precision/{precise,reduced}.rs`, `stockham/avx/generic/`, `base128/pinned_probe.rs`)
 
 - **Outcome:** `apollo-fft` stops carrying its own AVX2 and AVX-512 intrinsics
   and reaches lane-parallel CPU work through `hermes-simd`, which is the Atlas
