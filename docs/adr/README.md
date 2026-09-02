@@ -46,3 +46,4 @@
 | [0041](0041-l1-resident-interleaved-base.md) | L1-resident interleaved base transforms | Accepted |
 | [0042](0042-avx-stockham-backend-retained.md) | The AVX Stockham backend is retained pending investigation; f64 N = 256/512 route scalar | Accepted |
 | [0043](0043-measurement-core-class-is-queried.md) | Measurement core class is queried, not assumed | Accepted |
+| [0045](0045-per-isa-fork-onto-hermes-lanes.md) | The per-ISA intrinsic fork retires family by family onto hermes lane kernels, each behind a measurement gate | Accepted |

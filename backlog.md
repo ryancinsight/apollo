@@ -3097,6 +3097,16 @@
   negative result left the ISA fork with. There is now a measured performance
   argument against the largest part of that fork, which the `apollo-fwht` case
   did not have.
+- **Finding 3, another instance (2026-09-02, pinned probe at the Stockham
+  sized routes, PR #276 entry baseline and both A/B rounds):** f32 n = 1024
+  takes 7.7 µs on a performance core against 3.3 µs on an efficiency core,
+  while RustFFT takes 0.58 µs / 1.27 µs — the apollo route is 12–13x behind
+  on the performance core and 2.6x on the efficiency core, and no other
+  probed size inverts the core hierarchy (f32 4096: 4.3 µs P / 7.1 µs E).
+  The route is `forward32_avx_with_scratch` (n = 1024 is in its size list).
+  Reproduced across four runs of two binaries; same class as finding 3 and
+  the sharpest instance so far, so it is the first case to profile.
+
 
 ## ATLAS-APOLLO-POT-THROUGHPUT-2026-08-25 — Profile the power-of-two f64 path [patch] — done 2026-08-25
 
@@ -3140,7 +3150,7 @@
   `ATLAS-APOLLO-POT-PLANAR-2026-08-25` and
   `ATLAS-APOLLO-AVX-STOCKHAM-AUDIT-2026-08-25`.
 
-## ATLAS-APOLLO-ISA-FORK-2026-08-25 — Retire the per-ISA fork onto the Hermes seam [arch] — in-progress (first slice; integrator Claude, 2026-09-02; lease: `stockham/butterfly/pair_lanes.rs`, `stockham/precision/{precise,reduced}.rs`, `stockham/avx/generic/`, `base128/pinned_probe.rs`)
+## ATLAS-APOLLO-ISA-FORK-2026-08-25 — Retire the per-ISA fork onto the Hermes seam [arch] — in-progress (pair stage delivered 2026-09-02; integrator Claude; next lease: `stockham/precision/{precise,reduced}.rs`)
 
 - **Outcome:** `apollo-fft` stops carrying its own AVX2 and AVX-512 intrinsics
   and reaches lane-parallel CPU work through `hermes-simd`, which is the Atlas
@@ -3159,7 +3169,20 @@
   "AVX+FMA present, proved by the route's runtime check" — which is exactly
   what the token carries for free; those 186 sites are 62% of the SAFETY
   ratchet's remaining 302.
-- **First slice (ready):** the generic pair stage — `stockham/avx/generic/
+- **First slice delivered 2026-09-02** (PR #276, ADR [0045](docs/adr/0045-per-isa-fork-onto-hermes-lanes.md)):
+  `stockham/avx/generic/pair.rs` (57 uncommented unsafe sites) is now one
+  `LaneKernel` in `stockham/butterfly/pair_lanes.rs`; the four AVX2/AVX-512
+  dispatch sites request their route's width (4/8 f64, 8/16 f32) and fall
+  back to `stage_pair_impl`. SAFETY ratchet 302 → 237. Interleaved pinned
+  probe, two rounds, matched binaries, RustFFT as same-run control: every
+  efficiency-core cell within 0.3%, performance-core f32 within the same
+  binary's 5.7% round-to-round spread, f64 1024/4096 −2.8%/−4.5%. Verdict
+  neutral-to-better; table in the ADR. Rounding is bit-identical to the
+  retired copy (same dup/swap/`fmaddsub` operand order), pinned by a
+  14·ε·4 differential bound against the scalar recurrence.
+  **Next slice:** `precision/{precise,reduced}.rs` (30 + 29 sites), same
+  gate. Non-goal reaffirmed: routing stays with ADR 0042.
+- **First slice (as planned):** the generic pair stage — `stockham/avx/generic/
   pair.rs` (57 sites) behind `StockhamAvxBackend::stage_pair_groups_two` —
   re-expressed as one `LaneKernel` over `ComplexReg` (`butterfly`,
   `mul`, `swap_pairs`/`blend`) replacing the per-ISA backend trait calls,
