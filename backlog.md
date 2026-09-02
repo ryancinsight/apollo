@@ -1,5 +1,40 @@
 # Apollo Backlog
 
+## ATLAS-APOLLO-ONESHOT-MISSES-THE-PLAN-2026-09-02 — The f32/f64 one-shot entry re-derived its plan on every call [patch] [perf] — done 2026-09-02
+
+- **Found while verifying the f16 storage route** (`ATLAS-APOLLO-STORAGE-ROUTE-MISSES-THE-PLAN`).
+  Adding a symmetric control to the promotion probe — `Complex32` through the
+  same `FftPrecision::fft_forward` the storage type uses — showed the f32 arm
+  running *slower* than the half-storage arm at every n >= 64, and tracking the
+  raw-kernel arm almost exactly (110.1 against 113.5 ns at n = 128). The
+  macro-generated fallback called `mixed_radix::forward_inplace`, which
+  re-derives twiddles and the radix decomposition per call; the cached plan
+  holds both. The peer's fix routed `Complex<f16>` through the plan and left
+  its own scalar behind.
+- **Delivered:** all three fallback arms (forward, inverse, inverse-unnorm) of
+  `fft_precision_impl!` resolve the cached 1-D plan, so `Complex32` and
+  `Complex64` reach the same route `Complex<f16>` already took. The lengths
+  with codelet arms are untouched, and the plan dispatches tiny lengths
+  internally anyway.
+- **Measured, performance core, min of 100 pinned samples, with the hoisted
+  `f32-plan` arm flat across both binaries as the control** (59.09 -> 56.93,
+  144.27 -> 145.51, 318.71 -> 318.91 ns):
+
+  | n | before | after | vs plan |
+  | --- | --- | --- | --- |
+  | 64 | 40.90 ns | 36.98 | 1.29x -> 1.23x |
+  | 128 | 110.12 | 65.46 | 1.86x -> 1.15x (-40.6%) |
+  | 256 | 219.29 | 154.42 | 1.52x -> 1.06x (-29.6%) |
+  | 512 | 386.54 | 325.57 | 1.21x -> 1.02x (-15.8%) |
+
+- **Not a campaign number.** The RustFFT/PhastFT comparison hoists apollo's
+  plan exactly as it hoists their planners, so it neither moves nor should:
+  this is the one-shot API reaching the same floor the planned API already had.
+- **Behavioral note:** `fft_forward` now populates the 1-D plan cache, which
+  the rest of the public 1-D surface already did. The warm path is a
+  thread-local hit, so it adds no lock traffic.
+- 547/547 native tests, doctests, clippy clean, fmt clean.
+
 ## ATLAS-APOLLO-HALF-STAGING-UNINIT-2026-09-02 — The half staging buffer was zeroed before being overwritten [patch] [perf] — done 2026-09-02
 
 - **Delivered** (`gap_audit.md#half-fusion-blocked-upstream`): the

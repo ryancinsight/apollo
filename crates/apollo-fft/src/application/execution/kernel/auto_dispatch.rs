@@ -11,6 +11,27 @@ use super::components::winograd::radix::{dft4_array_impl, dft8_array_impl};
 use super::components::winograd::{dft3_impl, dft5_array_impl, dft7_impl};
 use super::mixed_radix;
 
+/// The cached plan for one length, which is what the lengths past the
+/// register-resident bases must run through.
+///
+/// `mixed_radix`'s free functions re-derive their twiddles and their radix
+/// decomposition on every call; the plan holds both. The transform is the same
+/// one either way, so paying for the derivation per call is pure overhead —
+/// measured on this host at 1.86x the plan's cost for a 128-point `f32`
+/// forward transform, 1.52x at 256, 1.21x at 512. The lookup that buys it is a
+/// thread-local hit on the warm path.
+#[inline]
+fn cached_plan<F>(n: usize) -> std::sync::Arc<crate::FftPlan1D<F>>
+where
+    F: crate::application::orchestration::cache::plans::PlanCacheProvider<PlanScalar = F>
+        + mixed_radix::MixedRadixScalar,
+{
+    F::get_1d_plan(
+        crate::Shape1D::new(n)
+            .expect("invariant: the codelet arms above cover every length below 2"),
+    )
+}
+
 /// Precision-generic auto-selecting FFT operations.
 ///
 /// Implementors delegate to the `mixed_radix` facade, which routes to:
@@ -109,7 +130,7 @@ macro_rules! fft_precision_impl {
                         dft7_impl::<$scalar, false, false>(data_ref);
                     }
                     _ => {
-                        mixed_radix::forward_inplace::<$scalar>(data);
+                        cached_plan::<$scalar>(n).forward_complex_slice_inplace(data);
                     }
                 }
             }
@@ -170,7 +191,7 @@ macro_rules! fft_precision_impl {
                         dft7_impl::<$scalar, true, true>(data_ref);
                     }
                     _ => {
-                        mixed_radix::inverse_inplace::<$scalar>(data);
+                        cached_plan::<$scalar>(n).inverse_complex_slice_inplace(data);
                     }
                 }
             }
@@ -218,7 +239,7 @@ macro_rules! fft_precision_impl {
                         dft7_impl::<$scalar, true, false>(data_ref);
                     }
                     _ => {
-                        mixed_radix::inverse_inplace_unnorm::<$scalar>(data);
+                        cached_plan::<$scalar>(n).inverse_complex_slice_unnorm_inplace(data);
                     }
                 }
             }

@@ -428,6 +428,19 @@ fn half_storage_against_its_kernel(suite: &mut BenchmarkSuite, core: &str) {
             );
         });
 
+        // The same public entry point, one scalar up. `Complex<f16>` and
+        // `Complex32` reach `FftPrecision::fft_forward` through the same
+        // dispatch and pay the same plan-cache lookup on the lengths that use
+        // one, so the difference between this arm and the storage arm is the
+        // conversion and nothing else. The `f32-plan` arm below cannot serve
+        // that role: it hoists plan construction out of the timed region,
+        // which the one-shot storage entry cannot do.
+        let mut work_precision = source32.clone();
+        suite.run(BenchmarkCase::new(core, "f32-precision", n), || {
+            work_precision.copy_from_slice(&source32);
+            <Complex32 as FftPrecision>::fft_forward(std::hint::black_box(&mut work_precision));
+        });
+
         let mut work32 = source32.clone();
         suite.run(BenchmarkCase::new(core, "f32-kernel", n), || {
             work32.copy_from_slice(&source32);
