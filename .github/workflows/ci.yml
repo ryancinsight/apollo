@@ -44,7 +44,7 @@ jobs:
   # member published on crates.io; apollo-bench and apollo-python are not.
   semver:
     name: SemVer gate
-    uses: ryancinsight/atlas/.github/workflows/semver-gate.yml@378081ec6cb04da4009253ecfb25e8b6966aa4e2
+    uses: ryancinsight/atlas/.github/workflows/semver-gate.yml@9062cfc6d78808cf1b7af60ae97f11825a6c8468
     with:
       package: apollo-czt,apollo-dctdst,apollo-dht,apollo-fft,apollo-fft-macros,apollo-frft,apollo-fwht,apollo-gft,apollo-hilbert,apollo-leto-interop,apollo-mellin,apollo-ntt,apollo-nufft,apollo-qft,apollo-radon,apollo-sdft,apollo-sft,apollo-sht,apollo-stft,apollo-validation,apollo-wavelet
       rust-toolchain: 1.97.0
