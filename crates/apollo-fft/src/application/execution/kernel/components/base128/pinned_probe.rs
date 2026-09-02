@@ -208,7 +208,7 @@ fn small_sizes_against_the_references_by_core_type() {
             );
         }
         println!("SML cpu={landed} ({core})");
-        suite.emit();
+        print!("{}", suite.report());
     }
 }
 
@@ -298,7 +298,7 @@ fn final_store_sink_against_incumbent_by_core_type() {
             });
         }
         println!("SINK cpu={landed} ({core})");
-        suite.emit();
+        print!("{}", suite.report());
     }
 }
 
@@ -479,6 +479,6 @@ fn half_storage_promotion_cost_by_core_type() {
         let mut suite = BenchmarkSuite::new(BenchmarkConfig::regression());
         half_storage_against_its_kernel(&mut suite, core);
         println!("HALF cpu={landed} ({core})");
-        suite.emit();
+        print!("{}", suite.report());
     }
 }

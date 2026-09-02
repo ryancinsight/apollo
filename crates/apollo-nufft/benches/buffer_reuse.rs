@@ -279,6 +279,6 @@ fn main() -> Result<(), apollo_bench::BenchmarkModeError> {
     bench_fast_type2_1d(&mut suite);
     bench_fast_type1_3d(&mut suite);
     bench_fast_type2_3d(&mut suite);
-    suite.emit();
+    print!("{}", suite.report());
     Ok(())
 }

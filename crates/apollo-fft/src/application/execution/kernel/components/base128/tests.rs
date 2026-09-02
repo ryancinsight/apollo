@@ -73,6 +73,25 @@ fn reduced_tolerance(input: &[Complex32]) -> f32 {
     scaled_epsilon / (1.0 - scaled_epsilon) * l1
 }
 
+/// On a host that declines both base routes the plan still transforms through
+/// the incumbent twiddle route; the fallback asserts that route's round-trip
+/// correctness instead of merely asserting twiddles exist.
+fn assert_incumbent_route_round_trips(plan: &crate::FftPlan1D<f64>, n: usize) {
+    if plan.base128.is_some() || plan.base64.is_some() {
+        return;
+    }
+    let source = signal(n);
+    let mut data = source.clone();
+    plan.forward_complex_slice_inplace(&mut data);
+    plan.inverse_complex_slice_inplace(&mut data);
+    let error = worst(&data, &source);
+    let bound = 2.0 * tolerance(&source);
+    assert!(
+        error <= bound,
+        "the incumbent route round trips by {error:.3e} > {bound:.3e}"
+    );
+}
+
 fn assert_base64_matches_direct<const INVERSE: bool>() {
     let source = signal(64);
     let mut actual = source.clone();
@@ -163,10 +182,7 @@ fn dynamic_base64_plan_owns_only_the_selected_route() {
         crate::Shape1D::new(64).expect("invariant: shape lengths are non-zero"),
     );
     let Some(base) = plan.base64.as_ref() else {
-        assert!(
-            plan.twiddle_fwd.is_some(),
-            "the incumbent route retains its forward twiddles"
-        );
+        assert_incumbent_route_round_trips(&plan, 64);
         return;
     };
 
@@ -329,10 +345,7 @@ fn dynamic_plan_owns_forward_and_lazily_initializes_inverse() {
         crate::Shape1D::new(128).expect("invariant: shape lengths are non-zero"),
     );
     let Some(base) = plan.base128.as_ref() else {
-        assert!(
-            plan.twiddle_fwd.is_some(),
-            "the incumbent route retains its forward twiddles"
-        );
+        assert_incumbent_route_round_trips(&plan, 128);
         return;
     };
 
@@ -376,10 +389,7 @@ fn dynamic_split_plans_share_complete_twiddle_tables() {
             crate::Shape1D::new(n).expect("invariant: shape lengths are non-zero"),
         );
         let Some(_) = plan.base128.as_ref() else {
-            assert!(
-                plan.twiddle_fwd.is_some(),
-                "the incumbent route retains its forward twiddles"
-            );
+            assert_incumbent_route_round_trips(&plan, n);
             continue;
         };
         let forward = plan
@@ -436,10 +446,7 @@ fn dynamic_split_plans_normalize_by_full_length() {
         let source = signal(n);
         let mut actual = source.clone();
         let Some(_) = plan.base128.as_ref() else {
-            assert!(
-                plan.twiddle_fwd.is_some(),
-                "the incumbent route retains its forward twiddles"
-            );
+            assert_incumbent_route_round_trips(&plan, n);
             continue;
         };
 

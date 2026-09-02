@@ -895,7 +895,7 @@ fn main() -> Result<(), apollo_bench::BenchmarkError> {
     eprintln!("engine_census: 3-D {shape:<10} apollo allocations/call — {allocs} ({bytes} B)");
 
     assert_staged_view_allocations();
-    suite.emit();
+    print!("{}", suite.report());
     let elapsed = started.elapsed();
     eprintln!("engine_census: completed in {:.2}s", elapsed.as_secs_f64());
     assert!(

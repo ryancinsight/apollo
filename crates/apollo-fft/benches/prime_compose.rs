@@ -57,6 +57,6 @@ fn main() -> Result<(), apollo_bench::BenchmarkModeError> {
         "two_by_prime_coprime_composites",
         &[38, 62, 106],
     );
-    suite.emit();
+    print!("{}", suite.report());
     Ok(())
 }

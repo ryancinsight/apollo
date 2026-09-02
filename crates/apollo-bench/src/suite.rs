@@ -47,11 +47,6 @@ impl BenchmarkSuite {
     pub fn report(&self) -> String {
         report::render(&self.records)
     }
-
-    /// Writes the completed suite report to standard output.
-    pub fn emit(&self) {
-        print!("{}", self.report());
-    }
 }
 
 impl Default for BenchmarkSuite {

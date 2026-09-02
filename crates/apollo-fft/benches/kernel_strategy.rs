@@ -164,6 +164,6 @@ fn main() -> Result<(), apollo_bench::BenchmarkModeError> {
     {
         bench_prime_strategy(&mut suite, config);
     }
-    suite.emit();
+    print!("{}", suite.report());
     Ok(())
 }
