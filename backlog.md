@@ -3168,7 +3168,7 @@
   `ATLAS-APOLLO-POT-PLANAR-2026-08-25` and
   `ATLAS-APOLLO-AVX-STOCKHAM-AUDIT-2026-08-25`.
 
-## ATLAS-APOLLO-ISA-FORK-2026-08-25 — Retire the per-ISA fork onto the Hermes seam [arch] — in-progress (pair, base, and triple stages delivered 2026-09-02; integrator Claude; next lease: `stockham/avx/generic/triple/`)
+## ATLAS-APOLLO-ISA-FORK-2026-08-25 — Retire the per-ISA fork onto the Hermes seam [arch] — in-progress (four slices delivered 2026-09-02; integrator Claude; next lease: `stockham/avx/precise/fixed.rs`, `stockham/butterfly/{dispatch.rs,lanes/}`)
 
 - **Outcome:** `apollo-fft` stops carrying its own AVX2 and AVX-512 intrinsics
   and reaches lane-parallel CPU work through `hermes-simd`, which is the Atlas
@@ -3213,11 +3213,17 @@
   — the radix-one triple first pass that `reduced.rs` routed to the generic
   intrinsic body, which carried ADR 0042's finding-3 pathology. Table in the
   ADR.
-  **Next slice:** the sized radix-one triple specialisations
-  (`avx/generic/triple/n{32,64,128,256,512,1024,32768}.rs`, 2,996 lines,
-  unrolls of the same element step) onto `stage_triple_radix_one_lanes`,
-  measured size by size; then `precision/{precise,reduced}.rs`. Non-goal
-  reaffirmed: routing stays with ADR 0042.
+- **Fourth slice delivered 2026-09-02 (same PR):** the seven sized radix-one
+  unrolls (2,996 lines) and their twelve arms deleted; `avx/generic/` gone;
+  `StockhamAvxBackend` reduced to its groups-one/-two specialisations.
+  Ratchet 208 → 168. Same gate over 8..32768: neutral — the one cell outside
+  the spread (performance f64 n = 32, +41%) moved with its same-run RustFFT
+  control (+44%), an instrument artefact at 20 ns scale. Table in the ADR.
+  **Next slice:** the fixed 32/64-point f64 leaves (`avx/precise/fixed.rs`,
+  748 lines) as `lanes/fixed.rs` codelets on `register_butterfly`; then the
+  groups-one/-two specialisations (`avx/{precise,reduced}/{base,pair,quad,
+  triple_1,triple_2}.rs`) and `reduced/fixed.rs`. Non-goal reaffirmed:
+  routing stays with ADR 0042.
 - **First slice (as planned):** the generic pair stage — `stockham/avx/generic/
   pair.rs` (57 sites) behind `StockhamAvxBackend::stage_pair_groups_two` —
   re-expressed as one `LaneKernel` over `ComplexReg` (`butterfly`,

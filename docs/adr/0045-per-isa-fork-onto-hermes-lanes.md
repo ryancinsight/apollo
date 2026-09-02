@@ -156,6 +156,36 @@ core than the efficiency core — and the lane kernel does not carry it. The
 sized specialisations share that body's element step, so the next slice
 measures them against the lane kernel size by size.
 
+## Fourth slice: the sized radix-one unrolls (2026-09-02)
+
+The seven sized radix-one triple specialisations (`triple/n{32,64,128,256,
+512,1024,32768}.rs`, 2,996 lines of explicit `do_one` unrolls over one
+element step) and their twelve dispatch arms were deleted; those sizes now
+reach the radix-one lane kernel through the general arm. With the last
+intrinsic stage body gone, `StockhamAvxBackend` lost its vector primitives
+and `avx/generic/` was removed. Ratchet: 208 → 168.
+
+Same instrument over every probed size (8..32768), triple-slice binary as
+`before`, two rounds; the cells the deleted unrolls served:
+
+| core | prec | n | before | after | after/before | RustFFT before/after |
+| --- | --- | --- | --- | --- | --- | --- |
+| performance | f64 | 32 | 21.9 ns | 30.9 ns | 1.411 | 15.6 / 22.5 (1.44) |
+| performance | f64 | 64 | 46.2 | 42.4 | 0.917 | 46.6 / 39.8 (0.85) |
+| performance | f64 | 128 | 94.0 | 96.7 | 1.029 | 86.4 / 92.5 |
+| performance | f64 | 256..32768 | — | — | 1.000–1.033 | — |
+| performance | f32 | 32..32768 | — | — | 0.944–1.090 | — |
+| efficiency | f64 | 32..32768 | — | — | 0.995–1.015 | — |
+| efficiency | f32 | 32..32768 | — | — | 0.994–1.019 | — |
+
+The efficiency-core rows repeat to 1.5%. The one performance-core cell
+outside the spread, f64 n = 32 at +41%, moved with its same-run RustFFT
+control (+44%, a binary that did not change), so it is the instrument —
+performance-core timing of a 20 ns transform shifts with binary layout —
+not the route; f64 n = 64 shows the mirror image (−8% with the control at
+−15%). Verdict: neutral; the gate passes, and the f64 n = 32 cell is
+re-measured with the next slice, which changes exactly that leaf.
+
 ## Alternatives rejected
 
 - **Retire the AVX Stockham backend wholesale** onto the auto-vectorized scalar
