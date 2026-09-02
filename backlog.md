@@ -51,7 +51,9 @@
 - **Limit stated:** identity was shown on the Windows/MSVC build; CI's Linux
   artifacts should be diffed the same way as the first step of part 2.
 
-## ATLAS-APOLLO-CENSUS-UNPINNED-BLEND-2026-09-01 — The engine census measures an unpinned two-class blend [patch] [perf] — in-progress 2026-09-01
+## ATLAS-APOLLO-CENSUS-UNPINNED-BLEND-2026-09-01 — The engine census measures an unpinned two-class blend [minor] [perf] — review 2026-09-01
+
+- **Delivered (PR #252):** `apollo_bench::bind_measurement_processor` — override, else second member of the highest queried class, else current processor labelled unclassified; binding verified and printed. `engine_census` pins after its opt-out (smoke: `bound to logical processor 1 (performance class; ...)`); `rustfft_comparison` drops its private copy (-130 lines); `BenchmarkError` shared. Reclassified [patch] -> [minor]: additive public surface on `apollo-bench`. Liveness: breaking the second-member rule fails exactly one test. Per-class census rows deferred to `APOLLO_BENCH_PROCESSOR` runs (60 s budget). Diagnostic for the gate's candidate-role bias is PR #253.
 
 - **Claim:** integrator claude (this session); lane `worktrees/apollo-ecoqos-premise` on `perf/apollo-bench-measurement-processor`; lease: `crates/apollo-bench/{Cargo.toml,src/**}`, `crates/apollo-fft/benches/{engine_census,rustfft_comparison}.rs`, this entry. Consolidation: `rustfft_comparison` already hand-rolls a processor binding (env override, else the current processor — class unknown); the census is the second occurrence, so selection-by-queried-class lands once in `apollo-bench` and both benches call it.
 
