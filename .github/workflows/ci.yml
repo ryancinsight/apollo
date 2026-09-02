@@ -23,6 +23,16 @@ concurrency:
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
+  adr-index:
+    name: ADR index is current
+    # atlas owns the one generator; this replaces the copy that lived in
+    # scripts/adr-index.py and the step that ran it (ATLAS-ADR-INDEX-GUARD-2026-09-01).
+    uses: ryancinsight/atlas/.github/workflows/adr-index-guard.yml@8585a1ade6045b5851b0cc9dab5b08bb75554519
+    permissions:
+      contents: read
+    with:
+      strict: true
+
   # Guards the one artifact whose correctness cannot be checked from inside the
   # overlay environment that produces it. Calls the shared Atlas workflow.
   lockfile:
@@ -89,8 +99,6 @@ jobs:
           cargo metadata --locked --no-deps --format-version=1 \
             | jq -r '.packages[].name' \
             | while read -r package; do cargo fmt -p "$package" -- --check; done
-      - name: ADR index
-        run: python scripts/adr-index.py check
       - name: SAFETY ratchet
         run: python scripts/safety_ratchet.py check
       - name: Clippy
