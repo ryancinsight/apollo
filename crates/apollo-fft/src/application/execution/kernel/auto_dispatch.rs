@@ -369,6 +369,64 @@ mod tests {
         );
     }
 
+    /// The register-resident storage lengths against a direct DFT.
+    ///
+    /// `dispatch_compact_storage` routes 2, 4, 8, 16 and 32 over a stack
+    /// buffer instead of the pooled `Complex32` scratch, and at some of those
+    /// lengths that reaches a different f32 codelet than the general route
+    /// would. The lengths the existing compact test covers (96) do not touch
+    /// it at all, so the new arms need their own oracle: each length, forward
+    /// and inverse, against the direct transform within the same derived
+    /// storage bound.
+    #[test]
+    fn register_resident_storage_lengths_match_direct() {
+        for n in [2usize, 4, 8, 16, 32] {
+            let input: Vec<Complex<f16>> = sig32(n)
+                .into_iter()
+                .map(|value| Complex::new(f16::from_f32(value.re), f16::from_f32(value.im)))
+                .collect();
+            let promoted: Vec<Complex32> = input
+                .iter()
+                .map(|value| Complex32::new(value.re.to_f32(), value.im.to_f32()))
+                .collect();
+            let input_l1 = promoted
+                .iter()
+                .map(|value| value.re.abs() + value.im.abs())
+                .sum::<f32>();
+            let unit_roundoff = f16::EPSILON.to_f32() * 0.5;
+            let compute_roundoff = n as f32 * f32::EPSILON;
+
+            for inverse in [false, true] {
+                let expected_f32 = if inverse {
+                    dft_inverse(&promoted)
+                } else {
+                    dft_forward(&promoted)
+                };
+                let expected: Vec<Complex<f16>> = expected_f32
+                    .into_iter()
+                    .map(|value| Complex::new(f16::from_f32(value.re), f16::from_f32(value.im)))
+                    .collect();
+                let scale = if inverse { 1.0 / n as f32 } else { 1.0 };
+                let error_bound = std::f32::consts::SQRT_2
+                    * input_l1
+                    * scale
+                    * (2.0 * unit_roundoff + compute_roundoff);
+
+                let mut actual = input.clone();
+                if inverse {
+                    fft_inverse(&mut actual);
+                } else {
+                    fft_forward(&mut actual);
+                }
+                let error = max_abs_err_half(&actual, &expected);
+                assert!(
+                    error <= error_bound,
+                    "n={n} inverse={inverse}: storage error {error} exceeds bound {error_bound}"
+                );
+            }
+        }
+    }
+
     #[test]
     fn unified_api_forward_64_matches_direct_and_typed() {
         let n = 45usize;

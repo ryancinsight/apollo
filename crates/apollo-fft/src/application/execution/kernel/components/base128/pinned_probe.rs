@@ -413,6 +413,19 @@ fn half_storage_against_its_kernel(suite: &mut BenchmarkSuite, core: &str) {
             work32.copy_from_slice(&source32);
             dispatch_inplace::<f32, false, false>(std::hint::black_box(&mut work32), None);
         });
+
+        // The same length through the public plan, which selects the
+        // register-resident bases. If this is far below the kernel arm, the
+        // storage route is not paying for arithmetic but for reaching a
+        // different kernel family.
+        let plan = crate::FftPlan1D::<f32>::new(
+            crate::Shape1D::new(n).expect("invariant: shape lengths are non-zero"),
+        );
+        let mut work_plan = source32.clone();
+        suite.run(BenchmarkCase::new(core, "f32-plan", n), || {
+            work_plan.copy_from_slice(&source32);
+            plan.forward_complex_slice_inplace(std::hint::black_box(&mut work_plan));
+        });
     }
 }
 
