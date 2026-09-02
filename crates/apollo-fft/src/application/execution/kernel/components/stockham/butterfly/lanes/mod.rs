@@ -20,11 +20,13 @@
 //! [`ComplexReg`]: hermes_simd::ComplexReg
 
 pub(crate) mod base;
+pub(crate) mod fixed;
 pub(crate) mod pair;
 #[cfg(test)]
 mod tests;
 pub(crate) mod triple;
 
 pub(crate) use base::*;
+pub(crate) use fixed::*;
 pub(crate) use pair::*;
 pub(crate) use triple::*;
