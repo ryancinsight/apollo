@@ -19,7 +19,14 @@
   Outside these probes the rule is protocol: after a rebuild, discard the
   first run.
 
-## ATLAS-APOLLO-STORAGE-ROUTE-MISSES-THE-PLAN-2026-09-02 — The storage route reaches a slower kernel family than the plan [patch] [perf] — todo
+## ATLAS-APOLLO-STORAGE-ROUTE-MISSES-THE-PLAN-2026-09-02 — The storage route reaches a slower kernel family than the plan [patch] [perf] — in progress
+
+- **Integrator / lease:** Codex; shared canonical branch `test/apollo-stft-leto-sidecar`;
+  lease: `api/cfft.rs`, `application/execution/kernel/auto_dispatch.rs`,
+  `application/execution/kernel/mixed_radix/{dispatch.rs,tests.rs}`,
+  `application/execution/kernel/components/base128/pinned_probe.rs`,
+  `docs/adr/0046-compact-storage-plan-routing.md`, and the storage-route audit
+  records below.
 
 - **Corrected 2026-09-02 (`gap_audit.md#half-storage-routing-corrected`):**
   the 12-16x figures below were measured on freshly built binaries and are an
