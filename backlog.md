@@ -76,6 +76,14 @@
 
 ## ATLAS-APOLLO-F16-FUSED-SMALL-BASES-2026-09-02 — Fuse half conversion into the register-resident codelets [patch] [perf] — todo
 
+- **Sized 2026-09-02 (`gap_audit.md#half-bridge-residual`):** conversion alone
+  costs 3.15 ns at n = 8, 3.34 at 16, 4.09 at 32 — against plan-route
+  transforms of 4.0/4.4/11.2 ns, so fusing both passes into the codelet's
+  loads and stores is worth up to ~3 ns at 8 and 16, and proportionally less
+  above. A probe-local inlined F16C reference measured *slower* than
+  eunomia's bulk call at every size, so the cost is the two passes
+  themselves, not the cross-crate call — fusion is the only lever left here.
+
 - **Outcome:** at the sizes whose whole transform is register-resident (the
   hermes-dispatched `dft16`/`dft32` codelets, and `dft8`), a half-storage
   transform loads `binary16` straight into the kernel's registers

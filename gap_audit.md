@@ -1,3 +1,29 @@
+## The half bridge's residual is conversion, not call overhead (2026-09-02) <a id="half-bridge-residual"></a>
+
+After the bulk bridge and the stack path, a half-storage transform still
+costs about 2x the f32 plan route at n = 8 and 16. The probe attributes the
+gap: conversion alone (both directions) is 3.15 ns at n = 8, 3.34 at 16,
+4.09 at 32 and 7.62 at 64 — a fixed ~3 ns plus a small per-lane term, which
+is call-shaped rather than work-shaped, and eunomia's `widen_f16`/`narrow_f16`
+dispatch wrappers carry no `#[inline]`, so a consumer pays two cross-crate
+calls per transform.
+
+**That reading is wrong, and the measurement says so.** A probe-local
+reference doing the same round trip with the F16C sequence inlined directly
+into the caller measured *slower* at every size — 7.24 ns against 3.15 at
+n = 8, 8.41 against 3.34 at 16, 13.98 against 6.96 at 64. Whatever the
+remaining fixed cost is, it is not the cross-crate call, and eunomia's bulk
+converters already beat a naive inlined sequence. No upstream `#[inline]`
+change is warranted, and the reference arm is removed rather than kept: it
+answered its question.
+
+The residual at these lengths is therefore the honest cost of two conversion
+passes over a buffer the kernel then reads a third time. Removing it means
+not having two passes — folding the widening into the codelet's loads and the
+narrowing into its stores, which is
+`ATLAS-APOLLO-F16-FUSED-SMALL-BASES-2026-09-02`, still open and still worth
+exactly one measured attempt.
+
 ## A freshly built probe binary's first run is not measurable (2026-09-02) <a id="first-run-after-build"></a>
 
 **Correction, and a measurement rule for every pinned probe in this
