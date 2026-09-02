@@ -1287,3 +1287,82 @@ fn lengths_adjacent_to_the_rejected_route_still_round_trip() {
         );
     }
 }
+
+/// Strided Leto views transform in place through staging, matching the
+/// contiguous transform of the same logical values bitwise (one kernel, one
+/// input) and leaving the interleaved filler untouched.
+#[test]
+fn leto_inplace_entries_stage_strided_views() {
+    use leto::SliceArg;
+    let logical: Vec<Complex64> = (0..8)
+        .map(|i| Complex64::new(0.25 * f64::from(i), -0.5 + 0.1 * f64::from(i)))
+        .collect();
+    let filler = Complex64::new(99.0, -99.0);
+    let interleave = |values: &[Complex64]| -> leto::Array1<Complex64> {
+        let buffer: Vec<Complex64> = values.iter().flat_map(|&v| [v, filler]).collect();
+        leto::Array1::from_shape_vec([buffer.len()], buffer).expect("interleaved buffer")
+    };
+    let strided_values = |array: &leto::Array1<Complex64>| -> Vec<Complex64> {
+        array
+            .as_slice()
+            .expect("owned array is dense")
+            .iter()
+            .step_by(2)
+            .copied()
+            .collect()
+    };
+    let fillers_intact = |array: &leto::Array1<Complex64>| {
+        array
+            .as_slice()
+            .expect("owned array is dense")
+            .iter()
+            .skip(1)
+            .step_by(2)
+            .all(|&v| v == filler)
+    };
+
+    let dynamic = FftPlan1D::<f64>::new(Shape1D::new(8).expect("invariant: 8 > 0"));
+    let mut expected = logical.clone();
+    dynamic.forward_complex_slice_inplace(&mut expected);
+    let mut buffer = interleave(&logical);
+    let view = buffer
+        .slice_with_mut::<1>(&[SliceArg::range(Some(0), None, 2)])
+        .expect("stride-2 view");
+    dynamic.forward_complex_leto_inplace(view);
+    assert_eq!(
+        strided_values(&buffer),
+        expected,
+        "dynamic forward through a strided view"
+    );
+    assert!(
+        fillers_intact(&buffer),
+        "staging must write back only the view's elements"
+    );
+
+    let view = buffer
+        .slice_with_mut::<1>(&[SliceArg::range(Some(0), None, 2)])
+        .expect("stride-2 view");
+    dynamic.inverse_complex_leto_inplace(view);
+    let mut round_trip = expected.clone();
+    dynamic.inverse_complex_slice_inplace(&mut round_trip);
+    assert_eq!(
+        strided_values(&buffer),
+        round_trip,
+        "dynamic inverse through a strided view"
+    );
+
+    let fixed = StaticFftPlan1D::<f64, 8>::new();
+    let mut expected_static = logical.clone();
+    fixed.forward_complex_slice_inplace(&mut expected_static);
+    let mut buffer = interleave(&logical);
+    let view = buffer
+        .slice_with_mut::<1>(&[SliceArg::range(Some(0), None, 2)])
+        .expect("stride-2 view");
+    fixed.forward_complex_leto_inplace(view);
+    assert_eq!(
+        strided_values(&buffer),
+        expected_static,
+        "static forward through a strided view"
+    );
+    assert!(fillers_intact(&buffer));
+}

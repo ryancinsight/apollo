@@ -242,6 +242,11 @@ Change-class tags: [patch] backward-compatible fix, [minor] additive non-breakin
 
 ### Fixed
 
+- [patch] `FftPlan1D`/`StaticFftPlan1D` `*_leto_inplace` entry points accept
+  every valid Leto layout: a C-dense view transforms in place and a strided
+  view is staged through the rank-one thread-local scratch role and written
+  back in logical order, as the 2-D and 3-D plans already did. The
+  "Array must be contiguous" panic is gone; only a length mismatch panics.
 - [patch] Every 1-D transform length now computes the DFT. `apollo-fft` had
   109 lengths in `2..=8200` that either asserted or returned a spectrum
   uncorrelated with the truth

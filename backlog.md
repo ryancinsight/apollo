@@ -1760,16 +1760,11 @@
   hand out `from_raw_parts_mut` slices from the TLS arena with no miri
   coverage.
 
-## ATLAS-APOLLO-LETO-INPLACE-TYPED-ERROR — Migrate leto-inplace panics to typed errors [major] — todo
+## ✅ ATLAS-APOLLO-LETO-INPLACE-TYPED-ERROR — Migrate leto-inplace panics to typed errors [major] — done 2026-09-02 as [patch]
 
-- **Outcome:** the `*_leto_inplace` `expect("Array must be contiguous")`
-  panics on `FftPlan1D` and `StaticFftPlan1D` become typed `ApolloResult`
-  returns. Breaking: needs the consumer sweep (coeus consumes apollo-fft)
-  and 0.x minor coordination. `# Panics` sections were made honest under
-  ATLAS-APOLLO-PLAN-LENGTH-SAFETY-2026-08-27 as the interim contract.
-- **Evidence:**
-  `crates/apollo-fft/src/application/execution/plan/fft/dimension_1d/dynamic_impl.rs`
-  and `static_impl.rs` leto entry points.
+- **Dissent from the filed direction:** the contiguity panic did not need a typed error — it needed the contract the 2-D and 3-D plans already have. `with_c_order_view` stages any non-C-dense view through a rank-disjoint scratch role and writes it back in logical order; the 1-D leto entries now use it (rank one borrows the 3-D Y role, which no 1-D pass touches). No signature changes, no consumer sweep, no `ApolloResult` on a path whose only failure was a layout the plan can serve.
+- **Delivered:** six entries (`forward`/`inverse`/`inverse_unnorm` × dynamic and static) accept strided views; `# Panics` now names only the length mismatch (the `PLAN-LENGTH-SAFETY` interim contract). Test: a stride-2 view transforms bitwise-equal to the contiguous transform of the same values, forward and inverse, with the interleaved filler untouched, for both plans.
+- **Evidence:** apollo-fft clippy `-D warnings`, 533/533, rustdoc clean.
 
 ## ✅ ATLAS-APOLLO-SHAPE1D-PRIVACY — Privatize Shape1D.n behind its validating constructor [major] — done 2026-09-02
 
