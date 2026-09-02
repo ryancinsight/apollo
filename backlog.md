@@ -3168,7 +3168,7 @@
   `ATLAS-APOLLO-POT-PLANAR-2026-08-25` and
   `ATLAS-APOLLO-AVX-STOCKHAM-AUDIT-2026-08-25`.
 
-## ATLAS-APOLLO-ISA-FORK-2026-08-25 — Retire the per-ISA fork onto the Hermes seam [arch] — in-progress (four slices delivered 2026-09-02; integrator Claude; next lease: `stockham/avx/precise/fixed.rs`, `stockham/butterfly/{dispatch.rs,lanes/}`)
+## ATLAS-APOLLO-ISA-FORK-2026-08-25 — Retire the per-ISA fork onto the Hermes seam [arch] — in-progress (five slices delivered 2026-09-02; integrator Claude; next lease: `stockham/avx/reduced/fixed.rs`, `stockham/butterfly/{fixed.rs,lanes/}`)
 
 - **Outcome:** `apollo-fft` stops carrying its own AVX2 and AVX-512 intrinsics
   and reaches lane-parallel CPU work through `hermes-simd`, which is the Atlas
@@ -3219,11 +3219,17 @@
   Ratchet 208 → 168. Same gate over 8..32768: neutral — the one cell outside
   the spread (performance f64 n = 32, +41%) moved with its same-run RustFFT
   control (+44%), an instrument artefact at 20 ns scale. Table in the ADR.
-  **Next slice:** the fixed 32/64-point f64 leaves (`avx/precise/fixed.rs`,
-  748 lines) as `lanes/fixed.rs` codelets on `register_butterfly`; then the
-  groups-one/-two specialisations (`avx/{precise,reduced}/{base,pair,quad,
-  triple_1,triple_2}.rs`) and `reduced/fixed.rs`. Non-goal reaffirmed:
-  routing stays with ADR 0042.
+- **Fifth slice delivered 2026-09-02 (same PR):** the fixed 32/64-point f64
+  leaves (748 lines of intrinsics) → `lanes/fixed_precise.rs` codelets on the
+  shared `register_butterfly` bodies, tested against a naive DFT. Gate:
+  efficiency-core f64 n = 32 **+2.3% (0.4 ns beyond spread)**, 64/1024/4096
+  neutral; performance-core cells at this scale spread 7–63% between rounds
+  of the same binary. Accepted with the number recorded (ADR). Ratchet
+  unchanged at 168 (commented blocks).
+  **Next slice:** the fixed 64-point f32 leaf (`reduced/fixed.rs`) as a
+  `lanes/fixed_reduced.rs` codelet, then the groups-one/-two
+  specialisations (`avx/{precise,reduced}/{base,pair,quad,triple_1,
+  triple_2}.rs`). Non-goal reaffirmed: routing stays with ADR 0042.
 - **First slice (as planned):** the generic pair stage — `stockham/avx/generic/
   pair.rs` (57 sites) behind `StockhamAvxBackend::stage_pair_groups_two` —
   re-expressed as one `LaneKernel` over `ComplexReg` (`butterfly`,

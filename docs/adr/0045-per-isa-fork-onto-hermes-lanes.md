@@ -186,6 +186,40 @@ not the route; f64 n = 64 shows the mirror image (−8% with the control at
 −15%). Verdict: neutral; the gate passes, and the f64 n = 32 cell is
 re-measured with the next slice, which changes exactly that leaf.
 
+## Fifth slice: the fixed 32/64-point f64 leaves (2026-09-02)
+
+`avx/precise/fixed.rs` (748 lines: an 8×8 and an 8×4 Cooley–Tukey
+factorisation over AVX intrinsics) became `Dft64`/`Dft32` lane codelets in
+`butterfly/lanes/fixed_precise.rs`, built on the shared
+`register_butterfly` DFT-4/DFT-8 with one pair-deinterleave for the 2×2
+sample transpose between phases and the same exact twiddle tables. The
+leaves are tested against a naive DFT in both directions. The ratchet is
+unchanged at 168 (every deleted block carried its comment).
+
+Same instrument, sized-unroll binary as `before`, two rounds; the sizes the
+leaves serve directly and the four-step rows that use them:
+
+| core | prec | n | before | after | after/before | RustFFT before/after |
+| --- | --- | --- | --- | --- | --- | --- |
+| efficiency | f64 | 32 | 60.1 ns | 61.4 ns | 1.023 | 41.1 / 41.2 |
+| efficiency | f64 | 64 | 89.6 | 89.6 | 1.000 | 84.3 / 84.6 |
+| efficiency | f64 | 1024 | 2992 | 3100 | 1.036 | 2453 / 2466 |
+| efficiency | f64 | 4096 | 13194 | 13221 | 1.002 | 12458 / 12355 |
+| performance | f64 | 32 | 23.4 (r2: 38.3) | 31.7 (r2: 41.8) | 1.354 | 16.1 / 24.5 |
+| performance | f64 | 64 | 43.3 | 46.3 | 1.069 | 39.1 / 45.5 |
+| performance | f64 | 1024 | 1896 | 1782 | 0.939 | 1175 / 1255 |
+| performance | f64 | 4096 | 9088 | 9131 | 1.005 | 6625 / 7096 |
+| both | f32 | 32..32768 | — | — | 0.981–1.028 | (controls) |
+
+The performance-core cells at 32 and 64 spread 63% and 7% between rounds of
+the *same* binary and their RustFFT controls moved 52% and 16%, so they carry
+no information at this scale; the efficiency core repeats to 1.5%. There the
+port costs **+2.3% at f64 n = 32 (0.4 ns beyond the round-to-round spread)**
+and nothing at 64, 1024, or 4096. Accepted: 0.4 ns at one size against 743
+lines of hand-scheduled intrinsics, with the codelet now sharing the
+`register_butterfly` bodies every other fixed kernel uses; the cell stays in
+the probe, so a later change to `radix8` that recovers it is measured.
+
 ## Alternatives rejected
 
 - **Retire the AVX Stockham backend wholesale** onto the auto-vectorized scalar
