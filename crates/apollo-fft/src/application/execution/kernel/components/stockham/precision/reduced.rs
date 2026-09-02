@@ -3,7 +3,6 @@ use super::super::avx::{
     backend::StockhamAvxBackend,
     generic::{
         base::stage_avx_fma,
-        pair::{stage_pair_avx_fma, stage_pair_radix1_avx_fma},
         triple::{
             stage_triple_avx_fma, stage_triple_low_live_avx_fma, stage_triple_radix1_avx_fma,
             stage_triple_radix1_n1024_avx_fma, stage_triple_radix1_n128_avx_fma,
@@ -13,7 +12,10 @@ use super::super::avx::{
         },
     },
 };
-use super::super::butterfly::{stage_pair_impl, stage_quad_impl, stage_triple_impl};
+use super::super::butterfly::{
+    stage_pair_impl, stage_pair_lanes, stage_pair_radix_one_lanes, stage_quad_impl,
+    stage_triple_impl,
+};
 use super::super::stage::stage_impl;
 #[cfg(target_arch = "x86_64")]
 use super::super::stage::stockham_reduced_stage_is_l1_resident;
@@ -243,13 +245,13 @@ impl StockhamPrecision for ReducedStockhamAvxFma {
     ) {
         let groups = src.len() / (radix << 1);
         if radix == 1 {
-            if src.len() >= 16 {
-                unsafe { stage_pair_radix1_avx_fma::<f32>(src, dst, second_twiddles) };
-            } else {
+            if src.len() < 16 || !stage_pair_radix_one_lanes::<f32, 8>(src, dst, second_twiddles) {
                 stage_pair_impl::<_, 1024>(src, dst, radix, first_twiddles, second_twiddles);
             }
         } else if groups >= 8 {
-            unsafe { stage_pair_avx_fma::<f32>(src, dst, radix, first_twiddles, second_twiddles) };
+            if !stage_pair_lanes::<f32, 8>(src, dst, radix, first_twiddles, second_twiddles) {
+                stage_pair_impl::<_, 1024>(src, dst, radix, first_twiddles, second_twiddles);
+            }
         } else if groups == 4 {
             unsafe {
                 <f32 as StockhamAvxBackend>::stage_pair_quarter_groups_two(
@@ -482,11 +484,7 @@ impl StockhamPrecision for ReducedStockhamAvx512 {
     ) {
         let groups = src.len() / (radix << 1);
         if radix == 1 {
-            if src.len() >= 16 {
-                unsafe {
-                    stage_pair_radix1_avx_fma::<crate::application::execution::kernel::components::stockham::avx::reduced::avx512_backend::Avx512BackendReduced>(src, dst, second_twiddles)
-                };
-            } else {
+            if src.len() < 16 || !stage_pair_radix_one_lanes::<f32, 16>(src, dst, second_twiddles) {
                 <ReducedStockhamAvxFma as StockhamPrecision>::stage_pair(
                     src,
                     dst,
@@ -506,11 +504,9 @@ impl StockhamPrecision for ReducedStockhamAvx512 {
                     second_twiddles,
                 )
             };
-        } else if groups >= 16 {
-            unsafe {
-                stage_pair_avx_fma::<crate::application::execution::kernel::components::stockham::avx::reduced::avx512_backend::Avx512BackendReduced>(src, dst, radix, first_twiddles, second_twiddles)
-            };
-        } else {
+        } else if groups < 16
+            || !stage_pair_lanes::<f32, 16>(src, dst, radix, first_twiddles, second_twiddles)
+        {
             <ReducedStockhamAvxFma as StockhamPrecision>::stage_pair(
                 src,
                 dst,
