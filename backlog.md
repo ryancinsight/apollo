@@ -3243,13 +3243,22 @@
   `groups == 4` triple stages → `PairStageGroupsTwo` /
   `TripleStageQuarterGroupsOne` (stride-4/-8 deinterleave of adjacent
   inputs); AVX2 specialisations and impls deleted; ratchet 162 → 154.
-  **Remaining intrinsic families:** the `groups == 8` triple
-  (`precise/triple_2.rs`), the f32 `groups == 4` pair and `groups == 8`
-  triple (`reduced/{pair,triple_2}.rs`), `quad.rs`, and the AVX-512 pair
-  impl — each packs two digits per register at the f32 width, which needs
-  a 128-bit half interleave hermes does not expose; filed as hermes
-  `HS-HALF-INTERLEAVE-2026-09-02` before those slices. Non-goal reaffirmed:
-  routing stays with ADR 0042.
+  Non-goal reaffirmed: routing stays with ADR 0042.
+- **Ninth slice delivered 2026-09-02 (same PR; gate: f32 n = 1024 +4.4%,
+  every other efficiency-core cell within 1.3%, f64 neutral throughout):** the
+  two-digit stages — f64 `groups == 8` triple and the f32 `groups == 4`
+  pair / `groups == 8` triple — on hermes' new `Vector::interleave_halves`
+  (hermes #138, the 128-bit half interleave this slice was waiting on) as
+  `PairStageQuarterGroupsTwo` / `TripleStageGroupsEight`; three intrinsic
+  files (370 lines), both `StockhamAvxBackend` methods and their AVX2
+  impls deleted; ratchet 154 → 148. Twiddle registers build from splats
+  plus one half interleave, never a stack buffer, and the builder is
+  `#[inline(always)]` so it stays inside the dispatcher's target-feature
+  scope. Two falsified hypotheses are recorded in the ADR (a stack buffer,
+  +6%; an out-of-line helper, +148%); the real cost was hermes'
+  `ComplexReg::splat`, fixed upstream as `HS-SPLAT-PAIR` (hermes #139). **Remaining
+  intrinsic families:** `quad.rs` (both precisions, `groups == 8`) and the
+  AVX-512 pair impl.
 - **First slice (as planned):** the generic pair stage — `stockham/avx/generic/
   pair.rs` (57 sites) behind `StockhamAvxBackend::stage_pair_groups_two` —
   re-expressed as one `LaneKernel` over `ComplexReg` (`butterfly`,

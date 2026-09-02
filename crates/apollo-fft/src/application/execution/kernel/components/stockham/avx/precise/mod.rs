@@ -4,4 +4,3 @@ pub(crate) mod avx512_backend;
 pub(crate) mod backend_impl;
 pub(crate) mod fixed;
 pub(crate) mod quad;
-pub(crate) mod triple_2;

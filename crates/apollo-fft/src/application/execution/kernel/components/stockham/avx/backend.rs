@@ -24,36 +24,6 @@ pub(crate) trait StockhamAvxBackend: Copy + Sized + 'static {
         unreachable!("Not implemented for this precision");
     }
 
-    unsafe fn stage_pair_quarter_groups_two(
-        src: &[Self::Complex],
-        dst: &mut [Self::Complex],
-        radix: usize,
-        first_twiddles: &[Self::Complex],
-        second_twiddles: &[Self::Complex],
-    ) {
-        let _ = (src, dst, radix, first_twiddles, second_twiddles);
-        unreachable!("Not implemented for this precision");
-    }
-
-    unsafe fn stage_triple_quarter_groups_two(
-        src: &[Self::Complex],
-        dst: &mut [Self::Complex],
-        radix: usize,
-        first_twiddles: &[Self::Complex],
-        second_twiddles: &[Self::Complex],
-        third_twiddles: &[Self::Complex],
-    ) {
-        let _ = (
-            src,
-            dst,
-            radix,
-            first_twiddles,
-            second_twiddles,
-            third_twiddles,
-        );
-        unreachable!("Not implemented for this precision");
-    }
-
     unsafe fn stockham_quad_groups_eight(
         src: &[Self::Complex],
         dst: &mut [Self::Complex],

@@ -1,11 +1,10 @@
 #[cfg(target_arch = "x86_64")]
 use super::super::avx::backend::StockhamAvxBackend;
-#[cfg(target_arch = "x86_64")]
-use super::super::avx::precise::triple_2::stage_triple_groups_eight_precise_avx_fma;
 use super::super::butterfly::{
     stage_groups_one_lanes, stage_lanes, stage_pair_groups_two_lanes, stage_pair_impl,
-    stage_pair_lanes, stage_pair_radix_one_lanes, stage_quad_impl, stage_triple_impl,
-    stage_triple_lanes, stage_triple_quarter_groups_one_lanes, stage_triple_radix_one_lanes,
+    stage_pair_lanes, stage_pair_radix_one_lanes, stage_quad_impl, stage_triple_groups_eight_lanes,
+    stage_triple_impl, stage_triple_lanes, stage_triple_quarter_groups_one_lanes,
+    stage_triple_radix_one_lanes,
 };
 use super::super::stage::stage_impl;
 
@@ -303,16 +302,23 @@ impl StockhamPrecision for PreciseStockhamAvxFma {
                 );
             }
         } else if groups == 8 {
-            unsafe {
-                stage_triple_groups_eight_precise_avx_fma(
+            if !stage_triple_groups_eight_lanes::<f64, 4>(
+                src,
+                dst,
+                radix,
+                first_twiddles,
+                second_twiddles,
+                third_twiddles,
+            ) {
+                stage_triple_impl::<_, 512>(
                     src,
                     dst,
                     radix,
                     first_twiddles,
                     second_twiddles,
                     third_twiddles,
-                )
-            };
+                );
+            }
         } else if groups >= 8 {
             if !stage_triple_lanes::<f64, 4>(
                 src,

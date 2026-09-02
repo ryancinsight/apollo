@@ -23,46 +23,6 @@ impl StockhamAvxBackend for f32 {
     }
 
     #[inline]
-    unsafe fn stage_pair_quarter_groups_two(
-        src: &[Complex32],
-        dst: &mut [Complex32],
-        radix: usize,
-        first_twiddles: &[Complex32],
-        second_twiddles: &[Complex32],
-    ) {
-        unsafe {
-            super::pair::stage_pair_quarter_groups_two_reduced_avx_fma(
-                src,
-                dst,
-                radix,
-                first_twiddles,
-                second_twiddles,
-            )
-        }
-    }
-
-    #[inline]
-    unsafe fn stage_triple_quarter_groups_two(
-        src: &[Complex32],
-        dst: &mut [Complex32],
-        radix: usize,
-        first_twiddles: &[Complex32],
-        second_twiddles: &[Complex32],
-        third_twiddles: &[Complex32],
-    ) {
-        unsafe {
-            super::triple_2::stage_triple_quarter_groups_two_reduced_avx_fma(
-                src,
-                dst,
-                radix,
-                first_twiddles,
-                second_twiddles,
-                third_twiddles,
-            )
-        }
-    }
-
-    #[inline]
     unsafe fn stockham_quad_groups_eight(
         src: &[Complex32],
         dst: &mut [Complex32],

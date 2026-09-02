@@ -306,6 +306,58 @@ impl — pack two digits per register at the f32 width and need the
 128-bit half interleave filed as hermes `HS-HALF-INTERLEAVE-2026-09-02`;
 they follow once it lands.
 
+## Ninth slice: the two-digit pair and triple stages (2026-09-02)
+
+The last AVX2 Stockham families — the f64 `groups == 8` triple
+(`precise/triple_2.rs`), the f32 `groups == 4` pair (`reduced/pair.rs`) and
+`groups == 8` triple (`reduced/triple_2.rs`) — pack two Stockham digits per
+register at the eight-lane f32 width: a digit owns two `k`, so its inputs
+are two-sample runs and the register that holds them straddles two digits.
+The gather that builds one input index across both digits is a 128-bit half
+interleave, which hermes did not expose; hermes `HS-HALF-INTERLEAVE`
+(PR ryancinsight/hermes#138) added `Vector::interleave_halves` with per-ISA
+overrides (`_mm256_permute2f128_*`, `_mm512_shuffle_f32x4`/`f64x2`,
+`vcombine_f32`/`vzip1q_f64`) over a scalar-emulation default, and this slice
+consumes it: `PairStageQuarterGroupsTwo` and `TripleStageGroupsEight` load
+`8 · digits` (`16 · digits`) consecutive inputs and pair the registers with
+one `interleave_halves` each, `digit_pair_twiddles` builds the
+`[w_j, w_j, w_{j+1}, w_{j+1}]` register, and the four-lane f64 width takes
+the same kernel with `digits == 1` and no interleave at all. Both kernels
+fall to their own scalar loop unless `radix` is a digit multiple, since the
+stage stride (`quarter_n`, `eighth_n`) must be a whole number of registers
+for the chunked stores to address the intended run. Three intrinsic files
+(370 lines), both `StockhamAvxBackend` methods, and their AVX2 impls were
+deleted; ratchet: 154 → 148.
+
+Same instrument, small-group binary as `before`, two rounds. The first
+build measured **+295% at f32 n = 1024** (1.62 µs → 6.2 µs, both rounds),
+and the cause was in hermes, not the kernels: `ComplexReg::splat` built
+`[re, im, re, im, ...]` by interleaving two scalar broadcasts — two unpacks
+plus a cross-lane `vperm2f128` — and these stages build three (pair) or
+seven (triple) twiddle registers per iteration. hermes `HS-SPLAT-PAIR`
+(PR ryancinsight/hermes#139) added `splat_pair`, the single pair-broadcast
+instruction each ISA already has (`vbroadcastsd`, `vbroadcastf64x2`,
+`vinsertf128`, `vdupq_n_f64`), and the same measurement then reads
+**+4.6% / +3.0%** at f32 n = 1024 with every other efficiency-core cell
+within 1.3%. The same PR's `blend_halves` — the in-lane half-granular
+select, replacing the cross-lane permute the twiddle build took from
+`interleave_halves` — leaves that cell at **+4.4%** (1.602 µs → 1.673 µs),
+so the residual is not cross-lane traffic and is not attributed. The f64
+half of the slice is neutral throughout (n = 1024: −0.3%), which is the
+half that runs one digit per register and needs no combine at all: the
+cost tracks the two-digit f32 packing, and the remaining families that
+pack that way should be measured before, not after, conversion.
+
+Two hypotheses were falsified on the way, both by reading codegen rather
+than by argument: a stack-buffered twiddle build (+6%) and an out-of-line
+`#[inline]` helper that left the dispatcher's target-feature scope (seven
+`callq` sites per loop iteration, +148%). The helper is now
+`#[inline(always)]` and the buffer is gone; the record keeps both because
+each is a standing trap for the remaining slices.
+
+`quad.rs` (both precisions, `groups == 8`) and the AVX-512 pair impl are
+the families that remain.
+
 ## Alternatives rejected
 
 - **Retire the AVX Stockham backend wholesale** onto the auto-vectorized scalar
