@@ -51,7 +51,9 @@ def parse_adr(path: Path) -> Adr:
         raise ValueError(f"{path.name}: missing canonical ADR heading")
 
     number = heading.group("number")
-    filename_number = path.name[:4]
+    # The numeric prefix at whatever width this repository uses; NUMBERED has
+    # already guaranteed three or four digits followed by a dash.
+    filename_number = path.name.split("-", 1)[0]
     if filename_number != number:
         raise ValueError(
             f"{path.name}: heading number {number} does not match filename {filename_number}"
