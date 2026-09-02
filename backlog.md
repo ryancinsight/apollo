@@ -1,6 +1,8 @@
 # Apollo Backlog
 
-## ATLAS-APOLLO-BENCH-REGRESSION-FALSE-POSITIVE-2026-09-01 — The regression gate flagged identical machine code [patch] [perf] — in-progress 2026-09-01 (identity fixed; bias open)
+## ATLAS-APOLLO-BENCH-REGRESSION-FALSE-POSITIVE-2026-09-01 — The regression gate flagged identical machine code [patch] [perf] — done 2026-09-01 (identity fixed; bias not reproduced)
+
+- **Part 2 result (runs 33574856108 unswapped, 33575247861 swapped; identical-code pair `bc141b9c` → `7196ae13`, `force_measurements=true`):** both report `replicated counterbalanced 139 cases across 3 reports; no supported regression`; the swap warnings and force notice confirm the diagnostics engaged. The +10% "slower in all four" seen on run 33570302967 did **not** recur in either role orientation, so it was a one-off on the #242 artifacts rather than a standing bias; its cause is unestablished and is not guessed here. Standing protection is the identity short-circuit (#250). Watchpoint: a regression flagged on a change with no plausible codegen impact re-runs these diagnostics (#253) before it is believed.
 
 - **Delivered (part 1), `d3490283` (PR #250):** the identity gate compares code sections via `scripts/bench_executable_identity.py`, shipped in the candidate archive. Proven live on #250's own run: all three benches `CODE IDENTICAL`, `measurements_required=false`, pair jobs skipped, regression check green — the gate's first ever short-circuit. **Open (part 2):** the systematic ~10% candidate slowdown on identical code; root-cause by role swap with the retained artifacts of run 33570302967.
 
