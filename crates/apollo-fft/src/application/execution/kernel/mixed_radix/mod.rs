@@ -15,8 +15,9 @@
 //!
 //! ## Dispatch hierarchy (f16)
 //!
-//! `Complex<f16>` is storage-only. All PoT sizes promote to f32, run through
-//! the Stockham f32 kernel, and demote back to f16 via `run_via_complex32`.
+//! `Complex<f16>` is storage-only. Lengths 2, 4, 8, 16, and 32 use the
+//! stack-resident f32 codelets; larger lengths are owned by the public API,
+//! which resolves a cached f32 plan and uses `run_via_complex32`.
 //!
 //! ## Monomorphization
 //!

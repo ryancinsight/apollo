@@ -31,36 +31,11 @@
   Outside these probes the rule is protocol: after a rebuild, discard the
   first run.
 
-## ATLAS-APOLLO-STORAGE-ROUTE-MISSES-THE-PLAN-2026-09-02 — The storage route reaches a slower kernel family than the plan [patch] [perf] — todo
+## ATLAS-APOLLO-STORAGE-ROUTE-MISSES-THE-PLAN-2026-09-02 — The storage route reaches a slower kernel family than the plan [patch] [perf] — done 2026-09-02
 
-- **Corrected 2026-09-02 (`gap_audit.md#half-storage-routing-corrected`):**
-  the 12-16x figures below were measured on freshly built binaries and are an
-  artifact of `gap_audit.md#first-run-after-build`; the warm numbers are
-  **1.99x at n = 64 (45.1 vs 22.7 ns), 2.03x at 128, 1.49x at 256, 1.32x at
-  512**. The finding stands in direction — the storage route does reach a
-  slower kernel family — but at this size it is an ordinary optimization, and
-  the case for crossing a layer boundary to fix it is weaker than the
-  original reading implied. Re-triage before scheduling.
-- **Original finding as recorded (superseded):** the same f32 length costs
-  16.1x more through the
-  `dispatch_inplace` entry the storage bridge calls than through the public
-  plan at n = 64 (482 vs 29.9 ns), 15.8x at 128, 13.0x at 256, 11.7x at 512.
-  A plan carries prebuilt `base64`/`base128` register-resident states and a
-  cached twiddle table and selects the tuned split routes; `dispatch_inplace`
-  falls back to `StockhamAutosort` over per-call twiddle lookups. Half storage
-  inherits all of it, and so does every other caller of that entry.
-- **Why it is filed rather than patched:** the base states live only inside
-  `FftPlan1D`, so the fix is to route storage transforms through the plan
-  cache — which exists and already maps `f16` onto the `f32` plan
-  (`PlanCacheProvider for f16`). Calling it from
-  `application/execution/kernel` would invert the layer direction, so the
-  question is where the compact-storage entry belongs (the API layer, beside
-  the other plan-cached entries, is the candidate), not how to make the kernel
-  faster. That is an [arch] placement decision with a migration for the public
-  `fft_forward::<Complex<f16>>` entry, and it deserves its own increment.
-- **Acceptance:** half-storage transforms at n >= 64 land within the bridge's
-  conversion cost of the f32 plan route for the same length; no execution-layer
-  module depends on orchestration; existing value oracles unchanged.
+- **Delivered:** `b61a84c5` routes compact storage through the cached f32 plan,
+  retains stack codelets for 2–32, passes 515 native tests plus doctests,
+  and reduces the warm 64–512 route to 1.08–1.34x of the plan baseline.
 
 ## ATLAS-APOLLO-HALF-STORAGE-SMALL-STACK-2026-09-02 — Register-resident half lengths need no pool [patch] [perf] — done 2026-09-02
 

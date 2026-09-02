@@ -5,8 +5,7 @@
 //! entry points (`fft_forward`, `fft_inverse`, `fft_inverse_unnorm`), and
 //! precision-specific scaffolding (`dispatch_dft11`).
 
-use eunomia::{Complex, Complex32, Complex64};
-use half::f16;
+use eunomia::{Complex32, Complex64};
 
 use super::components::winograd::radix::{dft4_array_impl, dft8_array_impl};
 use super::components::winograd::{dft3_impl, dft5_array_impl, dft7_impl};
@@ -255,26 +254,13 @@ fft_precision_impl!(
     ],
 );
 
-impl FftPrecision for Complex<f16> {
-    #[inline]
-    fn fft_forward(data: &mut [Self]) {
-        mixed_radix::forward_compact_storage(data);
-    }
-    #[inline]
-    fn fft_inverse(data: &mut [Self]) {
-        mixed_radix::inverse_compact_storage(data);
-    }
-    #[inline]
-    fn fft_inverse_unnorm(data: &mut [Self]) {
-        mixed_radix::inverse_unnorm_compact_storage(data);
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
     use crate::application::execution::kernel::direct::{dft_forward, dft_inverse};
     use crate::application::execution::kernel::test_utils::{max_abs_err_32, max_abs_err_64};
+    use eunomia::Complex;
+    use half::f16;
 
     #[derive(Clone, Copy)]
     enum CompactTransform {

@@ -142,6 +142,35 @@ worth its own measurement, not the order-of-magnitude defect the first
 reading suggested, and the case for crossing a layer boundary to fix it is
 correspondingly weaker.
 
+## Resolution: compact storage uses the cached plan route (2026-09-02) <a id="half-storage-plan-route"></a>
+
+The compact `Complex<f16>` entry now resolves the existing cached `f32`
+`FftPlan1D` for lengths above the register-resident range, then performs one
+bulk widen/plan execution/narrow sequence. Lengths 2, 4, 8, 16, and 32 retain
+their measured stack-resident codelet route. The implementation is in the API
+layer, so execution remains independent of orchestration and no second plan
+cache is introduced.
+
+The pinned ignored probe was run in release mode with its committed warm-up
+pass and a second pass on the selected performance and efficiency cores. The
+reported medians (nanoseconds) were:
+
+| n | performance storage | performance plan | performance conversion | efficiency storage | efficiency plan | efficiency conversion |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| 64 | 36.849 | 30.154 | 7.249 | 72.967 | 54.587 | 8.793 |
+| 128 | 77.570 | 61.502 | 21.513 | 137.992 | 115.382 | 16.742 |
+| 256 | 165.920 | 145.852 | 36.718 | 325.160 | 295.622 | 30.420 |
+| 512 | 352.047 | 324.362 | 33.634 | 712.419 | 659.889 | 62.237 |
+
+Against the previous warm storage route, the performance-core medians improve
+by 18%, 36%, 29%, and 16% at 64, 128, 256, and 512; the efficiency-core
+medians improve by 11%, 32%, 21%, and 11%. The remaining storage overhead is
+1.22–1.09x on the performance core and 1.34–1.08x on the efficiency core,
+consistent with the bridge plus cache-entry overhead at these short lengths.
+The API regression compares the compact result with the same cached `f32`
+plan after conversion at all four lengths; the existing impulse and
+round-trip value oracles remain unchanged.
+
 ## Correction: the bulk bridge's gain is uniform across sizes (2026-09-02) <a id="half-storage-bulk-bridge-corrected"></a>
 
 Supersedes the table in `#half-storage-bulk-bridge`. Those arms were also
