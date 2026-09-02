@@ -23,6 +23,23 @@ on:
         description: Git revision compared with the baseline
         required: true
         type: string
+      force_measurements:
+        description: >-
+          Run the pair jobs even when the identity gate finds the executables'
+          code identical. Diagnostic only: the candidate-role bias under
+          investigation shows on identical code, which the gate otherwise skips.
+        required: false
+        default: false
+        type: boolean
+      swap_roles:
+        description: >-
+          Exchange the baseline and candidate executables after extraction so
+          the "candidate" reports run the baseline binary. Diagnostic only: a
+          slowdown that persists attaches to the role or invocation; one that
+          flips attaches to the artifact.
+        required: false
+        default: false
+        type: boolean
 
 permissions:
   contents: read
@@ -251,6 +268,10 @@ jobs:
               *) echo "::error::bench_executable_identity failed on $benchmark (exit $rc)"; exit "$rc" ;;
             esac
           done
+          if [[ "${{ inputs.force_measurements }}" == "true" ]]; then
+            echo "::notice::measurements forced by dispatch input despite identical code"
+            measurements_required=true
+          fi
           echo "measurements_required=$measurements_required" >> "$GITHUB_OUTPUT"
 
   benchmark-pair:
@@ -299,6 +320,15 @@ jobs:
           for archive in executable-artifacts/*.tar.gz; do
             tar --extract --gzip --file "$archive"
           done
+          if [[ "${{ inputs.swap_roles }}" == "true" ]]; then
+            # Diagnostic: the reports keep their role names, the binaries trade
+            # places, so a role-attached bias survives and a file-attached one
+            # flips sign.
+            mv benchmark-executables/baseline benchmark-executables/.swap
+            mv benchmark-executables/candidate benchmark-executables/baseline
+            mv benchmark-executables/.swap benchmark-executables/candidate
+            echo "::warning::roles swapped: 'baseline' reports run the candidate executable and vice versa"
+          fi
 
       - name: Measure counterbalanced pair
         shell: bash
