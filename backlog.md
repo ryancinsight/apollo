@@ -26,11 +26,28 @@
   consumer that holds a composite-length `FftPlan1D` (2-D and 3-D lane passes
   among them) is paying the same difference without a predicate to route
   around it.
-- **First question for whoever takes it:** which strategy each route selects
-  at n = 100 and n = 384, and whether the plan's construction-time choice is
-  simply different from the dispatcher's runtime choice or is the same choice
-  reached through more indirection. `PlanStrategy` is already exposed under
-  `#[cfg(test)]`, so the comparison is readable without new instrumentation.
+- **A code-grounded lead, not yet measured.** The two routes read their radix
+  decomposition from different sources. `dispatch_inplace` checks
+  `static_prime23_radices(n)` first — a zero-cost static match — and only then
+  `cached_prime23_radices(n)`. The plan's selection ladder in
+  `FftPlan1D::new` never consults the static table at all: past its
+  hand-listed special cases (385, 180, 144, 176, 200, 72, 511, 36, 48, 63, 90,
+  198) it goes straight to `cached_prime23_radices`. n = 384 *is* in the static
+  table, as `[4, 4, 4, 2, 3]`, so for that length the two routes take their
+  decomposition from two different places and may not agree. What
+  `cached_prime23_radices(384)` actually returns is unverified — the diagnostic
+  that would answer it needs a build, and the shared mnemosyne tree was
+  mid-rebase while this was written.
+- **n = 100 is not explained by that.** It is absent from the static table, so
+  both routes should reach `cached_prime23_radices(100)` and the same radices.
+  Its 29% therefore points at execution rather than selection — the plan's
+  `forward_impl` indirection, its `assert_plan_length` and
+  `runtime_tiny_direct_dispatch` preamble, or a different scratch acquisition —
+  and wants attribution before any fix.
+- **First step for whoever takes it:** print `PlanStrategy` (already exposed
+  under `#[cfg(test)]`) beside `static_prime23_radices` and
+  `cached_prime23_radices` for 96, 100, 128, 384, 512, 1000. That distinguishes
+  the two hypotheses above in one run and needs no new instrumentation.
 - **Acceptance:** the plan is no slower than the free function at every length
   in the table above, measured in one binary with alternating arms; then the
   `is_power_of_two` condition in `fft_precision_impl!`'s fallback is removed
