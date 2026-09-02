@@ -10013,5 +10013,7 @@ slower in all four counterbalanced comparisons (+6% to +17%).
   the pair jobs timed identical code, reporting +10% on #242. Check that
   would have caught it: the gate had never once reported
   `measurements_required=false` — a check that never passes is not a check.
-  Fixed in #250 (compare code sections); the residual candidate-role bias is
-  open under `ATLAS-APOLLO-BENCH-REGRESSION-FALSE-POSITIVE-2026-09-01`.
+  Fixed in #250 (compare code sections). The candidate-role bias did not
+  reproduce under #253's forced/swapped diagnostics (runs 33574856108,
+  33575247861: no supported regression either way); recorded as a one-off,
+  cause unestablished.
