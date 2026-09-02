@@ -1,5 +1,17 @@
 # Apollo Backlog
 
+## ATLAS-APOLLO-HALF-STAGING-UNINIT-2026-09-02 — The half staging buffer was zeroed before being overwritten [patch] [perf] — done 2026-09-02
+
+- **Delivered** (`gap_audit.md#half-fusion-blocked-upstream`): the
+  register-resident storage lengths stage into `MaybeUninit` rather than a
+  zeroed array — the widening fills every lane of it, so the zeroing was a
+  whole extra pass over the buffer. Debug builds poison the staging with NaN
+  so an unwritten lane fails the value oracles instead of passing quietly.
+- **Measured paired, warm protocol, both core classes:** performance core
+  n = 8 −1.0%, n = 16 −3.4%, n = 32 −7.2%; efficiency core −1.1%, −22.8%
+  (noisiest cell), −5.3%. Small but consistent in direction across all six.
+- 546/546 debug and release, clippy, ratchet unchanged.
+
 ## ATLAS-APOLLO-PROBE-FIRST-RUN-ARTIFACT-2026-09-02 — A freshly built probe binary's first run is not measurable [patch] [ci] — done 2026-09-02
 
 - **Finding** (`gap_audit.md#first-run-after-build`): on this host the first
@@ -74,8 +86,24 @@
   to a uniform -73 to -85% in `gap_audit.md#half-storage-bulk-bridge-corrected`
   (see `#first-run-after-build`).
 
-## ATLAS-APOLLO-F16-FUSED-SMALL-BASES-2026-09-02 — Fuse half conversion into the register-resident codelets [patch] [perf] — todo
+## ATLAS-APOLLO-F16-FUSED-SMALL-BASES-2026-09-02 — Fuse half conversion into the register-resident codelets [patch] [perf] — blocked: hermes has no widen-to-lanes primitive
 
+- **Attempted and blocked 2026-09-02 (`gap_audit.md#half-fusion-blocked-upstream`).**
+  Ceiling measured at about 3.5 ns per transform at n = 16 (8.9 → ~5.4,
+  −39%), less at 32, nothing at n >= 64. Fusion needs the conversion and the
+  codelet in one target-feature frame with values staying in registers, and
+  inside hermes' frame apollo cannot turn binary16 into a `Vector<f32, A>`:
+  hermes models F16 as `[F16; 16]`. Three hermes homes were examined and all
+  are closed today — a `BackendKernel<T>` hook needs a portable `f32 -> T`
+  that `Scalar` does not have; a blanket-impl trait cannot be overridden per
+  backend without specialization; an inherent per-arch method cannot be named
+  from a `LaneKernel::call<A>` body. A fourth route (enabling `f16c` in
+  hermes' AVX2 dispatch frame so an inlinable conversion loop autovectorizes)
+  is open but changes the frame contract for every consumer.
+- **Re-open trigger:** a hermes decision on how reduced-precision storage
+  enters compute lanes — an ADR-level question that serves any mixed-precision
+  consumer, not only this one. Writing the primitive in apollo is explicitly
+  not the fallback: that is the per-ISA fork ADR 0045 retires.
 - **Sized 2026-09-02 (`gap_audit.md#half-bridge-residual`):** conversion alone
   costs 3.15 ns at n = 8, 3.34 at 16, 4.09 at 32 — against plan-route
   transforms of 4.0/4.4/11.2 ns, so fusing both passes into the codelet's
