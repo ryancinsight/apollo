@@ -51,7 +51,7 @@
 - **Limit stated:** identity was shown on the Windows/MSVC build; CI's Linux
   artifacts should be diffed the same way as the first step of part 2.
 
-## ATLAS-APOLLO-CENSUS-UNPINNED-BLEND-2026-09-01 — The engine census measures an unpinned two-class blend [minor] [perf] — review 2026-09-01
+## ATLAS-APOLLO-CENSUS-UNPINNED-BLEND-2026-09-01 — The engine census measures an unpinned two-class blend [minor] [perf] — done 2026-09-01 (merged 12b9c4d4)
 
 - **Limit (found by #252's Linux smoke):** hermes `ProcessorBinding` has no Linux backend, so the helper reports *unpinned* on every Linux runner; the blend is removed on Windows hosts only until `HS-PROCESSOR-BINDING-LINUX-2026-09-01` lands. An operator override that cannot be honoured is still an error.
 - **Delivered (PR #252):** `apollo_bench::bind_measurement_processor` — override, else second member of the highest queried class, else current processor labelled unclassified; binding verified and printed. `engine_census` pins after its opt-out (smoke: `bound to logical processor 1 (performance class; ...)`); `rustfft_comparison` drops its private copy (-130 lines); `BenchmarkError` shared. Reclassified [patch] -> [minor]: additive public surface on `apollo-bench`. Liveness: breaking the second-member rule fails exactly one test. Per-class census rows deferred to `APOLLO_BENCH_PROCESSOR` runs (60 s budget). Diagnostic for the gate's candidate-role bias is PR #253.
