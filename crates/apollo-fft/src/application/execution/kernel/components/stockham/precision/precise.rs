@@ -1,10 +1,15 @@
 #[cfg(target_arch = "x86_64")]
 use super::super::avx::backend::StockhamAvxBackend;
+use super::super::butterfly::{stage_pair_impl, stage_quad_impl, stage_triple_impl};
+// The lane kernels live in `butterfly::lanes`, which `butterfly/mod.rs`
+// gates on x86_64 along with its re-export; every caller below sits under
+// the same gate. Importing them unconditionally made each non-x86 build
+// fail at this `use` (E0432) before reaching any code that needs them.
+#[cfg(target_arch = "x86_64")]
 use super::super::butterfly::{
-    stage_groups_one_lanes, stage_lanes, stage_pair_groups_two_lanes, stage_pair_impl,
-    stage_pair_lanes, stage_pair_radix_one_lanes, stage_quad_impl, stage_triple_groups_eight_lanes,
-    stage_triple_impl, stage_triple_lanes, stage_triple_quarter_groups_one_lanes,
-    stage_triple_radix_one_lanes,
+    stage_groups_one_lanes, stage_lanes, stage_pair_groups_two_lanes, stage_pair_lanes,
+    stage_pair_radix_one_lanes, stage_triple_groups_eight_lanes, stage_triple_lanes,
+    stage_triple_quarter_groups_one_lanes, stage_triple_radix_one_lanes,
 };
 use super::super::stage::stage_impl;
 
