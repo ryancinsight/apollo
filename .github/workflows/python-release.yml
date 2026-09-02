@@ -36,6 +36,9 @@ jobs:
     name: Publish wheels to PyPI
     needs: wheels
     runs-on: ubuntu-latest
+    # Bounded wait: the download and one upload finish in minutes; a hung
+    # publish otherwise holds the runner for the platform default of six hours.
+    timeout-minutes: 15
     environment:
       name: pypi
       url: https://pypi.org/p/apollo-fft

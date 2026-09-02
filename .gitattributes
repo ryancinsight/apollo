@@ -1,0 +1,13 @@
+# Line endings are committed policy, not editor state: every writer hashes the
+# same LF blob, so Windows and Unix agents never see CRLF churn hunks.
+* text=auto
+*.md text eol=lf
+*.rs text eol=lf
+*.toml text eol=lf
+*.yml text eol=lf
+*.yaml text eol=lf
+*.json text eol=lf
+*.ps1 text eol=lf
+*.py text eol=lf
+*.sh text eol=lf
+*.lock text eol=lf
