@@ -108,7 +108,9 @@
 - **Non-goals:** the power-throttling opt-out — its premise is handled under
   ATLAS-APOLLO-ECOQOS-PREMISE-2026-09-01.
 
-## ATLAS-APOLLO-MAIN-RED-BUTTERFLY-GLOBS-2026-09-01 — Explicit butterfly intrinsic imports [patch] — review 2026-09-01 (decision: author)
+## ATLAS-APOLLO-MAIN-RED-BUTTERFLY-GLOBS-2026-09-01 — Explicit butterfly intrinsic imports [patch] — done 2026-09-01
+
+- **Closed (2026-09-01, Claude):** PR #242 merged. Its bench gate had charged an import-list-only diff with a 10% Rader regression because the gate compared `head.sha` against a `base.sha` 33 commits newer; PR #257 makes the candidate the merge ref, after which #242 measured byte-identical executables and skipped the pairs. Recorded under `ATLAS-APOLLO-BENCH-GATE-NOISE-2026-08-28` as a second, distinct noise source.
 
 - **Reframed 2026-09-01:** #241 restored per-site `allow(..., reason)` at both sites before this landed, so main no longer needs #242 to be green. #242 stands as the no-suppression, convention-matching alternative; accepting or closing it is the author's call, tradeoff stated once in the PR body.
 
