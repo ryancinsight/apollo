@@ -1,10 +1,10 @@
-use super::super::avx::fixed_len64_reduced_avx_fma;
 #[cfg(all(test, target_arch = "x86_64"))]
 use super::super::avx::{
     stage_pair_quarter_groups_two_reduced_avx_fma, stage_reduced_groups_one_avx_fma,
 };
 use super::super::precision::ReducedStockhamAvxFma;
 use super::super::transform::{transform, transform_len4096_four_triples, transform_sized};
+use super::lanes::fixed_len64_reduced_lanes;
 use eunomia::Complex32;
 #[cfg(all(test, target_arch = "x86_64"))]
 use eunomia::Complex64;
@@ -493,7 +493,11 @@ pub(crate) unsafe fn forward32_avx_with_scratch(
         match data.len() {
             4 => fixed_len4_reduced_avx_fma(data, scratch, twiddles),
             8 => fixed_len8_reduced_avx_fma(data, scratch, twiddles),
-            64 => fixed_len64_reduced_avx_fma(data, scratch, twiddles),
+            64 => {
+                if !fixed_len64_reduced_lanes(data, twiddles) {
+                    transform::<ReducedStockhamAvxFma>(data, scratch, twiddles, None);
+                }
+            }
             _ => unreachable!("FIXED_LEN_REDUCED_AVX_SIZES guard passed"),
         }
         return;
@@ -520,7 +524,11 @@ pub(crate) unsafe fn forward32_avx_with_scratch_sized<const LOG2: u32>(
         match n {
             4 => fixed_len4_reduced_avx_fma(data, scratch, twiddles),
             8 => fixed_len8_reduced_avx_fma(data, scratch, twiddles),
-            64 => fixed_len64_reduced_avx_fma(data, scratch, twiddles),
+            64 => {
+                if !fixed_len64_reduced_lanes(data, twiddles) {
+                    transform_sized::<ReducedStockhamAvxFma>(data, scratch, twiddles, None, LOG2);
+                }
+            }
             _ => unreachable!("FIXED_LEN_REDUCED_AVX_SIZES guard passed"),
         }
         return;
