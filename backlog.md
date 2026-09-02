@@ -21,7 +21,7 @@
 
 ## ATLAS-APOLLO-STORAGE-ROUTE-MISSES-THE-PLAN-2026-09-02 — The storage route reaches a slower kernel family than the plan [patch] [perf] — in progress
 
-- **Integrator / lease:** Codex; shared canonical branch `test/apollo-stft-leto-sidecar`;
+- **Integrator / lease:** Codex; shared canonical branch `arch/apollo-split-two-digit-lanes`;
   lease: `api/cfft.rs`, `application/execution/kernel/auto_dispatch.rs`,
   `application/execution/kernel/mixed_radix/{dispatch.rs,tests.rs}`,
   `application/execution/kernel/components/base128/pinned_probe.rs`,

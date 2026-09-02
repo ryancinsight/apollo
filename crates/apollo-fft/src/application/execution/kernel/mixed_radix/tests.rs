@@ -3,6 +3,7 @@ mod good_thomas;
 use super::super::test_utils::max_abs_err_64;
 use super::*;
 use crate::application::execution::kernel::direct::{dft_forward, dft_inverse};
+use crate::application::execution::kernel::{fft_forward, fft_inverse};
 use eunomia::{Complex, Complex32, Complex64};
 use half::f16;
 
@@ -285,7 +286,7 @@ fn compact_half_storage_impulse_has_flat_spectrum() {
     let n = 8usize;
     let mut data = vec![Complex::new(f16::ZERO, f16::ZERO); n];
     data[0] = Complex::new(f16::from_f32(1.0), f16::ZERO);
-    forward_compact_storage(&mut data);
+    fft_forward(&mut data);
     for (bin, value) in data.iter().enumerate() {
         assert!(
             (value.re.to_f32() - 1.0).abs() < 5.0e-3,
@@ -307,8 +308,8 @@ fn compact_half_storage_roundtrip_stays_within_storage_error() {
         })
         .collect();
     let mut data = input.clone();
-    forward_compact_storage(&mut data);
-    inverse_compact_storage(&mut data);
+    fft_forward(&mut data);
+    fft_inverse(&mut data);
     let max_err = data
         .iter()
         .zip(input.iter())

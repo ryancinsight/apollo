@@ -389,9 +389,8 @@ fn split_pieces_by_size() {
 /// demotion pay.
 #[cfg(test)]
 fn half_storage_against_its_kernel(suite: &mut BenchmarkSuite, core: &str) {
-    use crate::application::execution::kernel::mixed_radix::dispatch::{
-        dispatch_inplace, forward_compact_storage,
-    };
+    use crate::application::execution::kernel::mixed_radix::dispatch::dispatch_inplace;
+    use crate::application::execution::kernel::FftPrecision;
     use eunomia::{Complex, Complex32};
     use half::f16;
 
@@ -410,7 +409,7 @@ fn half_storage_against_its_kernel(suite: &mut BenchmarkSuite, core: &str) {
         let mut work16 = source16.clone();
         suite.run(BenchmarkCase::new(core, "half-storage", n), || {
             work16.copy_from_slice(&source16);
-            forward_compact_storage(std::hint::black_box(&mut work16));
+            <Complex<f16> as FftPrecision>::fft_forward(std::hint::black_box(&mut work16));
         });
 
         // Conversion alone, both directions: what the bridge costs when the

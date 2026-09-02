@@ -1,14 +1,66 @@
 //! Forward complex FFT API functions.
 
+use crate::application::execution::kernel::mixed_radix::dispatch::try_register_resident_storage;
 use crate::application::execution::kernel::mixed_radix::scalar::plan_scratch::PlanScratch;
 use crate::application::execution::kernel::mixed_radix::MixedRadixScalar;
+use crate::application::execution::kernel::precision_bridge::run_via_complex32;
+use crate::application::execution::kernel::FftPrecision;
 use crate::application::execution::plan::fft::{
     dimension_1d::StaticFftPlan1D, dimension_2d::StaticFftPlan2D, dimension_3d::StaticFftPlan3D,
 };
 use crate::application::orchestration::cache::plans::PlanCacheProvider;
 use crate::domain::metadata::shape::{Shape1D, Shape2D, Shape3D};
 use eunomia::Complex;
+use half::f16;
 use leto::{Array1, Array2, Array3};
+
+/// Executes compact complex storage through the cached `f32` plan.
+///
+/// `Complex<f16>` is a storage representation rather than a native arithmetic
+/// scalar on the supported CPU path. The widening boundary stays here, beside
+/// the plan-cache lookup, so execution kernels remain independent of
+/// orchestration. The cached plan retains the tuned base states and twiddle
+/// tables across calls while the thread-local bridge scratch bounds temporary
+/// storage to one transform.
+#[inline]
+fn execute_compact_storage<const INVERSE: bool, const NORMALIZE: bool>(data: &mut [Complex<f16>]) {
+    if data.len() <= 1 {
+        return;
+    }
+    if try_register_resident_storage::<Complex<f16>, INVERSE, NORMALIZE>(data) {
+        return;
+    }
+    let shape = Shape1D::new(data.len()).expect("invariant: compact storage is non-empty");
+    let plan = <f16 as PlanCacheProvider>::get_1d_plan(shape);
+    run_via_complex32(data, |buffer| {
+        if INVERSE {
+            if NORMALIZE {
+                plan.inverse_complex_slice_inplace(buffer);
+            } else {
+                plan.inverse_complex_slice_unnorm_inplace(buffer);
+            }
+        } else {
+            plan.forward_complex_slice_inplace(buffer);
+        }
+    });
+}
+
+impl FftPrecision for Complex<f16> {
+    #[inline]
+    fn fft_forward(data: &mut [Self]) {
+        execute_compact_storage::<false, false>(data);
+    }
+
+    #[inline]
+    fn fft_inverse(data: &mut [Self]) {
+        execute_compact_storage::<true, true>(data);
+    }
+
+    #[inline]
+    fn fft_inverse_unnorm(data: &mut [Self]) {
+        execute_compact_storage::<true, false>(data);
+    }
+}
 
 /// Forward complex 1D FFT in-place for a scalar profile selected at compile time.
 pub fn fft_1d_complex_inplace<T>(data: &mut Array1<Complex<T>>)
@@ -294,4 +346,43 @@ pub fn fft_3d_complex_static_into<T, const NX: usize, const NY: usize, const NZ:
     );
     out.assign(&field.view());
     fft_3d_complex_static_inplace::<T, NX, NY, NZ>(out);
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::application::execution::kernel::fft_forward;
+    use eunomia::Complex32;
+
+    #[test]
+    fn compact_storage_matches_the_cached_f32_plan() {
+        for n in [64, 128, 256, 512] {
+            let input: Vec<Complex<f16>> = (0..n)
+                .map(|index| {
+                    let index = index as f32;
+                    Complex::new(
+                        f16::from_f32((index * 0.017).sin()),
+                        f16::from_f32((index * 0.023).cos()),
+                    )
+                })
+                .collect();
+            let mut expected = input
+                .iter()
+                .map(|value| Complex32::new(value.re.to_f32(), value.im.to_f32()))
+                .collect::<Vec<_>>();
+            <f32 as PlanCacheProvider>::get_1d_plan(
+                Shape1D::new(n).expect("invariant: test lengths are non-zero"),
+            )
+            .forward_complex_slice_inplace(&mut expected);
+            let expected = expected
+                .into_iter()
+                .map(|value| Complex::new(f16::from_f32(value.re), f16::from_f32(value.im)))
+                .collect::<Vec<_>>();
+
+            let mut actual = input;
+            fft_forward(&mut actual);
+
+            assert_eq!(actual, expected, "compact route differs at n={n}");
+        }
+    }
 }

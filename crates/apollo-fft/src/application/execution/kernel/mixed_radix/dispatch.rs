@@ -13,7 +13,7 @@
 //! | `inverse_inplace_unnorm`         | true    | false     |
 //! | `inverse_inplace`                | true    | true      |
 
-use super::super::precision_bridge::{run_via_complex32, Complex32Bridge};
+use super::super::precision_bridge::Complex32Bridge;
 use super::caches::{cached_coprime_factors, cached_is_prime, cached_prime23_radices};
 use super::scalar::MixedRadixScalar;
 use crate::application::execution::kernel::pot::StockhamAutosort;
@@ -504,45 +504,6 @@ pub(crate) fn inverse_inplace<F: MixedRadixScalar<Complex = eunomia::Complex<F>>
     dispatch_inplace::<F, true, true>(data, None);
 }
 
-// ── Compact storage ──────────────────────────────────────────────────────────
-
-/// In-place forward FFT (unnormalized) for compact storage routed through `Complex32`.
-///
-/// Power-of-two sizes promote to f32, run the Stockham f32 autosort kernel
-/// without bit reversal, and demote back to compact storage. Non-PoT sizes use
-/// the same generic selector order through `run_via_complex32`.
-#[inline]
-pub(crate) fn forward_compact_storage<S: Complex32Bridge>(data: &mut [S]) {
-    dispatch_compact_storage::<S, false, false>(data);
-}
-
-/// In-place inverse FFT (unnormalized) for compact storage routed through `Complex32`.
-#[inline]
-pub(crate) fn inverse_unnorm_compact_storage<S: Complex32Bridge>(data: &mut [S]) {
-    dispatch_compact_storage::<S, true, false>(data);
-}
-
-/// In-place inverse FFT normalized by 1/N for compact storage routed through `Complex32`.
-#[inline]
-pub(crate) fn inverse_compact_storage<S: Complex32Bridge>(data: &mut [S]) {
-    dispatch_compact_storage::<S, true, true>(data);
-}
-
-#[inline]
-fn dispatch_compact_storage<S: Complex32Bridge, const INVERSE: bool, const NORMALIZE: bool>(
-    data: &mut [S],
-) {
-    if data.len() <= 1 {
-        return;
-    }
-    if try_register_resident_storage::<S, INVERSE, NORMALIZE>(data) {
-        return;
-    }
-    run_via_complex32(data, |buf| {
-        dispatch_inplace::<f32, INVERSE, NORMALIZE>(buf, None);
-    });
-}
-
 /// Runs the lengths whose whole `Complex32` transform is register-resident
 /// over a stack buffer, so a half-storage transform of one of them touches no
 /// pool at all.
@@ -556,7 +517,11 @@ fn dispatch_compact_storage<S: Complex32Bridge, const INVERSE: bool, const NORMA
 ///
 /// Returns whether the length was handled.
 #[inline]
-fn try_register_resident_storage<S: Complex32Bridge, const INVERSE: bool, const NORMALIZE: bool>(
+pub(crate) fn try_register_resident_storage<
+    S: Complex32Bridge,
+    const INVERSE: bool,
+    const NORMALIZE: bool,
+>(
     data: &mut [S],
 ) -> bool {
     /// One length: widen into a fixed stack buffer, run the sized codelet the
