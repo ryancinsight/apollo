@@ -2908,6 +2908,19 @@
   for each. The `_into` variants must measure zero allocations per call.
 - **Risk / change class:** [patch] for the forward paths; the inverse
   complex-to-real needs its own derivation and tests.
+- **State re-derived 2026-09-02 (stale-memory check):** the forward 1-D real
+  entry points already take the split — `fft_1d_array`, `fft_1d_array_into`,
+  `fft_1d_slice`, `fft_1d_slice_half_into`, and `fft_1d_leto` (through
+  `fft_1d_slice`) all branch on `real_split_applies(n)` into
+  `forward_1d_into_via_split` / `forward_1d_half_into` (`api/rfft.rs:20-140`).
+  Still widening: `fft_1d_array_static_into` (its `T: RealFftData`-only bound
+  has no plan provider for the half-length plan — adding `PlanCacheProvider`
+  is a public-bound change, [major] under semver-checks, so it needs its own
+  decision), the 2-D/3-D real paths, and the inverse:
+  `inverse_1d_slice_owned` still does `input.to_owned()` then `collect`
+  (`real_storage/mod.rs:206-213`) — one transient allocation more than the
+  complex-to-real untangle needs. Remaining scope is therefore the inverse
+  untangle (own derivation + tests) and the multi-dimensional real axes.
 
 ## ATLAS-APOLLO-ENGINE-CENSUS-2026-08-25 — Commit the four-engine census as an instrument [patch] — done 2026-08-25 (see above)
 
