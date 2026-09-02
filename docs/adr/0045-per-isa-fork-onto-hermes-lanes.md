@@ -115,6 +115,47 @@ binary spread 25% between rounds at f32 32768 (50685 vs 63203), so the
 4096 are the only movements that clear it. Verdict: neutral, small gain at
 4096; the gate passes.
 
+## Third slice: the triple stage (2026-09-02)
+
+`stockham/avx/generic/triple.rs`'s three generic bodies — `stage_triple_avx_fma`,
+its byte-identical `low_live` twin (the L1-residency predicates that chose
+between them are deleted with it), and the radix-one form — became
+`butterfly/lanes/triple.rs`. The radix-one quarter turns rotate through
+`ComplexReg::mul_i`/`mul_neg_i` selected once from the twiddle's sign, the
+same permute-and-xor the intrinsic used. The sized radix-one specialisations
+(n = 32..32768) stayed on the intrinsic helper for this slice. Ratchet:
+220 → 208.
+
+Same instrument, base-slice binary as `before`, two rounds, medians in µs:
+
+| core | prec | n | before | after | after/before |
+| --- | --- | --- | --- | --- | --- |
+| performance | f32 | 1024 | 7735 | 790 | **0.102** |
+| performance | f32 | 4096 | 4423 | 4175 | 0.944 |
+| performance | f32 | 32768 | 50729 | 51047 | 1.006 |
+| performance | f64 | 1024 | 1909 | 1827 | 0.957 |
+| performance | f64 | 4096 | 8779 | 9177 | 1.045 |
+| performance | f64 | 32768 | 103613 | 103687 | 1.001 |
+| efficiency | f32 | 1024 | 3323 | 1558 | **0.469** |
+| efficiency | f32 | 4096 | 6966 | 6970 | 1.001 |
+| efficiency | f32 | 32768 | 66107 | 65718 | 0.994 |
+| efficiency | f64 | 1024 | 3004 | 3031 | 1.009 |
+| efficiency | f64 | 4096 | 13108 | 13048 | 0.995 |
+| efficiency | f64 | 32768 | 124411 | 123853 | 0.996 |
+
+Every cell but two is inside the instrument's spread (efficiency-core rows
+within 1%, performance-core rows within the same binary's round-to-round
+range; the 256/512 controls moved ≤ 3.4%). The two are the f32 n = 1024
+route: 7.7 µs → 0.79 µs on the performance core and 3.3 µs → 1.56 µs on the
+efficiency core, against RustFFT's 0.58 µs / 1.27 µs. That route is the
+radix-one triple first pass, which `reduced.rs` sent to the generic intrinsic
+body at n = 1024 (the one size with no sized specialisation); the intrinsic
+body was the "finding 3" pathology recorded in ADR
+[0042](0042-avx-stockham-backend-retained.md) — 13x slower on a performance
+core than the efficiency core — and the lane kernel does not carry it. The
+sized specialisations share that body's element step, so the next slice
+measures them against the lane kernel size by size.
+
 ## Alternatives rejected
 
 - **Retire the AVX Stockham backend wholesale** onto the auto-vectorized scalar

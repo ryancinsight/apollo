@@ -33,6 +33,22 @@
   cfgs: `stockham/mod.rs` (runtime-backed) and the 3-point Winograd pair
   (a dispatched 3-point kernel measured as a loss). 525/525, ratchet 302.
 
+## ATLAS-APOLLO-MEASUREMENT-SMT-SIBLINGS-2026-09-02 — The pinned instruments do not know a processor's SMT sibling [patch] — todo
+
+- **Outcome:** `kernel::measurement_cores` selects each arm's processor with
+  themis `CpuTopology::smt()` in hand: never processor 0's sibling (the
+  interrupt target's core), and the census prints each processor's core so a
+  reader can see when two arms or a busy peer share one.
+- **Driver:** themis `THEMIS-PLACEMENT-AXES-2026-09-01` axis 1 delivered
+  `CpuSmtView` (`core_of`, `siblings_of`, `one_processor_per_core`) for
+  exactly this consumer; this host (Core Ultra 9 285K) has no SMT, so the
+  change is a guarantee for other hosts rather than a measured delta here.
+- **Acceptance oracle:** on a host reporting SMT, the selected processors'
+  cores contain neither processor 0 nor each other; on a host without SMT or
+  without an SMT report the selection is unchanged. Unit-tested against the
+  queried topology (present-and-absent arms).
+- **Risk / change class:** [patch]; test-only instruments.
+
 ## ✅ ATLAS-APOLLO-SMALL-F32-BASES-2026-09-01 — f32 n = 16 and 32 have no live vector kernel [patch] [perf] — done 2026-09-02
 
 - **Delivered:** f32 `n = 16`/`32` run eight-lane register-resident codelets
@@ -3102,6 +3118,12 @@
   The route is `forward32_avx_with_scratch` (n = 1024 is in its size list).
   Reproduced across four runs of two binaries; same class as finding 3 and
   the sharpest instance so far, so it is the first case to profile.
+  **Resolved 2026-09-02 by PR #276's triple slice:** the stage was the
+  radix-one triple first pass on the generic intrinsic body; on the hermes
+  lane kernel it takes 0.79 µs (performance) / 1.56 µs (efficiency) against
+  RustFFT's 0.58 / 1.27 µs, and no other probed size moved. The mechanism
+  behind finding 3 is therefore in the intrinsic bodies themselves (ADR 0045
+  retires them family by family), not in the route structure.
 
 
 ## ATLAS-APOLLO-POT-THROUGHPUT-2026-08-25 — Profile the power-of-two f64 path [patch] — done 2026-08-25
@@ -3146,7 +3168,7 @@
   `ATLAS-APOLLO-POT-PLANAR-2026-08-25` and
   `ATLAS-APOLLO-AVX-STOCKHAM-AUDIT-2026-08-25`.
 
-## ATLAS-APOLLO-ISA-FORK-2026-08-25 — Retire the per-ISA fork onto the Hermes seam [arch] — in-progress (pair and base stages delivered 2026-09-02; integrator Claude; next lease: `stockham/avx/generic/triple.rs`)
+## ATLAS-APOLLO-ISA-FORK-2026-08-25 — Retire the per-ISA fork onto the Hermes seam [arch] — in-progress (pair, base, and triple stages delivered 2026-09-02; integrator Claude; next lease: `stockham/avx/generic/triple/`)
 
 - **Outcome:** `apollo-fft` stops carrying its own AVX2 and AVX-512 intrinsics
   and reaches lane-parallel CPU work through `hermes-simd`, which is the Atlas
@@ -3183,9 +3205,19 @@
   cells within 1.2%, performance-core cells inside the same binary's spread
   except 4096 at −5.8/−5.9% (f64/f32); base routes 256/512 as controls moved
   ≤ 1.7%. Table in the ADR.
-  **Next slice:** `avx/generic/triple.rs` (the triple stage and its sized
-  n = 128/256/1024/32768 specialisations), then `precision/{precise,reduced}.rs`
-  (30 + 29 sites), same gate. Non-goal reaffirmed: routing stays with ADR 0042.
+- **Third slice delivered 2026-09-02 (same PR):** the generic triple stage
+  (both twins and the radix-one form) → `butterfly/lanes/triple.rs`; the L1
+  residency predicates deleted with the twins. Ratchet 220 → 208. Same
+  gate: every cell inside the instrument's spread except **f32 n = 1024:
+  7.7 µs → 0.79 µs (performance core), 3.3 µs → 1.56 µs (efficiency core)**
+  — the radix-one triple first pass that `reduced.rs` routed to the generic
+  intrinsic body, which carried ADR 0042's finding-3 pathology. Table in the
+  ADR.
+  **Next slice:** the sized radix-one triple specialisations
+  (`avx/generic/triple/n{32,64,128,256,512,1024,32768}.rs`, 2,996 lines,
+  unrolls of the same element step) onto `stage_triple_radix_one_lanes`,
+  measured size by size; then `precision/{precise,reduced}.rs`. Non-goal
+  reaffirmed: routing stays with ADR 0042.
 - **First slice (as planned):** the generic pair stage — `stockham/avx/generic/
   pair.rs` (57 sites) behind `StockhamAvxBackend::stage_pair_groups_two` —
   re-expressed as one `LaneKernel` over `ComplexReg` (`butterfly`,
