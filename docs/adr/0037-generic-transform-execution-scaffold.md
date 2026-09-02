@@ -1,4 +1,4 @@
-# 0037 — Generic transform execution scaffold in apollo-fft
+# ADR 0037: Generic transform execution scaffold in apollo-fft
 
 - Status: Accepted
 - Revision 2026-08-02: Accepted on delivery of the shared layer with
