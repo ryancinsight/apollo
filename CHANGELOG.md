@@ -54,6 +54,15 @@ Change-class tags: [patch] backward-compatible fix, [minor] additive non-breakin
 
 ### Changed
 
+- [patch] `apollo-stft` fuses forward windowing into the complex frame write.
+  Every frame lying wholly inside the signal is windowed by the provider's
+  `real_mul_to_interleaved_complex` straight from the signal slice into the
+  complex output; only the frames overhanging either end are zero-padded on
+  the scalar path. The two forward real scratch pools are gone (16 KiB per
+  worker at frame 1024), the pass count drops from three to one, and the
+  values are bit-exact with the previous path. Per-frame cost at 1024 falls
+  to 0.71x-0.77x of the three-pass shape.
+
 - [minor] **Benches measure on a processor chosen by queried efficiency class.**
   `apollo-bench` gains `bind_measurement_processor`: `APOLLO_BENCH_PROCESSOR`
   override, else the second member of the most performant class the platform
