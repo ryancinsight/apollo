@@ -7,7 +7,7 @@ use eunomia::{Complex32, Complex64};
 
 // ── Combination-stage twiddles for N=32 (forward) ────────────────────────────
 
-#[cfg(all(target_arch = "x86_64", target_feature = "avx", target_feature = "fma"))]
+#[cfg(target_arch = "x86_64")]
 pub(super) const TWIDDLES_COMBINE_FWD_32: [Complex64; 32] = [
     // k = 0
     Complex64::new(1.000000000000000000e0_f64, -0.000000000000000000e0_f64),
@@ -49,7 +49,7 @@ pub(super) const TWIDDLES_COMBINE_FWD_32: [Complex64; 32] = [
 
 // ── Combination-stage twiddles for N=32 (inverse) ────────────────────────────
 
-#[cfg(all(target_arch = "x86_64", target_feature = "avx", target_feature = "fma"))]
+#[cfg(target_arch = "x86_64")]
 pub(super) const TWIDDLES_COMBINE_INV_32: [Complex64; 32] = [
     // k = 0
     Complex64::new(1.000000000000000000e0_f64, 0.000000000000000000e0_f64),
@@ -91,7 +91,7 @@ pub(super) const TWIDDLES_COMBINE_INV_32: [Complex64; 32] = [
 
 // ── Combination-stage twiddles for N=64 (forward) ────────────────────────────
 
-#[cfg(all(target_arch = "x86_64", target_feature = "avx", target_feature = "fma"))]
+#[cfg(target_arch = "x86_64")]
 pub(super) const TWIDDLES_COMBINE_FWD_64: [Complex64; 64] = [
     // k = 0
     Complex64::new(1_f64, 0_f64),
@@ -169,7 +169,7 @@ pub(super) const TWIDDLES_COMBINE_FWD_64: [Complex64; 64] = [
 
 // ── Combination-stage twiddles for N=64 (inverse) ────────────────────────────
 
-#[cfg(all(target_arch = "x86_64", target_feature = "avx", target_feature = "fma"))]
+#[cfg(target_arch = "x86_64")]
 pub(super) const TWIDDLES_COMBINE_INV_64: [Complex64; 64] = [
     // k = 0
     Complex64::new(1_f64, 0_f64),

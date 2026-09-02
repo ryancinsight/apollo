@@ -3,11 +3,11 @@
 //! Extracted verbatim from the `MixedRadixScalar` implementation so the trait
 //! wiring and the unrolled codelet bodies occupy separate leaf modules.
 
-#[cfg(all(target_arch = "x86_64", target_feature = "avx", target_feature = "fma"))]
-use super::super::simd::avx::{avx_fft4_reduced, rotate_minus_i_ps, rotate_plus_i_ps, sse_cmul_ps};
-#[cfg(all(target_arch = "x86_64", target_feature = "avx", target_feature = "fma"))]
+#[cfg(target_arch = "x86_64")]
+use super::super::simd::avx::{rotate_minus_i_ps, rotate_plus_i_ps, sse_cmul_ps};
+#[cfg(target_arch = "x86_64")]
 use super::super::trait_def::MixedRadixScalar;
-#[cfg(all(target_arch = "x86_64", target_feature = "avx", target_feature = "fma"))]
+#[cfg(target_arch = "x86_64")]
 use crate::application::execution::kernel::radix_stage::normalize_inplace;
 use eunomia::Complex32;
 
@@ -26,41 +26,16 @@ pub(in crate::application::execution::kernel::mixed_radix::scalar) unsafe fn sma
     let n = data.len();
     match n {
         2 => {
-            #[cfg(all(target_arch = "x86_64", target_feature = "avx", target_feature = "fma"))]
-            {
-                use std::arch::x86_64::{
-                    _mm_add_ps, _mm_loadu_ps, _mm_mul_ps, _mm_set1_ps, _mm_shuffle_ps,
-                    _mm_storeu_ps, _mm_sub_ps,
-                };
-                let ptr = data.as_mut_ptr().cast::<f32>();
-                let reg = _mm_loadu_ps(ptr);
-                let a_reg = _mm_shuffle_ps::<0x44>(reg, reg);
-                let b_reg = _mm_shuffle_ps::<0xEE>(reg, reg);
-                let sum = _mm_add_ps(a_reg, b_reg);
-                let diff = _mm_sub_ps(a_reg, b_reg);
-                let mut res = _mm_shuffle_ps::<0xE4>(sum, diff);
-                if INVERSE && NORMALIZE {
-                    let scale = _mm_set1_ps(0.5);
-                    res = _mm_mul_ps(res, scale);
-                }
-                _mm_storeu_ps(ptr, res);
-            }
-            #[cfg(not(all(
-                target_arch = "x86_64",
-                target_feature = "avx",
-                target_feature = "fma"
-            )))]
-            {
-                let a = *data.get_unchecked(0);
-                let b = *data.get_unchecked(1);
-                if INVERSE && NORMALIZE {
-                    let half = Complex32::new(0.5, 0.0);
-                    *data.get_unchecked_mut(0) = (a + b) * half;
-                    *data.get_unchecked_mut(1) = (a - b) * half;
-                } else {
-                    *data.get_unchecked_mut(0) = a + b;
-                    *data.get_unchecked_mut(1) = a - b;
-                }
+            // Scalar by measurement: n = 2: vector arm measured neutral; a call is not worth it here.
+            let a = *data.get_unchecked(0);
+            let b = *data.get_unchecked(1);
+            if INVERSE && NORMALIZE {
+                let half = Complex32::new(0.5, 0.0);
+                *data.get_unchecked_mut(0) = (a + b) * half;
+                *data.get_unchecked_mut(1) = (a - b) * half;
+            } else {
+                *data.get_unchecked_mut(0) = a + b;
+                *data.get_unchecked_mut(1) = a - b;
             }
             true
         }
@@ -78,56 +53,36 @@ pub(in crate::application::execution::kernel::mixed_radix::scalar) unsafe fn sma
             true
         }
         4 => {
-            #[cfg(all(target_arch = "x86_64", target_feature = "avx", target_feature = "fma"))]
-            {
-                use std::arch::x86_64::{
-                    _mm256_loadu_ps, _mm256_mul_ps, _mm256_set1_ps, _mm256_storeu_ps,
-                };
-                let ptr = data.as_mut_ptr().cast::<f32>();
-                let v = _mm256_loadu_ps(ptr);
-                let mut res = avx_fft4_reduced::<INVERSE>(v);
-                if NORMALIZE {
-                    let scale = _mm256_set1_ps(0.25);
-                    res = _mm256_mul_ps(res, scale);
-                }
-                _mm256_storeu_ps(ptr, res);
-            }
-            #[cfg(not(all(
-                target_arch = "x86_64",
-                target_feature = "avx",
-                target_feature = "fma"
-            )))]
-            {
-                let x0 = *data.get_unchecked(0);
-                let x1 = *data.get_unchecked(1);
-                let x2 = *data.get_unchecked(2);
-                let x3 = *data.get_unchecked(3);
-                let a0 = x0 + x2;
-                let a1 = x1 + x3;
-                let a2 = x0 - x2;
-                let a3 = x1 - x3;
-                let i_a3 = Complex32::new(-a3.im, a3.re);
-                if INVERSE && NORMALIZE {
-                    let quarter = Complex32::new(0.25, 0.0);
-                    *data.get_unchecked_mut(0) = (a0 + a1) * quarter;
-                    *data.get_unchecked_mut(2) = (a0 - a1) * quarter;
-                    if INVERSE {
-                        *data.get_unchecked_mut(1) = (a2 + i_a3) * quarter;
-                        *data.get_unchecked_mut(3) = (a2 - i_a3) * quarter;
-                    } else {
-                        *data.get_unchecked_mut(1) = (a2 - i_a3) * quarter;
-                        *data.get_unchecked_mut(3) = (a2 + i_a3) * quarter;
-                    }
+            // Scalar by measurement: n = 4: vector arm measured neutral (-1%); a call is not worth it here.
+            let x0 = *data.get_unchecked(0);
+            let x1 = *data.get_unchecked(1);
+            let x2 = *data.get_unchecked(2);
+            let x3 = *data.get_unchecked(3);
+            let a0 = x0 + x2;
+            let a1 = x1 + x3;
+            let a2 = x0 - x2;
+            let a3 = x1 - x3;
+            let i_a3 = Complex32::new(-a3.im, a3.re);
+            if INVERSE && NORMALIZE {
+                let quarter = Complex32::new(0.25, 0.0);
+                *data.get_unchecked_mut(0) = (a0 + a1) * quarter;
+                *data.get_unchecked_mut(2) = (a0 - a1) * quarter;
+                if INVERSE {
+                    *data.get_unchecked_mut(1) = (a2 + i_a3) * quarter;
+                    *data.get_unchecked_mut(3) = (a2 - i_a3) * quarter;
                 } else {
-                    *data.get_unchecked_mut(0) = a0 + a1;
-                    *data.get_unchecked_mut(2) = a0 - a1;
-                    if INVERSE {
-                        *data.get_unchecked_mut(1) = a2 + i_a3;
-                        *data.get_unchecked_mut(3) = a2 - i_a3;
-                    } else {
-                        *data.get_unchecked_mut(1) = a2 - i_a3;
-                        *data.get_unchecked_mut(3) = a2 + i_a3;
-                    }
+                    *data.get_unchecked_mut(1) = (a2 - i_a3) * quarter;
+                    *data.get_unchecked_mut(3) = (a2 + i_a3) * quarter;
+                }
+            } else {
+                *data.get_unchecked_mut(0) = a0 + a1;
+                *data.get_unchecked_mut(2) = a0 - a1;
+                if INVERSE {
+                    *data.get_unchecked_mut(1) = a2 + i_a3;
+                    *data.get_unchecked_mut(3) = a2 - i_a3;
+                } else {
+                    *data.get_unchecked_mut(1) = a2 - i_a3;
+                    *data.get_unchecked_mut(3) = a2 + i_a3;
                 }
             }
             true
@@ -311,62 +266,46 @@ pub(in crate::application::execution::kernel::mixed_radix::scalar) unsafe fn sma
             }
         }
         4 => {
-            #[cfg(all(target_arch = "x86_64", target_feature = "avx", target_feature = "fma"))]
-            {
-                use std::arch::x86_64::{
-                    _mm256_loadu_ps, _mm256_mul_ps, _mm256_set1_ps, _mm256_storeu_ps,
-                };
-                let ptr = data.as_mut_ptr().cast::<f32>();
-                let v = _mm256_loadu_ps(ptr);
-                let mut res = avx_fft4_reduced::<INVERSE>(v);
-                if NORMALIZE {
-                    let scale = _mm256_set1_ps(0.25);
-                    res = _mm256_mul_ps(res, scale);
-                }
-                _mm256_storeu_ps(ptr, res);
-            }
-            #[cfg(not(all(
-                target_arch = "x86_64",
-                target_feature = "avx",
-                target_feature = "fma"
-            )))]
-            {
-                let x0 = *data.get_unchecked(0);
-                let x1 = *data.get_unchecked(1);
-                let x2 = *data.get_unchecked(2);
-                let x3 = *data.get_unchecked(3);
-                let a0 = x0 + x2;
-                let a1 = x1 + x3;
-                let a2 = x0 - x2;
-                let a3 = x1 - x3;
-                let i_a3 = Complex32::new(-a3.im, a3.re);
-                if INVERSE && NORMALIZE {
-                    let quarter = Complex32::new(0.25, 0.0);
-                    *data.get_unchecked_mut(0) = (a0 + a1) * quarter;
-                    *data.get_unchecked_mut(2) = (a0 - a1) * quarter;
-                    if INVERSE {
-                        *data.get_unchecked_mut(1) = (a2 + i_a3) * quarter;
-                        *data.get_unchecked_mut(3) = (a2 - i_a3) * quarter;
-                    } else {
-                        *data.get_unchecked_mut(1) = (a2 - i_a3) * quarter;
-                        *data.get_unchecked_mut(3) = (a2 + i_a3) * quarter;
-                    }
+            // Scalar by measurement: sized n = 4: vector arm measured neutral (-1%); a call is not worth it here.
+            let x0 = *data.get_unchecked(0);
+            let x1 = *data.get_unchecked(1);
+            let x2 = *data.get_unchecked(2);
+            let x3 = *data.get_unchecked(3);
+            let a0 = x0 + x2;
+            let a1 = x1 + x3;
+            let a2 = x0 - x2;
+            let a3 = x1 - x3;
+            let i_a3 = Complex32::new(-a3.im, a3.re);
+            if INVERSE && NORMALIZE {
+                let quarter = Complex32::new(0.25, 0.0);
+                *data.get_unchecked_mut(0) = (a0 + a1) * quarter;
+                *data.get_unchecked_mut(2) = (a0 - a1) * quarter;
+                if INVERSE {
+                    *data.get_unchecked_mut(1) = (a2 + i_a3) * quarter;
+                    *data.get_unchecked_mut(3) = (a2 - i_a3) * quarter;
                 } else {
-                    *data.get_unchecked_mut(0) = a0 + a1;
-                    *data.get_unchecked_mut(2) = a0 - a1;
-                    if INVERSE {
-                        *data.get_unchecked_mut(1) = a2 + i_a3;
-                        *data.get_unchecked_mut(3) = a2 - i_a3;
-                    } else {
-                        *data.get_unchecked_mut(1) = a2 - i_a3;
-                        *data.get_unchecked_mut(3) = a2 + i_a3;
-                    }
+                    *data.get_unchecked_mut(1) = (a2 - i_a3) * quarter;
+                    *data.get_unchecked_mut(3) = (a2 + i_a3) * quarter;
+                }
+            } else {
+                *data.get_unchecked_mut(0) = a0 + a1;
+                *data.get_unchecked_mut(2) = a0 - a1;
+                if INVERSE {
+                    *data.get_unchecked_mut(1) = a2 + i_a3;
+                    *data.get_unchecked_mut(3) = a2 - i_a3;
+                } else {
+                    *data.get_unchecked_mut(1) = a2 - i_a3;
+                    *data.get_unchecked_mut(3) = a2 + i_a3;
                 }
             }
         }
         8 => {
-            #[cfg(all(target_arch = "x86_64", target_feature = "avx", target_feature = "fma"))]
-            {
+            #[cfg(target_arch = "x86_64")]
+            #[target_feature(enable = "avx,fma")]
+            #[inline]
+            unsafe fn vector_arm<const INVERSE: bool, const NORMALIZE: bool>(
+                data: &mut [Complex32],
+            ) {
                 use std::arch::x86_64::{
                     _mm_add_ps, _mm_castpd_ps, _mm_castps_pd, _mm_loadu_ps, _mm_mul_ps,
                     _mm_set1_ps, _mm_setr_ps, _mm_shuffle_pd, _mm_shuffle_ps, _mm_storeu_ps,
@@ -476,12 +415,24 @@ pub(in crate::application::execution::kernel::mixed_radix::scalar) unsafe fn sma
                 _mm_storeu_ps(ptr.add(8), out4_5);
                 _mm_storeu_ps(ptr.add(12), out6_7);
             }
-            #[cfg(not(all(
-                target_arch = "x86_64",
-                target_feature = "avx",
-                target_feature = "fma"
-            )))]
-            {
+            let vector_done = {
+                #[cfg(target_arch = "x86_64")]
+                {
+                    if super::super::simd::avx::avx_fma_available() {
+                        // SAFETY: the probe proved AVX and FMA on this host, and the
+                        // caller's contract supplies at least this arm's lanes.
+                        vector_arm::<INVERSE, NORMALIZE>(data);
+                        true
+                    } else {
+                        false
+                    }
+                }
+                #[cfg(not(target_arch = "x86_64"))]
+                {
+                    false
+                }
+            };
+            if !vector_done {
                 let data_ref = &mut *data.as_mut_ptr().cast::<[Complex32; 8]>();
                 crate::application::execution::kernel::components::winograd::dft8_array_impl::<
                     f32,
@@ -511,41 +462,25 @@ pub(in crate::application::execution::kernel::mixed_radix::scalar) unsafe fn sma
             }
         }
         32 => {
-            #[cfg(all(target_arch = "x86_64", target_feature = "avx", target_feature = "fma"))]
-            {
-                let mut scratch = [Complex32::new(0.0, 0.0); 32];
-                let twiddles = <f32 as MixedRadixScalar>::small_pot_twiddles::<INVERSE>(32);
-                <f32 as crate::application::execution::kernel::components::stockham::StockhamKernel>::forward_with_scratch(
-                    data,
-                    &mut scratch,
-                    twiddles,
-                );
-                if INVERSE && NORMALIZE {
-                    normalize_inplace(data, 1.0 / 32.0);
-                }
-            }
-            #[cfg(not(all(
-                target_arch = "x86_64",
-                target_feature = "avx",
-                target_feature = "fma"
-            )))]
-            {
-                let data_ref = &mut *data.as_mut_ptr().cast::<[Complex32; 32]>();
-                crate::application::execution::kernel::components::winograd::dft32_impl::<
-                    f32,
-                    INVERSE,
-                >(data_ref);
-                if INVERSE && NORMALIZE {
-                    let scale = Complex32::new(1.0 / 32.0, 0.0);
-                    for x in data_ref.iter_mut() {
-                        *x *= scale;
-                    }
+            // Scalar by measurement: n = 32: the vector body measured 5x slower than the scalar arm (240 vs 47 ns pinned); kept scalar, kernel filed.
+            let data_ref = &mut *data.as_mut_ptr().cast::<[Complex32; 32]>();
+            crate::application::execution::kernel::components::winograd::dft32_impl::<f32, INVERSE>(
+                data_ref,
+            );
+            if INVERSE && NORMALIZE {
+                let scale = Complex32::new(1.0 / 32.0, 0.0);
+                for x in data_ref.iter_mut() {
+                    *x *= scale;
                 }
             }
         }
         64 => {
-            #[cfg(all(target_arch = "x86_64", target_feature = "avx", target_feature = "fma"))]
-            {
+            #[cfg(target_arch = "x86_64")]
+            #[target_feature(enable = "avx,fma")]
+            #[inline]
+            unsafe fn vector_arm<const INVERSE: bool, const NORMALIZE: bool>(
+                data: &mut [Complex32],
+            ) {
                 let mut scratch = [Complex32::new(0.0, 0.0); 64];
                 let twiddles = <f32 as MixedRadixScalar>::small_pot_twiddles::<INVERSE>(64);
                 <f32 as crate::application::execution::kernel::components::stockham::StockhamKernel>::forward_with_scratch(
@@ -557,12 +492,24 @@ pub(in crate::application::execution::kernel::mixed_radix::scalar) unsafe fn sma
                     normalize_inplace(data, 1.0 / 64.0);
                 }
             }
-            #[cfg(not(all(
-                target_arch = "x86_64",
-                target_feature = "avx",
-                target_feature = "fma"
-            )))]
-            {
+            let vector_done = {
+                #[cfg(target_arch = "x86_64")]
+                {
+                    if super::super::simd::avx::avx_fma_available() {
+                        // SAFETY: the probe proved AVX and FMA on this host, and the
+                        // caller's contract supplies at least this arm's lanes.
+                        vector_arm::<INVERSE, NORMALIZE>(data);
+                        true
+                    } else {
+                        false
+                    }
+                }
+                #[cfg(not(target_arch = "x86_64"))]
+                {
+                    false
+                }
+            };
+            if !vector_done {
                 let data_ref = &mut *data.as_mut_ptr().cast::<[Complex32; 64]>();
                 crate::application::execution::kernel::components::winograd::dft64_impl::<
                     f32,

@@ -3,12 +3,11 @@
 //! Extracted verbatim from the `MixedRadixScalar` implementation so the trait
 //! wiring and the unrolled codelet bodies occupy separate leaf modules.
 
-#[cfg(all(target_arch = "x86_64", target_feature = "avx", target_feature = "fma"))]
+#[cfg(target_arch = "x86_64")]
 use super::super::simd::avx::{
     avx_cmul_precise, avx_fft4_parallel_precise, avx_fft8_parallel_precise, avx_fft8_precise,
-    rotate_minus_i, rotate_plus_i, sse_cmul,
 };
-#[cfg(all(target_arch = "x86_64", target_feature = "avx", target_feature = "fma"))]
+#[cfg(target_arch = "x86_64")]
 use super::super::twiddle_constants::{
     TWIDDLES_COMBINE_FWD_32, TWIDDLES_COMBINE_FWD_64, TWIDDLES_COMBINE_INV_32,
     TWIDDLES_COMBINE_INV_64,
@@ -182,368 +181,40 @@ pub(in crate::application::execution::kernel::mixed_radix::scalar) unsafe fn sma
             }
         }
         8 => {
-            #[cfg(all(target_arch = "x86_64", target_feature = "avx", target_feature = "fma"))]
-            {
-                use std::arch::x86_64::{
-                    _mm_add_pd, _mm_loadu_pd, _mm_mul_pd, _mm_set1_pd, _mm_set_pd, _mm_storeu_pd,
-                    _mm_sub_pd,
-                };
-                let ptr = data.as_mut_ptr().cast::<f64>();
-                let x0 = _mm_loadu_pd(ptr);
-                let x1 = _mm_loadu_pd(ptr.add(2));
-                let x2 = _mm_loadu_pd(ptr.add(4));
-                let x3 = _mm_loadu_pd(ptr.add(6));
-                let x4 = _mm_loadu_pd(ptr.add(8));
-                let x5 = _mm_loadu_pd(ptr.add(10));
-                let x6 = _mm_loadu_pd(ptr.add(12));
-                let x7 = _mm_loadu_pd(ptr.add(14));
-
-                // Bit-reversed loading into variables
-                let r0 = x0;
-                let r1 = x4;
-                let r2 = x2;
-                let r3 = x6;
-                let r4 = x1;
-                let r5 = x5;
-                let r6 = x3;
-                let r7 = x7;
-
-                // Stage 1
-                let a0 = _mm_add_pd(r0, r1);
-                let a1 = _mm_sub_pd(r0, r1);
-                let a2 = _mm_add_pd(r2, r3);
-                let a3 = _mm_sub_pd(r2, r3);
-                let a4 = _mm_add_pd(r4, r5);
-                let a5 = _mm_sub_pd(r4, r5);
-                let a6 = _mm_add_pd(r6, r7);
-                let a7 = _mm_sub_pd(r6, r7);
-
-                // Stage 2
-                let a3_rot = if INVERSE {
-                    rotate_plus_i(a3)
-                } else {
-                    rotate_minus_i(a3)
-                };
-                let a7_rot = if INVERSE {
-                    rotate_plus_i(a7)
-                } else {
-                    rotate_minus_i(a7)
-                };
-
-                let b0 = _mm_add_pd(a0, a2);
-                let b2 = _mm_sub_pd(a0, a2);
-                let b1 = _mm_add_pd(a1, a3_rot);
-                let b3 = _mm_sub_pd(a1, a3_rot);
-                let b4 = _mm_add_pd(a4, a6);
-                let b6 = _mm_sub_pd(a4, a6);
-                let b5 = _mm_add_pd(a5, a7_rot);
-                let b7 = _mm_sub_pd(a5, a7_rot);
-
-                // Stage 3
-                let c = std::f64::consts::FRAC_1_SQRT_2;
-                let (w1, w3) = if INVERSE {
-                    (_mm_set_pd(c, c), _mm_set_pd(c, -c))
-                } else {
-                    (_mm_set_pd(-c, c), _mm_set_pd(-c, -c))
-                };
-
-                let b5_tw = sse_cmul(b5, w1);
-                let b6_tw = if INVERSE {
-                    rotate_plus_i(b6)
-                } else {
-                    rotate_minus_i(b6)
-                };
-                let b7_tw = sse_cmul(b7, w3);
-
-                let mut c0 = _mm_add_pd(b0, b4);
-                let mut c4 = _mm_sub_pd(b0, b4);
-                let mut c1 = _mm_add_pd(b1, b5_tw);
-                let mut c5 = _mm_sub_pd(b1, b5_tw);
-                let mut c2 = _mm_add_pd(b2, b6_tw);
-                let mut c6 = _mm_sub_pd(b2, b6_tw);
-                let mut c3 = _mm_add_pd(b3, b7_tw);
-                let mut c7 = _mm_sub_pd(b3, b7_tw);
-
-                if INVERSE && NORMALIZE {
-                    let scale = _mm_set1_pd(0.125);
-                    c0 = _mm_mul_pd(c0, scale);
-                    c1 = _mm_mul_pd(c1, scale);
-                    c2 = _mm_mul_pd(c2, scale);
-                    c3 = _mm_mul_pd(c3, scale);
-                    c4 = _mm_mul_pd(c4, scale);
-                    c5 = _mm_mul_pd(c5, scale);
-                    c6 = _mm_mul_pd(c6, scale);
-                    c7 = _mm_mul_pd(c7, scale);
-                }
-
-                _mm_storeu_pd(ptr, c0);
-                _mm_storeu_pd(ptr.add(2), c1);
-                _mm_storeu_pd(ptr.add(4), c2);
-                _mm_storeu_pd(ptr.add(6), c3);
-                _mm_storeu_pd(ptr.add(8), c4);
-                _mm_storeu_pd(ptr.add(10), c5);
-                _mm_storeu_pd(ptr.add(12), c6);
-                _mm_storeu_pd(ptr.add(14), c7);
-            }
-            #[cfg(not(all(
-                target_arch = "x86_64",
-                target_feature = "avx",
-                target_feature = "fma"
-            )))]
-            {
-                let data_ref = &mut *data.as_mut_ptr().cast::<[Complex64; 8]>();
-                crate::application::execution::kernel::components::winograd::dft8_array_impl::<
-                    f64,
-                    INVERSE,
-                    false,
-                >(data_ref);
-                if INVERSE && NORMALIZE {
-                    let scale = Complex64::new(0.125, 0.0);
-                    for x in data_ref.iter_mut() {
-                        *x *= scale;
-                    }
+            // Scalar by measurement: n = 8: vector arm measured +12% (call plus probe outweigh the body); kept scalar.
+            let data_ref = &mut *data.as_mut_ptr().cast::<[Complex64; 8]>();
+            crate::application::execution::kernel::components::winograd::dft8_array_impl::<
+                f64,
+                INVERSE,
+                false,
+            >(data_ref);
+            if INVERSE && NORMALIZE {
+                let scale = Complex64::new(0.125, 0.0);
+                for x in data_ref.iter_mut() {
+                    *x *= scale;
                 }
             }
         }
         16 => {
-            #[cfg(all(target_arch = "x86_64", target_feature = "avx", target_feature = "fma"))]
-            {
-                use std::arch::x86_64::{
-                    _mm_add_pd, _mm_loadu_pd, _mm_mul_pd, _mm_set1_pd, _mm_set_pd, _mm_storeu_pd,
-                    _mm_sub_pd,
-                };
-                let ptr = data.as_mut_ptr().cast::<f64>();
-                let mut x0 = _mm_loadu_pd(ptr);
-                let mut x1 = _mm_loadu_pd(ptr.add(2));
-                let mut x2 = _mm_loadu_pd(ptr.add(4));
-                let mut x3 = _mm_loadu_pd(ptr.add(6));
-                let mut x4 = _mm_loadu_pd(ptr.add(8));
-                let mut x5 = _mm_loadu_pd(ptr.add(10));
-                let mut x6 = _mm_loadu_pd(ptr.add(12));
-                let mut x7 = _mm_loadu_pd(ptr.add(14));
-                let mut x8 = _mm_loadu_pd(ptr.add(16));
-                let mut x9 = _mm_loadu_pd(ptr.add(18));
-                let mut x10 = _mm_loadu_pd(ptr.add(20));
-                let mut x11 = _mm_loadu_pd(ptr.add(22));
-                let mut x12 = _mm_loadu_pd(ptr.add(24));
-                let mut x13 = _mm_loadu_pd(ptr.add(26));
-                let mut x14 = _mm_loadu_pd(ptr.add(28));
-                let mut x15 = _mm_loadu_pd(ptr.add(30));
-
-                // Stage 1 (radix 2, distance 8)
-                let a0 = _mm_add_pd(x0, x8);
-                let a8 = _mm_sub_pd(x0, x8);
-                let a1 = _mm_add_pd(x1, x9);
-                let mut a9 = _mm_sub_pd(x1, x9);
-                let a2 = _mm_add_pd(x2, x10);
-                let mut a10 = _mm_sub_pd(x2, x10);
-                let a3 = _mm_add_pd(x3, x11);
-                let mut a11 = _mm_sub_pd(x3, x11);
-                let a4 = _mm_add_pd(x4, x12);
-                let mut a12 = _mm_sub_pd(x4, x12);
-                let a5 = _mm_add_pd(x5, x13);
-                let mut a13 = _mm_sub_pd(x5, x13);
-                let a6 = _mm_add_pd(x6, x14);
-                let mut a14 = _mm_sub_pd(x6, x14);
-                let a7 = _mm_add_pd(x7, x15);
-                let mut a15 = _mm_sub_pd(x7, x15);
-
-                // Twiddle multiplications for Stage 1
-                let c = std::f64::consts::FRAC_1_SQRT_2;
-                let (w1, w2, w3, w5, w6, w7) = if INVERSE {
-                    (
-                        _mm_set_pd(0.38268343236508978, 0.9238795325112867),
-                        _mm_set_pd(c, c),
-                        _mm_set_pd(0.9238795325112867, 0.3826834323650898),
-                        _mm_set_pd(0.9238795325112867, -0.3826834323650898),
-                        _mm_set_pd(c, -c),
-                        _mm_set_pd(0.38268343236508978, -0.9238795325112867),
-                    )
-                } else {
-                    (
-                        _mm_set_pd(-0.38268343236508978, 0.9238795325112867),
-                        _mm_set_pd(-c, c),
-                        _mm_set_pd(-0.9238795325112867, 0.3826834323650898),
-                        _mm_set_pd(-0.9238795325112867, -0.3826834323650898),
-                        _mm_set_pd(-c, -c),
-                        _mm_set_pd(-0.38268343236508978, -0.9238795325112867),
-                    )
-                };
-
-                a9 = sse_cmul(a9, w1);
-                a10 = sse_cmul(a10, w2);
-                a11 = sse_cmul(a11, w3);
-                a12 = if INVERSE {
-                    rotate_plus_i(a12)
-                } else {
-                    rotate_minus_i(a12)
-                };
-                a13 = sse_cmul(a13, w5);
-                a14 = sse_cmul(a14, w6);
-                a15 = sse_cmul(a15, w7);
-
-                // Stage 2 (radix 2, distance 4)
-                let b0 = _mm_add_pd(a0, a4);
-                let b4 = _mm_sub_pd(a0, a4);
-                let b1 = _mm_add_pd(a1, a5);
-                let mut b5 = _mm_sub_pd(a1, a5);
-                let b2 = _mm_add_pd(a2, a6);
-                let mut b6 = _mm_sub_pd(a2, a6);
-                let b3 = _mm_add_pd(a3, a7);
-                let mut b7 = _mm_sub_pd(a3, a7);
-
-                let b8 = _mm_add_pd(a8, a12);
-                let b12 = _mm_sub_pd(a8, a12);
-                let b9 = _mm_add_pd(a9, a13);
-                let mut b13 = _mm_sub_pd(a9, a13);
-                let b10 = _mm_add_pd(a10, a14);
-                let mut b14 = _mm_sub_pd(a10, a14);
-                let b11 = _mm_add_pd(a11, a15);
-                let mut b15 = _mm_sub_pd(a11, a15);
-
-                let (w8_1, w8_3) = if INVERSE {
-                    (_mm_set_pd(c, c), _mm_set_pd(c, -c))
-                } else {
-                    (_mm_set_pd(-c, c), _mm_set_pd(-c, -c))
-                };
-
-                b5 = sse_cmul(b5, w8_1);
-                b6 = if INVERSE {
-                    rotate_plus_i(b6)
-                } else {
-                    rotate_minus_i(b6)
-                };
-                b7 = sse_cmul(b7, w8_3);
-
-                b13 = sse_cmul(b13, w8_1);
-                b14 = if INVERSE {
-                    rotate_plus_i(b14)
-                } else {
-                    rotate_minus_i(b14)
-                };
-                b15 = sse_cmul(b15, w8_3);
-
-                // Stage 3 (radix 2, distance 2)
-                let c0 = _mm_add_pd(b0, b2);
-                let c2 = _mm_sub_pd(b0, b2);
-                let c1 = _mm_add_pd(b1, b3);
-                let mut c3 = _mm_sub_pd(b1, b3);
-                c3 = if INVERSE {
-                    rotate_plus_i(c3)
-                } else {
-                    rotate_minus_i(c3)
-                };
-
-                let c4 = _mm_add_pd(b4, b6);
-                let c6 = _mm_sub_pd(b4, b6);
-                let c5 = _mm_add_pd(b5, b7);
-                let mut c7 = _mm_sub_pd(b5, b7);
-                c7 = if INVERSE {
-                    rotate_plus_i(c7)
-                } else {
-                    rotate_minus_i(c7)
-                };
-
-                let c8 = _mm_add_pd(b8, b10);
-                let c10 = _mm_sub_pd(b8, b10);
-                let c9 = _mm_add_pd(b9, b11);
-                let mut c11 = _mm_sub_pd(b9, b11);
-                c11 = if INVERSE {
-                    rotate_plus_i(c11)
-                } else {
-                    rotate_minus_i(c11)
-                };
-
-                let c12 = _mm_add_pd(b12, b14);
-                let c14 = _mm_sub_pd(b12, b14);
-                let c13 = _mm_add_pd(b13, b15);
-                let mut c15 = _mm_sub_pd(b13, b15);
-                c15 = if INVERSE {
-                    rotate_plus_i(c15)
-                } else {
-                    rotate_minus_i(c15)
-                };
-
-                // Stage 4 (radix 2, distance 1)
-                x0 = _mm_add_pd(c0, c1);
-                x8 = _mm_sub_pd(c0, c1);
-                x4 = _mm_add_pd(c2, c3);
-                x12 = _mm_sub_pd(c2, c3);
-
-                x2 = _mm_add_pd(c4, c5);
-                x10 = _mm_sub_pd(c4, c5);
-                x6 = _mm_add_pd(c6, c7);
-                x14 = _mm_sub_pd(c6, c7);
-
-                x1 = _mm_add_pd(c8, c9);
-                x9 = _mm_sub_pd(c8, c9);
-                x5 = _mm_add_pd(c10, c11);
-                x13 = _mm_sub_pd(c10, c11);
-
-                x3 = _mm_add_pd(c12, c13);
-                x11 = _mm_sub_pd(c12, c13);
-                x7 = _mm_add_pd(c14, c15);
-                x15 = _mm_sub_pd(c14, c15);
-
-                if INVERSE && NORMALIZE {
-                    let scale = _mm_set1_pd(0.0625);
-                    x0 = _mm_mul_pd(x0, scale);
-                    x1 = _mm_mul_pd(x1, scale);
-                    x2 = _mm_mul_pd(x2, scale);
-                    x3 = _mm_mul_pd(x3, scale);
-                    x4 = _mm_mul_pd(x4, scale);
-                    x5 = _mm_mul_pd(x5, scale);
-                    x6 = _mm_mul_pd(x6, scale);
-                    x7 = _mm_mul_pd(x7, scale);
-                    x8 = _mm_mul_pd(x8, scale);
-                    x9 = _mm_mul_pd(x9, scale);
-                    x10 = _mm_mul_pd(x10, scale);
-                    x11 = _mm_mul_pd(x11, scale);
-                    x12 = _mm_mul_pd(x12, scale);
-                    x13 = _mm_mul_pd(x13, scale);
-                    x14 = _mm_mul_pd(x14, scale);
-                    x15 = _mm_mul_pd(x15, scale);
-                }
-
-                _mm_storeu_pd(ptr, x0);
-                _mm_storeu_pd(ptr.add(2), x1);
-                _mm_storeu_pd(ptr.add(4), x2);
-                _mm_storeu_pd(ptr.add(6), x3);
-                _mm_storeu_pd(ptr.add(8), x4);
-                _mm_storeu_pd(ptr.add(10), x5);
-                _mm_storeu_pd(ptr.add(12), x6);
-                _mm_storeu_pd(ptr.add(14), x7);
-                _mm_storeu_pd(ptr.add(16), x8);
-                _mm_storeu_pd(ptr.add(18), x9);
-                _mm_storeu_pd(ptr.add(20), x10);
-                _mm_storeu_pd(ptr.add(22), x11);
-                _mm_storeu_pd(ptr.add(24), x12);
-                _mm_storeu_pd(ptr.add(26), x13);
-                _mm_storeu_pd(ptr.add(28), x14);
-                _mm_storeu_pd(ptr.add(30), x15);
-            }
-            #[cfg(not(all(
-                target_arch = "x86_64",
-                target_feature = "avx",
-                target_feature = "fma"
-            )))]
-            {
-                let data_ref = &mut *data.as_mut_ptr().cast::<[Complex64; 16]>();
-                crate::application::execution::kernel::components::winograd::dft16_impl::<
-                    f64,
-                    INVERSE,
-                >(data_ref);
-                if INVERSE && NORMALIZE {
-                    let scale = Complex64::new(0.0625, 0.0);
-                    for x in data_ref.iter_mut() {
-                        *x *= scale;
-                    }
+            // Scalar by measurement: n = 16: vector arm measured +8% (call plus probe outweigh the body); kept scalar.
+            let data_ref = &mut *data.as_mut_ptr().cast::<[Complex64; 16]>();
+            crate::application::execution::kernel::components::winograd::dft16_impl::<f64, INVERSE>(
+                data_ref,
+            );
+            if INVERSE && NORMALIZE {
+                let scale = Complex64::new(0.0625, 0.0);
+                for x in data_ref.iter_mut() {
+                    *x *= scale;
                 }
             }
         }
         32 => {
-            #[cfg(all(target_arch = "x86_64", target_feature = "avx", target_feature = "fma"))]
-            {
+            #[cfg(target_arch = "x86_64")]
+            #[target_feature(enable = "avx,fma")]
+            #[inline]
+            unsafe fn vector_arm<const INVERSE: bool, const NORMALIZE: bool>(
+                data: &mut [Complex64],
+            ) {
                 use std::arch::x86_64::{
                     _mm256_loadu_pd, _mm256_mul_pd, _mm256_permute2f128_pd, _mm256_set1_pd,
                     _mm256_storeu_pd,
@@ -678,12 +349,24 @@ pub(in crate::application::execution::kernel::mixed_radix::scalar) unsafe fn sma
                 _mm256_storeu_pd(ptr.add(56), out7_0);
                 _mm256_storeu_pd(ptr.add(60), out7_1);
             }
-            #[cfg(not(all(
-                target_arch = "x86_64",
-                target_feature = "avx",
-                target_feature = "fma"
-            )))]
-            {
+            let vector_done = {
+                #[cfg(target_arch = "x86_64")]
+                {
+                    if super::super::simd::avx::avx_fma_available() {
+                        // SAFETY: the probe proved AVX and FMA on this host, and the
+                        // caller's contract supplies at least this arm's lanes.
+                        vector_arm::<INVERSE, NORMALIZE>(data);
+                        true
+                    } else {
+                        false
+                    }
+                }
+                #[cfg(not(target_arch = "x86_64"))]
+                {
+                    false
+                }
+            };
+            if !vector_done {
                 let data_ref = &mut *data.as_mut_ptr().cast::<[Complex64; 32]>();
                 crate::application::execution::kernel::components::winograd::dft32_impl::<
                     f64,
@@ -698,8 +381,12 @@ pub(in crate::application::execution::kernel::mixed_radix::scalar) unsafe fn sma
             }
         }
         64 => {
-            #[cfg(all(target_arch = "x86_64", target_feature = "avx", target_feature = "fma"))]
-            {
+            #[cfg(target_arch = "x86_64")]
+            #[target_feature(enable = "avx,fma")]
+            #[inline]
+            unsafe fn vector_arm<const INVERSE: bool, const NORMALIZE: bool>(
+                data: &mut [Complex64],
+            ) {
                 use std::arch::x86_64::{
                     _mm256_loadu_pd, _mm256_mul_pd, _mm256_permute2f128_pd, _mm256_set1_pd,
                     _mm256_setzero_pd, _mm256_storeu_pd,
@@ -870,12 +557,24 @@ pub(in crate::application::execution::kernel::mixed_radix::scalar) unsafe fn sma
                     _mm256_storeu_pd(ptr.add(i * 4), out[i]);
                 }
             }
-            #[cfg(not(all(
-                target_arch = "x86_64",
-                target_feature = "avx",
-                target_feature = "fma"
-            )))]
-            {
+            let vector_done = {
+                #[cfg(target_arch = "x86_64")]
+                {
+                    if super::super::simd::avx::avx_fma_available() {
+                        // SAFETY: the probe proved AVX and FMA on this host, and the
+                        // caller's contract supplies at least this arm's lanes.
+                        vector_arm::<INVERSE, NORMALIZE>(data);
+                        true
+                    } else {
+                        false
+                    }
+                }
+                #[cfg(not(target_arch = "x86_64"))]
+                {
+                    false
+                }
+            };
+            if !vector_done {
                 let data_ref = &mut *data.as_mut_ptr().cast::<[Complex64; 64]>();
                 crate::application::execution::kernel::components::winograd::dft64_impl::<
                     f64,

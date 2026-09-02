@@ -1,3 +1,39 @@
+## Runtime vector arms for the small transforms (2026-09-01) <a id="runtime-vector-arms"></a>
+
+`ATLAS-APOLLO-COMPILE-TIME-FEATURE-GATES-2026-09-01`. Five files selected
+their SSE/AVX bodies with compile-time `cfg(target_feature = "avx", "fma")`
+and no runtime fallback; nothing sets `target-cpu`, so every default build
+ran the scalar arm. The vector bodies now live in local
+`#[target_feature(enable = "avx,fma")]` fns selected by a once-per-process
+probe (`avx_fma_available`, the crate's `OnceLock` idiom), scalar arm as
+fallback; the twelve shared SIMD helpers carry the attribute instead of the
+cfg, the four combine-twiddle tables only the arch gate.
+
+**Three shapes were measured, and the measurements chose the arms.** (1)
+Per-arm `#[target_feature]` fns: f32 n = 8 11.3 -> 4.7 ns (-58%), f32 64
+34.5 -> 23.7 (-31%), f64 32 35.6 -> 24.4 (-31%), f64 64 -3%; but tiny arms
+lost to the non-inlinable call plus probe (f64 8 +12%, f64 16 +8%, f32 2/4
+neutral), and the f32 n = 32 vector body ran 47 -> 239 ns (+404%) — a
+never-live kernel that is pathological, not merely slow. (2) One
+`#[target_feature]` frame per entry with `#[inline(always)]` arms (the
+LaneKernel shape): worse — the unsized entry's runtime `match` inlines every
+arm into one frame (f64 32 only -12%, f64 2 +151% from the wrapper call),
+and f32 32 unchanged at +408%. (3) Shape (1) with only the winning arms
+vectorized and the rest scalar by measurement, each carrying its note:
+f32 8 **-61%** (4.40 ns, reproduced three runs), f32 64 **-31%** (23.8 ns,
+0.85x RustFFT, reproduced twice on identical arm code), f64 64 -3..-5%,
+f64 32 -9..-31% (noise-limited: RustFFT's in-run control drifted +10..38%
+under peer builds), every other size within the session's noise. Kernels
+whose vector arm lost are deleted, not parked.
+
+Two leads remain, filed: f32 n = 16 (Winograd `dft16`, 4.3x RustFFT) has
+no vector arm at all, and f32 n = 32's vector body must be replaced, not
+re-enabled — both are candidates for the hermes-dispatched instance-major
+construction that serves n = 64 and 128 (`ATLAS-APOLLO-SMALL-F32-BASES`).
+The f32/f64 three-point Winograd kernels keep their compile-time cfg: a
+runtime-dispatched 3-point kernel cannot inline into its composite callers
+and measured as a loss at n = 96 (+30%).
+
 ## Unchecked indexing hid what the array types already proved (2026-09-01) <a id="ratchet-slice-safe-indexing"></a>
 
 The first SAFETY-ratchet burn-down slices deleted `unsafe` rather than
