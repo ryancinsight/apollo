@@ -563,16 +563,30 @@ fn try_register_resident_storage<S: Complex32Bridge, const INVERSE: bool, const 
     /// f32 route selects for it, narrow back.
     macro_rules! sized {
         ($n:literal) => {{
-            let mut buffer = [eunomia::Complex32::new(0.0, 0.0); $n];
-            S::widen_slice(data, &mut buffer);
+            let mut staging = core::mem::MaybeUninit::<[eunomia::Complex32; $n]>::uninit();
+            // SAFETY: the reference is used only as `widen_slice`'s destination
+            // until every lane is written. That call fills
+            // `min(src.len(), dst.len())` lanes and both are exactly `$n` here
+            // — `data.len()` selected this arm — so the buffer is wholly
+            // initialized before the codelet reads it. `Complex32` is a pair of
+            // `f32`, which has no invalid bit pattern. Zeroing it first would
+            // be a whole extra pass over a buffer the widening overwrites
+            // (measured 1 to 7% of the transform at these lengths). Coverage
+            // is enforced rather than argued: debug builds poison the staging
+            // with NaN below, so a lane the widening failed to write poisons
+            // the output and fails the value oracles.
+            let buffer = unsafe { &mut *staging.as_mut_ptr() };
+            #[cfg(debug_assertions)]
+            buffer.fill(eunomia::Complex32::new(f32::NAN, f32::NAN));
+            S::widen_slice(data, buffer);
             // SAFETY: `small_pot_inplace_sized` requires the slice to hold
             // exactly `N` samples, which the array type fixes.
             unsafe {
                 <f32 as MixedRadixScalar>::small_pot_inplace_sized::<$n, INVERSE, NORMALIZE>(
-                    &mut buffer,
+                    buffer,
                 );
             }
-            S::narrow_slice(&buffer, data);
+            S::narrow_slice(buffer, data);
             return true;
         }};
     }

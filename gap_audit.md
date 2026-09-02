@@ -1,3 +1,67 @@
+## What fusing the half conversion into the codelets would take (2026-09-02) <a id="half-fusion-blocked-upstream"></a>
+
+`ATLAS-APOLLO-F16-FUSED-SMALL-BASES-2026-09-02`, attempted and **blocked on an
+upstream API-design decision, with the ceiling measured**.
+
+**The ceiling.** At n = 16 a half-storage transform costs 8.9 ns: the codelet
+alone is 4.4 (the plan arm on the same length) and conversion is 3.3, of which
+the F16C instructions themselves are on the order of 1 ns — four `vcvtph2ps`
+and four `vcvtps2ph` for thirty-two lanes. The rest is that the buffer is
+walked three times: written by the widening, read and written by the codelet,
+read by the narrowing. Fusion — widening on the codelet's loads and narrowing
+on its stores — would leave one pass and put the ceiling near 5.4 ns, about
+−39% at n = 16, less at 32, and nothing at n >= 64 where the transform is not
+register-resident anyway.
+
+**Why apollo cannot do it alone.** Fusion requires the conversion and the
+codelet arithmetic to sit in one `#[target_feature]` frame with the values
+never leaving registers. The codelet runs inside the frame hermes selects
+(`vectorize_hardware_lanes::<8, f32>`), and inside that frame apollo has no
+way to turn binary16 storage into a `Vector<f32, A>`: hermes models F16 as
+`type Vector = [F16; 16]`, a scalar array, so there is no widen-to-lanes
+primitive to call. Writing one in apollo means x86 intrinsics in the kernel,
+which is precisely the per-ISA fork ADR 0045 is retiring.
+
+**Why hermes cannot take it cheaply either — three routes, all closed.**
+
+1. *A `BackendKernel<T>` hook*, the shape `deinterleave_pairs` uses. It needs a
+   `T`-generic default body, and `Scalar` (eunomia's `NumericElement`) offers
+   no portable `f32 -> T`: its only numeric conversion is `CastFrom<i32>`. A
+   default that is only meaningful for `T = f32` does not belong on a
+   `T`-generic trait.
+2. *A separate trait with a blanket impl* over `A: BackendKernel<f32>`. It
+   compiles, but a blanket impl cannot be overridden per backend without
+   specialization, so every backend would get the scalar body — the thing the
+   primitive exists to avoid.
+3. *An inherent method per arch type.* Per-backend bodies work, but a
+   `LaneKernel::call<A: SimdArch + SimdKernel<T>>` body cannot name it: the
+   contract fixes the bounds, and consumers reach backends only through the
+   facet traits in the `SimdKernel` umbrella.
+
+A fourth idea — enabling `f16c` in hermes' AVX2 dispatch frame so a plain
+inlinable conversion loop autovectorizes inside it — remains open, and is the
+cheapest of the four, but it changes the feature set every consumer's kernels
+compile under and so is a deliberate contract change rather than an addition.
+
+**And the cheap alternative is already falsified.** Inlining the F16C sequence
+into the caller by hand measured *slower* than eunomia's bulk converters at
+every size (`#half-bridge-residual`), so there is no apollo-side shortcut that
+skips the register question.
+
+The item stays open against the upstream decision: how reduced-precision
+storage enters compute lanes is a hermes API question worth an ADR, and it
+serves more than one consumer — any mixed-precision workload that stores
+binary16 and computes in f32 hits exactly this wall. What it is worth is now
+a number rather than a hope: about 3.5 ns per transform at n = 16.
+
+**Delivered while measuring it:** the staging buffer for those lengths is no
+longer zero-initialized before the widening overwrites it. Paired warm
+measurement, both core classes: performance core n = 8 −1.0%, n = 16 −3.4%,
+n = 32 −7.2%; efficiency core −1.1%, −22.8% (that cell's baseline is the
+noisiest of the six) and −5.3%. Debug builds poison the staging with NaN, so
+a lane the widening failed to write fails the value oracles rather than
+passing quietly.
+
 ## The half bridge's residual is conversion, not call overhead (2026-09-02) <a id="half-bridge-residual"></a>
 
 After the bulk bridge and the stack path, a half-storage transform still
