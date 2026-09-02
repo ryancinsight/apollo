@@ -159,7 +159,9 @@ fn base64_reduced_precision_matches_the_direct_transform() {
 
 #[test]
 fn dynamic_base64_plan_owns_only_the_selected_route() {
-    let plan = crate::FftPlan1D::<f64>::new(crate::Shape1D { n: 64 });
+    let plan = crate::FftPlan1D::<f64>::new(
+        crate::Shape1D::new(64).expect("invariant: shape lengths are non-zero"),
+    );
     let Some(base) = plan.base64.as_ref() else {
         assert!(
             plan.twiddle_fwd.is_some(),
@@ -323,7 +325,9 @@ fn comparison_specialization_does_not_record_phases() {
 
 #[test]
 fn dynamic_plan_owns_forward_and_lazily_initializes_inverse() {
-    let plan = crate::FftPlan1D::<f64>::new(crate::Shape1D { n: 128 });
+    let plan = crate::FftPlan1D::<f64>::new(
+        crate::Shape1D::new(128).expect("invariant: shape lengths are non-zero"),
+    );
     let Some(base) = plan.base128.as_ref() else {
         assert!(
             plan.twiddle_fwd.is_some(),
@@ -368,7 +372,9 @@ fn dynamic_plan_owns_forward_and_lazily_initializes_inverse() {
 #[test]
 fn dynamic_split_plans_share_complete_twiddle_tables() {
     for n in [256usize, 512] {
-        let plan = crate::FftPlan1D::<f64>::new(crate::Shape1D { n });
+        let plan = crate::FftPlan1D::<f64>::new(
+            crate::Shape1D::new(n).expect("invariant: shape lengths are non-zero"),
+        );
         let Some(_) = plan.base128.as_ref() else {
             assert!(
                 plan.twiddle_fwd.is_some(),
@@ -424,7 +430,9 @@ fn dynamic_split_plans_share_complete_twiddle_tables() {
 #[test]
 fn dynamic_split_plans_normalize_by_full_length() {
     for n in super::BASE_SPLIT_LENGTHS {
-        let plan = crate::FftPlan1D::<f64>::new(crate::Shape1D { n });
+        let plan = crate::FftPlan1D::<f64>::new(
+            crate::Shape1D::new(n).expect("invariant: shape lengths are non-zero"),
+        );
         let source = signal(n);
         let mut actual = source.clone();
         let Some(_) = plan.base128.as_ref() else {
@@ -449,7 +457,9 @@ fn dynamic_split_plans_normalize_by_full_length() {
 
 fn assert_dynamic_split_matches_direct<const INVERSE: bool>() {
     for n in [256usize, 512] {
-        let plan = crate::FftPlan1D::<f64>::new(crate::Shape1D { n });
+        let plan = crate::FftPlan1D::<f64>::new(
+            crate::Shape1D::new(n).expect("invariant: shape lengths are non-zero"),
+        );
         let source = signal(n);
         let mut actual = source.clone();
         let Some(_) = plan.base128.as_ref() else {
@@ -495,7 +505,9 @@ fn reduced_dynamic_split_matches_the_direct_transform() {
             Complex32::new((0.043 * x).sin(), 0.25 * (0.029 * x).cos())
         })
         .collect();
-    let plan = crate::FftPlan1D::<f32>::new(crate::Shape1D { n: N });
+    let plan = crate::FftPlan1D::<f32>::new(
+        crate::Shape1D::new(N).expect("invariant: shape lengths are non-zero"),
+    );
     let mut actual = source.clone();
     let Some(_) = plan.base128.as_ref() else {
         assert_eq!(actual, source, "a width decline must not mutate the input");
@@ -518,7 +530,9 @@ fn reduced_dynamic_split_matches_the_direct_transform() {
 
 #[test]
 fn f64_dynamic_plan_clones_execute_inverse_concurrently() {
-    let plan = crate::FftPlan1D::<f64>::new(crate::Shape1D { n: 128 });
+    let plan = crate::FftPlan1D::<f64>::new(
+        crate::Shape1D::new(128).expect("invariant: shape lengths are non-zero"),
+    );
     let first_input = signal(128);
     let mut second_input = first_input.clone();
     second_input.rotate_left(17);
@@ -572,7 +586,9 @@ fn f64_dynamic_plan_clones_execute_inverse_concurrently() {
 
 #[test]
 fn f32_dynamic_plan_clones_execute_inverse_concurrently() {
-    let plan = crate::FftPlan1D::<f32>::new(crate::Shape1D { n: 128 });
+    let plan = crate::FftPlan1D::<f32>::new(
+        crate::Shape1D::new(128).expect("invariant: shape lengths are non-zero"),
+    );
     let first_input: Vec<_> = (0..128)
         .map(|index| {
             let x = index as f32;

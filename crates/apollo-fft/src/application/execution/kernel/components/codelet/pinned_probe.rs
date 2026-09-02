@@ -119,7 +119,9 @@ fn mid_sizes_against_the_batched_four_step_by_core_type() {
                     Complex64::new((0.017 * x).sin(), 0.25 * (0.031 * x).cos())
                 })
                 .collect();
-            let plan = crate::FftPlan1D::<f64>::new(crate::Shape1D { n });
+            let plan = crate::FftPlan1D::<f64>::new(
+                crate::Shape1D::new(n).expect("invariant: shape lengths are non-zero"),
+            );
             let mut work = src.clone();
             let route = best_block(|| {
                 work.copy_from_slice(&src);
@@ -151,7 +153,9 @@ fn codelet_against_the_incumbent_by_core_type() {
             Complex64::new((0.4 * x + 0.3).sin(), (0.7 * x - 0.1).cos())
         })
         .collect();
-    let plan = crate::FftPlan1D::<f64>::new(crate::Shape1D { n: 16 });
+    let plan = crate::FftPlan1D::<f64>::new(
+        crate::Shape1D::new(16).expect("invariant: shape lengths are non-zero"),
+    );
 
     let Some(selection) = measurement_cores::selected() else {
         eprintln!("host reports no processor class information; probe not measurable");

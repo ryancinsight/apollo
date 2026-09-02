@@ -142,7 +142,7 @@ impl<F: MixedRadixScalar<Complex = Complex<F>>> FftPlan1D<F> {
     /// Create a new 1D plan.
     #[must_use]
     pub fn new(shape: Shape1D) -> Self {
-        let n = shape.n;
+        let n = shape.n();
         // 256 and 512 decimate down to the same base rather than paying the
         // four-step's six passes at a size where they dominate the transform.
         let base128 =
@@ -514,7 +514,7 @@ impl<F: MixedRadixScalar<Complex = Complex<F>>> FftPlan1D<F> {
     /// Return the validated shape owned by this plan.
     #[must_use]
     pub fn shape(&self) -> Shape1D {
-        Shape1D { n: self.n }
+        Shape1D::new(self.n).expect("invariant: the plan was built from a validated shape")
     }
 
     /// Forward transform of a complex signal in-place.

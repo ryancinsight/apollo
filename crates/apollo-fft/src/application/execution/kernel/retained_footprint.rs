@@ -400,7 +400,9 @@ fn retained_footprint_attribution() {
             <f64 as MixedRadixScalar>::cached_twiddle_fwd(n)
         });
         let plan = window("plan build", || {
-            crate::FftPlan1D::<f64>::new(crate::Shape1D { n })
+            crate::FftPlan1D::<f64>::new(
+                crate::Shape1D::new(n).expect("invariant: shape lengths are non-zero"),
+            )
         });
         window("first forward", || {
             plan.forward_complex_slice_inplace(std::hint::black_box(&mut signal));
@@ -419,7 +421,9 @@ fn native_width_short_and_base_warm_execution_is_allocation_free() {
     let _mnemosyne_hooks = MnemosyneHooks::install();
 
     for n in [64usize, 96, 128, 256, 512] {
-        let plan = crate::FftPlan1D::<f32>::new(crate::Shape1D { n });
+        let plan = crate::FftPlan1D::<f32>::new(
+            crate::Shape1D::new(n).expect("invariant: shape lengths are non-zero"),
+        );
         let mut signal = (0..n)
             .map(|index| {
                 let x = index as f32;
@@ -446,7 +450,9 @@ fn native_width_short_and_base_warm_execution_is_allocation_free() {
     }
 
     for n in [64usize, 96, 128, 256, 512] {
-        let plan = crate::FftPlan1D::<f64>::new(crate::Shape1D { n });
+        let plan = crate::FftPlan1D::<f64>::new(
+            crate::Shape1D::new(n).expect("invariant: shape lengths are non-zero"),
+        );
         let mut signal = (0..n)
             .map(|index| {
                 let x = index as f64;
@@ -479,7 +485,9 @@ fn wide_planar_transpose_warm_execution_is_allocation_free() {
     let _mnemosyne_hooks = MnemosyneHooks::install();
 
     for n in [16_384usize, 32_768] {
-        let plan = crate::FftPlan1D::<f32>::new(crate::Shape1D { n });
+        let plan = crate::FftPlan1D::<f32>::new(
+            crate::Shape1D::new(n).expect("invariant: shape lengths are non-zero"),
+        );
         let mut signal = (0..n)
             .map(|index| {
                 let x = index as f32;
@@ -512,7 +520,9 @@ fn small_nonsmooth_rader_warm_execution_is_allocation_free() {
     let _mnemosyne_hooks = MnemosyneHooks::install();
 
     for n in [59usize, 83, 107] {
-        let plan = crate::FftPlan1D::<f64>::new(crate::Shape1D { n });
+        let plan = crate::FftPlan1D::<f64>::new(
+            crate::Shape1D::new(n).expect("invariant: shape lengths are non-zero"),
+        );
         let mut signal = (0..n)
             .map(|index| {
                 let x = index as f64;
@@ -539,7 +549,9 @@ fn small_nonsmooth_rader_warm_execution_is_allocation_free() {
     }
 
     for n in [59usize, 83, 107] {
-        let plan = crate::FftPlan1D::<f32>::new(crate::Shape1D { n });
+        let plan = crate::FftPlan1D::<f32>::new(
+            crate::Shape1D::new(n).expect("invariant: shape lengths are non-zero"),
+        );
         let mut signal = (0..n)
             .map(|index| {
                 let x = index as f32;

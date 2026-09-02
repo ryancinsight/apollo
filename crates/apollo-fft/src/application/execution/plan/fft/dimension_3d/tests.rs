@@ -154,7 +154,9 @@ fn axis_passes_compose_to_full_forward_and_roundtrip_per_axis() {
     use crate::domain::metadata::shape::Shape3D;
 
     let (nx, ny, nz) = (6usize, 4usize, 8usize);
-    let plan = FftPlan3D::<f64>::new(Shape3D { nx, ny, nz });
+    let plan = FftPlan3D::<f64>::new(
+        Shape3D::new(nx, ny, nz).expect("invariant: shape lengths are non-zero"),
+    );
     let original = Array3::from_shape_fn([nx, ny, nz], |[i, j, k]| {
         let x = ((i * ny + j) * nz + k) as f64;
         Complex64::new((0.17 * x).sin() + 0.3, 0.23 * (0.31 * x).cos())
@@ -209,11 +211,9 @@ fn dynamic_fft_3d_preserves_logical_view_order() {
     use crate::application::execution::plan::fft::dimension_3d::FftPlan3D;
     use crate::domain::metadata::shape::Shape3D;
 
-    let plan = FftPlan3D::<f64>::new(Shape3D {
-        nx: 2,
-        ny: 3,
-        nz: 4,
-    });
+    let plan = FftPlan3D::<f64>::new(
+        Shape3D::new(2, 3, 4).expect("invariant: shape lengths are non-zero"),
+    );
     exercise_nonstandard_layouts(
         "dynamic",
         |view| plan.forward_complex_leto_inplace(view),

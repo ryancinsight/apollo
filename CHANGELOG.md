@@ -10,6 +10,12 @@ Change-class tags: [patch] backward-compatible fix, [minor] additive non-breakin
 
 ### Breaking
 
+- [major] `apollo-fft` shape descriptors validate at construction and nowhere
+  else: `Shape1D`, `Shape2D` and `Shape3D` make their length fields private,
+  gain `const fn` accessors (`n()`, `nx()`, `ny()`, `nz()`), carry
+  `#[non_exhaustive]`, and re-validate through `Shape*::new` on
+  deserialization. A zero length is a typed validation error at the shape,
+  never a plan that runs as an identity ([ADR 0044](docs/adr/0044-shape-descriptors-validate-at-construction.md)).
 - [major] `apollo-fft` removes its dense WGPU implementation and public
   `GpuFft3d`, `GpuFft3dBuffers`, `GpuFft3dF16Native`, and `WgpuBackend`
   surfaces, plus the `native-f16` feature. Accelerator FFT consumers now
@@ -843,6 +849,11 @@ Change-class tags: [patch] backward-compatible fix, [minor] additive non-breakin
 
 ### Migration
 
+- Shape fields: `shape.n` → `shape.n()`, `shape.nx` → `shape.nx()` (and `ny`,
+  `nz`). Literals: `Shape1D { n }` → `Shape1D::new(n)?`, or
+  `Shape1D::new(n).expect("invariant: <why n > 0 here>")` where the length is a
+  constant; likewise `Shape2D::new(nx, ny)` and `Shape3D::new(nx, ny, nz)`.
+  Code that built a zero-length plan must refuse the length before the shape.
 - Upgrade consumers to Rust 1.95 before updating Apollo.
 
 ### Fixed

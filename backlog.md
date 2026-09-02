@@ -1771,15 +1771,11 @@
   `crates/apollo-fft/src/application/execution/plan/fft/dimension_1d/dynamic_impl.rs`
   and `static_impl.rs` leto entry points.
 
-## ATLAS-APOLLO-SHAPE1D-PRIVACY — Privatize Shape1D.n behind its validating constructor [major] — todo
+## ✅ ATLAS-APOLLO-SHAPE1D-PRIVACY — Privatize Shape1D.n behind its validating constructor [major] — done 2026-09-02
 
-- **Outcome:** `Shape1D.n` becomes private with an accessor so
-  `Shape1D::new` validation (`n > 0`) is the only construction path;
-  requires a consumer literal-construction sweep first (in-tree sites such
-  as `crates/apollo-fft/tests/twiddle_accuracy_gate.rs` construct
-  `Shape1D { n }` literals, and external consumers may too).
-- **Evidence:** `crates/apollo-fft/src/domain/metadata/shape.rs` 8-11
-  declares `pub n`, bypassing validation.
+- **Delivered:** [ADR 0044](docs/adr/0044-shape-descriptors-validate-at-construction.md) (Accepted) — `Shape1D`/`Shape2D`/`Shape3D` fields private, `const fn` accessors, `#[non_exhaustive]`, serde `try_from` representations so deserialization re-validates; 47 literals in 20 files and 25 field reads migrated in the same change (no bridge); the zero-length plan test became the refusal contract (`Shape1D::new(0)` is a typed error naming `n`); a `compile_fail` doctest pins the closed literal path. CHANGELOG Breaking + Migration entries.
+- **Evidence:** workspace clippy `-D warnings` (all features, all targets), nextest 1389/1389, doctests, rustdoc clean; the PR's informational semver job is expected to report exactly the field removals.
+- **Residual:** kwavers' two `Shape1D { n }` sites (`crates/kwavers-math/src/fft/mod.rs`) migrate in the co-evolution unit that advances its apollo pin; `HalfSpectrum3D` keeps `pub full`/`pub nz_c` (a derived descriptor built by `from_shape`) — same class, its own item if a bypass appears.
 
 ## ATLAS-APOLLO-BRANCH-DEBT-2026-08-27 — Eight stale local branches hold unique patches — in progress
 

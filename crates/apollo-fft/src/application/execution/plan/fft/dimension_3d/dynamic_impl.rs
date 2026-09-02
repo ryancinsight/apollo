@@ -44,7 +44,7 @@ where
     /// Create a new 3D plan.
     #[must_use]
     pub fn new(shape: Shape3D) -> Self {
-        let (nx, ny, nz) = (shape.nx, shape.ny, shape.nz);
+        let (nx, ny, nz) = (shape.nx(), shape.ny(), shape.nz());
         let m = nz / 2;
         let nz_c_val = m + 1;
         Self {
@@ -76,11 +76,8 @@ where
     /// Return the validated shape owned by this plan.
     #[must_use]
     pub fn shape(&self) -> Shape3D {
-        Shape3D {
-            nx: self.nx,
-            ny: self.ny,
-            nz: self.nz,
-        }
+        Shape3D::new(self.nx, self.ny, self.nz)
+            .expect("invariant: the plan was built from a validated shape")
     }
 
     /// Forward transform of a complex field in-place.
