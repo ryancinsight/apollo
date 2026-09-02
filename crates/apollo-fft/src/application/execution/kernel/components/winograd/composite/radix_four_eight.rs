@@ -1,15 +1,23 @@
-//! Exact eight-lane DFT-32 codelet.
+//! Exact eight-lane DFT-16 and DFT-32 codelets.
 //!
 //! Four interleaved complex samples occupy one eight-lane register. The
-//! kernel views 32 samples as four rows of eight, computes eight lane-wise
-//! DFT-4s, applies the six mixed-radix twiddle vectors, transposes two 4×4
-//! complex tiles, and finishes with four lane-wise DFT-8s. Unsupported native
-//! widths decline before the kernel observes the mutable operand.
+//! DFT-32 kernel views 32 samples as four rows of eight, computes eight
+//! lane-wise DFT-4s, applies the six mixed-radix twiddle vectors, transposes
+//! two 4×4 complex tiles, and finishes with four lane-wise DFT-8s. The DFT-16
+//! kernel is the same construction over four rows of four: four lane-wise
+//! DFT-4s, three twiddle vectors (the `W_16` powers are the even `W_32`
+//! powers), one 4×4 transpose, and four lane-wise DFT-4s. Both stay register
+//! resident and store natural order. Unsupported native widths decline
+//! before either kernel observes the mutable operand.
 
 use super::power::TWIDDLE32_FWD;
 use crate::application::execution::kernel::components::register_butterfly::{radix4, radix8};
 use eunomia::{Complex, Complex32};
 use hermes_simd::{ComplexReg, LaneKernel, Simd, SimdArch, SimdKernel, Vector};
+
+struct Dft16<'data, const INVERSE: bool> {
+    data: &'data mut [Complex32; 16],
+}
 
 struct Dft32<'data, const INVERSE: bool> {
     data: &'data mut [Complex32; 32],
@@ -134,6 +142,50 @@ where
     store(output[7], &mut data[28..32]);
 }
 
+/// `x[4·b1 + b0]`: register `b1` holds lanes `b0`. A DFT-4 across the four
+/// registers indexes `m`, the lane twiddle `W_16^{b0·m}` follows (row `m`
+/// carries indices `2·b0·m` into the `W_32` table), the transpose hands each
+/// register the four `b0` of one `m`, and the closing DFT-4 across registers
+/// yields `X[4·m' + m]` with `m` in the lanes — natural order, contiguous
+/// stores.
+#[expect(
+    clippy::inline_always,
+    reason = "the codelet must remain in the selected target-feature frame"
+)]
+#[inline(always)]
+fn dft16_kernel<A, const INVERSE: bool>(simd: Simd<f32, A>, data: &mut [Complex32; 16])
+where
+    A: SimdArch + SimdKernel<f32>,
+{
+    let mut rows = radix4::<f32, A, INVERSE>([
+        load::<A>(simd, &data[0..4]),
+        load::<A>(simd, &data[4..8]),
+        load::<A>(simd, &data[8..12]),
+        load::<A>(simd, &data[12..16]),
+    ]);
+    rows[1] = rows[1] * twiddles::<A, INVERSE, 0, 2, 4, 6>(simd);
+    rows[2] = rows[2] * twiddles::<A, INVERSE, 0, 4, 8, 12>(simd);
+    rows[3] = rows[3] * twiddles::<A, INVERSE, 0, 6, 12, 18>(simd);
+    ComplexReg::transpose_square(&mut rows);
+    let output = radix4::<f32, A, INVERSE>(rows);
+    store(output[0], &mut data[0..4]);
+    store(output[1], &mut data[4..8]);
+    store(output[2], &mut data[8..12]);
+    store(output[3], &mut data[12..16]);
+}
+
+impl<const INVERSE: bool> LaneKernel<f32> for Dft16<'_, INVERSE> {
+    type Output = ();
+    #[expect(
+        clippy::inline_always,
+        reason = "the codelet must remain in the selected target-feature frame"
+    )]
+    #[inline(always)]
+    fn call<A: SimdArch + SimdKernel<f32>>(self, simd: Simd<f32, A>) {
+        dft16_kernel::<A, INVERSE>(simd, self.data);
+    }
+}
+
 impl<const INVERSE: bool> LaneKernel<f32> for Dft32<'_, INVERSE> {
     type Output = ();
 
@@ -160,6 +212,11 @@ impl<const ROWS: usize, const INVERSE: bool> LaneKernel<f32> for Dft32Rows<'_, R
             dft32_kernel::<A, INVERSE>(simd, row);
         }
     }
+}
+
+/// Runs the DFT-16 codelet only when a native eight-lane backend exists.
+pub(crate) fn try_dft16_hardware<const INVERSE: bool>(data: &mut [Complex32; 16]) -> bool {
+    hermes_simd::vectorize_hardware_lanes::<8, f32, _>(Dft16::<INVERSE> { data }).is_some()
 }
 
 /// Runs the DFT-32 codelet only when a native eight-lane backend exists.

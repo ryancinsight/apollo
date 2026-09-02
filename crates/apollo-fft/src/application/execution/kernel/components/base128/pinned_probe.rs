@@ -90,7 +90,7 @@ where
     T: ProbeScalar + MixedRadixScalar<Complex = eunomia::Complex<T>>,
     eunomia::Complex<T>: bytemuck::Pod,
 {
-    for n in [64usize, 128, 256, 512] {
+    for n in [8usize, 16, 32, 64, 128, 256, 512] {
         let src: Vec<eunomia::Complex<T>> = (0..n)
             .map(|i| {
                 let x = i as f64;
