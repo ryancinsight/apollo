@@ -77,8 +77,10 @@ fn forward_f64_agrees_with_phastft_within_derived_bound() {
         let l1 = l1_norm(&source);
 
         let mut apollo = source.clone();
-        apollo_fft::FftPlan1D::<f64>::new(apollo_fft::Shape1D { n: len })
-            .forward_complex_slice_inplace(&mut apollo);
+        apollo_fft::FftPlan1D::<f64>::new(
+            apollo_fft::Shape1D::new(len).expect("invariant: shape lengths are non-zero"),
+        )
+        .forward_complex_slice_inplace(&mut apollo);
 
         let mut re: Vec<f64> = source.iter().map(|v| v.re).collect();
         let mut im: Vec<f64> = source.iter().map(|v| v.im).collect();
@@ -137,8 +139,10 @@ fn forward_f32_agrees_with_phastft_within_derived_bound() {
         let l1: f64 = source.iter().map(|v| f64::from(v.re.hypot(v.im))).sum();
 
         let mut apollo = source.clone();
-        apollo_fft::FftPlan1D::<f32>::new(apollo_fft::Shape1D { n: len })
-            .forward_complex_slice_inplace(&mut apollo);
+        apollo_fft::FftPlan1D::<f32>::new(
+            apollo_fft::Shape1D::new(len).expect("invariant: shape lengths are non-zero"),
+        )
+        .forward_complex_slice_inplace(&mut apollo);
 
         let mut re: Vec<f32> = source.iter().map(|v| v.re).collect();
         let mut im: Vec<f32> = source.iter().map(|v| v.im).collect();
@@ -184,7 +188,9 @@ fn f32_small_power_of_two_round_trips_within_derived_bound() {
             .iter()
             .map(|value| Complex32::new(value.re as f32, value.im as f32))
             .collect();
-        let plan = apollo_fft::FftPlan1D::<f32>::new(apollo_fft::Shape1D { n: len });
+        let plan = apollo_fft::FftPlan1D::<f32>::new(
+            apollo_fft::Shape1D::new(len).expect("invariant: shape lengths are non-zero"),
+        );
         let mut work = input.clone();
         plan.forward_complex_slice_inplace(&mut work);
         plan.inverse_complex_slice_inplace(&mut work);

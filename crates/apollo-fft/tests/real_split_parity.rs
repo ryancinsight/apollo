@@ -201,8 +201,9 @@ fn half_spectrum_entry_allocates_nothing_and_matches_the_full_one() {
         let src = signal(n);
         let full = apollo_fft::fft_1d_slice::<f64>(&src);
 
-        let half_plan =
-            <f64 as apollo_fft::PlanCacheProvider>::get_1d_plan(apollo_fft::Shape1D { n: n / 2 });
+        let half_plan = <f64 as apollo_fft::PlanCacheProvider>::get_1d_plan(
+            apollo_fft::Shape1D::new(n / 2).expect("invariant: shape lengths are non-zero"),
+        );
         let mut half = vec![Complex64::default(); n / 2 + 1];
         <f64 as RealFftData>::forward_1d_half_into(half_plan.as_ref(), &src, &mut half);
 

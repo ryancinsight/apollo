@@ -42,7 +42,7 @@ impl PlanCacheProvider for f64 {
         static GLOBAL_CACHE: std::sync::LazyLock<RwLock<HashMap<usize, Arc<FftPlan1D<f64>>>>> =
             std::sync::LazyLock::new(|| RwLock::new(HashMap::new()));
 
-        let key = shape.n;
+        let key = shape.n();
         if let Some(plan) = LAST_PLAN.with(|last| {
             let borrow = last.borrow();
             if let Some((n, plan)) = &*borrow {
@@ -91,7 +91,7 @@ impl PlanCacheProvider for f64 {
         static GLOBAL_CACHE: std::sync::LazyLock<SharedPlan2Map<f64>> =
             std::sync::LazyLock::new(|| RwLock::new(HashMap::new()));
 
-        let key = (shape.nx, shape.ny);
+        let key = (shape.nx(), shape.ny());
         if let Some(plan) = TLS_CACHE.with(|cache| cache.borrow().get(&key).map(Arc::clone)) {
             return plan;
         }
@@ -122,7 +122,7 @@ impl PlanCacheProvider for f64 {
         static GLOBAL_CACHE: std::sync::LazyLock<SharedPlan3Map<f64>> =
             std::sync::LazyLock::new(|| RwLock::new(HashMap::new()));
 
-        let key = (shape.nx, shape.ny, shape.nz);
+        let key = (shape.nx(), shape.ny(), shape.nz());
         if let Some(plan) = TLS_CACHE.with(|cache| cache.borrow().get(&key).map(Arc::clone)) {
             return plan;
         }
@@ -159,7 +159,7 @@ impl PlanCacheProvider for f32 {
         static GLOBAL_CACHE: std::sync::LazyLock<RwLock<HashMap<usize, Arc<FftPlan1D<f32>>>>> =
             std::sync::LazyLock::new(|| RwLock::new(HashMap::new()));
 
-        let key = shape.n;
+        let key = shape.n();
         if let Some(plan) = LAST_PLAN.with(|last| {
             let borrow = last.borrow();
             if let Some((n, plan)) = &*borrow {
@@ -208,7 +208,7 @@ impl PlanCacheProvider for f32 {
         static GLOBAL_CACHE: std::sync::LazyLock<SharedPlan2Map<f32>> =
             std::sync::LazyLock::new(|| RwLock::new(HashMap::new()));
 
-        let key = (shape.nx, shape.ny);
+        let key = (shape.nx(), shape.ny());
         if let Some(plan) = TLS_CACHE.with(|cache| cache.borrow().get(&key).map(Arc::clone)) {
             return plan;
         }
@@ -239,7 +239,7 @@ impl PlanCacheProvider for f32 {
         static GLOBAL_CACHE: std::sync::LazyLock<SharedPlan3Map<f32>> =
             std::sync::LazyLock::new(|| RwLock::new(HashMap::new()));
 
-        let key = (shape.nx, shape.ny, shape.nz);
+        let key = (shape.nx(), shape.ny(), shape.nz());
         if let Some(plan) = TLS_CACHE.with(|cache| cache.borrow().get(&key).map(Arc::clone)) {
             return plan;
         }

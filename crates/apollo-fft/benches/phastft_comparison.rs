@@ -112,8 +112,12 @@ fn bench_size(suite: &mut BenchmarkSuite, config: BenchmarkConfig, len: usize) {
     let (re64, im64) = split_64(&source64);
     let (re32, im32) = split_32(&source32);
 
-    let apollo64 = apollo_fft::FftPlan1D::<f64>::new(apollo_fft::Shape1D { n: len });
-    let apollo32 = apollo_fft::FftPlan1D::<f32>::new(apollo_fft::Shape1D { n: len });
+    let apollo64 = apollo_fft::FftPlan1D::<f64>::new(
+        apollo_fft::Shape1D::new(len).expect("invariant: shape lengths are non-zero"),
+    );
+    let apollo32 = apollo_fft::FftPlan1D::<f32>::new(
+        apollo_fft::Shape1D::new(len).expect("invariant: shape lengths are non-zero"),
+    );
     let phast64 = PlannerDit64::new(len);
     let phast32 = PlannerDit32::new(len);
 

@@ -242,7 +242,9 @@ fn peak_working_set_census() {
 
         let mut work = src.clone();
         let (peak, retained, apollo) = peak_live_bytes(|| {
-            let plan = apollo_fft::FftPlan1D::<f64>::new(apollo_fft::Shape1D { n });
+            let plan = apollo_fft::FftPlan1D::<f64>::new(
+                apollo_fft::Shape1D::new(n).expect("invariant: shape lengths are non-zero"),
+            );
             plan.forward_complex_slice_inplace(black_box(&mut work));
             plan
         });
@@ -318,7 +320,9 @@ fn count_allocations<F: FnMut()>(mut f: F) -> (usize, usize) {
 
 /// Verifies the non-C-dense view boundary reuses its staging role after warm-up.
 fn assert_staged_view_allocations() {
-    let plan_2d = apollo_fft::FftPlan2D::<f64>::new(apollo_fft::Shape2D { nx: 3, ny: 4 });
+    let plan_2d = apollo_fft::FftPlan2D::<f64>::new(
+        apollo_fft::Shape2D::new(3, 4).expect("invariant: shape lengths are non-zero"),
+    );
     let layout_2d = ArrayLayout::f_contiguous([3, 4]).expect("valid Fortran layout");
     let mut storage_2d = complex_signal(12);
     let (allocs_2d, bytes_2d) = count_allocations(|| {
@@ -561,7 +565,9 @@ fn qos_placement_probe() {
         .as_ref()
         .and_then(CpuTopology::efficiency_class_count);
     let src = complex_signal(nx * ny);
-    let plan = apollo_fft::FftPlan2D::<f64>::new(apollo_fft::Shape2D { nx, ny });
+    let plan = apollo_fft::FftPlan2D::<f64>::new(
+        apollo_fft::Shape2D::new(nx, ny).expect("invariant: shape lengths are non-zero"),
+    );
     let mut plane = Array2::from_shape_vec((nx, ny), src.clone()).expect("shape matches the data");
 
     let mut phase = |label: &str| {
@@ -699,7 +705,9 @@ fn main() -> Result<(), apollo_bench::BenchmarkError> {
         let (re_src, im_src): (Vec<f64>, Vec<f64>) = src.iter().map(|v| (v.re, v.im)).unzip();
         let real_src: Vec<f64> = re_src.clone();
 
-        let apollo = apollo_fft::FftPlan1D::<f64>::new(apollo_fft::Shape1D { n });
+        let apollo = apollo_fft::FftPlan1D::<f64>::new(
+            apollo_fft::Shape1D::new(n).expect("invariant: shape lengths are non-zero"),
+        );
         let rust = FftPlanner::<f64>::new().plan_fft_forward(n);
         let phast = phastft::planner::PlannerDit64::new(n);
         let mut real_planner = RealFftPlanner::<f64>::new();
@@ -793,7 +801,9 @@ fn main() -> Result<(), apollo_bench::BenchmarkError> {
         let rust_src: Vec<RustComplex<f64>> =
             src.iter().map(|v| RustComplex::new(v.re, v.im)).collect();
 
-        let apollo = apollo_fft::FftPlan2D::<f64>::new(apollo_fft::Shape2D { nx, ny });
+        let apollo = apollo_fft::FftPlan2D::<f64>::new(
+            apollo_fft::Shape2D::new(nx, ny).expect("invariant: shape lengths are non-zero"),
+        );
         let mut plane =
             Array2::from_shape_vec((nx, ny), src.clone()).expect("shape matches the data");
 
@@ -856,7 +866,9 @@ fn main() -> Result<(), apollo_bench::BenchmarkError> {
     let total = nx * ny * nz;
     let shape = format!("{nx}x{ny}x{nz}");
     let src = complex_signal(total);
-    let apollo = apollo_fft::FftPlan3D::<f64>::new(apollo_fft::Shape3D { nx, ny, nz });
+    let apollo = apollo_fft::FftPlan3D::<f64>::new(
+        apollo_fft::Shape3D::new(nx, ny, nz).expect("invariant: shape lengths are non-zero"),
+    );
     let mut volume =
         Array3::from_shape_vec([nx, ny, nz], src.clone()).expect("shape matches the data");
 

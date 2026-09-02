@@ -91,7 +91,9 @@ fn batched_against_the_references_across_the_ladder() {
             let phast = phastft::planner::PlannerDit64::new(n);
 
             let mut work = src.clone();
-            let plan = crate::FftPlan1D::<f64>::new(crate::Shape1D { n });
+            let plan = crate::FftPlan1D::<f64>::new(
+                crate::Shape1D::new(n).expect("invariant: shape lengths are non-zero"),
+            );
             let mut rust_work = rust_src.clone();
             let (batched_ns, rust_ns) = best_pair(
                 calls,

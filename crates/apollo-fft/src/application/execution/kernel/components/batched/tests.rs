@@ -228,7 +228,9 @@ fn f32_n32768_public_plan_matches_an_impulse_and_round_trip() {
     let source = Complex32::new(0.75, -0.25);
     let mut actual = vec![Complex32::default(); n];
     actual[source_index] = source;
-    let plan = crate::FftPlan1D::<f32>::new(crate::Shape1D { n });
+    let plan = crate::FftPlan1D::<f32>::new(
+        crate::Shape1D::new(n).expect("invariant: shape lengths are non-zero"),
+    );
 
     plan.forward_complex_slice_inplace(&mut actual);
 

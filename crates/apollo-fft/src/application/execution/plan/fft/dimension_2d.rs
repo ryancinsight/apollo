@@ -194,7 +194,7 @@ where
     /// Create a new 2D plan.
     #[must_use]
     pub fn new(shape: Shape2D) -> Self {
-        let (nx, ny) = (shape.nx, shape.ny);
+        let (nx, ny) = (shape.nx(), shape.ny());
         Self {
             nx,
             ny,
@@ -208,10 +208,8 @@ where
     /// Return the validated shape owned by this plan.
     #[must_use]
     pub fn shape(&self) -> Shape2D {
-        Shape2D {
-            nx: self.nx,
-            ny: self.ny,
-        }
+        Shape2D::new(self.nx, self.ny)
+            .expect("invariant: the plan was built from a validated shape")
     }
 
     /// Forward transform of a complex array in-place.
