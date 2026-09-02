@@ -64,7 +64,7 @@ eunomia = { version = "0.8.0", git = "https://github.com/ryancinsight/eunomia", 
 mnemosyne = { package = "mnemosyne-memory", version = "0.7.0", git = "https://github.com/ryancinsight/Mnemosyne.git", features = ["eunomia"] }
 melinoe = { version = "0.9.0", git = "https://github.com/ryancinsight/melinoe.git", default-features = false, features = ["alloc"] }
 hermes-simd = { version = "0.7.0", git = "https://github.com/ryancinsight/hermes.git" }
-half = { version = "2.7.1", features = ["serde", "use-intrinsics"] }
+half = { version = "2.7.1", features = ["bytemuck", "serde", "use-intrinsics"] }
 leto = { version = "0.42.0", git = "https://github.com/ryancinsight/leto.git" }
 leto-ops = { version = "0.42.0", git = "https://github.com/ryancinsight/leto.git" }
 # Hephaestus is Apollo's shared Atlas accelerator substrate (atlas ADR 0001).
