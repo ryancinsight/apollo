@@ -136,7 +136,9 @@
 - **Non-goals:** the power-throttling opt-out — its premise is handled under
   ATLAS-APOLLO-ECOQOS-PREMISE-2026-09-01.
 
-## ATLAS-APOLLO-MAIN-RED-BUTTERFLY-GLOBS-2026-09-01 — Explicit butterfly intrinsic imports [patch] — review 2026-09-01 (decision: author)
+## ATLAS-APOLLO-MAIN-RED-BUTTERFLY-GLOBS-2026-09-01 — Explicit butterfly intrinsic imports [patch] — done 2026-09-01
+
+- **Closed (2026-09-01, Claude):** PR #242 merged. Its bench gate had charged an import-list-only diff with a 10% Rader regression because the gate compared `head.sha` against a `base.sha` 33 commits newer; PR #257 makes the candidate the merge ref, after which #242 measured byte-identical executables and skipped the pairs. Recorded under `ATLAS-APOLLO-BENCH-GATE-NOISE-2026-08-28` as a second, distinct noise source.
 
 - **Reframed 2026-09-01:** #241 restored per-site `allow(..., reason)` at both sites before this landed, so main no longer needs #242 to be green. #242 stands as the no-suppression, convention-matching alternative; accepting or closing it is the author's call, tradeoff stated once in the PR body.
 
@@ -967,7 +969,9 @@
   links navigable rather than demoting them to code spans. Warning-denied
   `cargo doc -p apollo-wavelet` passes; the same pass also fixed
   `apollo-fft`'s `real_fft` private-item link (#247).
-## ATLAS-APOLLO-SHT-FFT-2026-08-29 — SHT longitude FFT factorization [minor] — in-progress
+## ATLAS-APOLLO-SHT-FFT-2026-08-29 — SHT longitude FFT factorization [minor] — done 2026-09-01
+
+- **Closed (stale-claim sweep 2026-09-01, Claude):** Landed as `a3cfe5cf` on main; the 2026-08-29 lease is discharged.
 
 - **Outcome:** the longitude sum in both SHT directions is computed as a DFT
   bin over φ via `apollo-fft`, so the φ-independent `associated_legendre`
@@ -1591,7 +1595,9 @@
   `33164426704` pass, and independent provider and consumer reviews are GREEN.
 - **Integrator:** Codex session `01a0253c-6013-7552-99cc-36bbbcf77f6d`; lease: none.
 
-## ATLAS-APOLLO-PLAN-LENGTH-SAFETY-2026-08-27 — Validate slice length at FftPlan1D entry [patch] — in-progress
+## ATLAS-APOLLO-PLAN-LENGTH-SAFETY-2026-08-27 — Validate slice length at FftPlan1D entry [patch] — done 2026-09-01
+
+- **Closed (stale-claim sweep 2026-09-01, Claude):** Landed as PR #155 (2026-08-27): `assert_plan_length` rejects a mismatched slice at the plan boundary before any unchecked kernel, with `# Panics` documented; the 2026-08-27 lease is discharged.
 
 - **Outcome:** public slice entry points validate input length before unchecked
   dispatch; a length-mismatched slice is rejected at the boundary instead of
@@ -1610,7 +1616,9 @@
   this entry.
 - **Last update:** 2026-08-27.
 
-## ATLAS-APOLLO-CWT-FFT-CONVOLUTION — Replace direct CWT evaluation with per-scale FFT convolution [minor] — review
+## ATLAS-APOLLO-CWT-FFT-CONVOLUTION — Replace direct CWT evaluation with per-scale FFT convolution [minor] — done 2026-09-01
+
+- **Closed (stale-claim sweep 2026-09-01, Claude):** Landed as PR #187 (2026-08-29); `FFT_CWT_LEN_THRESHOLD` and the FFT cross-correlation rows are on main.
 
 - Delivered on `perf/apollo-transform-algorithms` (`e2f7ed21`). Each scale row
   is one circular cross-correlation through `apollo-fft`; the signal spectrum
@@ -1623,7 +1631,9 @@
   the sub-threshold path; `FFT_CWT_LEN_THRESHOLD = 8` is the measured
   single-scale crossover.
 
-## ATLAS-APOLLO-SHT-FFT-FACTORIZATION — Factor SHT longitude sums through FFT [minor] — review
+## ATLAS-APOLLO-SHT-FFT-FACTORIZATION — Factor SHT longitude sums through FFT [minor] — done 2026-09-01
+
+- **Closed (stale-claim sweep 2026-09-01, Claude):** Landed with `ATLAS-APOLLO-SHT-FFT-2026-08-29` as `a3cfe5cf` (perf(apollo-sht): Factor the longitude sums through an FFT).
 
 - **Delivered by** `ATLAS-APOLLO-SHT-FFT-2026-08-29`; closes when that PR lands.
 - **Correction:** the evidence line below cites
