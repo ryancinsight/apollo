@@ -1,4 +1,4 @@
-# 0042 — The AVX Stockham backend is retained pending investigation; f64 N = 256/512 route scalar
+# ADR 0042: The AVX Stockham backend is retained pending investigation; f64 N = 256/512 route scalar
 
 - Status: Accepted (2026-08-27)
 - Item: `ATLAS-APOLLO-AVX-STOCKHAM-AUDIT-2026-08-25` (reopened 2026-09-01)

@@ -1,4 +1,4 @@
-# 0043 — Measurement core class is queried, not assumed
+# ADR 0043: Measurement core class is queried, not assumed
 
 - Status: Accepted (2026-09-01)
 - Item: `ATLAS-APOLLO-CORE-CLASS-LABELS-2026-09-01`
