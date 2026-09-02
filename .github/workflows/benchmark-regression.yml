@@ -96,6 +96,17 @@ jobs:
           path: apollo-measurement
           persist-credentials: false
 
+      - name: Checkout the atlas comparer
+        if: matrix.revision == 'candidate'
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: ryancinsight/atlas
+          ref: 12a92b53f87e37ef936d12007a172ada25305d6c
+          path: atlas-tool
+          sparse-checkout: scripts/bench_executable_identity.py
+          sparse-checkout-cone-mode: false
+          persist-credentials: false
+
       # Hold the candidate instrument and representative workloads constant
       # while leaving baseline production source unchanged.
       - name: Pin candidate benchmark instrument
@@ -210,10 +221,10 @@ jobs:
             install -m 755 \
               "$CARGO_TARGET_DIR/release/apollo-bench-compare" \
               benchmark-executables/apollo-bench-compare
-            # The identity job has no source checkout; the code-section
+            # The identity job has no source checkout; atlas's code-section
             # comparer rides in this archive like the compare tool does.
             install -m 755 \
-              apollo-measurement/scripts/bench_executable_identity.py \
+              atlas-tool/scripts/bench_executable_identity.py \
               benchmark-executables/bench_executable_identity.py
           fi
 
