@@ -1,3 +1,34 @@
+## A fix measured on one length class regressed another (2026-09-02) <a id="length-class-split"></a>
+
+Routing the one-shot `FftPrecision` entry through the cached plan was measured
+on power-of-two lengths — 128, 256, 512 — where it wins by 18 to 46%. It
+merged. The composite lengths were never in the probe, and there the same
+substitution *loses* by 21 to 29%: n = 100 goes 101.40 ns to 130.65, n = 384
+281.79 to 354.34.
+
+The instrument is what allowed it. The probe swept 8, 16, 32, 64, 128, 256,
+512 — every length a power of two, because it grew out of the half-storage
+work where the register-resident bases are all powers of two. A sweep whose
+members all share a property cannot distinguish a result that depends on that
+property from one that does not, and a uniform-looking table reads as coverage.
+The fallback arm being edited served *every* length past the codelets, so the
+blast radius and the measured set were different sets, and nothing in the
+process compared them.
+
+**The rule:** when a change lands in a branch that serves a class of inputs,
+the measured set must span the class's real partitions, not the ones the
+previous task happened to care about. For transform lengths that is at least
+power-of-two, smooth composite, and prime. The correction here was cheap
+because the routes stayed side by side and could be measured against each
+other in one binary; had the old route been deleted, the regression would have
+been invisible and permanent.
+
+**What it exposed.** The plan is slower than the ad-hoc dispatcher for
+composite lengths, which inverts the reason plans exist and is now its own item
+(`backlog.md#atlas-apollo-plan-underselects-composite`). The `is_power_of_two`
+condition that removes the regression is a measured guard over that defect, not
+a design, and it carries its premises so that fixing the plan retires it.
+
 ## The fused half codelet is falsified, and the instrument that said otherwise (2026-09-02) <a id="half-fusion-not-established"></a>
 
 `ATLAS-APOLLO-F16-FUSED-SMALL-BASES-2026-09-02`, **built end to end across
