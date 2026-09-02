@@ -1780,6 +1780,7 @@
   `Shape1D { n }` literals, and external consumers may too).
 - **Evidence:** `crates/apollo-fft/src/domain/metadata/shape.rs` 8-11
   declares `pub n`, bypassing validation.
+- **ADR drafted 2026-09-02:** [0044](docs/adr/0044-shape-descriptors-validate-at-construction.md) (Proposed) — private fields + `const fn` accessors on all three shape descriptors, `#[non_exhaustive]`, every literal migrated in the same change, kwavers' two sites in the co-evolution unit; [major], shipping with the 0.27.0 breaks. Blast radius re-measured: 42 in-tree literals, 2 in kwavers, a handful of field reads. Next increment: the migration itself.
 
 ## ATLAS-APOLLO-BRANCH-DEBT-2026-08-27 — Eight stale local branches hold unique patches — in progress
 
