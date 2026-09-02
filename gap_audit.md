@@ -1,3 +1,52 @@
+## Small half transforms need no pool, and the storage route misses the plan (2026-09-02) <a id="half-storage-small-and-routing"></a>
+
+Two findings from the same probe, after the bulk bridge removed the conversion
+cost (`#half-storage-bulk-bridge`).
+
+**The pool is the wrong shape for a register-resident length.**
+`run_via_complex32` borrows its `Complex32` buffer from a thread-local
+`ScratchPool` — right when the compute buffer is worth reusing, but at n ≤ 32
+the buffer is at most 256 bytes, the sized codelet keeps it in registers, and
+the borrow, its depth bookkeeping and growth check are a visible share of a
+transform costing a few nanoseconds. Those lengths now widen into a fixed stack
+array, run the sized codelet directly, and narrow back. Measured pinned
+(performance core, medians ns): n = 8 **18.5 → 10.5** (−43%), n = 16 10.7 →
+**8.9** (−17%), n = 32 17.3 → **15.4** (−11%); efficiency core n = 8 15.9 →
+**10.2** (−36%), with 16 and 32 inside the session's noise. n = 8 is the
+decisive one; 16 and 32 are kept because they are neutral-to-better and no
+longer touch the pool at all, which is the memory half of the case.
+
+**The storage route reaches a different kernel family than the plan does, and
+at n ≥ 64 that costs an order of magnitude.** The probe measures the same
+length three ways — half storage, the `dispatch_inplace` f32 entry the bridge
+calls, and the public `FftPlan1D` route:
+
+| n | storage | `dispatch_inplace` f32 | plan f32 | plan vs kernel |
+| --- | --- | --- | --- | --- |
+| 8 | 10.5 | 11.9 | 3.9 | 3.1x |
+| 16 | 8.9 | 6.3 | 4.4 | 1.4x |
+| 32 | 15.4 | 11.3 | 11.2 | 1.0x |
+| 64 | 498 | 482 | 29.9 | **16.1x** |
+| 128 | 987 | 960 | 60.9 | **15.8x** |
+| 256 | 1948 | 1907 | 146 | **13.0x** |
+| 512 | 3982 | 3901 | 334 | **11.7x** |
+
+The gap is not arithmetic and not conversion: it is that a plan carries
+prebuilt register-resident base states (`base64`, `base128`) and a cached
+twiddle table, and selects the tuned split routes for larger lengths, while
+`dispatch_inplace` falls back to `StockhamAutosort` over per-call cached
+twiddles. Every caller of that entry pays it, not only half storage.
+
+That fix is not a kernel change. The base states live only inside
+`FftPlan1D`, so reaching them means the storage transform must go through the
+plan cache — which already exists and already maps `f16` to the `f32` plan
+(`PlanCacheProvider for f16`) — and that is an upward dependency from the
+execution layer to orchestration, so it is a placement decision rather than a
+patch. Filed as `ATLAS-APOLLO-STORAGE-ROUTE-MISSES-THE-PLAN-2026-09-02` with
+these numbers; n = 64 is deliberately left out of the stack path above,
+because running the slow sized arm over a stack buffer would move that cost
+rather than remove it.
+
 ## Half-storage transforms paid more to convert than to transform (2026-09-02) <a id="half-storage-bulk-bridge"></a>
 
 `Complex<f16>` has no native kernel: `precision_bridge` promotes the buffer to

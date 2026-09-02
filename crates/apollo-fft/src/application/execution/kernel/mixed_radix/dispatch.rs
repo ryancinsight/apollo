@@ -535,9 +535,59 @@ fn dispatch_compact_storage<S: Complex32Bridge, const INVERSE: bool, const NORMA
     if data.len() <= 1 {
         return;
     }
+    if try_register_resident_storage::<S, INVERSE, NORMALIZE>(data) {
+        return;
+    }
     run_via_complex32(data, |buf| {
         dispatch_inplace::<f32, INVERSE, NORMALIZE>(buf, None);
     });
+}
+
+/// Runs the lengths whose whole `Complex32` transform is register-resident
+/// over a stack buffer, so a half-storage transform of one of them touches no
+/// pool at all.
+///
+/// `run_via_complex32` borrows a `Complex32` buffer from a thread-local pool,
+/// which is the right shape when the compute buffer is large enough to be
+/// worth reusing. At these lengths it is not: the buffer is at most a
+/// kilobyte, the sized codelets keep it in registers throughout, and the pool
+/// borrow, its depth bookkeeping and the growth check are a visible share of
+/// a transform that costs a few nanoseconds.
+///
+/// Returns whether the length was handled.
+#[inline]
+fn try_register_resident_storage<S: Complex32Bridge, const INVERSE: bool, const NORMALIZE: bool>(
+    data: &mut [S],
+) -> bool {
+    /// One length: widen into a fixed stack buffer, run the sized codelet the
+    /// f32 route selects for it, narrow back.
+    macro_rules! sized {
+        ($n:literal) => {{
+            let mut buffer = [eunomia::Complex32::new(0.0, 0.0); $n];
+            S::widen_slice(data, &mut buffer);
+            // SAFETY: `small_pot_inplace_sized` requires the slice to hold
+            // exactly `N` samples, which the array type fixes.
+            unsafe {
+                <f32 as MixedRadixScalar>::small_pot_inplace_sized::<$n, INVERSE, NORMALIZE>(
+                    &mut buffer,
+                );
+            }
+            S::narrow_slice(&buffer, data);
+            return true;
+        }};
+    }
+    match data.len() {
+        2 => sized!(2),
+        4 => sized!(4),
+        8 => sized!(8),
+        16 => sized!(16),
+        32 => sized!(32),
+        // Not 64: its sized `small_pot` arm is the slow member of the f32
+        // family here (measured 16x the plan's register-resident base64), so
+        // running it over a stack buffer would only move that cost, not
+        // remove it (ATLAS-APOLLO-STORAGE-ROUTE-MISSES-THE-PLAN-2026-09-02).
+        _ => false,
+    }
 }
 
 #[cfg(test)]

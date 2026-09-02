@@ -1,5 +1,45 @@
 # Apollo Backlog
 
+## ATLAS-APOLLO-STORAGE-ROUTE-MISSES-THE-PLAN-2026-09-02 — The storage route reaches a slower kernel family than the plan [patch] [perf] — todo
+
+- **Finding** (`gap_audit.md#half-storage-small-and-routing`, measured pinned
+  2026-09-02): the same f32 length costs 16.1x more through the
+  `dispatch_inplace` entry the storage bridge calls than through the public
+  plan at n = 64 (482 vs 29.9 ns), 15.8x at 128, 13.0x at 256, 11.7x at 512.
+  A plan carries prebuilt `base64`/`base128` register-resident states and a
+  cached twiddle table and selects the tuned split routes; `dispatch_inplace`
+  falls back to `StockhamAutosort` over per-call twiddle lookups. Half storage
+  inherits all of it, and so does every other caller of that entry.
+- **Why it is filed rather than patched:** the base states live only inside
+  `FftPlan1D`, so the fix is to route storage transforms through the plan
+  cache — which exists and already maps `f16` onto the `f32` plan
+  (`PlanCacheProvider for f16`). Calling it from
+  `application/execution/kernel` would invert the layer direction, so the
+  question is where the compact-storage entry belongs (the API layer, beside
+  the other plan-cached entries, is the candidate), not how to make the kernel
+  faster. That is an [arch] placement decision with a migration for the public
+  `fft_forward::<Complex<f16>>` entry, and it deserves its own increment.
+- **Acceptance:** half-storage transforms at n >= 64 land within the bridge's
+  conversion cost of the f32 plan route for the same length; no execution-layer
+  module depends on orchestration; existing value oracles unchanged.
+
+## ATLAS-APOLLO-HALF-STORAGE-SMALL-STACK-2026-09-02 — Register-resident half lengths need no pool [patch] [perf] — done 2026-09-02
+
+- **Delivered** (`gap_audit.md#half-storage-small-and-routing`): lengths 2, 4,
+  8, 16 and 32 widen into a fixed stack array, run the sized codelet the f32
+  route selects, and narrow back — no thread-local pool borrow, no growth
+  check, no depth bookkeeping, for buffers of at most 256 bytes that the
+  codelet keeps in registers anyway.
+- **Measured pinned:** performance core n = 8 18.5 → **10.5** ns (−43%),
+  n = 16 10.7 → **8.9** (−17%), n = 32 17.3 → **15.4** (−11%); efficiency core
+  n = 8 15.9 → **10.2** (−36%), 16 and 32 within noise. 64 is excluded by
+  measurement, not omission: its sized arm is the slow member of the family
+  (see the routing item above).
+- **Coverage:** the compact oracle covered n = 96 only, which never touches
+  these arms; a new test transforms each new length forward and inverse
+  against the direct DFT within the same derived storage bound, and was proven
+  to bite by routing n = 16 to the eight-point codelet.
+
 ## ATLAS-APOLLO-HALF-STORAGE-BULK-BRIDGE-2026-09-02 — Half-storage promotion ran one lane at a time [patch] [perf] — done 2026-09-02
 
 - **Delivered** (`gap_audit.md#half-storage-bulk-bridge`): the `Complex32Bridge`
