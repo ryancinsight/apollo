@@ -103,6 +103,6 @@ fn main() -> Result<(), apollo_bench::BenchmarkModeError> {
     let mut suite = BenchmarkSuite::new(config);
     bench_paired_scale_row(&mut suite, config);
     bench_convolution_scaling(&mut suite, config);
-    suite.emit();
+    print!("{}", suite.report());
     Ok(())
 }

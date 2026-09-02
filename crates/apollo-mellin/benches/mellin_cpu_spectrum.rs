@@ -88,7 +88,7 @@ fn main() -> Result<(), apollo_bench::BenchmarkModeError> {
         );
     }
 
-    suite.emit();
+    print!("{}", suite.report());
     assert!(
         started.elapsed() < Duration::from_secs(BUDGET_SECS),
         "mellin_cpu_spectrum exceeded its {BUDGET_SECS}s budget ({:.2}s)",

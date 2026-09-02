@@ -208,7 +208,7 @@ fn main() -> Result<(), BenchmarkError> {
     for len in lengths {
         bench_size(&mut suite, config, len);
     }
-    suite.emit();
+    print!("{}", suite.report());
 
     let elapsed = started.elapsed();
     eprintln!(

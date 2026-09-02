@@ -592,8 +592,13 @@ hephaestus-core = { workspace = true }
 
     #[test]
     fn provider_audit_rejects_unknown_options() {
-        let result = parse_args(["--bad".to_string()].into_iter());
-        assert!(result.is_err());
+        let message = parse_args(["--bad".to_string()].into_iter())
+            .expect_err("an unknown option must be rejected")
+            .to_string();
+        assert!(
+            message.contains("unknown provider-audit option `--bad`"),
+            "the error must name the offending option: {message}"
+        );
     }
 
     #[test]

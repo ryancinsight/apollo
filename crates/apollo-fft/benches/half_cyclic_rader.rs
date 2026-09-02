@@ -183,7 +183,7 @@ fn main() -> Result<(), apollo_bench::BenchmarkModeError> {
     let mut suite = BenchmarkSuite::new(config);
     bench_half_cyclic_rader(&mut suite, config);
     bench_composite_radix_order(&mut suite, config);
-    suite.emit();
+    print!("{}", suite.report());
     Ok(())
 }
 

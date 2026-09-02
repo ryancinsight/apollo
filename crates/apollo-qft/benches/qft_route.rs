@@ -120,7 +120,7 @@ fn main() -> Result<(), apollo_bench::BenchmarkModeError> {
         });
     }
 
-    suite.emit();
+    print!("{}", suite.report());
     let elapsed = started.elapsed();
     assert!(
         elapsed < Duration::from_secs(BUDGET_SECS),

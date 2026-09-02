@@ -192,6 +192,6 @@ fn main() -> Result<(), apollo_bench::BenchmarkModeError> {
     bench_inverse_fft(&mut suite);
     bench_forward_reuse(&mut suite);
     bench_inverse_reuse(&mut suite);
-    suite.emit();
+    print!("{}", suite.report());
     Ok(())
 }

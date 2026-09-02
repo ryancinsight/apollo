@@ -119,6 +119,6 @@ fn main() -> Result<(), apollo_bench::BenchmarkModeError> {
     let mut suite = BenchmarkSuite::new(mode.apply(BenchmarkConfig::standard()));
     bench_forward(&mut suite);
     bench_filtered_backproject(&mut suite);
-    suite.emit();
+    print!("{}", suite.report());
     Ok(())
 }

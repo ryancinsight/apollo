@@ -99,7 +99,7 @@ fn main() -> Result<(), apollo_bench::BenchmarkModeError> {
         );
     }
 
-    suite.emit();
+    print!("{}", suite.report());
     assert!(
         started.elapsed() < Duration::from_secs(BUDGET_SECS),
         "stft_cpu_forward exceeded its {BUDGET_SECS}s budget ({:.2}s)",
