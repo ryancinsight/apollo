@@ -61,8 +61,23 @@
   to a uniform -73 to -85% in `gap_audit.md#half-storage-bulk-bridge-corrected`
   (see `#first-run-after-build`).
 
-## ATLAS-APOLLO-F16-FUSED-SMALL-BASES-2026-09-02 — Fuse half conversion into the register-resident codelets [patch] [perf] — blocked: hermes has no widen-to-lanes primitive
+## ATLAS-APOLLO-F16-FUSED-SMALL-BASES-2026-09-02 — Fuse half conversion into the register-resident codelets [patch] [perf] — done 2026-09-02 (falsified)
 
+- **Built and falsified 2026-09-02 (`gap_audit.md#half-fusion-not-established`).**
+  The upstream blocker was removed (hermes gained a kernel-declared F16C
+  frame, eunomia's bulk dispatch became inlinable) and apollo gained the fused
+  codelet. It is correct and it is not faster: measured with both paths in one
+  binary and the arms alternating in one process, n = 16 fused 9.50/9.72 ns
+  against staged 9.09/8.65, n = 32 a wash. The ceiling assumed three trips to
+  memory; at 128 to 256 bytes they are three trips to L1, and the fused body
+  costs more in register pressure than they cost in traffic. Apollo's codelet
+  and hermes' const are reverted; eunomia's `#[inline]` stands as neutral and
+  independently sound.
+- **The measurement lesson outranks the result:** two rebuild-between-arms
+  comparisons of the same unchanged code disagreed by thirty points (-22.7%
+  then +6.9% at n = 16) with flat controls. At these magnitudes a comparison
+  must live in one binary with alternating arms; a fresh executable behind
+  each arm varies by more than the effect under test.
 - **Attempted and blocked 2026-09-02 (`gap_audit.md#half-fusion-blocked-upstream`).**
   Ceiling measured at about 3.5 ns per transform at n = 16 (8.9 → ~5.4,
   −39%), less at 32, nothing at n >= 64. Fusion needs the conversion and the
