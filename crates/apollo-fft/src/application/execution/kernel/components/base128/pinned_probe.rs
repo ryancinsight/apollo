@@ -413,6 +413,22 @@ fn half_storage_against_its_kernel(suite: &mut BenchmarkSuite, core: &str) {
             forward_compact_storage(std::hint::black_box(&mut work16));
         });
 
+        // Conversion alone, both directions: what the bridge costs when the
+        // transform between them is removed. A per-lane cost scales with n;
+        // a call-shaped cost does not.
+        let mut convert_dst = source32.clone();
+        let mut convert_back = source16.clone();
+        suite.run(BenchmarkCase::new(core, "convert-only", n), || {
+            <eunomia::Complex<f16> as crate::application::execution::kernel::precision_bridge::Complex32Bridge>::widen_slice(
+                std::hint::black_box(&source16),
+                std::hint::black_box(&mut convert_dst),
+            );
+            <eunomia::Complex<f16> as crate::application::execution::kernel::precision_bridge::Complex32Bridge>::narrow_slice(
+                std::hint::black_box(&convert_dst),
+                std::hint::black_box(&mut convert_back),
+            );
+        });
+
         let mut work32 = source32.clone();
         suite.run(BenchmarkCase::new(core, "f32-kernel", n), || {
             work32.copy_from_slice(&source32);
