@@ -247,6 +247,40 @@ which the fifth slice recorded as +2.3%, reads 60.1 ns again against a
 binary in which the f64 leaf did not change — so that +2.3% was binary
 layout too, not the codelet. Verdict: neutral; the gate passes.
 
+## Seventh slice: the groups-one stage (2026-09-02)
+
+The final Stockham stage (`groups == 1`) — an AVX/FMA body per precision
+and two AVX-512 bodies behind `StockhamAvxBackend::stage_groups_one` —
+became `GroupsOneStage` in `butterfly/lanes/groups_one.rs`: one
+pair-deinterleave of two loaded registers yields the even and odd inputs a
+register of `j` needs. Ratchet: 168 → 162.
+
+Same instrument, f32-leaf binary as `before`, two rounds; the cells that
+moved beyond the efficiency core's 0.5% repeatability:
+
+| core | prec | n | before | after | after/before | RustFFT before/after |
+| --- | --- | --- | --- | --- | --- | --- |
+| efficiency | f32 | 1024 | 1562 ns | 1601 ns | **1.025** | 1267 / 1268 |
+| efficiency | f64 | 16 | 16.8 (r2: 19.4) | 19.1 | 1.135 | 20.0 / 20.2 |
+| efficiency | f64 | 32768 | 125941 | 123050 | 0.977 | 130284 / 130010 |
+| efficiency | rest | 8..32768 | — | — | 0.986–1.003 | — |
+| performance | f32 | 1024 | 790 | 709 | 0.897 | 609 / 577 |
+| performance | f32 | 4096 | 4417 | 4146 | 0.939 | 3201 / 3491 |
+
+The f64 n = 16 cell spread 15% between rounds of the same binary; the rest
+of the performance-core column is inside its usual spread. The one real
+movement is **f32 n = 1024 at +2.5% (40 ns)** on the efficiency core, both
+rounds agreeing to 0.2%. Its final stage is radix 512 at eight lanes, where
+hermes' AVX2 `deinterleave_pairs` is two cross-lane `permute2f128` plus two
+`shuffle_ps` per four digits, against the retired body's two in-lane
+`unpack` per two digits at SSE width — the same shuffle count, but the
+cross-lane form pays port-5 latency the unpacks do not. Accepted with the
+number recorded: the cure is an unpack-based even/odd split in hermes'
+AVX2 f32 backend, filed there as `HS-DEINTERLEAVE-PAIRS-AVX2-F32-2026-09-02`
+and measured through this cell when it lands; apollo has no four-lane f32
+hardware backend to route to meanwhile (hermes ships AVX2/AVX-512 only on
+x86-64).
+
 ## Alternatives rejected
 
 - **Retire the AVX Stockham backend wholesale** onto the auto-vectorized scalar

@@ -3168,7 +3168,7 @@
   `ATLAS-APOLLO-POT-PLANAR-2026-08-25` and
   `ATLAS-APOLLO-AVX-STOCKHAM-AUDIT-2026-08-25`.
 
-## ATLAS-APOLLO-ISA-FORK-2026-08-25 — Retire the per-ISA fork onto the Hermes seam [arch] — in-progress (six slices delivered 2026-09-02; integrator Claude; next lease: `stockham/avx/{backend.rs,precise/,reduced/}`, `stockham/butterfly/{fixed.rs,lanes/}`)
+## ATLAS-APOLLO-ISA-FORK-2026-08-25 — Retire the per-ISA fork onto the Hermes seam [arch] — in-progress (eight slices delivered 2026-09-02; integrator Claude; lease: `stockham/avx/`, `stockham/butterfly/`, `stockham/precision/`)
 
 - **Outcome:** `apollo-fft` stops carrying its own AVX2 and AVX-512 intrinsics
   and reaches lane-parallel CPU work through `hermes-simd`, which is the Atlas
@@ -3231,10 +3231,24 @@
   Gate: flat on the efficiency core at every size (f32 n = 64: 0.999);
   the fifth slice's +2.3% at f64 n = 32 re-read as 0.986 against an
   unchanged f64 leaf, so it was binary layout. Table in the ADR.
-  **Next slice:** the groups-one stage (`avx/{precise,reduced}/base.rs`
-  and the two AVX-512 bodies) as `lanes/groups_one.rs`, then the
-  groups-two/quarter specialisations (`pair.rs`, `triple_1/2.rs`, `quad.rs`).
-  Non-goal reaffirmed: routing stays with ADR 0042.
+- **Seventh slice delivered 2026-09-02 (same PR):** the groups-one stage →
+  `lanes/groups_one.rs`; trait method, four impls, and `base.rs` twins
+  deleted. Ratchet 168 → 162. Gate: efficiency core flat except **f32
+  n = 1024 +2.5% (40 ns)** — hermes' AVX2 `deinterleave_pairs` is a
+  cross-lane permute where the retired body used SSE unpacks; accepted,
+  filed upstream as hermes `HS-DEINTERLEAVE-PAIRS-AVX2-F32-2026-09-02`
+  (ADR table).
+- **Eighth slice (measurement pending):** the `groups == 2` pair and
+  `groups == 4` triple stages → `PairStageGroupsTwo` /
+  `TripleStageQuarterGroupsOne` (stride-4/-8 deinterleave of adjacent
+  inputs); AVX2 specialisations and impls deleted; ratchet 162 → 154.
+  **Remaining intrinsic families:** the `groups == 8` triple
+  (`precise/triple_2.rs`), the f32 `groups == 4` pair and `groups == 8`
+  triple (`reduced/{pair,triple_2}.rs`), `quad.rs`, and the AVX-512 pair
+  impl — each packs two digits per register at the f32 width, which needs
+  a 128-bit half interleave hermes does not expose; filed as hermes
+  `HS-HALF-INTERLEAVE-2026-09-02` before those slices. Non-goal reaffirmed:
+  routing stays with ADR 0042.
 - **First slice (as planned):** the generic pair stage — `stockham/avx/generic/
   pair.rs` (57 sites) behind `StockhamAvxBackend::stage_pair_groups_two` —
   re-expressed as one `LaneKernel` over `ComplexReg` (`butterfly`,
