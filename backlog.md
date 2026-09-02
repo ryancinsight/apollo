@@ -1,9 +1,36 @@
 # Apollo Backlog
 
+## ATLAS-APOLLO-PROBE-FIRST-RUN-ARTIFACT-2026-09-02 — A freshly built probe binary's first run is not measurable [patch] [ci] — done 2026-09-02
+
+- **Finding** (`gap_audit.md#first-run-after-build`): on this host the first
+  execution of a newly linked test binary runs several times slower
+  throughout the process — the same call read 482 ns on the run after the
+  build and 36 ns on the next run of the same binary, with no code change.
+  It is per-process, not per-case: an arm repeated at the end of a run
+  reproduces the arm at its start, and two runs of an unchanged binary agree
+  to ~2%.
+- **Why it matters:** an ABBA comparison that rebuilds between arms measures
+  every arm on a fresh binary. Relative deltas usually survive; absolute
+  figures need not. It produced a merged "12-16x" finding here that the warm
+  numbers reduce to 1.2-2.0x.
+- **Delivered:** both pinned probes run their whole measured set once into a
+  discarded suite before the reported one, so a freshly built binary now
+  reports warm numbers (verified: n = 64 kernel 35.9 ns on a fresh build).
+  Outside these probes the rule is protocol: after a rebuild, discard the
+  first run.
+
 ## ATLAS-APOLLO-STORAGE-ROUTE-MISSES-THE-PLAN-2026-09-02 — The storage route reaches a slower kernel family than the plan [patch] [perf] — todo
 
-- **Finding** (`gap_audit.md#half-storage-small-and-routing`, measured pinned
-  2026-09-02): the same f32 length costs 16.1x more through the
+- **Corrected 2026-09-02 (`gap_audit.md#half-storage-routing-corrected`):**
+  the 12-16x figures below were measured on freshly built binaries and are an
+  artifact of `gap_audit.md#first-run-after-build`; the warm numbers are
+  **1.99x at n = 64 (45.1 vs 22.7 ns), 2.03x at 128, 1.49x at 256, 1.32x at
+  512**. The finding stands in direction — the storage route does reach a
+  slower kernel family — but at this size it is an ordinary optimization, and
+  the case for crossing a layer boundary to fix it is weaker than the
+  original reading implied. Re-triage before scheduling.
+- **Original finding as recorded (superseded):** the same f32 length costs
+  16.1x more through the
   `dispatch_inplace` entry the storage bridge calls than through the public
   plan at n = 64 (482 vs 29.9 ns), 15.8x at 128, 13.0x at 256, 11.7x at 512.
   A plan carries prebuilt `base64`/`base128` register-resident states and a
@@ -42,7 +69,10 @@
 
 ## ATLAS-APOLLO-HALF-STORAGE-BULK-BRIDGE-2026-09-02 — Half-storage promotion ran one lane at a time [patch] [perf] — done 2026-09-02
 
-- Closed; the delivery record is in git history.
+- Closed; the delivery record is in git history. Its recorded n >= 64 figures
+  were measured one run after each build and understate the gain: corrected
+  to a uniform -73 to -85% in `gap_audit.md#half-storage-bulk-bridge-corrected`
+  (see `#first-run-after-build`).
 
 ## ATLAS-APOLLO-F16-FUSED-SMALL-BASES-2026-09-02 — Fuse half conversion into the register-resident codelets [patch] [perf] — todo
 
