@@ -15,9 +15,10 @@ ADR_DIRECTORY = REPOSITORY / "docs" / "adr"
 INDEX = ADR_DIRECTORY / "README.md"
 
 TITLE_PATTERNS = (
-    re.compile(r"^# ADR (?P<number>\d{4}): (?P<title>.+)$", re.MULTILINE),
-    re.compile(r"^# (?P<number>\d{4}) — (?P<title>.+)$", re.MULTILINE),
+    re.compile(r"^# ADR (?P<number>\d{3,4}): (?P<title>.+)$", re.MULTILINE),
+    re.compile(r"^# (?P<number>\d{3,4}) — (?P<title>.+)$", re.MULTILINE),
 )
+NUMBERED = re.compile(r"\d{3,4}-.*\.md")
 INLINE_STATUS = re.compile(
     r"^-\s+(?:\*\*Status:\*\*|Status:)\s+(?P<status>Proposed|Accepted|Rejected)\b",
     re.MULTILINE,
@@ -67,7 +68,13 @@ def render() -> str:
     """Render the complete deterministic ADR index."""
     entries = [
         parse_adr(path)
-        for path in sorted(ADR_DIRECTORY.glob("[0-9][0-9][0-9][0-9]-*.md"))
+        # Three- or four-digit numbering: repositories differ, the generator
+        # does not. The width is whatever each repository already uses.
+        for path in sorted(
+            path
+            for path in ADR_DIRECTORY.glob("[0-9]*-*.md")
+            if NUMBERED.fullmatch(path.name)
+        )
     ]
     numbers = [entry.number for entry in entries]
     if len(numbers) != len(set(numbers)):
