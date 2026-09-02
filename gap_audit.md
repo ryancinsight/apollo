@@ -1,3 +1,28 @@
+## Unchecked indexing hid what the array types already proved (2026-09-01) <a id="ratchet-slice-safe-indexing"></a>
+
+The first SAFETY-ratchet burn-down slices deleted `unsafe` rather than
+commenting it, and one of them measured as a win. `winograd/radix/
+odd_prime_pair.rs` indexed its const-sized arrays (`[Complex<F>; N]`,
+`[F; H]`) through `get_unchecked` with loop indices already bounded by the
+same consts; plain indexing lets every bounds check fold in each
+monomorphization -- and the f32 odd-prime route got faster: pinned paired
+runs, f32 n = 7/11/13 -29%/-28%/-25%, 19 -12%, 31 -9%, RustFFT f32 controls
+within 1%, f64 flat at every size. The slice-through-unchecked-pointer form
+had been hiding the array length from LLVM, not saving a check.
+`radix_composite/arity.rs` reinterpreted its `[_; R]` buffer as `[_; 2]`
+etc. through raw casts inside the monomorphized `match R` arms; a slice
+`try_into` const-folds to the same code with no unsafe. The proc-macro
+generated composite codelets (`dftNN_impl`) were `unsafe fn` by habit -- the
+array type carries the length and every raw operation inside is already
+discharged -- so they are safe fns now, and every caller's wrapper block
+went with them (35 in the winograd tests, one in Cook-Toom). Ratchet
+baseline 398 -> 302.
+
+The same comparison exposed the next lead: the f32 short kernels select
+their SSE bodies with compile-time `target_feature` cfgs and nothing sets
+`target-cpu`, so the default build runs them scalar
+(`ATLAS-APOLLO-COMPILE-TIME-FEATURE-GATES-2026-09-01`).
+
 ## The compose arena aligned its offset, not its address (2026-09-01) <a id="compose-arena-alignment"></a>
 
 `ATLAS-APOLLO-COMPOSE-ARENA-MIRI` asked for miri coverage of the fused
