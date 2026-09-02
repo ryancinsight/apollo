@@ -220,6 +220,33 @@ lines of hand-scheduled intrinsics, with the codelet now sharing the
 `register_butterfly` bodies every other fixed kernel uses; the cell stays in
 the probe, so a later change to `radix8` that recovers it is measured.
 
+## Sixth slice: the fixed 64-point f32 leaf (2026-09-02)
+
+The f32 64-point leaf — the radix-one triple lane kernel followed by the
+intrinsic `stage_triple_quarter_groups_one_reduced_avx_fma` — became the
+`Dft64Reduced` codelet in `butterfly/lanes/fixed_reduced.rs`: the same 8×8
+factorisation as the f64 leaf with four columns per register and one 4×4
+sample transpose (`ComplexReg::transpose_square`) between phases, tested
+against an f64 naive DFT in both directions.
+
+Same instrument, f64-leaf binary as `before`, two rounds:
+
+| core | prec | n | before | after | after/before | RustFFT before/after |
+| --- | --- | --- | --- | --- | --- | --- |
+| efficiency | f32 | 64 | 54.5 ns | 54.5 ns | 0.999 | 51.3 / 51.5 |
+| efficiency | f32 | 32..32768 (rest) | — | — | 0.994–1.004 | — |
+| performance | f32 | 64 | 30.2 | 22.7 | 0.752 | 20.8 / 28.5 |
+| performance | f32 | 1024 | 821 | 800 | 0.974 | 581 / 589 |
+| performance | f32 | 4096 | 4252 | 4141 | 0.974 | 3493 / 3317 |
+| efficiency | f64 | 32 | 60.9 | 60.1 | 0.986 | 41.2 / 41.1 |
+
+The leaf is exactly flat on the efficiency core; the performance-core f32
+n = 64 cell moved −25% while its control moved +37%, the same layout
+sensitivity the fifth slice recorded. The efficiency-core f64 n = 32 cell,
+which the fifth slice recorded as +2.3%, reads 60.1 ns again against a
+binary in which the f64 leaf did not change — so that +2.3% was binary
+layout too, not the codelet. Verdict: neutral; the gate passes.
+
 ## Alternatives rejected
 
 - **Retire the AVX Stockham backend wholesale** onto the auto-vectorized scalar

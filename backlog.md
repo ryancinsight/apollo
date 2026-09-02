@@ -3168,7 +3168,7 @@
   `ATLAS-APOLLO-POT-PLANAR-2026-08-25` and
   `ATLAS-APOLLO-AVX-STOCKHAM-AUDIT-2026-08-25`.
 
-## ATLAS-APOLLO-ISA-FORK-2026-08-25 — Retire the per-ISA fork onto the Hermes seam [arch] — in-progress (five slices delivered 2026-09-02; integrator Claude; next lease: `stockham/avx/reduced/fixed.rs`, `stockham/butterfly/{fixed.rs,lanes/}`)
+## ATLAS-APOLLO-ISA-FORK-2026-08-25 — Retire the per-ISA fork onto the Hermes seam [arch] — in-progress (six slices delivered 2026-09-02; integrator Claude; next lease: `stockham/avx/{backend.rs,precise/,reduced/}`, `stockham/butterfly/{fixed.rs,lanes/}`)
 
 - **Outcome:** `apollo-fft` stops carrying its own AVX2 and AVX-512 intrinsics
   and reaches lane-parallel CPU work through `hermes-simd`, which is the Atlas
@@ -3226,10 +3226,15 @@
   neutral; performance-core cells at this scale spread 7–63% between rounds
   of the same binary. Accepted with the number recorded (ADR). Ratchet
   unchanged at 168 (commented blocks).
-  **Next slice:** the fixed 64-point f32 leaf (`reduced/fixed.rs`) as a
-  `lanes/fixed_reduced.rs` codelet, then the groups-one/-two
-  specialisations (`avx/{precise,reduced}/{base,pair,quad,triple_1,
-  triple_2}.rs`). Non-goal reaffirmed: routing stays with ADR 0042.
+- **Sixth slice delivered 2026-09-02 (same PR):** the f32 64-point leaf →
+  `lanes/fixed_reduced.rs` (`Dft64Reduced`, 4×4 in-register transpose).
+  Gate: flat on the efficiency core at every size (f32 n = 64: 0.999);
+  the fifth slice's +2.3% at f64 n = 32 re-read as 0.986 against an
+  unchanged f64 leaf, so it was binary layout. Table in the ADR.
+  **Next slice:** the groups-one stage (`avx/{precise,reduced}/base.rs`
+  and the two AVX-512 bodies) as `lanes/groups_one.rs`, then the
+  groups-two/quarter specialisations (`pair.rs`, `triple_1/2.rs`, `quad.rs`).
+  Non-goal reaffirmed: routing stays with ADR 0042.
 - **First slice (as planned):** the generic pair stage — `stockham/avx/generic/
   pair.rs` (57 sites) behind `StockhamAvxBackend::stage_pair_groups_two` —
   re-expressed as one `LaneKernel` over `ComplexReg` (`butterfly`,
