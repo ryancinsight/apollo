@@ -27,6 +27,8 @@ pub(crate) mod pair;
 #[cfg(test)]
 mod tests;
 pub(crate) mod triple;
+pub(crate) mod triple_small_groups;
+pub(crate) mod two_digit;
 
 pub(crate) use base::*;
 pub(crate) use fixed_precise::*;
@@ -34,3 +36,5 @@ pub(crate) use fixed_reduced::*;
 pub(crate) use groups_one::*;
 pub(crate) use pair::*;
 pub(crate) use triple::*;
+pub(crate) use triple_small_groups::*;
+pub(crate) use two_digit::*;
