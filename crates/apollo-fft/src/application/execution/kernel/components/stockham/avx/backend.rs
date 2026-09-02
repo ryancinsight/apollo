@@ -6,13 +6,7 @@ pub(crate) trait StockhamAvxBackend: Copy + Sized + 'static {
     const COMPLEX_PER_VECTOR: usize;
 
     unsafe fn unpack_complex(c: Self::Complex) -> (Self::Real, Self::Real);
-    unsafe fn complex_mul(a: Self::Complex, b: Self::Complex) -> Self::Complex;
-    unsafe fn complex_add(a: Self::Complex, b: Self::Complex) -> Self::Complex;
-    unsafe fn complex_sub(a: Self::Complex, b: Self::Complex) -> Self::Complex;
-
     unsafe fn set1_real(val: Self::Real) -> Self::Vector;
-    unsafe fn set1_imag(val: Self::Real) -> Self::Vector;
-
     unsafe fn loadu_complex(ptr: *const Self::Complex) -> Self::Vector;
     unsafe fn storeu_complex(ptr: *mut Self::Complex, val: Self::Vector);
 

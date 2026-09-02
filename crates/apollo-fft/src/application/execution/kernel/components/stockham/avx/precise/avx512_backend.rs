@@ -22,27 +22,7 @@ impl StockhamAvxBackend for Avx512BackendPrecise {
     }
 
     #[inline]
-    unsafe fn complex_mul(a: Complex64, b: Complex64) -> Complex64 {
-        a * b
-    }
-
-    #[inline]
-    unsafe fn complex_add(a: Complex64, b: Complex64) -> Complex64 {
-        a + b
-    }
-
-    #[inline]
-    unsafe fn complex_sub(a: Complex64, b: Complex64) -> Complex64 {
-        a - b
-    }
-
-    #[inline]
     unsafe fn set1_real(val: f64) -> __m512d {
-        _mm512_set1_pd(val)
-    }
-
-    #[inline]
-    unsafe fn set1_imag(val: f64) -> __m512d {
         _mm512_set1_pd(val)
     }
 

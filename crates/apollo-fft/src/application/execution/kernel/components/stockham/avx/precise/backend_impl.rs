@@ -15,27 +15,7 @@ impl StockhamAvxBackend for f64 {
     }
 
     #[inline]
-    unsafe fn complex_mul(a: Complex64, b: Complex64) -> Complex64 {
-        a * b
-    }
-
-    #[inline]
-    unsafe fn complex_add(a: Complex64, b: Complex64) -> Complex64 {
-        a + b
-    }
-
-    #[inline]
-    unsafe fn complex_sub(a: Complex64, b: Complex64) -> Complex64 {
-        a - b
-    }
-
-    #[inline]
     unsafe fn set1_real(val: f64) -> __m256d {
-        unsafe { std::arch::x86_64::_mm256_set1_pd(val) }
-    }
-
-    #[inline]
-    unsafe fn set1_imag(val: f64) -> __m256d {
         unsafe { std::arch::x86_64::_mm256_set1_pd(val) }
     }
 

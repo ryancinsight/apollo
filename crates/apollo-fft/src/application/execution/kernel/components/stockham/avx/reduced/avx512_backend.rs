@@ -23,27 +23,7 @@ impl StockhamAvxBackend for Avx512BackendReduced {
     }
 
     #[inline]
-    unsafe fn complex_mul(a: Complex32, b: Complex32) -> Complex32 {
-        a * b
-    }
-
-    #[inline]
-    unsafe fn complex_add(a: Complex32, b: Complex32) -> Complex32 {
-        a + b
-    }
-
-    #[inline]
-    unsafe fn complex_sub(a: Complex32, b: Complex32) -> Complex32 {
-        a - b
-    }
-
-    #[inline]
     unsafe fn set1_real(val: f32) -> __m512 {
-        _mm512_set1_ps(val)
-    }
-
-    #[inline]
-    unsafe fn set1_imag(val: f32) -> __m512 {
         _mm512_set1_ps(val)
     }
 

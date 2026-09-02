@@ -3,19 +3,16 @@ use super::super::avx::precise::triple_2::stage_triple_groups_eight_precise_avx_
 #[cfg(target_arch = "x86_64")]
 use super::super::avx::{
     backend::StockhamAvxBackend,
-    generic::{
-        base::stage_avx_fma,
-        triple::{
-            stage_triple_avx_fma, stage_triple_low_live_avx_fma, stage_triple_radix1_avx_fma,
-            stage_triple_radix1_n1024_avx_fma, stage_triple_radix1_n128_avx_fma,
-            stage_triple_radix1_n256_avx_fma, stage_triple_radix1_n32768_avx_fma,
-            stage_triple_radix1_n32_avx_fma, stage_triple_radix1_n512_avx_fma,
-            stage_triple_radix1_n64_avx_fma,
-        },
+    generic::triple::{
+        stage_triple_avx_fma, stage_triple_low_live_avx_fma, stage_triple_radix1_avx_fma,
+        stage_triple_radix1_n1024_avx_fma, stage_triple_radix1_n128_avx_fma,
+        stage_triple_radix1_n256_avx_fma, stage_triple_radix1_n32768_avx_fma,
+        stage_triple_radix1_n32_avx_fma, stage_triple_radix1_n512_avx_fma,
+        stage_triple_radix1_n64_avx_fma,
     },
 };
 use super::super::butterfly::{
-    stage_pair_impl, stage_pair_lanes, stage_pair_radix_one_lanes, stage_quad_impl,
+    stage_lanes, stage_pair_impl, stage_pair_lanes, stage_pair_radix_one_lanes, stage_quad_impl,
     stage_triple_impl,
 };
 use super::super::stage::stage_impl;
@@ -256,9 +253,7 @@ impl StockhamPrecision for PreciseStockhamAvxFma {
         let groups = src.len() / (radix << 1);
         if groups == 1 && radix >= 2 {
             unsafe { <f64 as StockhamAvxBackend>::stage_groups_one(src, dst, radix, twiddles) };
-        } else if groups >= 2 {
-            unsafe { stage_avx_fma::<f64>(src, dst, radix, twiddles) };
-        } else {
+        } else if groups < 2 || !stage_lanes::<f64, 4>(src, dst, radix, twiddles) {
             stage_impl::<_, 512>(src, dst, radix, twiddles);
         }
     }
@@ -481,12 +476,7 @@ impl StockhamPrecision for PreciseStockhamAvx512 {
             unsafe {
                 <crate::application::execution::kernel::components::stockham::avx::precise::avx512_backend::Avx512BackendPrecise as StockhamAvxBackend>::stage_groups_one(src, dst, radix, twiddles)
             };
-        } else if groups >= 4 {
-            // avx512 COMPLEX_PER_VECTOR is 4
-            unsafe {
-                stage_avx_fma::<crate::application::execution::kernel::components::stockham::avx::precise::avx512_backend::Avx512BackendPrecise>(src, dst, radix, twiddles)
-            };
-        } else {
+        } else if groups < 4 || !stage_lanes::<f64, 8>(src, dst, radix, twiddles) {
             <PreciseStockhamAvxFma as StockhamPrecision>::stage(src, dst, radix, twiddles);
         }
     }
