@@ -3238,7 +3238,8 @@
   cross-lane permute where the retired body used SSE unpacks; accepted,
   filed upstream as hermes `HS-DEINTERLEAVE-PAIRS-AVX2-F32-2026-09-02`
   (ADR table).
-- **Eighth slice (measurement pending):** the `groups == 2` pair and
+- **Eighth slice delivered 2026-09-02 (same PR; gate: every efficiency-core
+  cell within 1.7%, neutral):** the `groups == 2` pair and
   `groups == 4` triple stages → `PairStageGroupsTwo` /
   `TripleStageQuarterGroupsOne` (stride-4/-8 deinterleave of adjacent
   inputs); AVX2 specialisations and impls deleted; ratchet 162 → 154.

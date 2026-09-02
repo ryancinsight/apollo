@@ -281,6 +281,31 @@ and measured through this cell when it lands; apollo has no four-lane f32
 hardware backend to route to meanwhile (hermes ships AVX2/AVX-512 only on
 x86-64).
 
+## Eighth slice: the small-group pair and triple stages (2026-09-02)
+
+The pair stage at `groups == 2` and the triple stage at `groups == 4` —
+where every Stockham digit owns one `k`, so its inputs are adjacent and its
+outputs strided — became `PairStageGroupsTwo` and
+`TripleStageQuarterGroupsOne`: a register of consecutive digits reads its
+inputs as four (eight) consecutive registers and splits them with
+`deinterleave_pairs4` (twice, then `deinterleave_pairs`) into the
+stride-4 (stride-8) subsequences; twiddles and outputs are contiguous. The
+AVX2 specialisations and their impls were deleted; the AVX-512 pair impl
+stays for the `groups == 4/8` arms it serves. Ratchet: 162 → 154.
+
+Same instrument, groups-one binary as `before`, two rounds: every
+efficiency-core cell within 1.7% (f32 32768 +1.7% against a 1.6%
+round-to-round spread; f64 512/1024/4096/32768 −0.6% to −1.3%); the
+performance-core column inside its usual spread. Verdict: neutral; the gate
+passes.
+
+The families still on intrinsics — the `groups == 8` triple
+(`precise/triple_2.rs`), the f32 `groups == 4` pair and `groups == 8`
+triple (`reduced/{pair,triple_2}.rs`), `quad.rs`, and the AVX-512 pair
+impl — pack two digits per register at the f32 width and need the
+128-bit half interleave filed as hermes `HS-HALF-INTERLEAVE-2026-09-02`;
+they follow once it lands.
+
 ## Alternatives rejected
 
 - **Retire the AVX Stockham backend wholesale** onto the auto-vectorized scalar
