@@ -2,8 +2,7 @@ use super::super::backend::StockhamAvxBackend;
 use eunomia::Complex64;
 use std::arch::x86_64::{
     __m512d, _mm512_add_pd, _mm512_fmaddsub_pd, _mm512_loadu_pd, _mm512_mul_pd, _mm512_permute_pd,
-    _mm512_set1_pd, _mm512_set_pd, _mm512_shuffle_f64x2, _mm512_storeu_pd, _mm512_sub_pd,
-    _mm512_xor_pd,
+    _mm512_shuffle_f64x2, _mm512_storeu_pd, _mm512_sub_pd,
 };
 
 #[derive(Copy, Clone)]
@@ -13,38 +12,6 @@ impl StockhamAvxBackend for Avx512BackendPrecise {
     type Real = f64;
     type Complex = Complex64;
     type Vector = __m512d;
-
-    const COMPLEX_PER_VECTOR: usize = 4;
-
-    #[inline]
-    unsafe fn unpack_complex(c: Complex64) -> (f64, f64) {
-        (c.re, c.im)
-    }
-
-    #[inline]
-    unsafe fn set1_real(val: f64) -> __m512d {
-        _mm512_set1_pd(val)
-    }
-
-    #[inline]
-    unsafe fn loadu_complex(ptr: *const Complex64) -> __m512d {
-        _mm512_loadu_pd(ptr.cast::<f64>())
-    }
-
-    #[inline]
-    unsafe fn storeu_complex(ptr: *mut Complex64, val: __m512d) {
-        _mm512_storeu_pd(ptr.cast::<f64>(), val)
-    }
-
-    #[inline]
-    unsafe fn add(a: __m512d, b: __m512d) -> __m512d {
-        _mm512_add_pd(a, b)
-    }
-
-    #[inline]
-    unsafe fn sub(a: __m512d, b: __m512d) -> __m512d {
-        _mm512_sub_pd(a, b)
-    }
 
     #[inline]
     unsafe fn mul(a: __m512d, b: __m512d) -> __m512d {
@@ -59,17 +26,6 @@ impl StockhamAvxBackend for Avx512BackendPrecise {
     #[inline]
     unsafe fn permute_complex_swap(a: __m512d) -> __m512d {
         _mm512_permute_pd(a, 0x55)
-    }
-
-    #[inline]
-    unsafe fn rotate_quarter_turn(v: __m512d, sign: f64) -> __m512d {
-        let swapped = _mm512_permute_pd(v, 0x55);
-        let mask = if sign > 0.0 {
-            _mm512_set_pd(0.0, -0.0, 0.0, -0.0, 0.0, -0.0, 0.0, -0.0)
-        } else {
-            _mm512_set_pd(-0.0, 0.0, -0.0, 0.0, -0.0, 0.0, -0.0, 0.0)
-        };
-        _mm512_xor_pd(swapped, mask)
     }
 
     #[inline]

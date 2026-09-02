@@ -1,5 +1,4 @@
 pub(crate) mod backend;
-pub(crate) mod generic;
 pub(crate) mod precise;
 pub(crate) mod reduced;
 

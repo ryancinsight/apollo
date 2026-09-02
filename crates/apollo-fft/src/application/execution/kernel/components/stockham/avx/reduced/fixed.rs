@@ -79,14 +79,3 @@ pub(crate) unsafe fn store_reduced_high(dst: *mut Complex32, value: std::arch::x
     use std::arch::x86_64::_mm_movehl_ps;
     store_reduced_low(dst, _mm_movehl_ps(value, value));
 }
-
-#[cfg(target_arch = "x86_64")]
-#[target_feature(enable = "avx,fma")]
-pub(crate) unsafe fn avx_rotate_quarter_turn_reduced(
-    value: std::arch::x86_64::__m256,
-    sign_mask: std::arch::x86_64::__m256,
-) -> std::arch::x86_64::__m256 {
-    use std::arch::x86_64::{_mm256_permute_ps, _mm256_xor_ps};
-
-    _mm256_xor_ps(_mm256_permute_ps::<0b1011_0001>(value), sign_mask)
-}

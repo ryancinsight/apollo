@@ -3,8 +3,8 @@ use eunomia::Complex32;
 use std::arch::x86_64::{
     __m512, _mm512_add_ps, _mm512_castpd_ps, _mm512_castps_pd, _mm512_fmaddsub_ps, _mm512_loadu_ps,
     _mm512_movehdup_ps, _mm512_moveldup_ps, _mm512_mul_ps, _mm512_permute_ps,
-    _mm512_permutex2var_pd, _mm512_set1_ps, _mm512_set_epi64, _mm512_set_ps, _mm512_shuffle_f64x2,
-    _mm512_storeu_ps, _mm512_sub_ps, _mm512_xor_ps,
+    _mm512_permutex2var_pd, _mm512_set_epi64, _mm512_shuffle_f64x2, _mm512_storeu_ps,
+    _mm512_sub_ps,
 };
 
 #[derive(Copy, Clone)]
@@ -14,38 +14,6 @@ impl StockhamAvxBackend for Avx512BackendReduced {
     type Real = f32;
     type Complex = Complex32;
     type Vector = __m512;
-
-    const COMPLEX_PER_VECTOR: usize = 8;
-
-    #[inline]
-    unsafe fn unpack_complex(c: Complex32) -> (f32, f32) {
-        (c.re, c.im)
-    }
-
-    #[inline]
-    unsafe fn set1_real(val: f32) -> __m512 {
-        _mm512_set1_ps(val)
-    }
-
-    #[inline]
-    unsafe fn loadu_complex(ptr: *const Complex32) -> __m512 {
-        _mm512_loadu_ps(ptr.cast::<f32>())
-    }
-
-    #[inline]
-    unsafe fn storeu_complex(ptr: *mut Complex32, val: __m512) {
-        _mm512_storeu_ps(ptr.cast::<f32>(), val)
-    }
-
-    #[inline]
-    unsafe fn add(a: __m512, b: __m512) -> __m512 {
-        _mm512_add_ps(a, b)
-    }
-
-    #[inline]
-    unsafe fn sub(a: __m512, b: __m512) -> __m512 {
-        _mm512_sub_ps(a, b)
-    }
 
     #[inline]
     unsafe fn mul(a: __m512, b: __m512) -> __m512 {
@@ -60,23 +28,6 @@ impl StockhamAvxBackend for Avx512BackendReduced {
     #[inline]
     unsafe fn permute_complex_swap(a: __m512) -> __m512 {
         _mm512_permute_ps(a, 0b1011_0001)
-    }
-
-    #[inline]
-    unsafe fn rotate_quarter_turn(v: __m512, sign: f32) -> __m512 {
-        let swapped = _mm512_permute_ps(v, 0b1011_0001);
-        let mask = if sign > 0.0 {
-            _mm512_set_ps(
-                0.0, -0.0, 0.0, -0.0, 0.0, -0.0, 0.0, -0.0, 0.0, -0.0, 0.0, -0.0, 0.0, -0.0, 0.0,
-                -0.0,
-            )
-        } else {
-            _mm512_set_ps(
-                -0.0, 0.0, -0.0, 0.0, -0.0, 0.0, -0.0, 0.0, -0.0, 0.0, -0.0, 0.0, -0.0, 0.0, -0.0,
-                0.0,
-            )
-        };
-        _mm512_xor_ps(swapped, mask)
     }
 
     #[inline]

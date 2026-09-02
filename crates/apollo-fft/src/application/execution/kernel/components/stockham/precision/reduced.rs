@@ -1,13 +1,5 @@
 #[cfg(target_arch = "x86_64")]
-use super::super::avx::{
-    backend::StockhamAvxBackend,
-    generic::triple::{
-        stage_triple_radix1_n1024_avx_fma, stage_triple_radix1_n128_avx_fma,
-        stage_triple_radix1_n256_avx_fma, stage_triple_radix1_n32768_avx_fma,
-        stage_triple_radix1_n32_avx_fma, stage_triple_radix1_n512_avx_fma,
-        stage_triple_radix1_n64_avx_fma,
-    },
-};
+use super::super::avx::backend::StockhamAvxBackend;
 use super::super::butterfly::{
     stage_lanes, stage_pair_impl, stage_pair_lanes, stage_pair_radix_one_lanes, stage_quad_impl,
     stage_triple_impl, stage_triple_lanes, stage_triple_radix_one_lanes,
@@ -280,48 +272,7 @@ impl StockhamPrecision for ReducedStockhamAvxFma {
     ) {
         let n = src.len();
         let groups = n / (radix << 1);
-        if radix == 1 && n == 32 {
-            // Per-LOG2 unroll for md-worst PoT 32 f32 (len32): n32 special no-loop.
-            unsafe {
-                stage_triple_radix1_n32_avx_fma::<f32>(src, dst, second_twiddles, third_twiddles)
-            };
-        } else if radix == 1 && n == 64 {
-            // Per-LOG2 unroll for md-worst PoT 64 f32 (len64 first pass): n64 special no-loop.
-            // Additive to prior n32 + ZST for 64. Targets controlling 1.97x from benchmark_results.
-            unsafe {
-                stage_triple_radix1_n64_avx_fma::<f32>(src, dst, second_twiddles, third_twiddles)
-            };
-        } else if radix == 1 && n == 128 {
-            // Per-LOG2 unroll for PoT 128 f32 (len128 first pass, current md 1.27x): n128 special no-loop.
-            // Additive to n64 + ZST LOG2=7.
-            unsafe {
-                stage_triple_radix1_n128_avx_fma::<f32>(src, dst, second_twiddles, third_twiddles)
-            };
-        } else if radix == 1 && n == 256 {
-            // Per-LOG2 unroll for n=256 radix1 (len256 first pass + p=256 f32 pads for n113 etc): n256 special.
-            // Targets 256/512/32768 PoT in md (f32 256 1.137x, 32768 2.64x; 32/64 benefit). Additive to 128 + ZST.
-            unsafe {
-                stage_triple_radix1_n256_avx_fma::<f32>(src, dst, second_twiddles, third_twiddles)
-            };
-        } else if radix == 1 && n == 512 {
-            // Per-LOG2 unroll for n=512 radix1 (len512 first pass + p=512 f32 pads for n113/257 etc): n512 special.
-            // Targets 512 f32 (now 0.733x) / f64 1.241x / 32768 PoT in md. Additive to n256 + ZST LOG2=9.
-            unsafe {
-                stage_triple_radix1_n512_avx_fma::<f32>(src, dst, second_twiddles, third_twiddles)
-            };
-        // n = 1024 deliberately has no specialization here. One existed and
-        // was removed: measured against the generic arm below, best of 200
-        // blocks of 200 transforms, it cost 7697 ns against 590 ns — 13x, in
-        // the direction the specialization was meant to improve. Its note
-        // targeted f64 at 32768 and the Bluestein pads, so the four-byte
-        // scalar at this length was never the case it was measured on.
-        } else if radix == 1 && n == 32768 {
-            // 4x unrolled k loop for n=32768 radix1 first pass (len32768, md f64 2.75x).
-            // Additive to n1024. 4 do_one/iter for higher ILP. Uniform step (avx f32 step=4 + avx512).
-            unsafe {
-                stage_triple_radix1_n32768_avx_fma::<f32>(src, dst, second_twiddles, third_twiddles)
-            };
-        } else if radix == 1 && groups >= 8 && n >= 32 {
+        if radix == 1 && groups >= 8 && n >= 32 {
             if !stage_triple_radix_one_lanes::<f32, 8>(src, dst, second_twiddles, third_twiddles) {
                 stage_triple_impl::<_, 1024>(
                     src,
@@ -514,32 +465,7 @@ impl StockhamPrecision for ReducedStockhamAvx512 {
     ) {
         let n = src.len();
         let groups = n / (radix << 1);
-        if radix == 1 && n == 32 {
-            unsafe {
-                stage_triple_radix1_n32_avx_fma::<crate::application::execution::kernel::components::stockham::avx::reduced::avx512_backend::Avx512BackendReduced>(src, dst, second_twiddles, third_twiddles)
-            };
-        } else if radix == 1 && n == 64 {
-            unsafe {
-                stage_triple_radix1_n64_avx_fma::<crate::application::execution::kernel::components::stockham::avx::reduced::avx512_backend::Avx512BackendReduced>(src, dst, second_twiddles, third_twiddles)
-            };
-        } else if radix == 1 && n == 128 {
-            unsafe {
-                stage_triple_radix1_n128_avx_fma::<crate::application::execution::kernel::components::stockham::avx::reduced::avx512_backend::Avx512BackendReduced>(src, dst, second_twiddles, third_twiddles)
-            };
-        } else if radix == 1 && n == 512 {
-            unsafe {
-                stage_triple_radix1_n512_avx_fma::<crate::application::execution::kernel::components::stockham::avx::reduced::avx512_backend::Avx512BackendReduced>(src, dst, second_twiddles, third_twiddles)
-            };
-        } else if radix == 1 && n == 1024 {
-            unsafe {
-                stage_triple_radix1_n1024_avx_fma::<crate::application::execution::kernel::components::stockham::avx::reduced::avx512_backend::Avx512BackendReduced>(src, dst, second_twiddles, third_twiddles)
-            };
-        } else if radix == 1 && n == 32768 {
-            // 4x (upgraded); wired for reduced avx512 backend (f32 step may be 16).
-            unsafe {
-                stage_triple_radix1_n32768_avx_fma::<crate::application::execution::kernel::components::stockham::avx::reduced::avx512_backend::Avx512BackendReduced>(src, dst, second_twiddles, third_twiddles)
-            };
-        } else if radix == 1 && groups >= 32 {
+        if radix == 1 && groups >= 32 {
             if !stage_triple_radix_one_lanes::<f32, 16>(src, dst, second_twiddles, third_twiddles) {
                 <ReducedStockhamAvxFma as StockhamPrecision>::stage_triple(
                     src,

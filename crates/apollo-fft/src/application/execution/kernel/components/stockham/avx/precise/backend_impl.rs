@@ -7,38 +7,6 @@ impl StockhamAvxBackend for f64 {
     type Complex = Complex64;
     type Vector = __m256d;
 
-    const COMPLEX_PER_VECTOR: usize = 2;
-
-    #[inline]
-    unsafe fn unpack_complex(c: Complex64) -> (f64, f64) {
-        (c.re, c.im)
-    }
-
-    #[inline]
-    unsafe fn set1_real(val: f64) -> __m256d {
-        unsafe { std::arch::x86_64::_mm256_set1_pd(val) }
-    }
-
-    #[inline]
-    unsafe fn loadu_complex(ptr: *const Complex64) -> __m256d {
-        unsafe { std::arch::x86_64::_mm256_loadu_pd(ptr.cast::<f64>()) }
-    }
-
-    #[inline]
-    unsafe fn storeu_complex(ptr: *mut Complex64, val: __m256d) {
-        unsafe { std::arch::x86_64::_mm256_storeu_pd(ptr.cast::<f64>(), val) }
-    }
-
-    #[inline]
-    unsafe fn add(a: __m256d, b: __m256d) -> __m256d {
-        unsafe { std::arch::x86_64::_mm256_add_pd(a, b) }
-    }
-
-    #[inline]
-    unsafe fn sub(a: __m256d, b: __m256d) -> __m256d {
-        unsafe { std::arch::x86_64::_mm256_sub_pd(a, b) }
-    }
-
     #[inline]
     unsafe fn mul(a: __m256d, b: __m256d) -> __m256d {
         unsafe { std::arch::x86_64::_mm256_mul_pd(a, b) }
@@ -52,18 +20,6 @@ impl StockhamAvxBackend for f64 {
     #[inline]
     unsafe fn permute_complex_swap(a: __m256d) -> __m256d {
         unsafe { std::arch::x86_64::_mm256_permute_pd::<0b0101>(a) }
-    }
-
-    #[inline]
-    unsafe fn rotate_quarter_turn(v: __m256d, sign: f64) -> __m256d {
-        let mask = unsafe {
-            if sign > 0.0 {
-                std::arch::x86_64::_mm256_set_pd(0.0, -0.0, 0.0, -0.0)
-            } else {
-                std::arch::x86_64::_mm256_set_pd(-0.0, 0.0, -0.0, 0.0)
-            }
-        };
-        unsafe { super::fixed::avx_rotate_quarter_turn(v, mask) }
     }
 
     #[inline]
