@@ -287,7 +287,7 @@ fn transform_impl<const LOG2: u32, P: StockhamPrecision>(
 /// |  4   | triple    |    512 | 10-12          | data                 |
 /// |  5   | triple    |   4096 | 13-15          | scratch              |
 ///
-/// Pass 1 (radix1 triple, stride=1) uses 4x-unrolled AVX stage (ILP for largest groups; see stage_triple_radix1_n32768).
+/// Pass 1 (radix1 triple, stride=1) runs the radix-one triple lane kernel.
 /// The all-triple schedule is faster than the shorter quad-heavy schedule on
 /// the current AVX backend despite requiring a terminal full-buffer copy.
 /// (Future mem-eff: even-pass schedule to land final write in data, eliding copy.)

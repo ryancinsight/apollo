@@ -1,32 +1,6 @@
-//! Scalar Stockham butterfly stage primitives and L1 residency thresholds.
+//! Scalar Stockham butterfly stage primitives.
 
 #![allow(clippy::many_single_char_names)]
-
-#[cfg(target_arch = "x86_64")]
-use eunomia::{Complex32, Complex64};
-
-#[cfg(target_arch = "x86_64")]
-const STOCKHAM_PRECISE_L1_RESIDENT_BYTES: usize = 32 * 1024;
-
-#[cfg(target_arch = "x86_64")]
-#[inline]
-pub(crate) fn stockham_precise_stage_is_l1_resident(n: usize) -> bool {
-    n <= STOCKHAM_PRECISE_L1_RESIDENT_BYTES / (core::mem::size_of::<Complex64>() * 2)
-}
-
-/// L1 residency threshold for f32 triple-stage dispatch.
-///
-/// A three-stage Stockham pass reads src[0..n] and writes dst[0..n]. Both
-/// buffers must fit in L1 to exploit the low-live codelet; 32 KiB gives 2048
-/// `Complex32` elements across the two buffers.
-#[cfg(target_arch = "x86_64")]
-const STOCKHAM_REDUCED_L1_RESIDENT_BYTES: usize = 32 * 1024;
-
-#[cfg(target_arch = "x86_64")]
-#[inline]
-pub(crate) fn stockham_reduced_stage_is_l1_resident(n: usize) -> bool {
-    n <= STOCKHAM_REDUCED_L1_RESIDENT_BYTES / (core::mem::size_of::<Complex32>() * 2)
-}
 
 #[inline]
 pub(crate) fn stage_impl<C, const TILE_SIZE: usize>(

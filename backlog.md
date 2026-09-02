@@ -73,6 +73,22 @@
   cfgs: `stockham/mod.rs` (runtime-backed) and the 3-point Winograd pair
   (a dispatched 3-point kernel measured as a loss). 525/525, ratchet 302.
 
+## ATLAS-APOLLO-MEASUREMENT-SMT-SIBLINGS-2026-09-02 — The pinned instruments do not know a processor's SMT sibling [patch] — todo
+
+- **Outcome:** `kernel::measurement_cores` selects each arm's processor with
+  themis `CpuTopology::smt()` in hand: never processor 0's sibling (the
+  interrupt target's core), and the census prints each processor's core so a
+  reader can see when two arms or a busy peer share one.
+- **Driver:** themis `THEMIS-PLACEMENT-AXES-2026-09-01` axis 1 delivered
+  `CpuSmtView` (`core_of`, `siblings_of`, `one_processor_per_core`) for
+  exactly this consumer; this host (Core Ultra 9 285K) has no SMT, so the
+  change is a guarantee for other hosts rather than a measured delta here.
+- **Acceptance oracle:** on a host reporting SMT, the selected processors'
+  cores contain neither processor 0 nor each other; on a host without SMT or
+  without an SMT report the selection is unchanged. Unit-tested against the
+  queried topology (present-and-absent arms).
+- **Risk / change class:** [patch]; test-only instruments.
+
 ## ✅ ATLAS-APOLLO-SMALL-F32-BASES-2026-09-01 — f32 n = 16 and 32 have no live vector kernel [patch] [perf] — done 2026-09-02
 
 - **Delivered:** f32 `n = 16`/`32` run eight-lane register-resident codelets
@@ -3128,6 +3144,22 @@
   negative result left the ISA fork with. There is now a measured performance
   argument against the largest part of that fork, which the `apollo-fwht` case
   did not have.
+- **Finding 3, another instance (2026-09-02, pinned probe at the Stockham
+  sized routes, PR #276 entry baseline and both A/B rounds):** f32 n = 1024
+  takes 7.7 µs on a performance core against 3.3 µs on an efficiency core,
+  while RustFFT takes 0.58 µs / 1.27 µs — the apollo route is 12–13x behind
+  on the performance core and 2.6x on the efficiency core, and no other
+  probed size inverts the core hierarchy (f32 4096: 4.3 µs P / 7.1 µs E).
+  The route is `forward32_avx_with_scratch` (n = 1024 is in its size list).
+  Reproduced across four runs of two binaries; same class as finding 3 and
+  the sharpest instance so far, so it is the first case to profile.
+  **Resolved 2026-09-02 by PR #276's triple slice:** the stage was the
+  radix-one triple first pass on the generic intrinsic body; on the hermes
+  lane kernel it takes 0.79 µs (performance) / 1.56 µs (efficiency) against
+  RustFFT's 0.58 / 1.27 µs, and no other probed size moved. The mechanism
+  behind finding 3 is therefore in the intrinsic bodies themselves (ADR 0045
+  retires them family by family), not in the route structure.
+
 
 ## ATLAS-APOLLO-POT-THROUGHPUT-2026-08-25 — Profile the power-of-two f64 path [patch] — done 2026-08-25
 
@@ -3171,7 +3203,7 @@
   `ATLAS-APOLLO-POT-PLANAR-2026-08-25` and
   `ATLAS-APOLLO-AVX-STOCKHAM-AUDIT-2026-08-25`.
 
-## ATLAS-APOLLO-ISA-FORK-2026-08-25 — Retire the per-ISA fork onto the Hermes seam [arch] — todo (unblocked 2026-09-01)
+## ATLAS-APOLLO-ISA-FORK-2026-08-25 — Retire the per-ISA fork onto the Hermes seam [arch] — in-progress (eight slices delivered 2026-09-02; integrator Claude; lease: `stockham/avx/`, `stockham/butterfly/`, `stockham/precision/`)
 
 - **Outcome:** `apollo-fft` stops carrying its own AVX2 and AVX-512 intrinsics
   and reaches lane-parallel CPU work through `hermes-simd`, which is the Atlas
@@ -3190,7 +3222,79 @@
   "AVX+FMA present, proved by the route's runtime check" — which is exactly
   what the token carries for free; those 186 sites are 62% of the SAFETY
   ratchet's remaining 302.
-- **First slice (ready):** the generic pair stage — `stockham/avx/generic/
+- **First slice delivered 2026-09-02** (PR #276, ADR [0045](docs/adr/0045-per-isa-fork-onto-hermes-lanes.md)):
+  `stockham/avx/generic/pair.rs` (57 uncommented unsafe sites) is now one
+  `LaneKernel` in `stockham/butterfly/pair_lanes.rs`; the four AVX2/AVX-512
+  dispatch sites request their route's width (4/8 f64, 8/16 f32) and fall
+  back to `stage_pair_impl`. SAFETY ratchet 302 → 237. Interleaved pinned
+  probe, two rounds, matched binaries, RustFFT as same-run control: every
+  efficiency-core cell within 0.3%, performance-core f32 within the same
+  binary's 5.7% round-to-round spread, f64 1024/4096 −2.8%/−4.5%. Verdict
+  neutral-to-better; table in the ADR. Rounding is bit-identical to the
+  retired copy (same dup/swap/`fmaddsub` operand order), pinned by a
+  14·ε·4 differential bound against the scalar recurrence.
+- **Second slice delivered 2026-09-02 (same PR):** `avx/generic/base.rs` →
+  `butterfly/lanes/base.rs`; lane kernels consolidated under
+  `butterfly/lanes/` with one differential harness; four dead backend-trait
+  helpers deleted. Ratchet 237 → 220. Same interleaved gate: efficiency-core
+  cells within 1.2%, performance-core cells inside the same binary's spread
+  except 4096 at −5.8/−5.9% (f64/f32); base routes 256/512 as controls moved
+  ≤ 1.7%. Table in the ADR.
+- **Third slice delivered 2026-09-02 (same PR):** the generic triple stage
+  (both twins and the radix-one form) → `butterfly/lanes/triple.rs`; the L1
+  residency predicates deleted with the twins. Ratchet 220 → 208. Same
+  gate: every cell inside the instrument's spread except **f32 n = 1024:
+  7.7 µs → 0.79 µs (performance core), 3.3 µs → 1.56 µs (efficiency core)**
+  — the radix-one triple first pass that `reduced.rs` routed to the generic
+  intrinsic body, which carried ADR 0042's finding-3 pathology. Table in the
+  ADR.
+- **Fourth slice delivered 2026-09-02 (same PR):** the seven sized radix-one
+  unrolls (2,996 lines) and their twelve arms deleted; `avx/generic/` gone;
+  `StockhamAvxBackend` reduced to its groups-one/-two specialisations.
+  Ratchet 208 → 168. Same gate over 8..32768: neutral — the one cell outside
+  the spread (performance f64 n = 32, +41%) moved with its same-run RustFFT
+  control (+44%), an instrument artefact at 20 ns scale. Table in the ADR.
+- **Fifth slice delivered 2026-09-02 (same PR):** the fixed 32/64-point f64
+  leaves (748 lines of intrinsics) → `lanes/fixed_precise.rs` codelets on the
+  shared `register_butterfly` bodies, tested against a naive DFT. Gate:
+  efficiency-core f64 n = 32 **+2.3% (0.4 ns beyond spread)**, 64/1024/4096
+  neutral; performance-core cells at this scale spread 7–63% between rounds
+  of the same binary. Accepted with the number recorded (ADR). Ratchet
+  unchanged at 168 (commented blocks).
+- **Sixth slice delivered 2026-09-02 (same PR):** the f32 64-point leaf →
+  `lanes/fixed_reduced.rs` (`Dft64Reduced`, 4×4 in-register transpose).
+  Gate: flat on the efficiency core at every size (f32 n = 64: 0.999);
+  the fifth slice's +2.3% at f64 n = 32 re-read as 0.986 against an
+  unchanged f64 leaf, so it was binary layout. Table in the ADR.
+- **Seventh slice delivered 2026-09-02 (same PR):** the groups-one stage →
+  `lanes/groups_one.rs`; trait method, four impls, and `base.rs` twins
+  deleted. Ratchet 168 → 162. Gate: efficiency core flat except **f32
+  n = 1024 +2.5% (40 ns)** — hermes' AVX2 `deinterleave_pairs` is a
+  cross-lane permute where the retired body used SSE unpacks; accepted,
+  filed upstream as hermes `HS-DEINTERLEAVE-PAIRS-AVX2-F32-2026-09-02`
+  (ADR table).
+- **Eighth slice delivered 2026-09-02 (same PR; gate: every efficiency-core
+  cell within 1.7%, neutral):** the `groups == 2` pair and
+  `groups == 4` triple stages → `PairStageGroupsTwo` /
+  `TripleStageQuarterGroupsOne` (stride-4/-8 deinterleave of adjacent
+  inputs); AVX2 specialisations and impls deleted; ratchet 162 → 154.
+  Non-goal reaffirmed: routing stays with ADR 0042.
+- **Ninth slice delivered 2026-09-02 (same PR; gate: f32 n = 1024 +4.4%,
+  every other efficiency-core cell within 1.3%, f64 neutral throughout):** the
+  two-digit stages — f64 `groups == 8` triple and the f32 `groups == 4`
+  pair / `groups == 8` triple — on hermes' new `Vector::interleave_halves`
+  (hermes #138, the 128-bit half interleave this slice was waiting on) as
+  `PairStageQuarterGroupsTwo` / `TripleStageGroupsEight`; three intrinsic
+  files (370 lines), both `StockhamAvxBackend` methods and their AVX2
+  impls deleted; ratchet 154 → 148. Twiddle registers build from splats
+  plus one half interleave, never a stack buffer, and the builder is
+  `#[inline(always)]` so it stays inside the dispatcher's target-feature
+  scope. Two falsified hypotheses are recorded in the ADR (a stack buffer,
+  +6%; an out-of-line helper, +148%); the real cost was hermes'
+  `ComplexReg::splat`, fixed upstream as `HS-SPLAT-PAIR` (hermes #139). **Remaining
+  intrinsic families:** `quad.rs` (both precisions, `groups == 8`) and the
+  AVX-512 pair impl.
+- **First slice (as planned):** the generic pair stage — `stockham/avx/generic/
   pair.rs` (57 sites) behind `StockhamAvxBackend::stage_pair_groups_two` —
   re-expressed as one `LaneKernel` over `ComplexReg` (`butterfly`,
   `mul`, `swap_pairs`/`blend`) replacing the per-ISA backend trait calls,

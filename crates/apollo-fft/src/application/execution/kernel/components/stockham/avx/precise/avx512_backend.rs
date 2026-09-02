@@ -2,8 +2,7 @@ use super::super::backend::StockhamAvxBackend;
 use eunomia::Complex64;
 use std::arch::x86_64::{
     __m512d, _mm512_add_pd, _mm512_fmaddsub_pd, _mm512_loadu_pd, _mm512_mul_pd, _mm512_permute_pd,
-    _mm512_set1_pd, _mm512_set_pd, _mm512_shuffle_f64x2, _mm512_storeu_pd, _mm512_sub_pd,
-    _mm512_xor_pd,
+    _mm512_shuffle_f64x2, _mm512_storeu_pd, _mm512_sub_pd,
 };
 
 #[derive(Copy, Clone)]
@@ -13,58 +12,6 @@ impl StockhamAvxBackend for Avx512BackendPrecise {
     type Real = f64;
     type Complex = Complex64;
     type Vector = __m512d;
-
-    const COMPLEX_PER_VECTOR: usize = 4;
-
-    #[inline]
-    unsafe fn unpack_complex(c: Complex64) -> (f64, f64) {
-        (c.re, c.im)
-    }
-
-    #[inline]
-    unsafe fn complex_mul(a: Complex64, b: Complex64) -> Complex64 {
-        a * b
-    }
-
-    #[inline]
-    unsafe fn complex_add(a: Complex64, b: Complex64) -> Complex64 {
-        a + b
-    }
-
-    #[inline]
-    unsafe fn complex_sub(a: Complex64, b: Complex64) -> Complex64 {
-        a - b
-    }
-
-    #[inline]
-    unsafe fn set1_real(val: f64) -> __m512d {
-        _mm512_set1_pd(val)
-    }
-
-    #[inline]
-    unsafe fn set1_imag(val: f64) -> __m512d {
-        _mm512_set1_pd(val)
-    }
-
-    #[inline]
-    unsafe fn loadu_complex(ptr: *const Complex64) -> __m512d {
-        _mm512_loadu_pd(ptr.cast::<f64>())
-    }
-
-    #[inline]
-    unsafe fn storeu_complex(ptr: *mut Complex64, val: __m512d) {
-        _mm512_storeu_pd(ptr.cast::<f64>(), val)
-    }
-
-    #[inline]
-    unsafe fn add(a: __m512d, b: __m512d) -> __m512d {
-        _mm512_add_pd(a, b)
-    }
-
-    #[inline]
-    unsafe fn sub(a: __m512d, b: __m512d) -> __m512d {
-        _mm512_sub_pd(a, b)
-    }
 
     #[inline]
     unsafe fn mul(a: __m512d, b: __m512d) -> __m512d {
@@ -79,61 +26,6 @@ impl StockhamAvxBackend for Avx512BackendPrecise {
     #[inline]
     unsafe fn permute_complex_swap(a: __m512d) -> __m512d {
         _mm512_permute_pd(a, 0x55)
-    }
-
-    #[inline]
-    unsafe fn rotate_quarter_turn(v: __m512d, sign: f64) -> __m512d {
-        let swapped = _mm512_permute_pd(v, 0x55);
-        let mask = if sign > 0.0 {
-            _mm512_set_pd(0.0, -0.0, 0.0, -0.0, 0.0, -0.0, 0.0, -0.0)
-        } else {
-            _mm512_set_pd(-0.0, 0.0, -0.0, 0.0, -0.0, 0.0, -0.0, 0.0)
-        };
-        _mm512_xor_pd(swapped, mask)
-    }
-
-    #[inline]
-    unsafe fn stage_groups_one(
-        src: &[Complex64],
-        dst: &mut [Complex64],
-        radix: usize,
-        twiddles: &[Complex64],
-    ) {
-        let half_n = radix;
-        let vector_end = radix & !3usize;
-        let src_ptr = src.as_ptr();
-        let dst_ptr = dst.as_mut_ptr();
-        let twiddle_ptr = twiddles.as_ptr();
-
-        let mut j = 0usize;
-        while j < vector_end {
-            let d01 = _mm512_loadu_pd(src_ptr.add(j << 1).cast::<f64>());
-            let d23 = _mm512_loadu_pd(src_ptr.add((j << 1) + 4).cast::<f64>());
-
-            let a = _mm512_shuffle_f64x2::<0x88>(d01, d23);
-            let b = _mm512_shuffle_f64x2::<0xdd>(d01, d23);
-
-            let w = _mm512_loadu_pd(twiddle_ptr.add(j).cast::<f64>());
-            let wr = _mm512_permute_pd::<0x00>(w);
-            let wi = _mm512_permute_pd::<0xFF>(w);
-
-            let product = Self::cmul(wr, wi, b);
-
-            let s = _mm512_add_pd(a, product);
-            let t = _mm512_sub_pd(a, product);
-
-            _mm512_storeu_pd(dst_ptr.add(j).cast::<f64>(), s);
-            _mm512_storeu_pd(dst_ptr.add(half_n + j).cast::<f64>(), t);
-
-            j += 4;
-        }
-        while j < radix {
-            let a = src[j << 1];
-            let b = src[(j << 1) + 1] * twiddles[j];
-            dst[j] = a + b;
-            dst[half_n + j] = a - b;
-            j += 1;
-        }
     }
 
     #[inline]
@@ -221,28 +113,6 @@ impl StockhamAvxBackend for Avx512BackendPrecise {
             dst[j + half_n + quarter_n] = b0 - c1;
             j += 1;
         }
-    }
-
-    #[inline]
-    unsafe fn stage_triple_quarter_groups_one(
-        src: &[Complex64],
-        dst: &mut [Complex64],
-        radix: usize,
-        first_twiddles: &[Complex64],
-        second_twiddles: &[Complex64],
-        third_twiddles: &[Complex64],
-    ) {
-        crate::application::execution::kernel::components::stockham::butterfly::stage_triple_impl::<
-            _,
-            512,
-        >(
-            src,
-            dst,
-            radix,
-            first_twiddles,
-            second_twiddles,
-            third_twiddles,
-        );
     }
 
     #[inline]

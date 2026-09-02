@@ -13,7 +13,7 @@ use super::precision::{PreciseStockham, ReducedStockham, StockhamPrecision};
 use super::precision::{PreciseStockhamAvxFma, ReducedStockhamAvxFma};
 use super::*;
 #[cfg(target_arch = "x86_64")]
-use crate::application::execution::kernel::components::stockham::avx::precise::triple_2::stage_triple_groups_eight_precise_avx_fma;
+use crate::application::execution::kernel::components::stockham::butterfly::stage_triple_groups_eight_lanes;
 use eunomia::{Complex32, Complex64};
 
 #[cfg(target_arch = "x86_64")]
@@ -161,7 +161,7 @@ fn precise_triple_avx_routes_groups_eight_to_dedicated_late_leaf() {
         .expect("PreciseStockhamAvxFma implementation must be present");
 
     assert!(body.contains("groups == 8"));
-    assert!(body.contains("stage_triple_groups_eight_precise_avx_fma("));
+    assert!(body.contains("stage_triple_groups_eight_lanes::<f64, 4>("));
     assert!(!body.contains("bit_reverse"));
     assert!(!body.contains("reverse_bits"));
 }
@@ -188,9 +188,14 @@ fn precise_avx_groups_eight_triple_stage_matches_scalar_reference() {
     let mut actual = expected.clone();
 
     stage_triple_impl::<_, 512>(&input, &mut expected, radix, first, second, third);
-    unsafe {
-        stage_triple_groups_eight_precise_avx_fma(&input, &mut actual, radix, first, second, third)
-    };
+    assert!(stage_triple_groups_eight_lanes::<f64, 4>(
+        &input,
+        &mut actual,
+        radix,
+        first,
+        second,
+        third
+    ));
 
     let err = actual
         .iter()

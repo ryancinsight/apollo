@@ -3,8 +3,8 @@ use eunomia::Complex32;
 use std::arch::x86_64::{
     __m512, _mm512_add_ps, _mm512_castpd_ps, _mm512_castps_pd, _mm512_fmaddsub_ps, _mm512_loadu_ps,
     _mm512_movehdup_ps, _mm512_moveldup_ps, _mm512_mul_ps, _mm512_permute_ps,
-    _mm512_permutex2var_pd, _mm512_set1_ps, _mm512_set_epi64, _mm512_set_ps, _mm512_shuffle_f64x2,
-    _mm512_storeu_ps, _mm512_sub_ps, _mm512_xor_ps,
+    _mm512_permutex2var_pd, _mm512_set_epi64, _mm512_shuffle_f64x2, _mm512_storeu_ps,
+    _mm512_sub_ps,
 };
 
 #[derive(Copy, Clone)]
@@ -14,58 +14,6 @@ impl StockhamAvxBackend for Avx512BackendReduced {
     type Real = f32;
     type Complex = Complex32;
     type Vector = __m512;
-
-    const COMPLEX_PER_VECTOR: usize = 8;
-
-    #[inline]
-    unsafe fn unpack_complex(c: Complex32) -> (f32, f32) {
-        (c.re, c.im)
-    }
-
-    #[inline]
-    unsafe fn complex_mul(a: Complex32, b: Complex32) -> Complex32 {
-        a * b
-    }
-
-    #[inline]
-    unsafe fn complex_add(a: Complex32, b: Complex32) -> Complex32 {
-        a + b
-    }
-
-    #[inline]
-    unsafe fn complex_sub(a: Complex32, b: Complex32) -> Complex32 {
-        a - b
-    }
-
-    #[inline]
-    unsafe fn set1_real(val: f32) -> __m512 {
-        _mm512_set1_ps(val)
-    }
-
-    #[inline]
-    unsafe fn set1_imag(val: f32) -> __m512 {
-        _mm512_set1_ps(val)
-    }
-
-    #[inline]
-    unsafe fn loadu_complex(ptr: *const Complex32) -> __m512 {
-        _mm512_loadu_ps(ptr.cast::<f32>())
-    }
-
-    #[inline]
-    unsafe fn storeu_complex(ptr: *mut Complex32, val: __m512) {
-        _mm512_storeu_ps(ptr.cast::<f32>(), val)
-    }
-
-    #[inline]
-    unsafe fn add(a: __m512, b: __m512) -> __m512 {
-        _mm512_add_ps(a, b)
-    }
-
-    #[inline]
-    unsafe fn sub(a: __m512, b: __m512) -> __m512 {
-        _mm512_sub_ps(a, b)
-    }
 
     #[inline]
     unsafe fn mul(a: __m512, b: __m512) -> __m512 {
@@ -80,70 +28,6 @@ impl StockhamAvxBackend for Avx512BackendReduced {
     #[inline]
     unsafe fn permute_complex_swap(a: __m512) -> __m512 {
         _mm512_permute_ps(a, 0b1011_0001)
-    }
-
-    #[inline]
-    unsafe fn rotate_quarter_turn(v: __m512, sign: f32) -> __m512 {
-        let swapped = _mm512_permute_ps(v, 0b1011_0001);
-        let mask = if sign > 0.0 {
-            _mm512_set_ps(
-                0.0, -0.0, 0.0, -0.0, 0.0, -0.0, 0.0, -0.0, 0.0, -0.0, 0.0, -0.0, 0.0, -0.0, 0.0,
-                -0.0,
-            )
-        } else {
-            _mm512_set_ps(
-                -0.0, 0.0, -0.0, 0.0, -0.0, 0.0, -0.0, 0.0, -0.0, 0.0, -0.0, 0.0, -0.0, 0.0, -0.0,
-                0.0,
-            )
-        };
-        _mm512_xor_ps(swapped, mask)
-    }
-
-    #[inline]
-    unsafe fn stage_groups_one(
-        src: &[Complex32],
-        dst: &mut [Complex32],
-        radix: usize,
-        twiddles: &[Complex32],
-    ) {
-        let half_n = radix;
-        let vector_end = radix & !7usize;
-        let src_ptr = src.as_ptr();
-        let dst_ptr = dst.as_mut_ptr();
-        let twiddle_ptr = twiddles.as_ptr();
-
-        let idx_a = _mm512_set_epi64(14, 12, 10, 8, 6, 4, 2, 0);
-        let idx_b = _mm512_set_epi64(15, 13, 11, 9, 7, 5, 3, 1);
-
-        let mut j = 0usize;
-        while j < vector_end {
-            let d0 = _mm512_castps_pd(_mm512_loadu_ps(src_ptr.add(j << 1).cast::<f32>()));
-            let d1 = _mm512_castps_pd(_mm512_loadu_ps(src_ptr.add((j << 1) + 8).cast::<f32>()));
-
-            let a = _mm512_castpd_ps(_mm512_permutex2var_pd(d0, idx_a, d1));
-            let b = _mm512_castpd_ps(_mm512_permutex2var_pd(d0, idx_b, d1));
-
-            let w = _mm512_loadu_ps(twiddle_ptr.add(j).cast::<f32>());
-            let wr = _mm512_moveldup_ps(w);
-            let wi = _mm512_movehdup_ps(w);
-
-            let product = Self::cmul(wr, wi, b);
-
-            let s = _mm512_add_ps(a, product);
-            let t = _mm512_sub_ps(a, product);
-
-            _mm512_storeu_ps(dst_ptr.add(j).cast::<f32>(), s);
-            _mm512_storeu_ps(dst_ptr.add(half_n + j).cast::<f32>(), t);
-
-            j += 8;
-        }
-        while j < radix {
-            let a = src[j << 1];
-            let b = src[(j << 1) + 1] * twiddles[j];
-            dst[j] = a + b;
-            dst[half_n + j] = a - b;
-            j += 1;
-        }
     }
 
     #[inline]
@@ -234,28 +118,6 @@ impl StockhamAvxBackend for Avx512BackendReduced {
             dst[j + half_n + quarter_n] = b0 - c1;
             j += 1;
         }
-    }
-
-    #[inline]
-    unsafe fn stage_triple_quarter_groups_one(
-        src: &[Complex32],
-        dst: &mut [Complex32],
-        radix: usize,
-        first_twiddles: &[Complex32],
-        second_twiddles: &[Complex32],
-        third_twiddles: &[Complex32],
-    ) {
-        crate::application::execution::kernel::components::stockham::butterfly::stage_triple_impl::<
-            _,
-            1024,
-        >(
-            src,
-            dst,
-            radix,
-            first_twiddles,
-            second_twiddles,
-            third_twiddles,
-        );
     }
 
     #[inline]

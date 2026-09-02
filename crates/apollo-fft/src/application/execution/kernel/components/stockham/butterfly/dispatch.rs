@@ -1,6 +1,6 @@
-use super::super::avx::{fixed_len32_precise_avx_fma, fixed_len64_precise_avx_fma};
 use super::super::precision::PreciseStockhamAvxFma;
 use super::super::transform::{transform_len4096_four_triples, transform_sized};
+use super::lanes::{fixed_len32_lanes, fixed_len64_lanes};
 use eunomia::Complex64;
 
 pub(crate) unsafe fn forward64_avx_with_scratch(
@@ -14,12 +14,14 @@ pub(crate) unsafe fn forward64_avx_with_scratch(
     // the same AVX FMA backend (future: add fixed_len128/256 column kernels).
     match data.len() {
         32 => {
-            fixed_len32_precise_avx_fma(data, scratch, twiddles);
-            return;
+            if fixed_len32_lanes(data, twiddles) {
+                return;
+            }
         }
         64 => {
-            fixed_len64_precise_avx_fma(data, scratch, twiddles);
-            return;
+            if fixed_len64_lanes(data, twiddles) {
+                return;
+            }
         }
         128 | 256 | 512 => {
             // Route explicitly for documentation and to enable future
@@ -50,12 +52,14 @@ pub(crate) unsafe fn forward64_avx_with_scratch_sized<const LOG2: u32>(
     debug_assert_eq!(data.len(), n);
     match n {
         32 => {
-            fixed_len32_precise_avx_fma(data, scratch, twiddles);
-            return;
+            if fixed_len32_lanes(data, twiddles) {
+                return;
+            }
         }
         64 => {
-            fixed_len64_precise_avx_fma(data, scratch, twiddles);
-            return;
+            if fixed_len64_lanes(data, twiddles) {
+                return;
+            }
         }
         128 | 256 | 512 => {
             // Route explicitly; falls through to sized transform.
