@@ -3131,7 +3131,7 @@
   `ATLAS-APOLLO-POT-PLANAR-2026-08-25` and
   `ATLAS-APOLLO-AVX-STOCKHAM-AUDIT-2026-08-25`.
 
-## ATLAS-APOLLO-ISA-FORK-2026-08-25 — Retire the per-ISA fork onto the Hermes seam [arch] — blocked
+## ATLAS-APOLLO-ISA-FORK-2026-08-25 — Retire the per-ISA fork onto the Hermes seam [arch] — todo (unblocked 2026-09-01)
 
 - **Outcome:** `apollo-fft` stops carrying its own AVX2 and AVX-512 intrinsics
   and reaches lane-parallel CPU work through `hermes-simd`, which is the Atlas
@@ -3141,12 +3141,23 @@
   `unsafe fn` declarations, while using its declared `hermes-simd` dependency in
   one file for one function. PhastFT delivers the same class of transform under
   `#![forbid(unsafe_code)]`, so the surface is not intrinsic to the workload.
-- **Blocker:** upstream. Hermes does not re-export `#[runtime_dispatch]`, so a
-  consumer has no supported route into a `#[target_feature]` scope, and every
-  `BackendKernel<T>` facet method is an `unsafe fn`. `apollo-fwht` already
-  demonstrates the failure mode: a generic Hermes kernel called from a crate
-  with no `#[target_feature]` attribute, which is the baseline-codegen defect
-  Hermes ADR 009 exists to prevent.
+- **Blocker re-verified stale (2026-09-01, Claude `/root`).** The route the
+  blocker said did not exist is the one apollo's own kernels have used since:
+  `hermes_simd::vectorize_lanes` runs a `LaneKernel` body inside hermes'
+  `#[target_feature]` dispatcher frame with a `Simd<T, A>` token proving
+  support, and `base128/`, `batched/`, and the split gather all ship on it.
+  Every `unsafe` in the Stockham AVX backend discharges one obligation —
+  "AVX+FMA present, proved by the route's runtime check" — which is exactly
+  what the token carries for free; those 186 sites are 62% of the SAFETY
+  ratchet's remaining 302.
+- **First slice (ready):** the generic pair stage — `stockham/avx/generic/
+  pair.rs` (57 sites) behind `StockhamAvxBackend::stage_pair_groups_two` —
+  re-expressed as one `LaneKernel` over `ComplexReg` (`butterfly`,
+  `mul`, `swap_pairs`/`blend`) replacing the per-ISA backend trait calls,
+  both scalar widths through the plan's native lane width, measured paired
+  at the sized routes (2..128, 1024, 4096, 32768) against RustFFT with the
+  base routes as controls. Subsequent slices follow the ratchet's density:
+  `precision/{precise,reduced}.rs`, the two `backend_impl.rs`, `transform.rs`.
 - **Re-open trigger:** ~~`HS-FEARLESS-TOKEN-2026-08-25` merges in Hermes~~ —
   fired 2026-08-25 (hermes PRs #63, #64). Replaced by a measurement gate, per
   the FWHT negative result: `apollo-fwht` was migrated onto the entry and
