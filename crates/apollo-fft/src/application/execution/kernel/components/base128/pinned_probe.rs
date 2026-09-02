@@ -183,6 +183,11 @@ fn small_sizes_against_the_references_by_core_type() {
             .get();
         assert_eq!(landed, cpu, "processor binding must remain exact");
         let core = core.label();
+        // Discarded pass: see `half_storage_promotion_cost_by_core_type`.
+        let mut warmup = BenchmarkSuite::new(BenchmarkConfig::regression());
+        small_sizes_for_scalar::<f64>(&mut warmup, core, "f64");
+        small_sizes_for_scalar::<f32>(&mut warmup, core, "f32");
+        drop(warmup);
         let mut suite = BenchmarkSuite::new(BenchmarkConfig::regression());
         small_sizes_for_scalar::<f64>(&mut suite, core, "f64");
         small_sizes_for_scalar::<f32>(&mut suite, core, "f32");
@@ -447,6 +452,15 @@ fn half_storage_promotion_cost_by_core_type() {
             .get();
         assert_eq!(landed, cpu, "processor binding must remain exact");
         let core = core.label();
+        // A freshly linked binary's first execution is not measurable on this
+        // host: the whole first process runs several times slower (n = 64
+        // read 482 ns against 36 on the very next run of the same binary),
+        // which is enough to invent an order-of-magnitude finding. One
+        // discarded pass absorbs it; a second run of the same binary
+        // reproduces these numbers.
+        let mut warmup = BenchmarkSuite::new(BenchmarkConfig::regression());
+        half_storage_against_its_kernel(&mut warmup, core);
+        drop(warmup);
         let mut suite = BenchmarkSuite::new(BenchmarkConfig::regression());
         half_storage_against_its_kernel(&mut suite, core);
         println!("HALF cpu={landed} ({core})");

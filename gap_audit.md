@@ -1,3 +1,79 @@
+## A freshly built probe binary's first run is not measurable (2026-09-02) <a id="first-run-after-build"></a>
+
+**Correction, and a measurement rule for every pinned probe in this
+repository.** On this host the first execution of a freshly linked test
+binary runs several times slower than every subsequent execution of the same
+binary — not only in its first case, but throughout the process. The same
+`dispatch_inplace` f32 call at n = 64 read **482 ns on the run right after
+the build and 36 ns on the very next run**, with no code change between
+them; at n = 512 it was 3901 against 396. Two runs of an unchanged binary
+agree to about 2%, and an arm repeated at the end of the same run reproduces
+the arm at the start exactly, so the distortion is per-process, not
+per-case or positional. The likely mechanism is the on-access scan of a
+newly written executable, which is why nothing inside the measurement
+changes it.
+
+This matters beyond one number: an ABBA comparison that rebuilds between
+arms measures each arm on a fresh binary, so both arms carry the distortion
+— usually similarly, which is why relative deltas survived, but not
+reliably, and an absolute figure taken that way can be an order of magnitude
+wrong. It produced exactly that here: a "storage route is 12-16x slower than
+the plan" finding, recorded and merged, that the warm numbers reduce to
+1.2-2.0x (corrected below).
+
+Both pinned probes now run their whole measured set once into a discarded
+suite before the reported one. A freshly built binary then reports the same
+numbers as a warm one (n = 64 kernel 35.9 ns on a fresh build). For any
+measurement outside these probes the rule stands on its own: **after a
+rebuild, discard the first run**.
+
+## Correction: the storage route's gap to the plan is 1.2-2.0x (2026-09-02) <a id="half-storage-routing-corrected"></a>
+
+Supersedes the table in `#half-storage-small-and-routing`, whose n >= 64 rows
+were taken on freshly built binaries and inflated by
+`#first-run-after-build`. Re-measured with a discarded warm-up pass, both
+core classes, medians in nanoseconds:
+
+| n | storage | `dispatch_inplace` f32 | plan f32 | storage / plan |
+| --- | --- | --- | --- | --- |
+| 8 | 10.2 | 11.5 | 4.0 | 2.65x |
+| 16 | 8.9 | 5.0 | 4.4 | 2.04x |
+| 32 | 15.1 | 11.3 | 11.2 | 1.35x |
+| 64 | 45.1 | 35.9 | 22.7 | 1.99x |
+| 128 | 121.1 | 110.2 | 59.7 | 2.03x |
+| 256 | 234.7 | 225.4 | 157.7 | 1.49x |
+| 512 | 420.7 | 396.4 | 319.2 | 1.32x |
+
+The direction of the original finding holds — the storage route does reach a
+different, slower kernel family than the plan, because a plan carries
+prebuilt register-resident base states and selects the tuned split routes —
+but the size of it does not. At 1.3-2.0x it is an ordinary optimization
+worth its own measurement, not the order-of-magnitude defect the first
+reading suggested, and the case for crossing a layer boundary to fix it is
+correspondingly weaker.
+
+## Correction: the bulk bridge's gain is uniform across sizes (2026-09-02) <a id="half-storage-bulk-bridge-corrected"></a>
+
+Supersedes the table in `#half-storage-bulk-bridge`. Those arms were also
+measured one run after each build; re-measured under the warm protocol, the
+element-wise to bulk comparison is both larger and flatter than recorded —
+the earlier numbers understated the gain at n >= 64, where the inflated
+kernel time diluted the conversion share:
+
+| n | performance core | efficiency core |
+| --- | --- | --- |
+| 8 | 38.8 → **10.2** (−74%) | 38.7 → **10.3** (−73%) |
+| 16 | 59.5 → **8.9** (−85%) | 78.2 → **19.9** (−75%) |
+| 32 | 102.0 → **15.1** (−85%) | 172.1 → **34.4** (−80%) |
+| 64 | 219.0 → **45.1** (−79%) | 362.5 → **81.5** (−78%) |
+| 128 | 477.4 → **121.1** (−75%) | 773.4 → **202.7** (−74%) |
+| 256 | 1017.6 → **234.7** (−77%) | 1540.6 → **412.9** (−73%) |
+| 512 | 2048.1 → **420.7** (−79%) | 3023.4 → **797.2** (−74%) |
+
+A half-storage transform spent roughly three quarters of its time converting
+one lane at a time, at every length. The merged change stands; only its
+recorded magnitude needed correcting.
+
 ## Small half transforms need no pool, and the storage route misses the plan (2026-09-02) <a id="half-storage-small-and-routing"></a>
 
 Two findings from the same probe, after the bulk bridge removed the conversion
