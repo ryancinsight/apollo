@@ -123,8 +123,12 @@ fn bench_size(suite: &mut BenchmarkSuite, config: BenchmarkConfig, len: usize) {
 
     // Plans, working buffers, and reusable scratch are built once; only the
     // copy plus transform is timed. Both engines get the same treatment.
-    let apollo64 = apollo_fft::FftPlan1D::<f64>::new(apollo_fft::Shape1D { n: len });
-    let apollo32 = apollo_fft::FftPlan1D::<f32>::new(apollo_fft::Shape1D { n: len });
+    let apollo64 = apollo_fft::FftPlan1D::<f64>::new(
+        apollo_fft::Shape1D::new(len).expect("invariant: shape lengths are non-zero"),
+    );
+    let apollo32 = apollo_fft::FftPlan1D::<f32>::new(
+        apollo_fft::Shape1D::new(len).expect("invariant: shape lengths are non-zero"),
+    );
     let mut planner64 = FftPlanner::<f64>::new();
     let mut planner32 = FftPlanner::<f32>::new();
     let rust64 = planner64.plan_fft_forward(len);

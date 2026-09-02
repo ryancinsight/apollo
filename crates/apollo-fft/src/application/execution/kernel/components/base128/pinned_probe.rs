@@ -104,7 +104,9 @@ where
             src.iter().map(|v| RustComplex::new(v.re, v.im)).collect();
         let (re_src, im_src): (Vec<T>, Vec<T>) = src.iter().map(|v| (v.re, v.im)).unzip();
 
-        let plan = crate::FftPlan1D::<T>::new(crate::Shape1D { n });
+        let plan = crate::FftPlan1D::<T>::new(
+            crate::Shape1D::new(n).expect("invariant: shape lengths are non-zero"),
+        );
         let rust = rustfft::FftPlanner::<T>::new().plan_fft_forward(n);
         let mut rust_scratch = vec![
             RustComplex::new(T::from_precise(0.0), T::from_precise(0.0));
@@ -332,7 +334,9 @@ fn split_pieces_by_size() {
         let mut out = src.clone();
         let calls = 8000u32;
         let (mut t_gather, mut t_base, mut t_route) = (f64::INFINITY, f64::INFINITY, f64::INFINITY);
-        let production = crate::FftPlan1D::<f64>::new(crate::Shape1D { n });
+        let production = crate::FftPlan1D::<f64>::new(
+            crate::Shape1D::new(n).expect("invariant: shape lengths are non-zero"),
+        );
         for _ in 0..12 {
             let t = std::time::Instant::now();
             for _ in 0..calls {

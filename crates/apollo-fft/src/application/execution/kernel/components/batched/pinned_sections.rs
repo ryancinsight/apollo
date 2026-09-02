@@ -69,7 +69,9 @@ fn measure_precision<F>(
 {
     for n in SIZES {
         let src = source(n);
-        let plan = crate::FftPlan1D::<F>::new(crate::Shape1D { n });
+        let plan = crate::FftPlan1D::<F>::new(
+            crate::Shape1D::new(n).expect("invariant: shape lengths are non-zero"),
+        );
         let mut work = src.clone();
 
         // One untimed call so plan and twiddle caches are warm, then drain

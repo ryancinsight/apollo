@@ -299,7 +299,7 @@ impl PyFftPlan3D {
     fn rfft<'py>(&self, py: Python<'py>, input: PyReadonlyArray3<f64>) -> PyResult<Py<PyAny>> {
         require_contiguous_3d(&input, "rfft input")?;
         let shape = input.shape();
-        if shape != [self.shape.nx, self.shape.ny, self.shape.nz] {
+        if shape != [self.shape.nx(), self.shape.ny(), self.shape.nz()] {
             return Err(PyValueError::new_err(
                 "input shape does not match plan shape",
             ));
@@ -316,7 +316,7 @@ impl PyFftPlan3D {
     ) -> PyResult<Py<PyAny>> {
         require_contiguous_3d(&input, "irfft input")?;
         let shape = input.shape();
-        if shape != [self.shape.nx, self.shape.ny, self.shape.nz] {
+        if shape != [self.shape.nx(), self.shape.ny(), self.shape.nz()] {
             return Err(PyValueError::new_err(
                 "input shape does not match plan shape",
             ));

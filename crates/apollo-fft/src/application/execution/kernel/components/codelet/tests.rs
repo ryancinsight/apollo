@@ -107,8 +107,10 @@ fn matches_the_incumbent_route_when_width_is_supported() {
     }
 
     let mut theirs = src.clone();
-    crate::FftPlan1D::<f64>::new(crate::Shape1D { n: 16 })
-        .forward_complex_slice_inplace(&mut theirs);
+    crate::FftPlan1D::<f64>::new(
+        crate::Shape1D::new(16).expect("invariant: shape lengths are non-zero"),
+    )
+    .forward_complex_slice_inplace(&mut theirs);
 
     let err = worst(&ours, &theirs);
     // Two different evaluation orders, each within the stage bound.

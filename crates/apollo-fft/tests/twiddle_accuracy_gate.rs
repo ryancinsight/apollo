@@ -181,7 +181,8 @@ fn max_deviation(computed: &[Complex64], expected: &[Complex64]) -> f64 {
 fn normalized_error(n: usize) -> f64 {
     let (signal, expected) = impulse_signal(n);
     let mut data = signal.clone();
-    FftPlan1D::<f64>::new(Shape1D { n }).forward_complex_slice_inplace(&mut data);
+    FftPlan1D::<f64>::new(Shape1D::new(n).expect("invariant: shape lengths are non-zero"))
+        .forward_complex_slice_inplace(&mut data);
 
     let stages = (n as f64).log2();
     max_deviation(&data, &expected) / (stages * U * l1_norm(&signal))
@@ -250,7 +251,8 @@ fn normalized_error_2d(nx: usize) -> f64 {
     let mut values = vec![Complex64::new(0.0, 0.0); nx * ny];
     values[ny] = Complex64::new(1.0, 0.0);
     let mut plane = Array2::from_shape_vec((nx, ny), values).expect("shape matches the data");
-    FftPlan2D::<f64>::new(Shape2D { nx, ny }).forward_complex_inplace(&mut plane);
+    FftPlan2D::<f64>::new(Shape2D::new(nx, ny).expect("invariant: shape lengths are non-zero"))
+        .forward_complex_inplace(&mut plane);
     let out = plane
         .as_slice()
         .expect("the transform leaves the plane contiguous");
@@ -413,7 +415,8 @@ fn every_dispatch_path_matches_a_compensated_reference() {
         let signal = dyadic_signal(n);
         let expected = compensated_dft(&signal);
         let mut data = signal.clone();
-        FftPlan1D::<f64>::new(Shape1D { n }).forward_complex_slice_inplace(&mut data);
+        FftPlan1D::<f64>::new(Shape1D::new(n).expect("invariant: shape lengths are non-zero"))
+            .forward_complex_slice_inplace(&mut data);
 
         // A mixed-radix length's stage count is bounded by log2(N); using that
         // rather than the actual radix sequence keeps the bound conservative for

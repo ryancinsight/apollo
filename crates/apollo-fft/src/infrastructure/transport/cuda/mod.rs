@@ -41,7 +41,7 @@ impl FftBackend for CudaBackend {
     }
 
     fn plan_1d(&self, shape: Shape1D) -> ApolloResult<Self::Plan1D> {
-        CudaFft1d::new(self.device.clone(), shape.n)
+        CudaFft1d::new(self.device.clone(), shape.n())
     }
 
     fn plan_2d(&self, _shape: Shape2D) -> ApolloResult<Self::Plan2D> {

@@ -150,7 +150,8 @@ fn static_fft_2d_preserves_logical_view_order() {
 
 #[test]
 fn dynamic_fft_2d_preserves_logical_view_order() {
-    let plan = FftPlan2D::<f64>::new(Shape2D { nx: 3, ny: 4 });
+    let plan =
+        FftPlan2D::<f64>::new(Shape2D::new(3, 4).expect("invariant: shape lengths are non-zero"));
     exercise_nonstandard_layouts(
         "dynamic",
         |view| plan.forward_complex_leto_inplace(view),

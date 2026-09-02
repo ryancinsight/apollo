@@ -251,35 +251,20 @@ fn dynamic_f32_inverse_modes_match_direct() {
 }
 
 #[test]
-fn dynamic_zero_length_plans_preserve_empty_slices() {
-    let plan64 = FftPlan1D::<f64>::new(Shape1D { n: 0 });
-    let expected64 = Vec::<Complex64>::new();
-    let mut forward64 = expected64.clone();
-    plan64.forward_complex_slice_inplace(&mut forward64);
-    assert_eq!(forward64, expected64, "f64 zero-length forward identity");
-    let mut inverse64 = expected64.clone();
-    plan64.inverse_complex_slice_inplace(&mut inverse64);
-    assert_eq!(inverse64, expected64, "f64 zero-length inverse identity");
-    let mut inverse_unnorm64 = expected64.clone();
-    plan64.inverse_complex_slice_unnorm_inplace(&mut inverse_unnorm64);
-    assert_eq!(
-        inverse_unnorm64, expected64,
-        "f64 zero-length unnormalized inverse identity"
+fn zero_length_shapes_are_refused_at_construction() {
+    // A zero-length plan is unrepresentable: `Shape1D` validates at
+    // construction and has no other way in (ADR 0044), so the identity a
+    // zero-length plan used to provide is now a typed refusal naming the axis.
+    let error = Shape1D::new(0).expect_err("a zero length must be refused");
+    let message = error.to_string();
+    assert!(
+        message.contains('n') && message.contains("must be > 0"),
+        "the validation error names the axis and the bound: {message}"
     );
-
-    let plan32 = FftPlan1D::<f32>::new(Shape1D { n: 0 });
-    let expected32 = Vec::<Complex32>::new();
-    let mut forward32 = expected32.clone();
-    plan32.forward_complex_slice_inplace(&mut forward32);
-    assert_eq!(forward32, expected32, "f32 zero-length forward identity");
-    let mut inverse32 = expected32.clone();
-    plan32.inverse_complex_slice_inplace(&mut inverse32);
-    assert_eq!(inverse32, expected32, "f32 zero-length inverse identity");
-    let mut inverse_unnorm32 = expected32.clone();
-    plan32.inverse_complex_slice_unnorm_inplace(&mut inverse_unnorm32);
     assert_eq!(
-        inverse_unnorm32, expected32,
-        "f32 zero-length unnormalized inverse identity"
+        Shape1D::new(1).expect("a unit length is valid").n(),
+        1,
+        "the smallest valid length round-trips through the accessor"
     );
 }
 
