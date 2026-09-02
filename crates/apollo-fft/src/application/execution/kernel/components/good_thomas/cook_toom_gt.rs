@@ -395,9 +395,7 @@ pub(crate) fn dft150_impl<F: ShortWinogradScalar, const INVERSE: bool>(
                     src_idx -= 150;
                 }
             }
-            unsafe {
-                dft25_impl::<F, INVERSE>(&mut row_arr);
-            }
+            dft25_impl::<F, INVERSE>(&mut row_arr);
             let row_start = (i1 * 3 + i2) * 25;
             for i3 in 0..25 {
                 unsafe {

@@ -85,25 +85,23 @@ pub(crate) fn dft_pair_impl<
     };
 
     for m in 0..H {
-        let a = unsafe { *data.get_unchecked(m + 1) };
-        let b = unsafe { *data.get_unchecked(N - 1 - m) };
+        let a = data[m + 1];
+        let b = data[N - 1 - m];
         let sum_re = a.re + b.re;
         let sum_im = a.im + b.im;
         y0_re += sum_re;
         y0_im += sum_im;
-        unsafe {
-            *sums.get_unchecked_mut(m) = eunomia::Complex::new(sum_re, sum_im);
-            let diff_re = a.re - b.re;
-            let diff_im = a.im - b.im;
-            *idiffs.get_unchecked_mut(m) = eunomia::Complex::new(-diff_im * sign, diff_re * sign);
-        }
+        sums[m] = eunomia::Complex::new(sum_re, sum_im);
+        let diff_re = a.re - b.re;
+        let diff_im = a.im - b.im;
+        idiffs[m] = eunomia::Complex::new(-diff_im * sign, diff_re * sign);
     }
 
     data[0] = eunomia::Complex::new(y0_re, y0_im);
 
     for k in 0..H {
-        let cos_row = unsafe { cos.get_unchecked(k) };
-        let sin_row = unsafe { sin.get_unchecked(k) };
+        let cos_row = &cos[k];
+        let sin_row = &sin[k];
 
         // Two-pass accumulation: compute base and delta contributions separately.
         // This improves instruction-level parallelism and CPU pipelining,
@@ -114,24 +112,20 @@ pub(crate) fn dft_pair_impl<
         let mut delta_im = zero;
 
         for m in 0..H {
-            let s_m = unsafe { *sums.get_unchecked(m) };
-            let c = unsafe { *cos_row.get_unchecked(m) };
+            let s_m = sums[m];
+            let c = cos_row[m];
             base_re += s_m.re * c;
             base_im += s_m.im * c;
         }
         for m in 0..H {
-            let id_m = unsafe { *idiffs.get_unchecked(m) };
-            let s = unsafe { *sin_row.get_unchecked(m) };
+            let id_m = idiffs[m];
+            let s = sin_row[m];
             delta_re += id_m.re * s;
             delta_im += id_m.im * s;
         }
 
-        unsafe {
-            *data.get_unchecked_mut(k + 1) =
-                eunomia::Complex::new(base_re + delta_re, base_im + delta_im);
-            *data.get_unchecked_mut(N - 1 - k) =
-                eunomia::Complex::new(base_re - delta_re, base_im - delta_im);
-        }
+        data[k + 1] = eunomia::Complex::new(base_re + delta_re, base_im + delta_im);
+        data[N - 1 - k] = eunomia::Complex::new(base_re - delta_re, base_im - delta_im);
     }
 }
 
@@ -191,20 +185,18 @@ pub(crate) fn dft_pair_impl_reduced<
     let mut y0_im = x0.im;
 
     for m in 0..H {
-        let a = unsafe { *data.get_unchecked(m + 1) };
-        let b = unsafe { *data.get_unchecked(N - 1 - m) };
+        let a = data[m + 1];
+        let b = data[N - 1 - m];
         let sum_re = a.re + b.re;
         let sum_im = a.im + b.im;
         y0_re += sum_re;
         y0_im += sum_im;
-        unsafe {
-            *sums_re.get_unchecked_mut(m) = sum_re;
-            *sums_im.get_unchecked_mut(m) = sum_im;
-            let diff_re = a.re - b.re;
-            let diff_im = a.im - b.im;
-            *idiffs_re.get_unchecked_mut(m) = -diff_im * sign;
-            *idiffs_im.get_unchecked_mut(m) = diff_re * sign;
-        }
+        sums_re[m] = sum_re;
+        sums_im[m] = sum_im;
+        let diff_re = a.re - b.re;
+        let diff_im = a.im - b.im;
+        idiffs_re[m] = -diff_im * sign;
+        idiffs_im[m] = diff_re * sign;
     }
 
     data[0] = eunomia::Complex::new(y0_re, y0_im);
@@ -215,33 +207,29 @@ pub(crate) fn dft_pair_impl_reduced<
         let mut delta_re = zero;
         let mut delta_im = zero;
 
-        let cos_row = unsafe { cos.get_unchecked(k) };
-        let sin_row = unsafe { sin.get_unchecked(k) };
+        let cos_row = &cos[k];
+        let sin_row = &sin[k];
 
         // Two-pass accumulation: compute base and delta contributions separately.
         // This improves instruction-level parallelism and CPU pipelining,
         // enabling better utilization of dual FMA units on modern out-of-order CPUs.
         for m in 0..H {
-            let sr = unsafe { *sums_re.get_unchecked(m) };
-            let si = unsafe { *sums_im.get_unchecked(m) };
-            let c = unsafe { *cos_row.get_unchecked(m) };
+            let sr = sums_re[m];
+            let si = sums_im[m];
+            let c = cos_row[m];
             base_re += sr * c;
             base_im += si * c;
         }
         for m in 0..H {
-            let ir = unsafe { *idiffs_re.get_unchecked(m) };
-            let ii = unsafe { *idiffs_im.get_unchecked(m) };
-            let s = unsafe { *sin_row.get_unchecked(m) };
+            let ir = idiffs_re[m];
+            let ii = idiffs_im[m];
+            let s = sin_row[m];
             delta_re += ir * s;
             delta_im += ii * s;
         }
 
-        unsafe {
-            *data.get_unchecked_mut(k + 1) =
-                eunomia::Complex::new(base_re + delta_re, base_im + delta_im);
-            *data.get_unchecked_mut(N - 1 - k) =
-                eunomia::Complex::new(base_re - delta_re, base_im - delta_im);
-        }
+        data[k + 1] = eunomia::Complex::new(base_re + delta_re, base_im + delta_im);
+        data[N - 1 - k] = eunomia::Complex::new(base_re - delta_re, base_im - delta_im);
     }
 }
 
@@ -271,14 +259,12 @@ pub(crate) fn dft_pair_forward_with_pointwise<F: WinogradScalar, const N: usize,
     let mut idiffs = [eunomia::Complex::new(zero, zero); H];
 
     for m in 0..H {
-        let a = unsafe { *data.get_unchecked(m + 1) };
-        let b = unsafe { *data.get_unchecked(N - 1 - m) };
-        unsafe {
-            *sums.get_unchecked_mut(m) = eunomia::Complex::new(a.re + b.re, a.im + b.im);
-            let diff_re = a.re - b.re;
-            let diff_im = a.im - b.im;
-            *idiffs.get_unchecked_mut(m) = eunomia::Complex::new(-diff_im * sign, diff_re * sign);
-        }
+        let a = data[m + 1];
+        let b = data[N - 1 - m];
+        sums[m] = eunomia::Complex::new(a.re + b.re, a.im + b.im);
+        let diff_re = a.re - b.re;
+        let diff_im = a.im - b.im;
+        idiffs[m] = eunomia::Complex::new(-diff_im * sign, diff_re * sign);
     }
 
     // DC bin: sum of all inputs × kernel_spectrum[0]
@@ -288,7 +274,7 @@ pub(crate) fn dft_pair_forward_with_pointwise<F: WinogradScalar, const N: usize,
         y0_re += s.re;
         y0_im += s.im;
     }
-    let ks0 = unsafe { *kernel_spectrum.get_unchecked(0) };
+    let ks0 = kernel_spectrum[0];
     data[0] = eunomia::Complex::new(y0_re, y0_im) * ks0;
 
     // Remaining bins: compute Winograd output then multiply by kernel_spectrum[k]
@@ -298,34 +284,30 @@ pub(crate) fn dft_pair_forward_with_pointwise<F: WinogradScalar, const N: usize,
         let mut delta_re = zero;
         let mut delta_im = zero;
 
-        let cos_row = unsafe { cos.get_unchecked(k) };
-        let sin_row = unsafe { sin.get_unchecked(k) };
+        let cos_row = &cos[k];
+        let sin_row = &sin[k];
 
         // Two-pass accumulation: compute base and delta contributions separately.
         // This improves instruction-level parallelism and CPU pipelining,
         // enabling better utilization of dual FMA units on modern out-of-order CPUs.
         for m in 0..H {
-            let s_m = unsafe { *sums.get_unchecked(m) };
-            let c = unsafe { *cos_row.get_unchecked(m) };
+            let s_m = sums[m];
+            let c = cos_row[m];
             base_re += s_m.re * c;
             base_im += s_m.im * c;
         }
         for m in 0..H {
-            let id_m = unsafe { *idiffs.get_unchecked(m) };
-            let s = unsafe { *sin_row.get_unchecked(m) };
+            let id_m = idiffs[m];
+            let s = sin_row[m];
             delta_re += id_m.re * s;
             delta_im += id_m.im * s;
         }
 
-        let ks_kp1 = unsafe { *kernel_spectrum.get_unchecked(k + 1) };
-        let ks_nmk = unsafe { *kernel_spectrum.get_unchecked(N - 1 - k) };
+        let ks_kp1 = kernel_spectrum[k + 1];
+        let ks_nmk = kernel_spectrum[N - 1 - k];
 
-        unsafe {
-            *data.get_unchecked_mut(k + 1) =
-                eunomia::Complex::new(base_re + delta_re, base_im + delta_im) * ks_kp1;
-            *data.get_unchecked_mut(N - 1 - k) =
-                eunomia::Complex::new(base_re - delta_re, base_im - delta_im) * ks_nmk;
-        }
+        data[k + 1] = eunomia::Complex::new(base_re + delta_re, base_im + delta_im) * ks_kp1;
+        data[N - 1 - k] = eunomia::Complex::new(base_re - delta_re, base_im - delta_im) * ks_nmk;
     }
 }
 

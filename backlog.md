@@ -1,5 +1,25 @@
 # Apollo Backlog
 
+## ATLAS-APOLLO-COMPILE-TIME-FEATURE-GATES-2026-09-01 — Short kernels gate SIMD on compile-time target features [patch] [perf] — todo
+
+- **Finding.** 37 sites in apollo-fft select SSE/AVX bodies with
+  `#[cfg(all(target_arch = "x86_64", target_feature = "avx", ...))]`
+  (`winograd/short_winograd.rs` and siblings). No workspace `rustflags`
+  sets `target-cpu` or `target-feature`, so on the default x86-64 build —
+  every CI run, every consumer, every benchmark here — those bodies are
+  compiled out and the scalar fallback runs. The pinned comparison shows the
+  cost where these kernels dominate: f32 n = 121 runs 274 ns against
+  RustFFT's 97 (2.8x), n = 67 407 against 212, n = 19 52 against 29, n = 31
+  103 against 67, while the f64 route sits at parity or better at the same
+  sizes (2026-09-01 `rustfft_comparison`, pinned).
+- **Outcome.** Replace compile-time feature cfgs with runtime capability
+  dispatch through the hermes seam (`vectorize_lanes`/`Simd` token — the
+  standards' runtime-detection rule), one dispatch per kernel entry, so the
+  vector bodies run on the hardware that has them. Measure per size against
+  the pinned comparison; f64 controls flat.
+- **Acceptance.** No `target_feature` cfg remains in apollo-fft kernel
+  sources; the f32 odd-size ratios above move; suite green.
+
 ## ATLAS-APOLLO-BENCH-REGRESSION-FALSE-POSITIVE-2026-09-01 — The regression gate flagged identical machine code [patch] [perf] — done 2026-09-01 (identity fixed; bias not reproduced)
 
 - **Part 2 result (runs 33574856108 unswapped, 33575247861 swapped; identical-code pair `bc141b9c` → `7196ae13`, `force_measurements=true`):** both report `replicated counterbalanced 139 cases across 3 reports; no supported regression`; the swap warnings and force notice confirm the diagnostics engaged. The +10% "slower in all four" seen on run 33570302967 did **not** recur in either role orientation, so it was a one-off on the #242 artifacts rather than a standing bias; its cause is unestablished and is not guessed here. Standing protection is the identity short-circuit (#250). Watchpoint: a regression flagged on a change with no plausible codegen impact re-runs these diagnostics (#253) before it is believed.
@@ -1638,6 +1658,18 @@
   34/33, `radix_composite/arity.rs` 25, `good_thomas/cook_toom_gt.rs` 25 —
   each slice a separate measured item; the check keeps every landed slice
   from regressing.
+- **Slices landed (2026-09-01, Claude `/root`):** 398 -> 302
+  (`gap_audit.md#ratchet-slice-safe-indexing`). `odd_prime_pair.rs` 35 -> 0
+  and `arity.rs` 25 -> 0 by replacing unchecked indexing with forms the
+  const array types already prove (arity keeps three strided sites under a
+  release entry assert and SAFETY); the generated composite codelets become
+  safe fns, retiring the 35 winograd test wrappers and one Cook-Toom
+  wrapper. Measured pinned, paired: f64 flat everywhere; f32 odd sizes
+  faster (7/11/13 -29%/-28%/-25%, 19 -12%, 31 -9%). Next by density:
+  `stockham/avx/generic/pair.rs` 57, `stockham/precision/{precise,reduced}`
+  34/33, `cook_toom_gt.rs` 24 -- the stockham clusters are the per-ISA
+  backend-call class whose structural fix is the hermes seam
+  (`ATLAS-APOLLO-ISA-FORK-2026-08-25`).
 ## ATLAS-APOLLO-COMPOSE-ARENA-MIRI — Cover the compose arena's raw-pointer pattern with miri [patch] — done 2026-09-01
 
 - **Delivered (2026-09-01, Claude `/root`):** `gap_audit.md#compose-arena-alignment`.

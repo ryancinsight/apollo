@@ -66,7 +66,7 @@ pub(crate) fn cooley_tukey_function(
     quote! {
         #inline_attr
         #[allow(unused_variables, unused_mut)]
-        pub(crate) unsafe fn #fn_name<
+        pub(crate) fn #fn_name<
             F: crate::application::execution::kernel::components::winograd::traits::WinogradScalar
                 + crate::application::execution::kernel::mixed_radix::traits::ShortDft<#n1>
                 + crate::application::execution::kernel::mixed_radix::traits::ShortDft<#n2>,
