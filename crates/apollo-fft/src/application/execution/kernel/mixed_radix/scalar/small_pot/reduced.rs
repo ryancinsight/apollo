@@ -200,18 +200,7 @@ pub(in crate::application::execution::kernel::mixed_radix::scalar) unsafe fn sma
             true
         }
         16 => {
-            // Use winograd dft16 for correctness (avx2_dft16_reduced produced wrong spectra
-            // for f32 plans; winograd verified).
-            let data_ref = &mut *data.as_mut_ptr().cast::<[Complex32; 16]>();
-            crate::application::execution::kernel::components::winograd::dft16_impl::<f32, INVERSE>(
-                data_ref,
-            );
-            if INVERSE && NORMALIZE {
-                let scale = Complex32::new(0.0625, 0.0);
-                for x in data_ref.iter_mut() {
-                    *x *= scale;
-                }
-            }
+            small_pot_inplace_sized_reduced::<16, INVERSE, NORMALIZE>(data);
             true
         }
         32 => {
@@ -448,12 +437,14 @@ pub(in crate::application::execution::kernel::mixed_radix::scalar) unsafe fn sma
             }
         }
         16 => {
-            // Keep the validated Winograd kernel: the reduced f32 AVX2 candidate produced
-            // incorrect N=16 spectra and has no active call site.
+            // The eight-lane register kernel when the host has that width, the
+            // Winograd codelet otherwise; both leave natural order in place.
             let data_ref = &mut *data.as_mut_ptr().cast::<[Complex32; 16]>();
-            crate::application::execution::kernel::components::winograd::dft16_impl::<f32, INVERSE>(
-                data_ref,
-            );
+            if !crate::application::execution::kernel::components::winograd::composite::try_dft16_hardware::<INVERSE>(data_ref) {
+                crate::application::execution::kernel::components::winograd::dft16_impl::<f32, INVERSE>(
+                    data_ref,
+                );
+            }
             if INVERSE && NORMALIZE {
                 let scale = Complex32::new(0.0625, 0.0);
                 for x in data_ref.iter_mut() {
@@ -464,9 +455,11 @@ pub(in crate::application::execution::kernel::mixed_radix::scalar) unsafe fn sma
         32 => {
             // Scalar by measurement: n = 32: the vector body measured 5x slower than the scalar arm (240 vs 47 ns pinned); kept scalar, kernel filed.
             let data_ref = &mut *data.as_mut_ptr().cast::<[Complex32; 32]>();
-            crate::application::execution::kernel::components::winograd::dft32_impl::<f32, INVERSE>(
-                data_ref,
-            );
+            if !crate::application::execution::kernel::components::winograd::composite::try_dft32_hardware::<INVERSE>(data_ref) {
+                crate::application::execution::kernel::components::winograd::dft32_impl::<f32, INVERSE>(
+                    data_ref,
+                );
+            }
             if INVERSE && NORMALIZE {
                 let scale = Complex32::new(1.0 / 32.0, 0.0);
                 for x in data_ref.iter_mut() {

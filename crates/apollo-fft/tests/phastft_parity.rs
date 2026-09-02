@@ -45,7 +45,7 @@ const TOLERANCE_FACTOR: f64 = 16.0;
 /// Powers of two from the smallest non-trivial transform through a length whose
 /// working set leaves L1, so blocking and staging paths are exercised rather
 /// than only the codelets.
-const SIZES: [usize; 8] = [4, 8, 16, 64, 256, 1_024, 4_096, 65_536];
+const SIZES: [usize; 9] = [4, 8, 16, 32, 64, 256, 1_024, 4_096, 65_536];
 
 fn signal(len: usize) -> Vec<Complex64> {
     (0..len)
@@ -165,6 +165,43 @@ fn forward_f32_agrees_with_phastft_within_derived_bound() {
             "N={len}: worst |Apollo - PhastFT| f32 = {worst:.3e}, bound {bound:.3e}, \
              margin consumed {:.4}",
             worst / bound
+        );
+    }
+}
+
+/// The eight-lane f32 codelets serve both directions; the inverse arm and its
+/// `1/N` normalization are checked by the round trip `x -> forward -> inverse`
+/// at the sizes they own (16 and 32) with 8 as the scalar-arm control. Two
+/// transforms each contribute the `c·m·u·‖x‖₁` forward-error ball of the
+/// derivation above, so the round-trip residual is bounded by the same
+/// [`TOLERANCE_FACTOR`] ball as a two-engine difference.
+#[test]
+fn f32_small_power_of_two_round_trips_within_derived_bound() {
+    const UNIT_ROUNDOFF: f64 = (f32::EPSILON / 2.0) as f64;
+    for len in [8usize, 16, 32] {
+        let reference = signal(len);
+        let input: Vec<Complex32> = reference
+            .iter()
+            .map(|value| Complex32::new(value.re as f32, value.im as f32))
+            .collect();
+        let plan = apollo_fft::FftPlan1D::<f32>::new(apollo_fft::Shape1D { n: len });
+        let mut work = input.clone();
+        plan.forward_complex_slice_inplace(&mut work);
+        plan.inverse_complex_slice_inplace(&mut work);
+        let l1 = l1_norm(&reference);
+        let bound = tolerance(len, l1, UNIT_ROUNDOFF);
+        let worst = work
+            .iter()
+            .zip(&input)
+            .map(|(actual, expected)| {
+                (f64::from(actual.re) - f64::from(expected.re))
+                    .hypot(f64::from(actual.im) - f64::from(expected.im))
+            })
+            .fold(0.0, f64::max);
+        assert!(
+            worst <= bound,
+            "N={len}: f32 forward/inverse round trip differs from the input by {worst:.3e}, \
+             exceeding the derived bound {bound:.3e}"
         );
     }
 }

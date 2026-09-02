@@ -54,6 +54,14 @@ Change-class tags: [patch] backward-compatible fix, [minor] additive non-breakin
 
 ### Changed
 
+- [patch] `apollo-fft` runs f32 `n = 16` and `n = 32` on eight-lane
+  register-resident codelets through the hermes dispatch (a new DFT-16 beside
+  the existing DFT-32 in `winograd::composite::radix_four_eight`), with the
+  Winograd scalar codelets as the fallback for hosts without that width.
+  Pinned on the performance core: `n = 16` 18.7 → 4.4 ns (RustFFT 4.1) and
+  `n = 32` 47.4 → 11.2 ns (RustFFT 9.2); both now run faster than their f64
+  siblings. The pinned small-size probe covers 8, 16 and 32.
+
 - [patch] `apollo-stft` fuses forward windowing into the complex frame write.
   Every frame lying wholly inside the signal is windowed by the provider's
   `real_mul_to_interleaved_complex` straight from the signal slice into the

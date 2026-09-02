@@ -33,20 +33,33 @@
   cfgs: `stockham/mod.rs` (runtime-backed) and the 3-point Winograd pair
   (a dispatched 3-point kernel measured as a loss). 525/525, ratchet 302.
 
-## ATLAS-APOLLO-SMALL-F32-BASES-2026-09-01 — f32 n = 16 and 32 have no live vector kernel [patch] [perf] — todo
+## ✅ ATLAS-APOLLO-SMALL-F32-BASES-2026-09-01 — f32 n = 16 and 32 have no live vector kernel [patch] [perf] — done 2026-09-02
 
-- **Finding.** Pinned comparison after the runtime-arm delivery: f32 n = 16
-  runs 19.2 ns against RustFFT's 4.4 (4.3x) through the scalar Winograd
-  `dft16`; f32 n = 32 runs 47.4 against 9.3 (5.1x) on the scalar arm — its
-  compiled-out AVX body measured 239 ns when enabled and is deleted. f32
-  n = 8 (now 4.4 ns) and n = 64 (23.8 ns, 0.85x) show what the width buys.
-- **Outcome.** Register-resident f32 kernels for 16 and 32 through the
-  hermes dispatch (`vectorize_lanes` LaneKernel, eight-lane layout), the
-  construction that already serves n = 64/128 — one instance-major
-  transform generalized over `ROWS`, not new hand kernels — measured pinned
-  against RustFFT with f64 controls.
-
-
+- **Delivered:** f32 `n = 16`/`32` run eight-lane register-resident codelets
+  through `vectorize_hardware_lanes` — a new DFT-16 (radix-4 × radix-4 with
+  one 4×4 transpose) beside the existing DFT-32 in
+  `winograd::composite::radix_four_eight` — wired as the `small_pot` sized arms
+  with the Winograd scalar codelets as the no-width fallback; the unsized
+  16-arm delegates to the sized one like 32/64 already did.
+- **Route decision (dissent from the outcome as filed):** the instance-major
+  base cannot generalize below `ROWS = 4`: its row pass fills each register
+  with samples of *distinct* rows (two per register at four lanes, four at
+  eight — `wide.rs` iterates `ROWS / 4` row groups), so `ROWS = 1`/`2` leave
+  the register unfilled rather than the column pass short. Sixteen and
+  thirty-two samples fill a register with one row's own samples, which is the
+  `radix_four_eight` construction (four complex per register, transpose
+  between the two radix stages) that already served DFT-32 — the same
+  register-resident, hermes-dispatched family, one kernel per size class.
+- **Evidence (pinned, `small_sizes_against_the_references_by_core_type`, now
+  covering 8/16/32; medians, ns):** performance core f32 `n = 16` 18.7 → 4.4
+  (RustFFT 4.1, ratio 4.78 → 1.08), `n = 32` 47.4 → 11.2 (RustFFT 9.2, 1.75 →
+  1.22; f64 controls 10.5 / 31.0 unchanged, so f32 is no longer the slower
+  scalar). Efficiency core `n = 16` 18.6 → 11.3, `n = 32` 55.6 → 23.4 (0.96 of
+  RustFFT). Correctness: PhastFT parity at 16 and 32 within the derived
+  `2c·m·u·‖x‖₁` bound, f32 forward/inverse round trip at 8/16/32 within the
+  same bound, apollo-fft 526/526, clippy `-D warnings`.
+- **Residual:** `n = 8` f32 (4.0 vs 2.6) keeps its scalar arm by the recorded
+  measurement; efficiency-core `n = 16` sits at 1.24 of RustFFT.
 
 ## ATLAS-APOLLO-BENCH-REGRESSION-FALSE-POSITIVE-2026-09-01 — The regression gate flagged identical machine code [patch] [perf] — done 2026-09-01 (identity fixed; bias not reproduced)
 
