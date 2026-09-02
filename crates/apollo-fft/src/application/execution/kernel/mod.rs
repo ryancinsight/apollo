@@ -37,6 +37,12 @@ pub mod benchmark_kernels;
 #[cfg(test)]
 pub(crate) mod measurement_cores;
 #[cfg(test)]
+// The footprint instrument installs a `#[global_allocator]` that forwards to
+// `System`. Under miri that runs the host allocator's over-aligned header
+// arithmetic interpreted, which Stacked Borrows rejects at deallocation
+// (a tag narrowed to the user span reads the header before it); miri's own
+// allocator serves miri runs, so the instrument stays out of them.
+#[cfg(not(miri))]
 mod retained_footprint;
 #[cfg(test)]
 pub(crate) mod test_utils;

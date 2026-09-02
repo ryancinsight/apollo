@@ -102,9 +102,7 @@ fn dft25_forward_matches_direct() {
         .collect();
     let expected = dft_forward(&input);
     let mut buf: [Complex64; 25] = input.as_slice().try_into().unwrap();
-    unsafe {
-        dft25_impl::<f64, false>(&mut buf);
-    }
+    dft25_impl::<f64, false>(&mut buf);
     let err = max_err(&buf, &expected);
     assert!(err < 1e-9, "DFT-25 forward max_err={err:.2e}");
 }
@@ -117,9 +115,7 @@ fn dft25_inverse_matches_direct() {
     let expected_unnorm: Vec<Complex64> =
         dft_inverse(&input).into_iter().map(|x| x * 25.0).collect();
     let mut buf: [Complex64; 25] = input.as_slice().try_into().unwrap();
-    unsafe {
-        dft25_impl::<f64, true>(&mut buf);
-    }
+    dft25_impl::<f64, true>(&mut buf);
     let err = max_err(&buf, &expected_unnorm);
     assert!(err < 1e-9, "DFT-25 inverse max_err={err:.2e}");
 }
@@ -130,12 +126,8 @@ fn dft25_roundtrip_recovers_input() {
         .map(|k| Complex64::new((k as f64 * 0.23).sin(), (k as f64 * 0.47).cos()))
         .collect();
     let mut buf: [Complex64; 25] = input.as_slice().try_into().unwrap();
-    unsafe {
-        dft25_impl::<f64, false>(&mut buf);
-    }
-    unsafe {
-        dft25_impl::<f64, true>(&mut buf);
-    }
+    dft25_impl::<f64, false>(&mut buf);
+    dft25_impl::<f64, true>(&mut buf);
     let recovered: Vec<Complex64> = buf.iter().map(|x| *x / 25.0).collect();
     let err = max_err(&recovered, &input);
     assert!(err < 1e-9, "DFT-25 roundtrip max_err={err:.2e}");
@@ -144,9 +136,7 @@ fn dft25_roundtrip_recovers_input() {
 #[test]
 fn dft25_dc_energy_in_bin0_only() {
     let mut buf = [Complex64::new(1.0, 0.0); 25];
-    unsafe {
-        dft25_impl::<f64, false>(&mut buf);
-    }
+    dft25_impl::<f64, false>(&mut buf);
     assert!(
         (buf[0] - Complex64::new(25.0, 0.0)).norm() < 1e-11,
         "DC bin: {:?}",
@@ -168,12 +158,8 @@ fn dft25_f32_forward_matches_f64() {
         .collect();
     let mut buf64: [Complex64; 25] = input64.as_slice().try_into().unwrap();
     let mut buf32: [Complex32; 25] = input32.as_slice().try_into().unwrap();
-    unsafe {
-        dft25_impl::<f64, false>(&mut buf64);
-    }
-    unsafe {
-        dft25_impl::<f32, false>(&mut buf32);
-    }
+    dft25_impl::<f64, false>(&mut buf64);
+    dft25_impl::<f32, false>(&mut buf32);
     let err = buf32
         .iter()
         .zip(buf64.iter())
@@ -275,16 +261,16 @@ fn dft_composite_small_cases() {
     run_composite_case::<6>(
         |data, inv| {
             if inv {
-                unsafe { dft6_impl::<f64, true>(data) }
+                dft6_impl::<f64, true>(data)
             } else {
-                unsafe { dft6_impl::<f64, false>(data) }
+                dft6_impl::<f64, false>(data)
             }
         },
         |data, inv| {
             if inv {
-                unsafe { dft6_impl::<f32, true>(data) }
+                dft6_impl::<f32, true>(data)
             } else {
-                unsafe { dft6_impl::<f32, false>(data) }
+                dft6_impl::<f32, false>(data)
             }
         },
         1e-4_f32,
@@ -311,16 +297,16 @@ fn dft_composite_small_cases() {
     run_composite_case::<10>(
         |data, inv| {
             if inv {
-                unsafe { dft10_impl::<f64, true>(data) }
+                dft10_impl::<f64, true>(data)
             } else {
-                unsafe { dft10_impl::<f64, false>(data) }
+                dft10_impl::<f64, false>(data)
             }
         },
         |data, inv| {
             if inv {
-                unsafe { dft10_impl::<f32, true>(data) }
+                dft10_impl::<f32, true>(data)
             } else {
-                unsafe { dft10_impl::<f32, false>(data) }
+                dft10_impl::<f32, false>(data)
             }
         },
         1e-4_f32,
@@ -329,16 +315,16 @@ fn dft_composite_small_cases() {
     run_composite_case::<12>(
         |data, inv| {
             if inv {
-                unsafe { dft12_impl::<f64, true>(data) }
+                dft12_impl::<f64, true>(data)
             } else {
-                unsafe { dft12_impl::<f64, false>(data) }
+                dft12_impl::<f64, false>(data)
             }
         },
         |data, inv| {
             if inv {
-                unsafe { dft12_impl::<f32, true>(data) }
+                dft12_impl::<f32, true>(data)
             } else {
-                unsafe { dft12_impl::<f32, false>(data) }
+                dft12_impl::<f32, false>(data)
             }
         },
         1e-4_f32,
@@ -347,16 +333,16 @@ fn dft_composite_small_cases() {
     run_composite_case::<14>(
         |data, inv| {
             if inv {
-                unsafe { dft14_impl::<f64, true>(data) }
+                dft14_impl::<f64, true>(data)
             } else {
-                unsafe { dft14_impl::<f64, false>(data) }
+                dft14_impl::<f64, false>(data)
             }
         },
         |data, inv| {
             if inv {
-                unsafe { dft14_impl::<f32, true>(data) }
+                dft14_impl::<f32, true>(data)
             } else {
-                unsafe { dft14_impl::<f32, false>(data) }
+                dft14_impl::<f32, false>(data)
             }
         },
         1e-4_f32,
@@ -383,16 +369,16 @@ fn dft_composite_small_cases() {
     run_composite_case::<27>(
         |data, inv| {
             if inv {
-                unsafe { dft27_impl::<f64, true>(data) }
+                dft27_impl::<f64, true>(data)
             } else {
-                unsafe { dft27_impl::<f64, false>(data) }
+                dft27_impl::<f64, false>(data)
             }
         },
         |data, inv| {
             if inv {
-                unsafe { dft27_impl::<f32, true>(data) }
+                dft27_impl::<f32, true>(data)
             } else {
-                unsafe { dft27_impl::<f32, false>(data) }
+                dft27_impl::<f32, false>(data)
             }
         },
         1e-4_f32,
@@ -441,16 +427,16 @@ fn dft_composite_medium_cases() {
     run_composite_case::<49>(
         |data, inv| {
             if inv {
-                unsafe { dft49_impl::<f64, true>(data) }
+                dft49_impl::<f64, true>(data)
             } else {
-                unsafe { dft49_impl::<f64, false>(data) }
+                dft49_impl::<f64, false>(data)
             }
         },
         |data, inv| {
             if inv {
-                unsafe { dft49_impl::<f32, true>(data) }
+                dft49_impl::<f32, true>(data)
             } else {
-                unsafe { dft49_impl::<f32, false>(data) }
+                dft49_impl::<f32, false>(data)
             }
         },
         1e-4_f32,
@@ -459,16 +445,16 @@ fn dft_composite_medium_cases() {
     run_composite_case::<81>(
         |data, inv| {
             if inv {
-                unsafe { dft81_impl::<f64, true>(data) }
+                dft81_impl::<f64, true>(data)
             } else {
-                unsafe { dft81_impl::<f64, false>(data) }
+                dft81_impl::<f64, false>(data)
             }
         },
         |data, inv| {
             if inv {
-                unsafe { dft81_impl::<f32, true>(data) }
+                dft81_impl::<f32, true>(data)
             } else {
-                unsafe { dft81_impl::<f32, false>(data) }
+                dft81_impl::<f32, false>(data)
             }
         },
         1e-4_f32,

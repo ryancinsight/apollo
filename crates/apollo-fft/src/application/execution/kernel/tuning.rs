@@ -28,14 +28,14 @@ pub(crate) const FOUR_STEP_THRESHOLD: usize = 1 << 12;
 /// "process-dependent" four-step anomaly in this audit was that, not code.
 /// `pot::core_matrix` pins the thread and removes the scheduler from the
 /// question entirely; at N = 4096 four-step beats Stockham on **both** core
-/// types (16.6 us against 28.1 on a P-core, 13.2 against 62.6 on an E-core),
+/// types (16.6 us against 28.1 on an E-core, 13.2 against 62.6 on a P-core),
 /// and `pot::crossover` — both routes, one process, cache flushed per arm —
 /// has it ahead from N = 256 through 2^20.
 ///
 /// 256 rather than 4096 since the f64 sized codelet arms also consult this
 /// predicate: `codelet::pinned_probe` measured the batched four-step against
-/// the sized route itself at 256 and 1024 — 1.5x faster on a P-core, 5 to 6x
-/// on an E-core — completing the pinned evidence down to the crossover the
+/// the sized route itself at 256 and 1024 — 1.5x faster on an E-core, 5 to 6x
+/// on a P-core — completing the pinned evidence down to the crossover the
 /// in-process instrument reported. See ADR 0039's fifth revision note.
 pub(crate) const ONE_DIMENSIONAL_FOUR_STEP_THRESHOLD: usize = 1 << 8;
 

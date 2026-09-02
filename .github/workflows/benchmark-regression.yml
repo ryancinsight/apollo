@@ -23,6 +23,23 @@ on:
         description: Git revision compared with the baseline
         required: true
         type: string
+      force_measurements:
+        description: >-
+          Run the pair jobs even when the identity gate finds the executables'
+          code identical. Diagnostic only: the candidate-role bias under
+          investigation shows on identical code, which the gate otherwise skips.
+        required: false
+        default: false
+        type: boolean
+      swap_roles:
+        description: >-
+          Exchange the baseline and candidate executables after extraction so
+          the "candidate" reports run the baseline binary. Diagnostic only: a
+          slowdown that persists attaches to the role or invocation; one that
+          flips attaches to the artifact.
+        required: false
+        default: false
+        type: boolean
 
 permissions:
   contents: read
@@ -44,7 +61,14 @@ jobs:
           - candidate
     env:
       BASELINE_REF: ${{ github.event_name == 'pull_request' && github.event.pull_request.base.sha || inputs.baseline_ref }}
-      CANDIDATE_REF: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || inputs.candidate_ref }}
+      # The candidate is the pull request's merge ref, not its head. The
+      # baseline is the base branch's tip at event time; a head that has not
+      # been rebased lacks every commit main gained since it branched, so
+      # comparing the two measures main's own progress as the PR's regression.
+      # The merge ref carries the same base plus exactly the PR's change, so
+      # the pair differs by the PR alone -- and an identical pair correctly
+      # skips measurement.
+      CANDIDATE_REF: ${{ github.event_name == 'pull_request' && format('refs/pull/{0}/merge', github.event.pull_request.number) || inputs.candidate_ref }}
       CARGO_TARGET_DIR: ${{ github.workspace }}/target
       REVISION: ${{ matrix.revision }}
     steps:
@@ -173,6 +197,11 @@ jobs:
             install -m 755 \
               "$CARGO_TARGET_DIR/release/apollo-bench-compare" \
               benchmark-executables/apollo-bench-compare
+            # The identity job has no source checkout; the code-section
+            # comparer rides in this archive like the compare tool does.
+            install -m 755 \
+              apollo-measurement/scripts/bench_executable_identity.py \
+              benchmark-executables/bench_executable_identity.py
           fi
 
           for benchmark in kernel_strategy prime_compose half_cyclic_rader; do
@@ -233,12 +262,23 @@ jobs:
             sha256sum \
               "benchmark-executables/baseline/$benchmark" \
               "benchmark-executables/candidate/$benchmark"
-            if ! cmp --silent \
+            # Whole-file identity never holds across the two build directories
+            # (symbol hashes, build id, .strtab follow the path), so compare the
+            # code sections. 0 = identical code, 1 = differs, else malformed.
+            rc=0
+            python3 benchmark-executables/bench_executable_identity.py \
               "benchmark-executables/baseline/$benchmark" \
-              "benchmark-executables/candidate/$benchmark"; then
-              measurements_required=true
-            fi
+              "benchmark-executables/candidate/$benchmark" || rc=$?
+            case "$rc" in
+              0) ;;
+              1) measurements_required=true ;;
+              *) echo "::error::bench_executable_identity failed on $benchmark (exit $rc)"; exit "$rc" ;;
+            esac
           done
+          if [[ "${{ inputs.force_measurements }}" == "true" ]]; then
+            echo "::notice::measurements forced by dispatch input despite identical code"
+            measurements_required=true
+          fi
           echo "measurements_required=$measurements_required" >> "$GITHUB_OUTPUT"
 
   benchmark-pair:
@@ -287,6 +327,15 @@ jobs:
           for archive in executable-artifacts/*.tar.gz; do
             tar --extract --gzip --file "$archive"
           done
+          if [[ "${{ inputs.swap_roles }}" == "true" ]]; then
+            # Diagnostic: the reports keep their role names, the binaries trade
+            # places, so a role-attached bias survives and a file-attached one
+            # flips sign.
+            mv benchmark-executables/baseline benchmark-executables/.swap
+            mv benchmark-executables/candidate benchmark-executables/baseline
+            mv benchmark-executables/.swap benchmark-executables/candidate
+            echo "::warning::roles swapped: 'baseline' reports run the candidate executable and vice versa"
+          fi
 
       - name: Measure counterbalanced pair
         shell: bash

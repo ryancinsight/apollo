@@ -15,9 +15,10 @@ ADR_DIRECTORY = REPOSITORY / "docs" / "adr"
 INDEX = ADR_DIRECTORY / "README.md"
 
 TITLE_PATTERNS = (
-    re.compile(r"^# ADR (?P<number>\d{4}): (?P<title>.+)$", re.MULTILINE),
-    re.compile(r"^# (?P<number>\d{4}) — (?P<title>.+)$", re.MULTILINE),
+    re.compile(r"^# ADR (?P<number>\d{3,4}): (?P<title>.+)$", re.MULTILINE),
+    re.compile(r"^# (?P<number>\d{3,4}) — (?P<title>.+)$", re.MULTILINE),
 )
+NUMBERED = re.compile(r"\d{3,4}-.*\.md")
 INLINE_STATUS = re.compile(
     r"^-\s+(?:\*\*Status:\*\*|Status:)\s+(?P<status>Proposed|Accepted|Rejected)\b",
     re.MULTILINE,
@@ -50,7 +51,9 @@ def parse_adr(path: Path) -> Adr:
         raise ValueError(f"{path.name}: missing canonical ADR heading")
 
     number = heading.group("number")
-    filename_number = path.name[:4]
+    # The numeric prefix at whatever width this repository uses; NUMBERED has
+    # already guaranteed three or four digits followed by a dash.
+    filename_number = path.name.split("-", 1)[0]
     if filename_number != number:
         raise ValueError(
             f"{path.name}: heading number {number} does not match filename {filename_number}"
@@ -67,7 +70,13 @@ def render() -> str:
     """Render the complete deterministic ADR index."""
     entries = [
         parse_adr(path)
-        for path in sorted(ADR_DIRECTORY.glob("[0-9][0-9][0-9][0-9]-*.md"))
+        # Three- or four-digit numbering: repositories differ, the generator
+        # does not. The width is whatever each repository already uses.
+        for path in sorted(
+            path
+            for path in ADR_DIRECTORY.glob("[0-9]*-*.md")
+            if NUMBERED.fullmatch(path.name)
+        )
     ]
     numbers = [entry.number for entry in entries]
     if len(numbers) != len(set(numbers)):

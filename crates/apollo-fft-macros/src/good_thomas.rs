@@ -198,7 +198,7 @@ pub(crate) fn good_thomas_function(
     quote! {
         #inline_attr
         #[allow(unused_variables, unused_mut)]
-        pub(crate) unsafe fn #fn_name<F: crate::application::execution::kernel::components::winograd::traits::WinogradScalar + crate::application::execution::kernel::mixed_radix::traits::ShortDft<#n1> + crate::application::execution::kernel::mixed_radix::traits::ShortDft<#n2> #scalar_bound, const INVERSE: bool>(
+        pub(crate) fn #fn_name<F: crate::application::execution::kernel::components::winograd::traits::WinogradScalar + crate::application::execution::kernel::mixed_radix::traits::ShortDft<#n1> + crate::application::execution::kernel::mixed_radix::traits::ShortDft<#n2> #scalar_bound, const INVERSE: bool>(
             data: &mut [eunomia::Complex<F>; #n],
         ) {
             // Use MaybeUninit to avoid zero-initialization overhead
@@ -212,7 +212,9 @@ pub(crate) fn good_thomas_function(
                 let row_start = i1 * #n2;
                 for i2 in 0..#n2 {
                     let dest_idx = row_start + i2;
-                    scratch_ptr.add(dest_idx).write(data[src_idx]);
+                    // SAFETY: `dest_idx < N` enumerates every scratch slot
+                    // exactly once; the read side waits for this loop.
+                    unsafe { scratch_ptr.add(dest_idx).write(data[src_idx]); }
                     src_idx += #n1;
                     if src_idx >= #n {
                         src_idx -= #n;

@@ -1040,8 +1040,8 @@ pub(crate) mod boundary;
 mod dif;
 
 // Test-gated deliberately: the interleaved in-place kernel is correct and
-// measured — and slower than the planar sibling by 16 to 37% pinned on a
-// P-core at every covered size, because the shuffle cost of interleaved
+// measured — and slower than the planar sibling by 16 to 37% pinned on an
+// E-core at every covered size, because the shuffle cost of interleaved
 // butterflies outweighs the planar seams it removes. It stays as the
 // independent-implementation differential oracle for this module; the
 // pinned probe that declined it is committed beside it.

@@ -23,10 +23,10 @@
   **decision stands** — the base is faster than the incumbent route on both
   rows, which is label-independent — but every ordered pair in the prose
   ("2.33x and 12.60x", "10.8% and 1.8%", "1.62x and 1.73x", the
-  164/521/452 vs 96/232/300 TSC attribution) reads in the opposite order, and
+  164/521/452 vs 96/232/300 TSC attribution) read in the opposite order, and
   the 11.0 ns residual dispatch cost attributed to the E-core was measured on
-  the performance core. Tracked as
-  `ATLAS-APOLLO-INVERTED-CORE-CLAIMS-2026-09-01`.
+  the performance core. Corrected below under
+  `ATLAS-APOLLO-INVERTED-CORE-CLAIMS-2026-09-01`; the figures are unchanged.
 - Revision 2026-08-27: records rejection of a premature production route that
   kept the experiment's thread-local plan instead of moving ownership into
   `FftPlan1D`. The unchanged exact comparator found repeatable unrelated-case
@@ -167,10 +167,10 @@ and produced 96.4799% exact distribution-free median intervals (nanoseconds):
 | E | 1844.331 [1843.457, 1845.866] | 146.401 [146.364, 146.468] | 84.694 [84.670, 84.726] | 148.974 [148.899, 149.065] |
 
 Thus the base is 2.33x and 12.60x faster than the incumbent route on the
-measured P- and E-cores. It is 10.8% and 1.8% faster than PhastFT, with
+measured E- and P-cores. It is 10.8% and 1.8% faster than PhastFT, with
 disjoint intervals, while RustFFT remains 1.62x and 1.73x faster. Separately,
-serialized phase attribution reported 164/521/452 TSC on the P-core and
-96/232/300 TSC on the E-core for redistribution/row/column work. Those phase
+serialized phase attribution reported 164/521/452 TSC on the E-core and
+96/232/300 TSC on the P-core for redistribution/row/column work. Those phase
 counts are diagnostic only.
 
 The comparison-specialization regression test leaves all attribution counters
@@ -200,7 +200,7 @@ The plan-owned candidate removes that rejected ownership discrepancy. A local
 | P | 295.117 [294.899, 295.304] | 294.865 [294.573, 295.022] | 182.040 [181.755, 182.189] | 330.547 [330.206, 331.105] |
 | E | 163.529 [163.502, 163.558] | 152.550 [152.520, 152.581] | 86.319 [86.300, 86.352] | 152.588 [152.558, 152.639] |
 
-Production and direct-base intervals overlap on the P-core. The E-core public
+Production and direct-base intervals overlap on the E-core. The P-core public
 dispatch wrapper retains an 11.0 ns cost over the direct call, but production
 is 11.28x faster than the 1844.331 ns incumbent entry baseline. RustFFT remains
 1.62x and 1.89x faster than production on the measured core types. These local

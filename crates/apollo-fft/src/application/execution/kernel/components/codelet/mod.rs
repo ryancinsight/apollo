@@ -3,7 +3,7 @@
 //! **Status: correct, measured, and declined** — this module is compiled for
 //! tests only. The N = 16 codelet passes a direct-DFT oracle in both
 //! directions but loses to the incumbent sized kernel pinned on both core
-//! types (1.8x on a P-core), because its bit reversal runs through a stack
+//! types (1.8x on an E-core), because its bit reversal runs through a stack
 //! buffer whose scalar stores stall the following vector loads. It stays as a
 //! measurement instrument beside the probe that declined it; promotion to a
 //! production route is gated on hermes gaining a two-register

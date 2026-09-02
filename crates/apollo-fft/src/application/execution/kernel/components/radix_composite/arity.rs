@@ -28,87 +28,120 @@ fn apply_dft_r<F: CompositeCache + ShortWinogradScalar, const R: usize, const IN
     // Compile-time branch on const R — LLVM can inline and vectorize each case.
     match R {
         2 => {
-            let ptr = buf.as_mut_ptr().cast::<[Complex<F>; 2]>();
-            F::dft2(unsafe { &mut *ptr });
+            let arr: &mut [Complex<F>; 2] = buf
+                .as_mut_slice()
+                .try_into()
+                .expect("invariant: this arm is the R == 2 monomorphization");
+            F::dft2(arr);
         }
         3 => {
-            let ptr = buf.as_mut_ptr().cast::<[Complex<F>; 3]>();
+            let arr: &mut [Complex<F>; 3] = buf
+                .as_mut_slice()
+                .try_into()
+                .expect("invariant: this arm is the R == 3 monomorphization");
             if INVERSE {
-                F::dft3::<true>(unsafe { &mut *ptr });
+                F::dft3::<true>(arr);
             } else {
-                F::dft3::<false>(unsafe { &mut *ptr });
+                F::dft3::<false>(arr);
             }
         }
         4 => {
-            let ptr = buf.as_mut_ptr().cast::<[Complex<F>; 4]>();
+            let arr: &mut [Complex<F>; 4] = buf
+                .as_mut_slice()
+                .try_into()
+                .expect("invariant: this arm is the R == 4 monomorphization");
             if INVERSE {
-                F::dft4::<true>(unsafe { &mut *ptr });
+                F::dft4::<true>(arr);
             } else {
-                F::dft4::<false>(unsafe { &mut *ptr });
+                F::dft4::<false>(arr);
             }
         }
         5 => {
-            let ptr = buf.as_mut_ptr().cast::<[Complex<F>; 5]>();
+            let arr: &mut [Complex<F>; 5] = buf
+                .as_mut_slice()
+                .try_into()
+                .expect("invariant: this arm is the R == 5 monomorphization");
             if INVERSE {
-                F::dft5::<true>(unsafe { &mut *ptr });
+                F::dft5::<true>(arr);
             } else {
-                F::dft5::<false>(unsafe { &mut *ptr });
+                F::dft5::<false>(arr);
             }
         }
         7 => {
-            let ptr = buf.as_mut_ptr().cast::<[Complex<F>; 7]>();
+            let arr: &mut [Complex<F>; 7] = buf
+                .as_mut_slice()
+                .try_into()
+                .expect("invariant: this arm is the R == 7 monomorphization");
             if INVERSE {
-                F::dft7::<true>(unsafe { &mut *ptr });
+                F::dft7::<true>(arr);
             } else {
-                F::dft7::<false>(unsafe { &mut *ptr });
+                F::dft7::<false>(arr);
             }
         }
         8 => {
-            let ptr = buf.as_mut_ptr().cast::<[Complex<F>; 8]>();
+            let arr: &mut [Complex<F>; 8] = buf
+                .as_mut_slice()
+                .try_into()
+                .expect("invariant: this arm is the R == 8 monomorphization");
             if INVERSE {
-                F::dft8::<true>(unsafe { &mut *ptr });
+                F::dft8::<true>(arr);
             } else {
-                F::dft8::<false>(unsafe { &mut *ptr });
+                F::dft8::<false>(arr);
             }
         }
         16 => {
-            let ptr = buf.as_mut_ptr().cast::<[Complex<F>; 16]>();
+            let arr: &mut [Complex<F>; 16] = buf
+                .as_mut_slice()
+                .try_into()
+                .expect("invariant: this arm is the R == 16 monomorphization");
             if INVERSE {
-                F::dft16::<true>(unsafe { &mut *ptr });
+                F::dft16::<true>(arr);
             } else {
-                F::dft16::<false>(unsafe { &mut *ptr });
+                F::dft16::<false>(arr);
             }
         }
         11 => {
-            let ptr = buf.as_mut_ptr().cast::<[Complex<F>; 11]>();
+            let arr: &mut [Complex<F>; 11] = buf
+                .as_mut_slice()
+                .try_into()
+                .expect("invariant: this arm is the R == 11 monomorphization");
             if INVERSE {
-                F::dft11::<true>(unsafe { &mut *ptr })
+                F::dft11::<true>(arr)
             } else {
-                F::dft11::<false>(unsafe { &mut *ptr })
+                F::dft11::<false>(arr)
             }
         }
         13 => {
-            let ptr = buf.as_mut_ptr().cast::<[Complex<F>; 13]>();
+            let arr: &mut [Complex<F>; 13] = buf
+                .as_mut_slice()
+                .try_into()
+                .expect("invariant: this arm is the R == 13 monomorphization");
             if INVERSE {
-                F::dft13::<true>(unsafe { &mut *ptr })
+                F::dft13::<true>(arr)
             } else {
-                F::dft13::<false>(unsafe { &mut *ptr })
+                F::dft13::<false>(arr)
             }
         }
         17 => {
-            let ptr = buf.as_mut_ptr().cast::<[Complex<F>; 17]>();
+            let arr: &mut [Complex<F>; 17] = buf
+                .as_mut_slice()
+                .try_into()
+                .expect("invariant: this arm is the R == 17 monomorphization");
             if INVERSE {
-                F::dft17::<true>(unsafe { &mut *ptr })
+                F::dft17::<true>(arr)
             } else {
-                F::dft17::<false>(unsafe { &mut *ptr })
+                F::dft17::<false>(arr)
             }
         }
         23 => {
-            let ptr = buf.as_mut_ptr().cast::<[Complex<F>; 23]>();
+            let arr: &mut [Complex<F>; 23] = buf
+                .as_mut_slice()
+                .try_into()
+                .expect("invariant: this arm is the R == 23 monomorphization");
             if INVERSE {
-                F::dft23::<true>(unsafe { &mut *ptr })
+                F::dft23::<true>(arr)
             } else {
-                F::dft23::<false>(unsafe { &mut *ptr })
+                F::dft23::<false>(arr)
             }
         }
         _ => unreachable!("unsupported radix {}", R),
@@ -145,12 +178,16 @@ fn load_and_twiddle<F: ShortWinogradScalar, const R: usize>(
     // Explicit iteration for better LLVM loop unroll hints with const R.
     // The compiler sees the exact iteration count from const R and can unroll fully.
     for k in 0..R {
+        // SAFETY: `k < R`, `j < prev_len`, and `compute_group` asserted
+        // `src.len() >= src_base + (R - 1) * stride + prev_len`.
         buf[k] = *unsafe { src.get_unchecked(k * stride + src_base + j) };
     }
     if j > 0 {
         // Read each arm's precomputed twiddle W^{k·j} from the flat table.
         // Arm k is at stage_twiddles[(k-1)*prev_len + j]; all loads are independent.
         for k in 1..R {
+            // SAFETY: `k < R`, `j < prev_len`, and `compute_group` asserted
+            // `stage_twiddles.len() >= (R - 1) * prev_len`.
             let tw = *unsafe { stage_twiddles.get_unchecked((k - 1) * prev_len + j) };
             buf[k] = apply_twiddle_impl(buf[k], tw);
         }
@@ -167,6 +204,8 @@ fn store_col<F: Copy, const R: usize>(
 ) {
     // Explicit iteration with const R enables full unroll by LLVM.
     for k in 0..R {
+        // SAFETY: `k < R`, `j < prev_len`, and `compute_group` asserted
+        // `dst.len() >= R * prev_len`.
         *unsafe { dst.get_unchecked_mut(j + k * prev_len) } = buf[k];
     }
 }
@@ -188,6 +227,16 @@ impl<const R: usize> FusedStage for Radix<R> {
         let stride = groups_out * prev_len;
         let src_base = b_out * prev_len;
         let stage_twiddles = twiddles[tw_idx];
+        // One predictable branch per group discharges every strided
+        // unchecked access below: column `j < prev_len` of arm `k < R` reads
+        // `src[src_base + k * stride + j]`, writes `dst[k * prev_len + j]`,
+        // and (for `j > 0`) reads `stage_twiddles[(k - 1) * prev_len + j]`.
+        assert!(
+            src.len() >= src_base + (R - 1) * stride + prev_len
+                && dst.len() >= R * prev_len
+                && stage_twiddles.len() >= (R - 1) * prev_len,
+            "invariant: the fused stage's buffers cover R x prev_len columns"
+        );
         let zero = Complex::<F>::ZERO;
         let mut j = 0;
 
@@ -289,15 +338,8 @@ impl<const R: usize> FusedStage for Radix<R> {
         // Applied only on the final stage of a fused pass; inner stages receive None.
         if let Some(pw) = pointwise {
             let len = R * prev_len;
-            let dst_ptr = dst.as_mut_ptr();
-            let pw_ptr = pw.as_ptr();
-            let mut idx = 0;
-            while idx < len {
-                unsafe {
-                    let out = dst_ptr.add(idx);
-                    *out = apply_twiddle_impl(*out, *pw_ptr.add(idx));
-                }
-                idx += 1;
+            for (out, factor) in dst[..len].iter_mut().zip(&pw[..len]) {
+                *out = apply_twiddle_impl(*out, *factor);
             }
         }
     }

@@ -203,3 +203,14 @@ fn forward_reduced_n100_matches_precise_reference() {
     let err = max_err(&got, &expected);
     assert!(err < 1e-4, "f32 forward N=100 max_err={err:.2e}");
 }
+
+/// The fused-adaptive path — and with it the thread-local compose arena —
+/// runs only above `FUSE_THRESHOLD`, so the smallest length that exercises
+/// the arena is the smallest composite above 65,536. A direct DFT oracle is
+/// quadratic there; the round trip is the O(n log n) property that still
+/// fails on any wrong lane. Natively this is a routine test; under miri it
+/// is the interpreted aliasing witness for the arena's raw-pointer hand-out.
+#[test]
+fn roundtrip_above_the_fuse_threshold_reaches_the_arena() {
+    check_roundtrip(3 * (1 << 15), 1e-9);
+}

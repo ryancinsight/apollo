@@ -2,9 +2,9 @@
 //!
 //! **Status: correct, measured, and declined** — compiled for tests only,
 //! where it serves as the independent-implementation differential oracle for
-//! the planar kernel. Pinned on a P-core it is 16 to 37% slower than the
+//! the planar kernel. Pinned on an E-core it is 16 to 37% slower than the
 //! planar sibling at every covered size (256 through 65536), and roughly even
-//! on an E-core only at the largest: the three-shuffles-per-multiply cost of
+//! on a P-core only at the largest: the three-shuffles-per-multiply cost of
 //! interleaved butterflies outweighs the conversion and transpose seams it
 //! removes. That verdict is the module's chief product — it localizes the
 //! remaining gap to the reference engines in radix depth per pass, not in the

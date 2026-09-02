@@ -1,6 +1,116 @@
 # Apollo Backlog
 
-## ATLAS-APOLLO-MAIN-RED-BUTTERFLY-GLOBS-2026-09-01 — Restore a green main after #240 [patch] — review 2026-09-01
+## ATLAS-APOLLO-COMPILE-TIME-FEATURE-GATES-2026-09-01 — Short kernels gate SIMD on compile-time target features [patch] [perf] — todo
+
+- **Finding.** 37 sites in apollo-fft select SSE/AVX bodies with
+  `#[cfg(all(target_arch = "x86_64", target_feature = "avx", ...))]`
+  (`winograd/short_winograd.rs` and siblings). No workspace `rustflags`
+  sets `target-cpu` or `target-feature`, so on the default x86-64 build —
+  every CI run, every consumer, every benchmark here — those bodies are
+  compiled out and the scalar fallback runs. The pinned comparison shows the
+  cost where these kernels dominate: f32 n = 121 runs 274 ns against
+  RustFFT's 97 (2.8x), n = 67 407 against 212, n = 19 52 against 29, n = 31
+  103 against 67, while the f64 route sits at parity or better at the same
+  sizes (2026-09-01 `rustfft_comparison`, pinned).
+- **Outcome.** Replace compile-time feature cfgs with runtime capability
+  dispatch through the hermes seam (`vectorize_lanes`/`Simd` token — the
+  standards' runtime-detection rule), one dispatch per kernel entry, so the
+  vector bodies run on the hardware that has them. Measure per size against
+  the pinned comparison; f64 controls flat.
+- **Acceptance.** No `target_feature` cfg remains in apollo-fft kernel
+  sources; the f32 odd-size ratios above move; suite green.
+
+## ATLAS-APOLLO-BENCH-REGRESSION-FALSE-POSITIVE-2026-09-01 — The regression gate flagged identical machine code [patch] [perf] — done 2026-09-01 (identity fixed; bias not reproduced)
+
+- **Part 2 result (runs 33574856108 unswapped, 33575247861 swapped; identical-code pair `bc141b9c` → `7196ae13`, `force_measurements=true`):** both report `replicated counterbalanced 139 cases across 3 reports; no supported regression`; the swap warnings and force notice confirm the diagnostics engaged. The +10% "slower in all four" seen on run 33570302967 did **not** recur in either role orientation, so it was a one-off on the #242 artifacts rather than a standing bias; its cause is unestablished and is not guessed here. Standing protection is the identity short-circuit (#250). Watchpoint: a regression flagged on a change with no plausible codegen impact re-runs these diagnostics (#253) before it is believed.
+
+- **Delivered (part 1), `d3490283` (PR #250):** the identity gate compares code sections via `scripts/bench_executable_identity.py`, shipped in the candidate archive. Proven live on #250's own run: all three benches `CODE IDENTICAL`, `measurements_required=false`, pair jobs skipped, regression check green — the gate's first ever short-circuit. **Open (part 2):** the systematic ~10% candidate slowdown on identical code; root-cause by role swap with the retained artifacts of run 33570302967.
+
+- **Observed (PR #242, run 33570302967):** `benchmark regression check` fails
+  with `rader_half_cyclic_vs_full_cyclic/{auto,bluestein}_f32/1031` "candidate
+  is slower in all four comparisons" — ~52.7 → ~58 us, +10%, consistent across
+  both orderings and both replications of the counterbalanced design.
+- **Verified false positive.** The PR's code delta is the import rewrite in
+  `stockham/butterfly/fixed.rs` alone. Building the `half_cyclic_rader` bench
+  from the PR head `39bb85e2` and its parent `d4782689` (rustc 1.97, MSVC,
+  one target dir) gives executables of identical size whose bytes differ at
+  **5 offsets of 124,928**: PE `TimeDateStamp` (`0xf0`) and four
+  debug-directory entry timestamps 28 bytes apart. The code sections are
+  identical. A consistent +10% between identical binaries is the instrument.
+- **What the design did not protect against:** counterbalancing orderings
+  cancels drift *within* a pair; it cannot cancel a systematic difference in
+  how the candidate artifact is produced or invoked — extraction order, page
+  cache state, path, or anything else that always attaches to "candidate".
+  Cause unknown; do not guess it into the record.
+- **Proven on the CI artifacts (run 33570302967), superseding the local
+  Windows evidence:** parsing the two Linux `half_cyclic_rader` ELF
+  executables section by section, `.text` is **byte-identical**
+  (4,321,182 B), as are `.rodata`, `.init`, `.fini`, `.plt`. Only `.strtab`,
+  `.data.rel.ro`, and `.note.gnu.build-id` differ — symbol-name hashes and
+  the build id, which follow the two build directories
+  (`apollo-measurement/` vs `apollo-candidate-source/`). Identical code,
+  +10% reported.
+- **The short-circuit already exists and is defeated.** The
+  `benchmark executable identity` job runs `sha256sum` + `cmp` on the whole
+  files and gates the pair jobs on `measurements_required`; whole-file
+  identity can never hold across two build paths, so it always falls
+  through to timing. Fix: compare **code sections** (every
+  `SHF_EXECINSTR` section plus `.rodata`), not files — a dependency-free
+  ELF section compare in `scripts/`, exit 0 on identical code — so
+  doc-, comment-, and import-only PRs report `no code delta` and skip the
+  four pair jobs.
+- **Separate and unresolved: the systematic candidate slowdown.** With code
+  identical, "slower in all four comparisons" means something attached to
+  the *candidate role or artifact* costs ~10% — and on a real change that
+  bias inflates every regression and hides every improvement of that size.
+  Root-cause with the retained artifacts: swap roles (run the baseline
+  executable as "candidate") and see whether the slowdown follows the role
+  or the file. Cause not guessed into the record.
+- **Acceptance oracle:** re-running the gate on #242's head reports
+  `no code delta`; an injected real regression (a deliberate extra pass in
+  one kernel on a scratch branch) is still caught — prove the check is live
+  before trusting the short-circuit.
+- **Limit stated:** identity was shown on the Windows/MSVC build; CI's Linux
+  artifacts should be diffed the same way as the first step of part 2.
+
+## ATLAS-APOLLO-CENSUS-UNPINNED-BLEND-2026-09-01 — The engine census measures an unpinned two-class blend [minor] [perf] — done 2026-09-01 (merged 12b9c4d4)
+
+- **Limit closed (#256, `f0332d9d`):** hermes#124 added the Linux backend and the lock advanced; the Ubuntu smoke now prints `engine_census: bound to logical processor 1 (uniform class; second member of the highest efficiency class)` — pinned on Linux, `uniform` on the homogeneous runner as expected.
+- **Limit (found by #252's Linux smoke):** hermes `ProcessorBinding` has no Linux backend, so the helper reports *unpinned* on every Linux runner; the blend is removed on Windows hosts only until `HS-PROCESSOR-BINDING-LINUX-2026-09-01` lands. An operator override that cannot be honoured is still an error.
+- **Delivered (PR #252):** `apollo_bench::bind_measurement_processor` — override, else second member of the highest queried class, else current processor labelled unclassified; binding verified and printed. `engine_census` pins after its opt-out (smoke: `bound to logical processor 1 (performance class; ...)`); `rustfft_comparison` drops its private copy (-130 lines); `BenchmarkError` shared. Reclassified [patch] -> [minor]: additive public surface on `apollo-bench`. Liveness: breaking the second-member rule fails exactly one test. Per-class census rows deferred to `APOLLO_BENCH_PROCESSOR` runs (60 s budget). Diagnostic for the gate's candidate-role bias is PR #253.
+
+- **Claim:** integrator claude (this session); lane `worktrees/apollo-ecoqos-premise` on `perf/apollo-bench-measurement-processor`; lease: `crates/apollo-bench/{Cargo.toml,src/**}`, `crates/apollo-fft/benches/{engine_census,rustfft_comparison}.rs`, this entry. Consolidation: `rustfft_comparison` already hand-rolls a processor binding (env override, else the current processor — class unknown); the census is the second occurrence, so selection-by-queried-class lands once in `apollo-bench` and both benches call it.
+
+- **Finding (EcoQoS probe, 2026-09-01, this host, High performance plan):**
+  2000 unpinned `forward_complex_inplace` calls on the 4096x16 batched shape
+  landed on **all 24 processors** — 54% on the 16 efficiency cores, 45% on the
+  8 performance cores before the throttling opt-out; 49%/50% after. Median
+  154 us, **p90 372-407 us (2.4-2.6x median)**. The census's `engine_census`
+  numbers, and every comparison table built from them (apollo vs rustfft vs
+  phastft), are therefore a scheduler-dependent blend of two core classes
+  with a fat tail, not a property of the engines. Pinned probes elsewhere in
+  the crate already select a processor by queried class (themis); the census
+  does not.
+- **Why it matters:** a blend's median moves with whatever share of calls the
+  scheduler happens to place on each class in that run. Two runs of the same
+  binary can disagree by the inter-class latency ratio without any code
+  change — the "process-dependent anomaly" class ADR 0039 attributed to
+  EcoQoS is exactly what a two-class blend produces on its own.
+- **Outcome:** census arms run pinned to a processor selected by queried
+  efficiency class, reporting per-class rows (highest class as the headline,
+  lowest class alongside), or the census documents that it is deliberately
+  measuring the unpinned scheduler blend and its tables say so. Default
+  recommendation: pin, and report both classes, matching the pinned probes.
+- **Acceptance oracle:** the same census binary run twice reports headline
+  medians whose spread is inside the derived per-class noise bound rather
+  than the inter-class ratio; `landed` processor class is asserted, not
+  assumed, for every timed arm.
+- **Non-goals:** the power-throttling opt-out — its premise is handled under
+  ATLAS-APOLLO-ECOQOS-PREMISE-2026-09-01.
+
+## ATLAS-APOLLO-MAIN-RED-BUTTERFLY-GLOBS-2026-09-01 — Explicit butterfly intrinsic imports [patch] — review 2026-09-01 (decision: author)
+
+- **Reframed 2026-09-01:** #241 restored per-site `allow(..., reason)` at both sites before this landed, so main no longer needs #242 to be green. #242 stands as the no-suppression, convention-matching alternative; accepting or closing it is the author's call, tradeoff stated once in the PR body.
 
 - **Defect:** both merge runs after #239/#240 fail `rust workspace` at Clippy
   under 1.97: `wildcard_imports` at `stockham/butterfly/fixed.rs:377` and
@@ -105,8 +215,25 @@
 - **Non-goals:** re-tuning any benchmark; this is a build defect, not a
   measurement one.
 
-## ATLAS-APOLLO-INVERTED-CORE-CLAIMS-2026-09-01 — Sweep merged claims resting on the swapped core labels [patch] — todo
+## ATLAS-APOLLO-INVERTED-CORE-CLAIMS-2026-09-01 — Sweep merged claims resting on the swapped core labels [patch] — done 2026-09-01
 
+- **Claim (2026-09-01):** integrator Claude `/root`; lease: the core-label
+  hunks of `backlog.md`, `gap_audit.md`, ADR 0041, and the kernel doc
+  comments (`batched/`, `codelet/`, `resident/planar.rs`, `tuning.rs`,
+  `mixed_radix/scalar/impls.rs`); ADR 0039 stays with the EcoQoS lease.
+  Method: partition every mention by the enclosing record's date against
+  the `core_class.rs` landing (`b21fc172`, 13:09); pre-boundary records
+  swap mechanically, history quotes and post-boundary records stand,
+  property-based claims restate to what was measured.
+- **Delivered (2026-09-01, Claude `/root`):** `gap_audit.md#core-label-sweep`.
+  Swapped in place: 53 lines here, 37 in `gap_audit.md`, ADR 0041's prose
+  (its own correction note now says corrected), and the doc comments in
+  `batched/{mod,interleaved}.rs`, `codelet/mod.rs`, `tuning.rs`, and
+  `mixed_radix/scalar/impls.rs`; `resident/planar.rs` restated to the
+  measured efficiency-core fact. Untouched by design: post-boundary records,
+  history quotes (ADR 0042/0043, `stockham/mod.rs`, `measurement_cores.rs`),
+  the host's core counts, and ADR 0039 (EcoQoS lease). Every remaining
+  pre-boundary mention is therefore a corrected figure under this note.
 - **Outcome:** every recorded claim measured through the mislabelled probes
   either reads correctly or is marked, so no second inverted conclusion stands.
 - **Scope:** the audit found 40+ affected claims. Dispatched here rather than
@@ -187,7 +314,19 @@
   conclusion cannot be recovered by swapping labels, re-measure with the
   corrected instrument rather than reinterpreting.
 
-## ATLAS-APOLLO-ECOQOS-PREMISE-2026-09-01 — Re-establish or withdraw the EcoQoS root cause [patch] — in-progress 2026-09-01
+## ATLAS-APOLLO-ECOQOS-PREMISE-2026-09-01 — Re-establish or withdraw the EcoQoS root cause [patch] — done 2026-09-01 (withdrawn, merged 0ed7660a)
+
+- **Withdrawn (PR #245).** Probe added to the census
+  (`APOLLO_QOS_PLACEMENT_PROBE=1`); one run on this host (24 LPs, High
+  performance plan, desktop on AC, 2000 unpinned calls of 4096x16 per phase):
+  explicit throttling state `0x0/0x0` before and `0x1/0x0` after the opt-out;
+  landings on all 24 processors, 45% → 50% on the eight performance cores
+  (33% share); median 154.0 → 155.2 us; p90 372 → 407 us. The observation
+  ("exclusively on E-cores") is false as measured, the mechanism is not
+  API-observable, the remedy has no measured effect. ADR 0039 carries the
+  dated revision and an inline marker; the opt-out stays as a documented
+  measured no-op because Balanced/battery is untested here. Likelier cause
+  filed as `ATLAS-APOLLO-CENSUS-UNPINNED-BLEND-2026-09-01`.
 
 - **Claim:** integrator claude (this session); lane `worktrees/apollo-ecoqos-premise` on `fix/apollo-ecoqos-premise`; lease: `benches/engine_census.rs`, `docs/adr/0039-*`, this entry.
 
@@ -246,7 +385,7 @@
   the two-pass fallback. `combine_sink_supported` and the unreachable
   production fallback are deleted; the pinned probe is generic over the
   scalar. Net -114 kernel lines.
-- **Measured pinned, P-core, back to back, twice:** f32 256 311.9 ->
+- **Measured pinned, E-core, back to back, twice:** f32 256 311.9 ->
   **294.2/293.7** ns (1.39 -> **1.31** vs RustFFT); f32 512 705.7 ->
   **694.8/690.3**; f64 and 64/128 controls flat. Debug+release 511/511.
 - **Integrator:** Claude `/root`.
@@ -259,12 +398,54 @@
 - **Risk / dependency.** [patch] [perf]. Hermes provider PR #113 merged as `2e993503`. Integrator `/root`; lease `/root` on Apollo Mellin CPU kernel/tests/benchmark and this item's PM/doc hunks. The peer-owned canonical `Cargo.lock` remains outside this lease. Last update 2026-09-01.
 - **Current evidence.** Benchmark `6f0d9ff1`, source `d3410c13`, and allocation census after `cb00aa51`: one 2N f64 real-lane buffer is deleted (16N retained bytes per active worker), a fresh thread observes one remaining 2N weight-buffer allocation, and the warmed row allocates zero times while matching an independent complex-value oracle. Controlled same-provider pairs reduce N = 128 medians by 1.96%/1.49% and N = 256 by 1.46%/0.83%, while N = 64 moves -0.28%/+0.82%. Provider head `59c89431` merged through Hermes PR #113 as `2e993503`; a disposable standalone Apollo lock resolves 36 first-party Git sources to that merge and passes warning-denied all-target Clippy, 27/27 debug and 27/27 release Nextest, Rustdoc, one doctest, and benchmark smoke. Canonical lock advanced past the provider merge (first-party pins to origin mains, standalone resolution verified); mellin/stft gates green on the delivered revision (clippy -D warnings, 27+45 nextest, doctests). Collected from the stale lane and integrated by takeover.
 
-## ATLAS-APOLLO-STFT-WINDOW-INTERLEAVE-2026-09-01 — Measure forward-frame fusion [patch] [perf] — done 2026-09-01 (fusion rejected)
+## ATLAS-APOLLO-STFT-WINDOW-INTERLEAVE-2026-09-01 — Measure forward-frame fusion [patch] [perf] — re-adjudicated 2026-09-01: fusion adopted under the memory criterion
+
+- **Re-adjudication (2026-09-01, Claude session 03d80d33).** The rejection
+  below applied a predeclared *latency-improvement* gate. The stack's current
+  directive is memory efficiency, under which the acceptance is: latency not
+  regressed, retained per-worker scratch reduced, values identical. Rebuilt the
+  candidate rather than reviving the deleted source: interior frames (every
+  frame wholly inside the signal) now call the provider's fused
+  `real_mul_to_interleaved_complex` straight from the signal slice into the
+  complex output viewed as its `2n` real lanes (`Complex` is `repr(C)`); only
+  the frames overhanging either end take the scalar path. Both forward real
+  pools are deleted; the one real-lane pool that remains serves the inverse
+  path and is named for it.
+- **Evidence — per-frame, isolated.** In-process interleaved A/B of the
+  windowing pass alone at n = 1024, best of 15 blocks of 4000, three rounds:
+  old three-pass 238/232/224 ns per frame, fused 173/164/173 ns — **0.71x to
+  0.77x**, output bit-exact (one rounding of `x * w` either way).
+- **Evidence — STFT level.** The peer's exact `stft_cpu_forward` instrument,
+  two adjacent before/after pairs on a quiet host (0 rustc), medians in us:
+
+  | row | pair 1 before → after | pair 2 before → after |
+  |---|---|---|
+  | frame_32 control (scalar path, unchanged) | 12.06 → 12.48 | 13.40 → 11.51 |
+  | frame_1024 / 16384 | 17.09 → 16.42 (-3.9%) | 16.14 → 15.34 (-5.0%) |
+  | frame_1024 / 65536 | 40.26 → 40.22 | 49.04 → 36.52 |
+
+  The unchanged control swings ±14% between runs, so this instrument's floor
+  is wider than the effect; within it the target rows moved favorably in both
+  pairs and never regressed, consistent with the isolated per-frame result.
+  No latency *win* is claimed from this table — that was the peer's finding
+  too — and none is required by the criterion applied here.
+- **Memory.** Forward-only workloads retain no real scratch per worker where
+  they retained two `ScratchPool<f64>` buffers of the frame length (16 KiB per
+  worker at frame 1024, 64 KiB at 4096); `forward_windowing_retains_no_real_
+  scratch` pins it and `interior_frame_windowing_is_fused_and_bit_exact_with_
+  the_scalar_formula` pins the values. Closes the hermes
+  `HS-REAL-WINDOW-INTERLEAVE-2026-09-01` consumer half; its provider surface
+  is no longer unused.
+- **Gates.** fmt; `clippy --locked -p apollo-stft --all-targets --all-features
+  -D warnings`; nextest 52/52 (two new); doctests.
+
+### Original adjudication (latency gate) — superseded
+
 
 - **Outcome.** Retain the exact reusable CPU STFT benchmark at `c1853792`; reject the fused Hermes consumer and its otherwise-unused public provider surface. The source-equivalent candidate removed two retained real scratch buffers (16,384 bytes per active worker at frame length 1,024) and kept warm execution allocation-free, but it did not clear the predeclared complete-path latency gate.
 - **Evidence.** In the first adjacent pair, the scalar control moved -6.96% while the 16,384/65,536-sample target medians moved -4.46%/-10.31%; in the second, control moved -0.15% while targets moved -0.14%/-0.83%. Target confidence intervals overlap and the first-pair movement is control-confounded, so no latency win is attributed. The experimental source and allocation test were removed before commit; production source is unchanged. Timing is local Windows AVX2 evidence only. Commits `c1853792`/`4d1e5e35` delivered with the canonical lock advance; the re-open trigger (lock regeneration) fired and was executed in the same takeover. Lease none.
 
-## ATLAS-APOLLO-BATCHED-NATIVE-WIDTH-2026-09-01 — The f32 reinterleave sink ran at half the native width [patch] [perf] — review
+## ATLAS-APOLLO-BATCHED-NATIVE-WIDTH-2026-09-01 — The f32 reinterleave sink ran at half the native width [patch] [perf] — done 2026-09-01
 
 - **Outcome.** `InterleaveRows`, the last batched boundary kernel hardcoding
   four lanes, takes the f32 native eight-lane width. The f64 route is unchanged.
@@ -301,6 +482,11 @@
   `crates/apollo-fft/src/application/execution/kernel/components/batched/**`.
   Last update 2026-09-01.
 
+- **Closed by verification (2026-09-01, Claude `/root`).** Source landed
+  through PR #231 (`35672941`) and is an ancestor of main; the "hosted review
+  and merge remain" line above predates that merge. The width test
+  (`f32_reinterleave_takes_the_native_width_and_matches_the_scalar_sink`)
+  runs in the 521-test suite that passed on today's tree.
 ## ATLAS-APOLLO-HERMES-COMPLEX-TRANSPOSE-2026-09-01 — Tile multidimensional complex transposes [patch] [perf] — done 2026-09-01
 
 - **Outcome.** Apollo source `9ac833cd` delegates its private 2-D/3-D complex transpose to Leto Ops PR #135/merge `060eb7eb`, which owns the allocation-free Hermes 16/8/4-lane tile selection and generic fallback; transform, Leto-view, Mnemosyne-scratch, and Moirai-scheduling contracts remain unchanged.
@@ -450,7 +636,7 @@
   traffic-removal claim remains.
 - **Evidence:** source `72bdf90a`, Linux test-CFG correction `160d3154`;
   three same-buffer ABBA confirmations improve N = 512 by
-  0.44--2.70% on the pinned P-core and 18.36--19.51% on the pinned E-core;
+  0.44--2.70% on the pinned E-core and 18.36--19.51% on the pinned P-core;
   N = 256 controls remain neutral. Release assembly has zero sink calls and
   three rather than ten compares. Debug/release 19/19 and release 510/510
   value tests, warm f32/f64 allocation census, all-target/all-feature Clippy,
@@ -461,7 +647,7 @@
   post-merge ladder, two runs): 512 (P) = 1282-1300 ns, 1.22-1.24 against
   RustFFT, down from 1307-1310 pre-merge; 512 (E) = 586-598 ns with a
   clean in-run control; 64/128/256 stable. Matches the recorded
-  0.44-2.70% P-core and 18-19% E-core deltas.
+  0.44-2.70% E-core and 18-19% P-core deltas.
 
 ## ATLAS-APOLLO-SPLIT-BOUNDARY-2026-08-31 — Vectorize the split's gather; fuse its combine levels [perf] — done 2026-08-31
 
@@ -512,8 +698,8 @@
   the per-scalar `USE_BASE_64` gate survives on the new plan. The 128
   plan also sheds 48 dead table lanes the generalization surfaced.
 - **Measured pinned, back to back, controls within 1%:** 64 goes
-  155.8 -> **89.3** ns on a P-core (1.88 -> **1.08** vs RustFFT, 0.55 vs
-  PhastFT) and 65.8 -> **46.4** on an E-core; 128/256/512 flat, verifying
+  155.8 -> **89.3** ns on an E-core (1.88 -> **1.08** vs RustFFT, 0.55 vs
+  PhastFT) and 65.8 -> **46.4** on a P-core; 128/256/512 flat, verifying
   the table relayout neutral. Every ladder size now sits between 1.07 and
   1.35 against RustFFT.
 - **Also falsified today, recorded in the same audit entry:** re-removing
@@ -599,7 +785,7 @@
   length in `2..=2048`, plus the tracked lengths above it, now passes with no
   wrong answers and no refusals.
 
-## ATLAS-APOLLO-N1024-SPECIALIZATION-2026-08-31 — A per-length kernel cost 13x at the length it specialized [perf] — review
+## ATLAS-APOLLO-N1024-SPECIALIZATION-2026-08-31 — A per-length kernel cost 13x at the length it specialized [perf] — done 2026-09-01
 
 - **Finding.** `ReducedStockhamAvxFma::stage_triple` dispatched a hand-written
   `stage_triple_radix1_n1024_avx_fma` for a four-byte scalar at n = 1024. It
@@ -629,6 +815,11 @@
   (no AVX-512 hardware — `ATLAS-APOLLO-WIDER-ISA-2026-08-28`). Left alone
   rather than changed blind.
 
+- **Closed by verification (2026-09-01, Claude `/root`).** Source `82557a32`
+  landed through PR #207 (`d975ecf6`); on current main the four-byte scalar's
+  `stage_triple` carries no n = 1024 arm (`reduced.rs` references none) while
+  the eight-byte arm in `precise.rs` keeps it, exactly as scoped. Suite
+  521/521 debug and release on the delivered tree.
 ## ATLAS-APOLLO-N32768-F64-VARIANCE-2026-08-31 — Exact-processor f64 N=32,768 latency retains a 22.3% band [patch] [perf] — done 2026-08-31
 
 - **Delivered:** source `3d3a7d37`, PR #217, merge `5bf93047`; retained phase
@@ -636,7 +827,7 @@
 - **Evidence:** independent GREEN; hosted lock/workspace/bindings/benchmark
   gates green; exact local package, cross-target, docs, and lock gates green.
 
-## ATLAS-APOLLO-SWEEP-STOPS-AT-512-2026-08-31 — The comparison sweep cannot see the sizes where per-length kernels live [patch] — review
+## ATLAS-APOLLO-SWEEP-STOPS-AT-512-2026-08-31 — The comparison sweep cannot see the sizes where per-length kernels live [patch] — done 2026-09-01
 
 - **Finding.** The default comparison stopped at 512 while production carries
   distinct 1,024 and 32,768 routes. The first extension also exposed two
@@ -685,6 +876,9 @@
   claim commit `b156a967` claimed ATLAS-APOLLO-FFT-1024-ROUTE-2026-08-31,
   which is already done on main; it was not carried forward.
 
+- **Closed by verification (2026-09-01, Claude `/root`).** Source `8a88529d`
+  landed through PR #216 (`a6fbcd02`) and is an ancestor of main; the
+  "hosted review/merge remain" line above predates that merge.
 ## ATLAS-APOLLO-BASE-64-SWITCH-RETIRED-2026-08-30 — A measured constant outlived its premises [patch] [perf] — done 2026-08-30
 
 - **What happened.** `USE_BASE_64` was added 2026-08-29 on a real measurement:
@@ -728,7 +922,7 @@
   (`ATLAS-SEMVER-GATE-FLEETWIDE`); this is the apollo-specific blocker that
   would keep apollo failing even once that item lands.
 
-## ATLAS-APOLLO-WAVELET-DOC-LINKS-2026-08-29 — Three unresolved intra-doc links in apollo-wavelet [patch] — todo
+## ATLAS-APOLLO-WAVELET-DOC-LINKS-2026-08-29 — Three unresolved intra-doc links in apollo-wavelet [patch] — done 2026-09-01
 
 - **Finding.** `RUSTDOCFLAGS="-D warnings" cargo doc` fails on
   `apollo-wavelet`: unresolved links to `coefficient`, `convolution`, and
@@ -737,6 +931,14 @@
 - **Origin:** commit `e2f7ed21`, outside this session's lease. Left for the
   owner rather than fixed in an unrelated PR.
 
+- **Delivered (2026-09-01, Claude `/root`).** Both items are public and
+  documented (`fn.coefficient.html`, `convolution/` are generated), yet the
+  relative forms (`[coefficient]`, `self::`, `super::coefficient`) do not
+  resolve from these module docs under 1.97 rustdoc; fully-qualified
+  `crate::infrastructure::kernel::continuous::…` paths do, keeping the
+  links navigable rather than demoting them to code spans. Warning-denied
+  `cargo doc -p apollo-wavelet` passes; the same pass also fixed
+  `apollo-fft`'s `real_fft` private-item link (#247).
 ## ATLAS-APOLLO-SHT-FFT-2026-08-29 — SHT longitude FFT factorization [minor] — in-progress
 
 - **Outcome:** the longitude sum in both SHT directions is computed as a DFT
@@ -1052,8 +1254,8 @@
   geometry and buffer split are named functions rather than open-coded at
   three call sites.
 - **Measured pinned:** 2048 7568.4 -> 7473.0 ns and 8192 31402.5 -> 30927.9
-  on a P-core (-1.3%, -1.5%; ratio 1.16 -> 1.13 at 8192), -3.7% and -1.4%
-  on an E-core. Controls 4096, 16384, 1024, 512, 256, 128 flat.
+  on an E-core (-1.3%, -1.5%; ratio 1.16 -> 1.13 at 8192), -3.7% and -1.4%
+  on a P-core. Controls 4096, 16384, 1024, 512, 256, 128 flat.
 - **Less than the model predicted, and the reason is recorded:** 8192 is
   128 KB, over L1 but inside L2, so the strided re-read the pass removes
   was being served from L2 rather than memory. The residual decimation cost
@@ -1072,7 +1274,7 @@
   removed; peak scratch lower than the unfused route.
 - **Measured pinned, controls in the same run:** 2048 8133.8 -> 7568.4 ns
   (-7.0%, ratio 1.44 -> 1.34) and 8192 34413.9 -> 31402.5 (-8.8%, 1.27 ->
-  1.16) on a P-core; -18.0% and -19.2% on an E-core. Controls 4096, 16384,
+  1.16) on an E-core; -18.0% and -19.2% on a P-core. Controls 4096, 16384,
   1024, 512, 256, 128 all flat. The const parameters cost the sequential
   path nothing, which was the live risk after the strided base source paid
   5% for the same shape.
@@ -1124,7 +1326,7 @@
 - **Why:** the general interleaved product is four operations (shuffle,
   multiply, alternating FMA) and so is the identity (rotation, add,
   multiply), with a longer chain. The three-shuffle model that motivated the
-  lever was wrong; this P-core is not shuffle-port-bound.
+  lever was wrong; this E-core is not shuffle-port-bound.
 - **Conclusion: the 136-vs-72 multiply gap is unconvertible in this layout**,
   and both the arithmetic and the schedule have been measured to their end.
   Further gain at n = 128 requires the register working set the AVX2 file
@@ -1139,8 +1341,8 @@
   one without its last stage, the column pass identical. The cold plan
   builder generalizes with it; `n = 64` gains a base route where it ran six
   ping-pong Stockham passes.
-- **Measured pinned:** n = 64 **158.2 -> 128.8 ns P-core (1.90x -> 1.54x
-  RustFFT)** and **108.3 -> 65.3 E-core (2.71x -> 1.67x)**; 128, 256 and 512
+- **Measured pinned:** n = 64 **158.2 -> 128.8 ns E-core (1.90x -> 1.54x
+  RustFFT)** and **108.3 -> 65.3 P-core (2.71x -> 1.67x)**; 128, 256 and 512
   unchanged. 1083 workspace tests green.
 - **Detour recorded (`gap_audit.md#base-row-length`):** the first generic
   version measured 5% slower at three sizes, which looked like the cost of
@@ -1311,9 +1513,9 @@
   radix-2 splits), with the plan building the base state for all three
   lengths so ownership stays as ADR 0041 requires, and the combine reading
   `W_N^j` from the final stage of the already-cached twiddle table.
-- **Measured pinned, P-core:** 256 820.8 -> **726.5** ns (1.99x -> **1.76x**
+- **Measured pinned, E-core:** 256 820.8 -> **726.5** ns (1.99x -> **1.76x**
   RustFFT, 1.19x -> **1.05x** PhastFT); 512 2110.9 -> **1901.3**
-  (2.01x -> **1.83x**, 1.44x -> **1.30x**). E-cores move with them.
+  (2.01x -> **1.83x**, 1.44x -> **1.30x**). P-cores move with them.
   Evidence: `gap_audit.md#small-size-splitting`.
 - **Declined:** a hand-vectorized combining kernel measured 728.9 against
   725.2 ns — no effect, so it was removed rather than kept.
@@ -1335,7 +1537,7 @@
   and therefore hit the batched planar kernel, and combines using the
   `W_N^j` entries already sitting in the last stage of the cached twiddle
   table — no new table, no new allocation class.
-- **Measured pinned, P-core:** 512 2623 -> **2117** ns (2.51x -> 2.02x),
+- **Measured pinned, E-core:** 512 2623 -> **2117** ns (2.51x -> 2.02x),
   2048 14140 -> **8055** (2.56x -> **1.43x**), 8192 68117 -> **34660**
   (2.49x -> **1.27x**); even powers unchanged. Cost is monotone in size
   again. Evidence: `gap_audit.md#odd-power-routing`.
@@ -1498,8 +1700,34 @@
   34/33, `radix_composite/arity.rs` 25, `good_thomas/cook_toom_gt.rs` 25 —
   each slice a separate measured item; the check keeps every landed slice
   from regressing.
-## ATLAS-APOLLO-COMPOSE-ARENA-MIRI — Cover the compose arena's raw-pointer pattern with miri [patch] — todo
+- **Slices landed (2026-09-01, Claude `/root`):** 398 -> 302
+  (`gap_audit.md#ratchet-slice-safe-indexing`). `odd_prime_pair.rs` 35 -> 0
+  and `arity.rs` 25 -> 0 by replacing unchecked indexing with forms the
+  const array types already prove (arity keeps three strided sites under a
+  release entry assert and SAFETY); the generated composite codelets become
+  safe fns, retiring the 35 winograd test wrappers and one Cook-Toom
+  wrapper. Measured pinned, paired: f64 flat everywhere; f32 odd sizes
+  faster (7/11/13 -29%/-28%/-25%, 19 -12%, 31 -9%). Next by density:
+  `stockham/avx/generic/pair.rs` 57, `stockham/precision/{precise,reduced}`
+  34/33, `cook_toom_gt.rs` 24 -- the stockham clusters are the per-ISA
+  backend-call class whose structural fix is the hermes seam
+  (`ATLAS-APOLLO-ISA-FORK-2026-08-25`).
+## ATLAS-APOLLO-COMPOSE-ARENA-MIRI — Cover the compose arena's raw-pointer pattern with miri [patch] — done 2026-09-01
 
+- **Delivered (2026-09-01, Claude `/root`):** `gap_audit.md#compose-arena-alignment`.
+  The arena carries its soundness invariant and the owned-allocation
+  fallback specification on `ComposeArena`; every unsafe site in
+  `adaptive.rs` has a SAFETY comment; three arena tests replicate the
+  production hand-out and run under miri (clean, 4.7 s standalone) — and the
+  first run found the arena aligning its offset rather than its address
+  (UB by contract), now fixed. A deepest-composite round trip above
+  `FUSE_THRESHOLD` (n = 98,304) joins the native suite. Under miri that
+  end-to-end path stops before the arena at the parallel policy's NUMA probe
+  (`GetNumaHighestNodeNumber` in `themis::topology::cpu::detect::windows`,
+  an unsupported foreign call) — the arena's miri witness is the unit-test
+  replica, and an upstream `cfg(miri)` stub of that probe is the external
+  requirement for the interpreted end-to-end run. Footprint instrument gated
+  `#[cfg(not(miri))]`; ratchet checker walks statement heads (398 baseline).
 - **Outcome:** the `ComposeArena` `from_raw_parts_mut`-over-TLS-`UnsafeCell`
   pattern carries a stated SAFETY invariant note and a miri-covered
   deepest-composite test; an owned-allocation fallback is specified if
@@ -1636,16 +1864,16 @@
 
   | pinned | apollo batched | phastft | rustfft (scratch-planned) |
   | --- | --- | --- | --- |
-  | P-core | 3423 ns | 3257 | 2455 |
-  | E-core | 2305 ns | 1482 | 1264 |
+  | E-core | 3423 ns | 3257 | 2455 |
+  | P-core | 2305 ns | 1482 | 1264 |
 
-  Apollo is **within 5% of PhastFT on the P-core** at the centre of the
+  Apollo is **within 5% of PhastFT on the E-core** at the centre of the
   "weak" range, and the true RustFFT gap is 1.4x — not the 2.4x that
   cross-instrument arithmetic (pinned apollo against unpinned census
   references, and `process()` versus `process_with_scratch`) had been
-  reporting. Matching PhastFT at mid sizes on P-cores is nearly done; the
+  reporting. Matching PhastFT at mid sizes on E-cores is nearly done; the
   post-fix verdict below shows this resident shape cannot close the remaining
-  RustFFT or E-core gaps.
+  RustFFT or P-core gaps.
 
 ## HS-VECTORIZE-LARGE-KERNEL — vectorize outlines large kernel bodies out of the target-feature scope (hermes) [arch] — provider done 2026-08-28
 
@@ -1666,7 +1894,7 @@
   order of 200 cycles per row; apollo's resident probe then re-measures the
   shape against the references.
 - **Post-fix verdict (hermes PR #78 merged):** the dispatch fix landed and
-  bit — resident 26.5 us → 6.5 us at N = 1024 P-core; row passes now
+  bit — resident 26.5 us → 6.5 us at N = 1024 E-core; row passes now
   ~171 cycles per 32-point row, near their port-limited bound. Per-pass TSC
   attribution (`RESIDENT_SECTIONS=1`): rows1 5462, rows2 7659, transposes
   1369 + 1430, untangle 5086. Structural verdict: the two row passes alone
@@ -1692,7 +1920,7 @@
   including the planar-vs-interleaved differential), and still measured
   **6.3k TSC per row pass against the interleaved kernel's 5.6k** — the
   boundary deinterleave/interleave networks spend as many shuffle-class ops
-  as the interleaved multiply chain they replace, and the P-core was never
+  as the interleaved multiply chain they replace, and the E-core was never
   shuffle-port-bound. Both register-row shapes cost ~3x a batched streaming
   pass in arithmetic alone.
 - **Delivered:** `resident/planar.rs` (named-local registers, native
@@ -1719,7 +1947,7 @@
   boundary kernels had the identical defect at runtime sizes, where the type
   cannot hold the length; they take one entry `assert!` plus proof-carrying
   raw chunk helpers instead, matching the stage kernel beside them.
-  Transpose **1151 -> 658 TSC (-43%)**; pinned ladder P-core moves to
+  Transpose **1151 -> 658 TSC (-43%)**; pinned ladder E-core moves to
   1.99/1.32/1.18/1.06 against RustFFT and 1.19/**0.98**/0.90/0.87 against
   PhastFT at n = 256/1024/4096/16384 — **apollo now leads PhastFT at 1024 as
   well as above it, and trails RustFFT by 6% at 16384.**
@@ -1733,7 +1961,7 @@
   per kernel, and keeping the register arrays pinned to memory. **Fix: put
   the lengths in the types** (`&mut [T; 256]`, `Box<[T; 496]>`). Bounds
   branches ~130 -> **zero**, verified in re-emitted assembly. **278.9 ns
-  P-core against 293.9 (-5.1%) and 135.3 against 145.2 E-core (-6.8%);
+  E-core against 293.9 (-5.1%) and 135.3 against 145.2 P-core (-6.8%);
   RustFFT ratio 1.62x -> 1.53x and 1.61x -> 1.50x.** No unsafe, no
   algorithmic change.
 - **Split executed, layout restored, both measured (2026-08-28,
@@ -1825,7 +2053,7 @@
   mixed-radix layer using one caller-owned full-length scratch and an
   explicit transpose, matching `MixedRadix8xnAvx(Butterfly128Avx64)` at
   N = 1024. Pinned five-engine probe is the acceptance instrument
-  (<= batched to merge as experiment, <= RustFFT ~2.47 us P-core to take
+  (<= batched to merge as experiment, <= RustFFT ~2.47 us E-core to take
   the route); the design increment defines the exact bit-reversal/twiddle
   address map, storage contract, bounded live set, and width gate before
   mutation (per the PR #147 review's respecification requirements).
@@ -1834,7 +2062,7 @@
   per-pass attribution is this item's first diagnostic step.
 - **Tiled transpose landed (2026-08-27, hermes `transpose_square` PR #83):**
   the plane transpose runs through in-register 4x4 tiles — 1659 → 1151 TSC
-  pinned — and the ladder moved: P-core vs PhastFT 1.26/1.08/0.92/0.88 and
+  pinned — and the ladder moved: E-core vs PhastFT 1.26/1.08/0.92/0.88 and
   vs RustFFT 2.10/1.42/1.20/1.10 at n = 256/1024/4096/16384. Movement now
   ~3.9k TSC at n = 1024 (deint 1431 kept scalar by verdict, transpose 1151,
   permute 582, reint 900); the permute-fold analysis is closed — the
@@ -1842,17 +2070,17 @@
   destination tile scatters across four row blocks, so in-place tile fusion
   is infeasible without a scratch plane. This architecture's movement is
   near its floor; the next lever is pass-count reduction (the 128-base
-  construction below) and E-core routing.
+  construction below) and P-core routing.
 - **Pinned ladder standing (2026-08-27, `batched::pinned_ladder`, contended
-  host):** P-core vs RustFFT 2.15x/1.49x/1.24x/1.14x and vs PhastFT
+  host):** E-core vs RustFFT 2.15x/1.49x/1.24x/1.14x and vs PhastFT
   1.29x/1.13x/0.95x/0.90x at n = 256/1024/4096/16384 — **the PhastFT bar is
-  met at 4096 and 16384 on P-cores**; residual gaps concentrate at small
-  sizes and on E-cores (up to 3.0x at n = 256), both dominated by fixed
+  met at 4096 and 16384 on E-cores**; residual gaps concentrate at small
+  sizes and on P-cores (up to 3.0x at n = 256), both dominated by fixed
   per-pass movement costs. Confirms the movement burn-down as the binding
   work; n = 256 routing itself (four-step vs a straight base butterfly) is
   in question once the 128-base exists.
 - **First diagnostic delivered (2026-08-27):** batched per-pass TSC
-  attribution at N = 1024 pinned P-core — deint 1431, stages1 2655,
+  attribution at N = 1024 pinned E-core — deint 1431, stages1 2655,
   transpose 1659, permute 582, stages2 3259, reint 1252: **45% of the
   budget is data movement**, and the stage arithmetic alone (5.9k) is
   already below RustFFT's whole-transform 7.9k, so the RustFFT gap is
@@ -1883,16 +2111,16 @@
 - **Corrected pinned evidence:** the first 326/194 ns figures are invalid
   because they included four timestamp reads and four atomic updates per
   transform. The 100-sample zero-instrumentation medians and 96.4799% exact
-  intervals are 294.518 ns [294.275, 294.826] P-core and 146.401 ns
-  [146.364, 146.468] E-core. The incumbent route is 687.152 ns
+  intervals are 294.518 ns [294.275, 294.826] E-core and 146.401 ns
+  [146.364, 146.468] P-core. The incumbent route is 687.152 ns
   [686.937, 687.564] and 1844.331 ns [1843.457, 1845.866], so the base is
   2.33x and 12.60x faster. PhastFT is 330.019 ns [329.688, 330.503] and
   148.974 ns [148.899, 149.065], while RustFFT remains faster at 181.788 ns
   [181.591, 181.986] and 84.694 ns [84.670, 84.726]. The measurement body
   completes in 11.98 seconds; its optimized test-binary rebuild took 2m15s
   and is build-cost evidence, not runtime evidence. Serialized phase
-  attribution, run separately, reports 164/521/452 TSC P-core and
-  96/232/300 TSC E-core (redistribution/rows/columns).
+  attribution, run separately, reports 164/521/452 TSC E-core and
+  96/232/300 TSC P-core (redistribution/rows/columns).
 - **Provider closure:** Hermes PR #86 merged exact-count dispatch as
   `5734b85a`; the four-lane f64 kernel now selects AVX2 on AVX-512 hosts, and
   an unavailable width returns `None` without invoking or mutating the kernel.
@@ -1906,9 +2134,9 @@
   inverse direct-DFT values, and both dynamic inverse modes plus zero/singleton
   identity plans have value-semantic coverage. Local production medians are
   295.117 ns
-  [294.899, 295.304] P-core and 163.529 ns [163.502, 163.558] E-core; the
+  [294.899, 295.304] E-core and 163.529 ns [163.502, 163.558] P-core; the
   same-run direct base is 294.865 ns [294.573, 295.022] and 152.550 ns
-  [152.520, 152.581]. The E-core wrapper has an 11.0 ns residual dispatch cost,
+  [152.520, 152.581]. The P-core wrapper has an 11.0 ns residual dispatch cost,
   while production is 11.28x faster than the incumbent entry baseline. The
   remaining merge requirement is a green unchanged hosted replicated
   counterbalanced comparator. ADR 0041 records the ownership and evidence.
@@ -1936,9 +2164,9 @@
   by 400 bytes, identifying placement sensitivity rather than a kernel win.
   The route is withdrawn; the base and its complete oracle remain test-gated.
 - **Small-size gate standing (`base128::pinned_probe`):** entry production
-  vs RustFFT at n = 64/128/256/512 P-core: 1.86/3.78/2.09/2.46 — the odd
+  vs RustFFT at n = 64/128/256/512 E-core: 1.86/3.78/2.09/2.46 — the odd
   powers route scalar (ADR 0042) and are the worst sizes in the ladder;
-  n = 128 E-core is 22x. **Next increments:** (1) admit the plan-owned N = 128
+  n = 128 P-core is 22x. **Next increments:** (1) admit the plan-owned N = 128
   route only if the unchanged exact comparator clears; (2) tighten the base
   toward RustFFT after a fresh profile of the
   now-uninstrumented specialization;
@@ -1998,8 +2226,8 @@
 - **Radix-8 was implemented and measured honestly, and it loses.** The full
   three-stage fused block (eight rows, seven hoisted twiddles) passed all
   eleven oracles including the interleaved differential on the first run —
-  and measured flat to slower pinned: +5/+3/+8% on a P-core at 256/4096/65536,
-  +7 to +13% slower on an E-core at small sizes. Codegen inspection confirmed
+  and measured flat to slower pinned: +5/+3/+8% on an E-core at 256/4096/65536,
+  +7 to +13% slower on a P-core at small sizes. Codegen inspection confirmed
   the mechanism the item predicted: **108 ymm-to-stack spill instructions
   against 17 FMAs** in the kernel body — register traffic exceeding
   arithmetic. Sixteen data registers is the whole AVX2 file, and the register
@@ -2013,10 +2241,10 @@
   multiply by them as vectors, and the transpose becomes a pure exchange —
   the scalar multiply that was 26% of the driver at N = 256 is deleted, not
   optimized.
-- **Measured pinned on the P-core (the item's primary oracle):** +4 to 9% at
+- **Measured pinned on the E-core (the item's primary oracle):** +4 to 9% at
   256 through 16384 against both recorded radix-4 baselines (1024: 3805 to
   3504 ns, now 14.6 flops/ns; cumulative with the seam pass, 4228 to 3504 =
-  17%); 65536 inside the baseline noise band. E-core figures are within their
+  17%); 65536 inside the baseline noise band. P-core figures are within their
   historical swing and not claimed.
 - **Memory accounting, stated:** the planes cache adds `2n` reals per
   `(n, direction)` key beside the interleaved matrix, which must stay because
@@ -2056,8 +2284,8 @@
 - **Built, verified, measured pinned — and the planar kernel wins.** The
   interleaved in-place four-step (no scratch, no conversions, vector twiddle
   pass) passes five oracles including a differential against the planar
-  kernel, and loses to it 16 to 37% pinned on a P-core at every covered size,
-  256 through 65536; on an E-core it reaches parity only at 16384. The
+  kernel, and loses to it 16 to 37% pinned on an E-core at every covered size,
+  256 through 65536; on a P-core it reaches parity only at 16384. The
   three-shuffles-per-multiply cost of interleaved butterflies outweighs the
   seams it removes — the planar layout earns its conversions on this
   hardware.
@@ -2080,7 +2308,7 @@
   N = 16 register-resident codelet on `hermes_simd::ComplexReg` passes four
   oracles (direct DFT forward and inverse, normalized round trip, differential
   against the incumbent route) but loses to the incumbent sized kernel 1.8x on
-  a P-core and 1.4x on an E-core. The incumbent small codelets are already
+  an E-core and 1.4x on a P-core. The incumbent small codelets are already
   near roofline (~22 flops/ns at N = 16); the losing term is the stack-buffer
   bit reversal, whose scalar stores stall the following vector loads. Per the
   acceptance oracle it ships **unwired**, with the probe that vetoed it
@@ -2111,11 +2339,11 @@
 - **The layout hypothesis was tested honestly and refuted.** The plane stride
   was padded off the power-of-two boundary (`ROW_PAD`), which was this item's
   proposed mechanism — and the census figure did not move. Padding is kept on
-  its own merits: +10% pinned on a P-core at N = 4096, and it removes the
+  its own merits: +10% pinned on an E-core at N = 4096, and it removes the
   aliasing hazard the fused transpose had to tile around.
 - **The decisive instrument** is `pot::core_matrix`: pin the thread, measure
-  both routes. At N = 4096, four-step beats Stockham on a P-core (16.6 us
-  against 28.1) and on an E-core (13.2 against 62.6) — nowhere near the 45-99
+  both routes. At N = 4096, four-step beats Stockham on an E-core (16.6 us
+  against 28.1) and on a P-core (13.2 against 62.6) — nowhere near the 45-99
   us the throttled process reported.
 - **Consequences shipped with the closure:** the 1-D crossover moves to 4096 on
   the controlled evidence (ADR 0039, fourth revision note); the census opts
@@ -2137,8 +2365,8 @@
   by the live column count, the NaN-sentinel test proves the fused transpose
   never writes it, and `scratch_len` is the single definition of the enlarged
   requirement for driver, callers, and tests alike.
-- **Measured pinned at N = 4096:** +10% on a P-core (16.6 against 18.3 us),
-  neutral on an E-core. The aliasing argument bites hardest at m >= 256, which
+- **Measured pinned at N = 4096:** +10% on an E-core (16.6 against 18.3 us),
+  neutral on a P-core. The aliasing argument bites hardest at m >= 256, which
   the quiet-host run should confirm.
 
 ## ATLAS-APOLLO-FOUR-STEP-TWIDDLE-PLANAR-2026-08-26 — Vectorize the four-step twiddle pass [patch] — done 2026-08-26, by deletion
@@ -3103,7 +3331,7 @@
   remain open.
 
 
-## Rust crate publication aliases [patch] — in progress
+## Rust crate publication aliases [patch] — blocked: release authority
 
 - Owner: Codex `/root`; scope: root dependency identities, clean lockfile,
   registry package verification, and crates.io publication readiness.
@@ -3119,6 +3347,13 @@
   runtime-only integer math is package-owned. Exact package verification,
   hosted verification, and merge remain.
 
+- **State (2026-09-01, Claude `/root`, claim four weeks stale).** The
+  workspace half is done: `mnemosyne = { package = "mnemosyne-memory" }` and
+  `moirai = { package = "moirai-runtime" }` bind the published identities at
+  the root (`0917a6a6`) without changing imports, and the gate is green. The
+  remaining half — publishing through the OIDC release workflow — is the
+  release state, which needs explicit authority; re-open trigger: a release
+  authorization naming the crates.
 ## D20-real-spherical-harmonic-provider [minor] — complete 2026-08-13
 
 - Owner: Codex `codex/real-spherical-harmonics`; scope: `apollo-sht` real,

@@ -8,8 +8,10 @@ thread_local! {
     pub(crate) static TYPED_SPECTRUM64_SCRATCH: ScratchPool<Complex64> = const { ScratchPool::new() };
     pub(crate) static TYPED_FORWARD_OUTPUT64_SCRATCH: ScratchPool<Complex64> = const { ScratchPool::new() };
     pub(crate) static TYPED_INVERSE_OUTPUT64_SCRATCH: ScratchPool<f64> = const { ScratchPool::new() };
-    pub(crate) static FORWARD_FRAME_REAL_SCRATCH: ScratchPool<f64> = const { ScratchPool::new() };
-    pub(crate) static WINDOWED_FRAME_REAL_SCRATCH: ScratchPool<f64> = const { ScratchPool::new() };
+    /// Real lane of an inverse frame, ahead of the window multiply. The forward
+    /// path retains no real scratch: interior frames multiply straight from the
+    /// signal slice into the complex output through the provider.
+    pub(crate) static INVERSE_REAL_LANE_SCRATCH: ScratchPool<f64> = const { ScratchPool::new() };
     pub(crate) static INVERSE_FRAME_SCRATCH: ScratchPool<f64> = const { ScratchPool::new() };
     pub(crate) static INVERSE_COMPLEX_SCRATCH: ScratchPool<Complex64> = const { ScratchPool::new() };
     pub(crate) static INVERSE_OVERLAP_SCRATCH: ScratchPool<f64> = const { ScratchPool::new() };
@@ -33,31 +35,45 @@ pub(crate) fn window_signal_frame_into(
     output: &mut [Complex64],
 ) {
     debug_assert_eq!(window.len(), output.len());
-    if window.len() < HERMES_WINDOW_FRAME_THRESHOLD {
+    let len = window.len();
+    if len < HERMES_WINDOW_FRAME_THRESHOLD {
         window_signal_frame_scalar(start, signal, window, output);
         return;
     }
-    FORWARD_FRAME_REAL_SCRATCH.with(|cell| {
-        cell.with_scratch(window.len(), |frame| {
-            WINDOWED_FRAME_REAL_SCRATCH.with(|windowed_cell| {
-                windowed_cell.with_scratch(window.len(), |windowed| {
-                    for (n, slot) in frame.iter_mut().enumerate() {
-                        let signal_index = start + n as isize;
-                        *slot = if signal_index >= 0 && (signal_index as usize) < signal.len() {
-                            signal[signal_index as usize]
-                        } else {
-                            0.0
-                        };
-                    }
-                    hermes_simd::elementwise_mul(frame, window, windowed)
-                        .expect("STFT frame and window lengths match");
-                    for (slot, value) in output.iter_mut().zip(windowed.iter().copied()) {
-                        *slot = Complex64::new(value, 0.0);
-                    }
-                });
-            });
-        });
-    });
+    // An interior frame lies wholly inside the signal, so its samples are a
+    // contiguous slice and the provider can multiply them by the window and
+    // write `[x * w, 0]` straight into the complex output: one pass, no gather
+    // scratch, no windowed scratch. Only the frames overhanging either end of
+    // the signal need zero padding, and those take the scalar path.
+    if start >= 0 {
+        let begin = start as usize;
+        if let Some(end) = begin.checked_add(len).filter(|&end| end <= signal.len()) {
+            hermes_simd::real_mul_to_interleaved_complex_runtime(
+                &signal[begin..end],
+                window,
+                complex_lanes_mut(output),
+            )
+            .expect("STFT frame, window and output lengths match by construction");
+            return;
+        }
+    }
+    window_signal_frame_scalar(start, signal, window, output);
+}
+
+/// Views a complex slice as its interleaved real lanes, `2 * len` scalars.
+#[inline]
+fn complex_lanes_mut(output: &mut [Complex64]) -> &mut [f64] {
+    const _: () = assert!(
+        core::mem::size_of::<Complex64>() == 2 * core::mem::size_of::<f64>()
+            && core::mem::align_of::<Complex64>() == core::mem::align_of::<f64>()
+    );
+    let lanes = output.len() * 2;
+    // SAFETY: `Complex<T>` is `#[repr(C)]` with exactly two `T` fields, so a
+    // `[Complex64]` of `len` elements is a `[f64]` of `2 * len` elements at
+    // the same address and alignment (pinned by the assertion above); the
+    // returned borrow reborrows `output` exclusively for its own lifetime, so
+    // no aliasing access exists while it is live.
+    unsafe { core::slice::from_raw_parts_mut(output.as_mut_ptr().cast::<f64>(), lanes) }
 }
 
 pub(crate) fn window_signal_frame_scalar(
@@ -84,7 +100,7 @@ pub(crate) fn window_complex_real_frame_into(
     debug_assert_eq!(frame_complex.len(), output.len());
     debug_assert_eq!(window.len(), output.len());
     if output.len() >= HERMES_WINDOW_FRAME_THRESHOLD {
-        FORWARD_FRAME_REAL_SCRATCH.with(|cell| {
+        INVERSE_REAL_LANE_SCRATCH.with(|cell| {
             cell.with_scratch(output.len(), |frame| {
                 for (slot, value) in frame.iter_mut().zip(frame_complex.iter()) {
                     *slot = value.re;
@@ -169,8 +185,8 @@ pub(crate) fn typed_workspace_capacities() -> (usize, usize, usize, usize) {
 }
 
 #[cfg(test)]
-pub(crate) fn forward_window_workspace_capacity() -> usize {
-    FORWARD_FRAME_REAL_SCRATCH.with(|cell| cell.capacity())
+pub(crate) fn inverse_real_lane_workspace_capacity() -> usize {
+    INVERSE_REAL_LANE_SCRATCH.with(|cell| cell.capacity())
 }
 
 #[cfg(test)]
