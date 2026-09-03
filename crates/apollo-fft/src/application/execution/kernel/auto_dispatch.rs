@@ -11,32 +11,20 @@ use super::components::winograd::radix::{dft4_array_impl, dft8_array_impl};
 use super::components::winograd::{dft3_impl, dft5_array_impl, dft7_impl};
 use super::mixed_radix;
 
-/// The cached plan for one length, which the power-of-two lengths past the
-/// register-resident bases run through.
+/// The cached plan for one length, which every length past the
+/// register-resident bases runs through.
 ///
-/// The two routes measure apart by length class, and only one way round. With
-/// both compiled into one binary and the arms alternating in one process,
-/// `f32` forward, performance core, minimum of 100 pinned samples — the plan
-/// against `mixed_radix`'s free function:
-///
-/// | n | free function | plan |
-/// | --- | --- | --- |
-/// | 96 | 72.73 ns | 72.50 |
-/// | 100 | 101.40 | 130.65 |
-/// | 128 | 112.40 | **60.93** |
-/// | 256 | 226.16 | **146.71** |
-/// | 384 | 281.79 | 354.34 |
-/// | 512 | 395.69 | **323.54** |
-/// | 1000 | 1036.65 | 1025.36 |
-///
-/// So the plan is the faster route for power-of-two lengths and the slower
-/// one otherwise, which is why the caller tests `is_power_of_two` rather than
-/// routing everything here. Why the plan loses on the composite lengths is not
-/// established — the two routes reach different strategies there, and a plan
-/// that selects worse than the ad-hoc dispatcher is its own defect
-/// (`backlog.md#atlas-apollo-plan-underselects-composite`). The premise behind
-/// this predicate is that split, not a claim about caching: if the plan's
-/// composite selection is fixed, re-measure before keeping the condition.
+/// This was briefly conditional. The plan measured slower than
+/// `mixed_radix`'s free dispatcher for composite lengths, so the fallback
+/// tested `is_power_of_two` and sent composites the other way — a measured
+/// guard over a defect rather than a design, recorded with the premise that
+/// would retire it. The premise is gone: the two routes were reading their
+/// radix decomposition from different tables and disagreeing about the
+/// *order*, and the plan's ladder now consults the same static table the
+/// dispatcher reads first (`FftPlan1D::new`). With that, the plan is no
+/// slower than the free route at any measured length — the composite cells
+/// straddle zero across three runs while the power-of-two lengths keep their
+/// 12 to 48% win — so there is one route again.
 #[inline]
 fn cached_plan<F>(n: usize) -> std::sync::Arc<crate::FftPlan1D<F>>
 where
@@ -147,11 +135,7 @@ macro_rules! fft_precision_impl {
                         dft7_impl::<$scalar, false, false>(data_ref);
                     }
                     _ => {
-                        if n.is_power_of_two() {
-                            cached_plan::<$scalar>(n).forward_complex_slice_inplace(data);
-                        } else {
-                            mixed_radix::forward_inplace::<$scalar>(data);
-                        }
+                        cached_plan::<$scalar>(n).forward_complex_slice_inplace(data);
                     }
                 }
             }
@@ -212,11 +196,7 @@ macro_rules! fft_precision_impl {
                         dft7_impl::<$scalar, true, true>(data_ref);
                     }
                     _ => {
-                        if n.is_power_of_two() {
-                            cached_plan::<$scalar>(n).inverse_complex_slice_inplace(data);
-                        } else {
-                            mixed_radix::inverse_inplace::<$scalar>(data);
-                        }
+                        cached_plan::<$scalar>(n).inverse_complex_slice_inplace(data);
                     }
                 }
             }
@@ -264,11 +244,7 @@ macro_rules! fft_precision_impl {
                         dft7_impl::<$scalar, true, false>(data_ref);
                     }
                     _ => {
-                        if n.is_power_of_two() {
-                            cached_plan::<$scalar>(n).inverse_complex_slice_unnorm_inplace(data);
-                        } else {
-                            mixed_radix::inverse_inplace_unnorm::<$scalar>(data);
-                        }
+                        cached_plan::<$scalar>(n).inverse_complex_slice_unnorm_inplace(data);
                     }
                 }
             }

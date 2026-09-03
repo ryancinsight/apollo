@@ -1,5 +1,38 @@
 # Apollo Backlog
 
+## ATLAS-APOLLO-RADIX-TABLES-DISAGREE-2026-09-02 — Two radix tables disagree about order, and each is faster somewhere [patch] [perf] — todo <a id="atlas-apollo-radix-tables-disagree"></a>
+
+- **Finding.** Apollo carries two sources for the same decision — which order
+  to apply the radices of a composite length — and they disagree in both
+  directions, by tens of percent. Measured in one binary, plan against free
+  dispatcher, minimum of 100 pinned samples:
+
+  | n | plan's order | dispatcher's order | faster |
+  | --- | --- | --- | --- |
+  | 100 | `[5, 5, 4]` (was) | `[4, 5, 5]` | dispatcher by 29% |
+  | 384 | `[3, 4, 4, 4, 2]` (was) | `[4, 4, 4, 2, 3]` | dispatcher by 26% |
+  | 180 | `[5, 3, 3, 4]` | `[4, 3, 3, 5]` | **plan by 62%** |
+
+  The first two are fixed (`#atlas-apollo-plan-underselects-composite`) by
+  having the plan read the dispatcher's table. n = 180 is the counter-example
+  that says the table is not simply right: its entry is 2.6x slower than the
+  order the plan hand-lists, and the free dispatcher still uses it. The
+  two-dimensional lane passes take the free route for non-power-of-two axes,
+  so a 180-length axis pays it per line.
+- **What is not known.** Whether an ordering *rule* exists — radix 4 first, or
+  descending, or something cache-derived — or whether these are per-length
+  measurements that happen to be recorded in two places. Three points do not
+  settle it, and the two tables were presumably each measured at some point
+  under premises nobody wrote down.
+- **First step.** Sweep the static table's lengths through both orders in one
+  binary — the instrument already exists — and see whether the winner is
+  predictable from the factorization. If it is, one derived order replaces both
+  tables; if it is not, one table with per-length measurements replaces two, and
+  each entry carries its number.
+- **Acceptance.** One source for radix order, every entry traceable to a
+  measurement, and no length where the route a caller happens to take changes
+  its cost by more than the noise band.
+
 ## ATLAS-APOLLO-STORAGE-ROUTE-COMPOSITE-2026-09-02 — The half storage route took the plan at every length, including the ones it loses on [patch] [perf] — done 2026-09-02
 
 - **The storage route had the defect its own scalar had just been cured of.**
@@ -40,7 +73,7 @@
   that missed this cannot miss the next one.
 - 547/547 native tests, doctests, clippy clean, fmt clean.
 
-## ATLAS-APOLLO-PLAN-UNDERSELECTS-COMPOSITE-2026-09-02 — The cached plan is slower than the ad-hoc dispatcher for composite lengths [patch] [perf] — todo <a id="atlas-apollo-plan-underselects-composite"></a>
+## ATLAS-APOLLO-PLAN-UNDERSELECTS-COMPOSITE-2026-09-02 — The cached plan is slower than the ad-hoc dispatcher for composite lengths [patch] [perf] — done 2026-09-02 <a id="atlas-apollo-plan-underselects-composite"></a>
 
 - **Finding.** `FftPlan1D::forward_complex_slice_inplace` and
   `mixed_radix::forward_inplace` compute the same transform by different
@@ -93,7 +126,40 @@
   `is_power_of_two` condition in `fft_precision_impl!`'s fallback is removed
   and the entry re-measured.
 - **Instrument:** `non_power_of_two_lane_route_by_core_type` in
-  `pinned_probe.rs` runs exactly this comparison.
+  `pinned_probe/lane_routes.rs` runs exactly this comparison.
+- **Cause found, and it is the radix order.** The two routes read their
+  decomposition from different tables and the tables factor these lengths
+  identically while ordering them differently. `dispatch_inplace` reads
+  `static_prime23_radices` first; `FftPlan1D::new`'s ladder never consulted it
+  and fell through to `cached_prime23_radices`. At n = 100 that was
+  `[5, 5, 4]` against the dispatcher's `[4, 5, 5]`; at n = 384
+  `[3, 4, 4, 4, 2]` against `[4, 4, 4, 2, 3]`. n = 1000, absent from the static
+  table, reaches the cached order from both routes and measured identical
+  either way — the control that isolates the order as the difference.
+- **Delivered:** the plan's ladder consults the same static table before the
+  cached one. Measured in one binary with alternating arms, plan against free
+  dispatcher, three runs: n = 100 goes +29% to a wash, n = 384 +26% to -3 to
+  -11%, and the power-of-two lengths keep their win (n = 128 -43 to -48%,
+  n = 256 -29 to -33%, n = 512 -12 to -20%). Coverage widened to span the
+  classes rather than one of them: powers of two, composites the static table
+  carries and does not, and a prime (n = 101, a wash both ways).
+- **The `is_power_of_two` guard is retired.** It was recorded as a measured
+  guard over this defect with the premise that would end it; the premise is
+  gone, so `fft_precision_impl!`'s fallback routes every length through the
+  plan again and there is one route. The half storage route inherits that
+  through its delegation, so both scalars moved together — which is what the
+  delegation was for.
+- **What this did not settle, and it matters.** Neither table is authoritative.
+  At n = 180 the plan's own hand-listed `[5, 3, 3, 4]` beats the static table's
+  `[4, 3, 3, 5]` by **62%** (189 ns against 500, stable across two runs) — the
+  opposite direction from n = 100 and n = 384. That length keeps its plan entry
+  and is untouched here, but the free dispatcher still uses the slower order
+  for it, and the two-dimensional lane passes take the free route for
+  non-power-of-two axes. Filed as
+  `#atlas-apollo-radix-tables-disagree`.
+- **Guarded:** `measured_orders_are_the_ones_selected` pins the three measured
+  decompositions. It would have failed before this change, so it bites.
+- 548/548 native tests, doctests, clippy clean, fmt clean.
 
 ## ATLAS-APOLLO-ONESHOT-MISSES-THE-PLAN-2026-09-02 — The f32/f64 one-shot entry re-derived its plan on every call [patch] [perf] — done 2026-09-02
 

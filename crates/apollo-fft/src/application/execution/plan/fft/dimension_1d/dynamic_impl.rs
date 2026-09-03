@@ -228,6 +228,22 @@ impl<F: MixedRadixScalar<Complex = Complex<F>>> FftPlan1D<F> {
             && (n <= 64 || F::use_generated_codelet_plan(n))
         {
             PlanStrategy::ShortWinograd
+        } else if let Some(radices) =
+            crate::application::execution::kernel::mixed_radix::dispatch::static_prime23_radices(n)
+        {
+            // The same table `dispatch_inplace` reads before anything else.
+            // The two tables factor these lengths identically and order them
+            // differently, and the order is worth 26 to 29%: measured with
+            // both routes in one binary, the plan's cached order ran n = 100
+            // at 130.65 ns against the dispatcher's 101.40 with `[5, 5, 4]`
+            // against `[4, 5, 5]`, and n = 384 at 354.34 against 281.79 with
+            // `[3, 4, 4, 4, 2]` against `[4, 4, 4, 2, 3]`. n = 1000, which
+            // this table does not carry, reaches the cached order from both
+            // routes and measures the same either way — the control that
+            // says the order is the difference and not the route.
+            PlanStrategy::Composite {
+                radices: Cow::Borrowed(radices),
+            }
         } else if let Some(radices) = crate::application::execution::kernel::mixed_radix::caches::cached_prime23_radices(n) {
             PlanStrategy::Composite {
                 radices: arc_to_cow(radices),
