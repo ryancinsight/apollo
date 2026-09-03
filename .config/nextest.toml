@@ -1,5 +1,22 @@
 [profile.default]
 slow-timeout = { period = "30s", terminate-after = 2 }
+# A rerun hides a flake instead of root-causing it, and a test that only
+# passes sometimes is a defect in the system under test or in the test's own
+# synchronisation. Explicit here rather than relying on the default so a
+# future profile cannot inherit a retry by accident.
+retries = 0
+
+# CI runs to completion so one run reports every failure. Fail-fast costs a
+# whole extra round trip per additional failure, which is the opposite of a
+# minimal CI budget when several tests break together.
+[profile.ci]
+slow-timeout = { period = "30s", terminate-after = 2 }
+retries = 0
+fail-fast = false
+status-level = "slow"
+
+[profile.ci.junit]
+path = "junit.xml"
 
 [test-groups]
 gpu-device = { max-threads = 1 }

@@ -1,5 +1,138 @@
 # Apollo Backlog
 
+## ATLAS-APOLLO-F32-NONPOT-WIDTH-2026-09-03 — f32 loses far more than f64 on non-power-of-two lengths [patch] [perf] — todo <a id="atlas-apollo-f32-nonpot-width"></a>
+
+- **Finding.** On composite and prime lengths apollo's `f32` is much further
+  behind RustFFT than its `f64` is, which inverts the expected order: AVX2
+  gives `f32` twice the lanes, so it should be *relatively* better.
+
+  | n | apollo f64 vs RustFFT | apollo f32 vs RustFFT |
+  | --- | --- | --- |
+  | 180 | +20 to +43% | +52 to +67% |
+  | 384 | +12 to +40% | +64 to +70% |
+  | 101 | +14 to +17% | +91 to +95% |
+
+- **The sharpest form of it:** at n = 101 apollo's `f32` measures 674 ns
+  against its own `f64` at 579. A prime-length transform where the narrower
+  scalar is slower is not a tuning gap; it means the f32 path is not running at
+  its width.
+- **Already excluded.** Both scalars route `composite_forward` to the same
+  generic `radix_composite::forward_inplace_with_radices`, so it is not a
+  different function. The Rader backend choice is scalar-parameterised
+  (`prefers_half_cyclic_for_rader::<F>`) but both `f32` and `f64` declare
+  `HALF_CYCLIC_RADER_THRESHOLD = 32`, so n = 101 takes the same backend on
+  both. The primitive root is cached for p < 4096, so it is not per-call
+  derivation.
+- **Narrowed by the absolute numbers, which say this is two problems.** At the
+  composite lengths `f32` *is* faster than `f64` — 313 ns against 499 at
+  n = 384 (0.63x), 142 against 204 at n = 180 (0.70x) — so it is using its
+  width there, and `radix_composite` does carry `f32` AVX2 passes for radix 2,
+  3, 4, 5 and 7. What it does not do is extract as much from the extra lanes as
+  RustFFT: RustFFT's `f32` is 0.53x its own `f64` at n = 384 against apollo's
+  0.63x. That is a narrower claim than "not vectorised", and the composite half
+  of this item is that ratio.
+- **The prime half is the anomaly.** At n = 101 apollo's `f32` (674 ns) is
+  slower than its own `f64` (579). No lane-width argument explains that, and it
+  is the Rader path rather than the composite one. Look at the lane dispatch
+  inside the Rader convolution for a capability query a scalar backend
+  satisfies — `exact_lanes_supported::<4, T>` answering true through a scalar
+  implementation is a known shape in this codebase and would leave `f32`
+  running unvectorised while reading as supported.
+- **Acceptance.** apollo `f32` is faster than apollo `f64` at every length in
+  the table, and the `f32` gap against RustFFT is no worse than the `f64` gap.
+  The two halves close separately: the prime anomaly is a defect, the composite
+  ratio is a tuning gap.
+
+## ATLAS-APOLLO-EIGHT-BLOCK-SPLIT-2026-09-03 — The tuned split stops at 512, and n = 1024 is the worst power-of-two gap [minor] [perf] — todo <a id="atlas-apollo-eight-block-split"></a>
+
+- **Finding.** `BASE_SPLIT_LENGTHS` is `[128, 256, 512]`. Those lengths sit at
+  +8 to +36% against RustFFT; n = 1024, the first length past the construction,
+  sits at **+64 to +69% in both precisions** — the largest power-of-two gap on
+  the board. 1024 is exactly 8 x 128, so it is the next member of the family
+  rather than a new idea.
+- **Not a constant change.** Adding 1024 to the array compiles and passes the
+  value oracles, but panics at `invariant: two or four 128-sample blocks`:
+  `GatherBlocks` implements the deinterleave network for `BLOCKS = 2` and
+  `BLOCKS = 4` only, and the block-count match routes anything above four into
+  the four-block arm. The scalar gather behind it *is* generic, so the first
+  increment can route eight blocks there and measure before any network work.
+- **The combine chain is the larger half.** Two blocks and four blocks are
+  hand-unrolled with combine sinks so the array is read and written once;
+  eight blocks needs a third level. A generic level loop would be simpler and
+  pay extra passes — which is the cost the current design exists to avoid — so
+  measure the simple form against `exec_pot_forward_sized::<10>` before
+  committing to a fused eight-block chain.
+- **Acceptance.** n = 1024 is faster than RustFFT at both precisions, with the
+  n = 128 to 512 cells unmoved.
+
+## ATLAS-APOLLO-BEAT-THE-REFERENCES-2026-09-03 — Apollo must be faster than RustFFT and PhastFT at every size [minor] [perf] — todo <a id="atlas-apollo-beat-the-references"></a>
+
+- **Standing bar.** Neither RustFFT nor PhastFT may be faster than apollo at
+  any length. This item is the scoreboard and the parent of the work; each gap
+  below becomes its own increment.
+- **Where it stands.** `small_sizes_against_the_references_by_core_type`,
+  performance core, minimum of 100 pinned samples, hoisted plans on every side
+  (RustFFT's planner and PhastFT's are hoisted exactly as apollo's is, so the
+  comparison is like for like). Percentages are apollo against RustFFT;
+  negative means apollo is ahead. PhastFT's DIT planner is power-of-two only
+  and has no arm elsewhere.
+
+  | n | f64 | f32 | class |
+  | --- | --- | --- | --- |
+  | 8 | +14% | +49% | pot |
+  | 16 | +40% | +9% | pot |
+  | 32 | **+105%** | +25% | pot |
+  | 64 | **-12%** | **-2%** | pot, tuned `State64` |
+  | 128 | +8% | +25% | pot, tuned split |
+  | 256 | +20% | +31% | pot, tuned split |
+  | 512 | +23% | +32% | pot, tuned split |
+  | 1024 | **+58%** | **+61%** | pot, untuned |
+  | 4096 | +31% | +36% | pot, untuned |
+  | 32768 | +36% | +42% | pot |
+  | 100 | **-15%** | **-32%** | composite |
+  | 180 | +38% | +49% | composite |
+  | 384 | +35% | +37% | composite |
+  | 1000 | +24% | **-9%** | composite |
+  | 101 | +19% | **+95%** | prime |
+  | 1009 | +18% | +28% | prime |
+
+  Element-wise minimum of two runs, taken after `#305` narrowed the
+  generated-codelet selection. The machine carries concurrent peer builds and
+  the spread is large — n = 32 `f64` read +33% on one run and +105% on the
+  next — so any increment must re-measure its own cells rather than trust this
+  table's precision. What is stable across every run this session is the set of
+  signs: apollo is ahead at n = 64, n = 100 and `f32` n = 1000, and behind
+  everywhere else.
+- **What the shape says.** Apollo is ahead exactly where it has a hand-tuned
+  construction — n = 64 (`State64`) and n = 100 — and behind everywhere else,
+  including at lengths where the tuned split applies (128 to 512 sit at
+  +8 to +36%). So this is not a handful of bad sizes: the tuned paths are
+  competitive and the general paths are roughly 10 to 40% behind, with two
+  untuned power-of-two lengths (1024, 4096) and the f32 non-power-of-two
+  family much worse.
+- **The f32 non-power-of-two family is the sharpest lead.** At n = 101 apollo's
+  `f32` (674 ns) is *slower than its own `f64`* (579), which cannot be right
+  when `f32` has twice the lanes. The same shape appears at 180 and 384, where
+  `f64` sits at +12 to +20% and `f32` at +52 to +70%. Something in the f32
+  composite and prime paths is not using its width. Filed as
+  `#atlas-apollo-f32-nonpot-width`.
+- **Hypotheses already falsified**, so nobody re-runs them: (1) the f64 n = 32
+  arm loading sixteen YMM registers and spilling — forcing the Winograd
+  fallback instead measured 33.4 ns against the vector arm's 31.0, so both
+  paths are ~2x RustFFT and register pressure is not the cause; (2) n = 1024
+  being on `exec_pot_forward_sized::<10>` rather than the generic executor —
+  the generic executor is worse (f32 1236 ns against 953); (3) the plan's call
+  preamble (`assert_plan_length` plus `runtime_tiny_direct_dispatch`) — it
+  costs 0.12 ns at n = 8 and nothing measurable above; (4) apollo's own
+  composite route beating its small codelets — the codelet wins by 27 to 279%
+  at n = 16 to 64.
+- **n = 1024 needs the eight-block split, and that is real work.** The tuned
+  construction covers 128, 256 and 512 (`BASE_SPLIT_LENGTHS`), and 1024 is
+  8 x 128. Extending it is not a constant change: `GatherBlocks` implements the
+  deinterleave network for two and four blocks only and asserts on anything
+  else, and the four-block combine chain is hand-unrolled with sinks rather
+  than generic over levels. Filed as `#atlas-apollo-eight-block-split`.
+
 ## ATLAS-APOLLO-CODELET-SELECTION-UNMEASURED-2026-09-03 — The generated-codelet arm was chosen without measurement; f32 narrowed to the measured winners [patch] [perf] — in progress <a id="atlas-apollo-codelet-selection-unmeasured"></a>
 
 - **Finding.** `use_generated_codelet_plan` routed 25 lengths to
