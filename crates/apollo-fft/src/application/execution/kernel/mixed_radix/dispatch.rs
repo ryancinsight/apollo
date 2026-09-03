@@ -20,7 +20,7 @@ use crate::application::execution::kernel::pot::StockhamAutosort;
 use crate::with_pot_zst;
 
 #[inline]
-fn static_coprime_factors(n: usize) -> Option<(usize, usize)> {
+pub(crate) fn static_coprime_factors(n: usize) -> Option<(usize, usize)> {
     match n {
         6 => Some((2, 3)),
         10 => Some((2, 5)),

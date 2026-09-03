@@ -67,11 +67,21 @@ Change-class tags: [patch] backward-compatible fix, [minor] additive non-breakin
   twenty-one that have a composite alternative -- n = 400 by 3.78x, 180 by
   3.42x, 128 by 3.29x, down to 484 by 1.09x -- and faster at five. The f32 list
   is now `96 | 121 | 154 | 222 | 242 | 246 | 259 | 296 | 363`. The winners are
-  a factor signature rather than a range: 121, 242 and 363 carry 11^2 and 154
-  carries an 11, exactly where the composite route needs an expensive prime
-  radix. Every consumer -- the plan, the free dispatcher and the const-generic
-  executor -- reads the one predicate, so all three follow. f64 is unchanged;
-  its list awaits the same measurement.
+  a factor signature rather than a range, and at f64 it is exact: every winner
+  is divisible by 11 and no loser is, because 11 is the radix the composite
+  route has no efficient kernel for. The two scalars differ -- f32 wins at 96
+  and loses at 99, 275 and 484, f64 the reverse -- so each list follows its own
+  measurement. f64 now accepts `72 | 99 | 121 | 154 | 222 | 242 | 246 | 259 | 275 |
+  296 | 363 | 484` -- 72 keeps the codelet because the plan's fallback there is
+  Good-Thomas rather than the composite the probe timed, where the codelet was slower at fourteen of twenty-one
+  measured lengths, n = 128 by 2.31x. Every consumer -- the plan, the free
+  dispatcher and the const-generic executor -- reads the one predicate, so all
+  three follow, and the plan's hand-carved `n == 180` and `n == 144` entries are
+  removed as redundant: the fallthrough derives the same radix orders. The four
+  lengths carrying a prime above 23 -- 222, 246, 259, 296 -- are measured
+  against the Good-Thomas split the dispatcher actually reaches for them, and
+  the codelet wins all four on both scalars by the widest margins in the sweep
+  (f32 3.23x at n = 222), so they stay on evidence rather than on caution.
 
 - [patch] `apollo-fft` kernel plan caches keep one copy per process rather than
   one per thread. `cached_plan`, `cached_four_step_planes`, and

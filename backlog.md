@@ -86,6 +86,35 @@
   satisfies — `exact_lanes_supported::<4, T>` answering true through a scalar
   implementation is a known shape in this codebase and would leave `f32`
   running unvectorised while reading as supported.
+- **A third locus, measured 2026-09-03 by the codelet-selection sweep.** That
+  sweep timed two routes over the same twenty lengths in one pinned run, once
+  per scalar, so it compares `f32` against `f64` *within a route* rather than
+  against a reference. The two routes answer oppositely:
+
+  | route | median `f32`/`f64` | reading |
+  | --- | --- | --- |
+  | composite | **0.80x** | `f32` is using its extra lanes |
+  | short-Winograd codelet | **1.28x** | `f32` is slower than `f64` at 17 of 20 |
+
+  Worst cases on the codelet arm: n = 144 at 1.83x, 99 at 1.50x, 112 at 1.46x,
+  189 at 1.45x, 120 at 1.44x. This is the same shape as the n = 101 prime
+  anomaly and it is not the Rader path, so whatever leaves `f32` running
+  narrow is not confined to the Rader convolution.
+- **And the codelet arm is not fundamentally narrow — the defect is a subset.**
+  Five of the measured codelets read below 1.0x, so they do run at `f32` width:
+  n = 96 at 0.50x, and the four coprime lengths 222 at 0.85x, 296 at 0.88x,
+  246 at 0.89x and 259 at 0.92x. The remaining fifteen sit between 1.03x and
+  1.83x. So this is an implementation gap in specific codelets rather than a
+  limit of the arm, which makes it a defect on the same footing as the prime
+  half rather than a tuning ratio — and it narrows the search to what those
+  five do differently.
+- **Consequence already visible.** Because the `f32` codelets run narrow, the
+  measured codelet/composite boundary differs by scalar: f32 wins only at 96,
+  121, 154, 242 and 363, while f64 wins at every length divisible by 11
+  (`#atlas-apollo-codelet-selection-unmeasured`). Closing this item should be
+  expected to move that boundary, and the sweep is the instrument that will
+  show it.
+
 - **Acceptance.** apollo `f32` is faster than apollo `f64` at every length in
   the table, and the `f32` gap against RustFFT is no worse than the `f64` gap.
   The two halves close separately: the prime anomaly is a defect, the composite
@@ -217,65 +246,84 @@
   else, and the four-block combine chain is hand-unrolled with sinks rather
   than generic over levels. Filed as `#atlas-apollo-eight-block-split`.
 
-## ATLAS-APOLLO-CODELET-SELECTION-UNMEASURED-2026-09-03 — The generated-codelet arm was chosen without measurement; f32 narrowed to the measured winners [patch] [perf] — in progress <a id="atlas-apollo-codelet-selection-unmeasured"></a>
+## ATLAS-APOLLO-CODELET-SELECTION-UNMEASURED-2026-09-03 — The generated-codelet arm was chosen without measurement; both scalars now follow the measurement [patch] [perf] — done 2026-09-03 <a id="atlas-apollo-codelet-selection-unmeasured"></a>
 
 - **Finding.** `use_generated_codelet_plan` routed 25 lengths to
   `ShortWinograd` ahead of any composite decomposition, and nothing checked
   that the codelet was the faster of the two. `traits.rs` gates every consumer
   through that one predicate, so the plan, the free dispatcher and the
   const-generic executor all took it.
-- **Measured 2026-09-03, `codelet_selection_by_core_type`.** Both arms over the
-  same data for every length the predicate accepts, pinned per core class,
-  minimum of 100 samples, f32. The composite arm uses the order
-  `dispatch_inplace` actually reaches — `static_prime23_radices` first, then
-  `cached_` — because timing the cached order for a length the static table
-  answers would measure a route the dispatcher never takes. Both arms are
-  asserted equal to 1e-4 relative before either is timed.
+- **Instrument.** `codelet_selection_by_core_type` and its f64 twin run both
+  arms over the same data for every accepted length, pinned per core class,
+  minimum of 100 samples. The composite arm uses the order `dispatch_inplace`
+  actually reaches — `static_prime23_radices` first, then `cached_` — because
+  timing the cached order for a length the static table answers would measure a
+  route the dispatcher never takes. Both arms are asserted equal to 1e-4
+  relative before either is timed.
+- **f32: sixteen of twenty-one were wrong.** 400 by 3.78x, 180 3.42x, 128
+  3.29x, 189 2.99x, 126 2.98x, 112 2.83x, 144 2.76x, 280 2.72x, 168 2.57x, 108
+  2.48x, 120 2.17x, 81 2.00x, 72 1.88x, 99 1.41x, 275 1.14x, 484 1.09x. Right
+  at five: 121 1.78x, 96 1.22x, 154 1.20x, 363 1.19x, 242 1.13x.
+- **f64: fourteen of twenty-one were wrong, and the boundary is not f32's.**
+  128 by 2.31x, 180 1.97x, 400 1.88x, 126 1.76x, 189 1.65x, 108 1.61x, 112
+  1.48x, 81 1.23x, 280 1.20x, 168 1.14x, 144 1.08x, 96 1.08x, 72 1.06x, 120
+  1.05x. Right at seven: 121 1.33x, 484 1.26x, 154 1.23x, 99 1.13x, 275 1.13x,
+  242 1.10x, 363 1.06x.
+- **The rule is a factor, and at f64 it is exact.** Every f64 winner is
+  divisible by 11 and no f64 loser is: 99 = 9*11, 121 = 11^2, 154 = 2*7*11,
+  242 = 2*11^2, 275 = 25*11, 363 = 3*11^2, 484 = 4*11^2. Eleven is the radix
+  the composite route has no efficient kernel for, so the codelet's fixed cost
+  finally pays. f32 follows the same signature with three exceptions in each
+  direction: it wins at 96 (no 11) and loses at 99, 275 and 484 (all 11), so
+  taking one scalar's answer for the other would have been wrong in four
+  places.
+- **Delivered.** f32 accepts `96 | 121 | 154 | 222 | 242 | 246 | 259 | 296 |
+  363`; f64 accepts `72 | 99 | 121 | 154 | 222 | 242 | 246 | 259 | 275 | 296 |
+  363 | 484`. The plan's hand-carved `n == 180` and `n == 144` entries are removed:
+  with neither codelet claiming those lengths the fallthrough derives the
+  static table's `[4, 3, 3, 5]` and `[4, 4, 3, 3]`, which are the same orders
+  the entries carried, and `planned_n180_{f32,f64}_composite_forward_matches_direct`
+  passes unchanged as the proof.
+- **72 stays for f64, and the gate is why.** The codelet measured 1.06x slower
+  there, so the first cut removed it — and
+  `planned_n72_f64_codelet_forward_matches_direct` failed. `FORCE_COMPOSITE_72`
+  is false for f64, so the plan's fallback at 72 is `GoodThomas { 9, 8 }`, not
+  the composite the probe timed: the measurement did not describe the route the
+  length would actually take. 1.06x is far too thin to move a length onto an
+  unmeasured route. f32 forces the composite, so there the removal is measured
+  and stands. The same audit over every other removed length found no second
+  divergence; all of them fall through to the derived composite.
+- **128 is a no-op either way.** Both the plan and `dispatch_inplace` answer
+  powers of two before they reach the codelet, so 128 never took that arm from
+  either route. The probe called `short_winograd` directly and so measured a
+  route nothing takes; removing 128 from the list changes no behaviour, and its
+  3.29x figure describes no live decision.
+- **222, 246, 259 and 296 measured against their real alternative.** Each
+  carries a prime above 23, so no prime-2/3 composite exists; the dispatcher
+  answers them from the coprime tables, so the probe now runs
+  `good_thomas::pfa_fft` as the alternative arm for exactly those lengths.
+  The codelet wins all four on both scalars, by the largest margins in the
+  sweep:
 
-  | codelet slower | | codelet faster | |
-  | --- | --- | --- | --- |
-  | 400 | 3.78x | 121 | 1.78x |
-  | 180 | 3.42x | 96 | 1.22x |
-  | 128 | 3.29x | 154 | 1.20x |
-  | 189 | 2.99x | 363 | 1.19x |
-  | 126 | 2.98x | 242 | 1.13x |
-  | 112 | 2.83x | | |
-  | 144 | 2.76x | | |
-  | 280 | 2.72x | | |
-  | 168 | 2.57x | | |
-  | 108 | 2.48x | | |
-  | 120 | 2.17x | | |
-  | 81 | 2.00x | | |
-  | 72 | 1.88x | | |
-  | 99 | 1.41x | | |
-  | 275 | 1.14x | | |
-  | 484 | 1.09x | | |
+  | n | f32 | f64 |
+  | --- | --- | --- |
+  | 222 | 3.23x | 1.96x |
+  | 296 | 3.00x | 1.87x |
+  | 259 | 2.76x | 1.84x |
+  | 246 | 2.07x | 1.55x |
 
-  Sixteen of twenty-one measurable lengths were the wrong choice. Two runs, one
-  per composite-table precedence, agreed on every verdict.
-- **The answer is a factor signature, not a length range.** 121 = 11^2,
-  242 = 2*11^2, 363 = 3*11^2 and 154 = 2*7*11 are exactly the lengths whose
-  composite decomposition needs an expensive prime radix; 96 = 2^5*3 is the one
-  smooth length the codelet still wins. The item expected a range and the data
-  says otherwise.
-- **Done.** The f32 list is narrowed to `96 | 121 | 154 | 222 | 242 | 246 |
-  259 | 296 | 363`.
-- **Deliberately not done.**
-  - **f64 is untouched.** Its arm carries the same 25-length list and the sweep
-    measured f32 only. Narrowing it on f32 evidence would be a change on no
-    evidence; the same probe run over f64 is the next step.
-  - **222, 246, 259, 296 stay.** Each carries a prime above 23, so no
-    prime-2/3 composite exists to compare against and the probe skips them.
-    Their real alternative is the coprime/PFA route and needs its own arm.
-  - **The plan's `n == 180` and `n == 144` entries stay.** They precede the
-    codelet check and so still guard f64, whose list is unchanged. Once f64 is
-    measured they become removable: the static table's `[4, 3, 3, 5]` and
-    `[4, 4, 3, 3]` are byte-identical to the hand-listed radices, so the
-    fallthrough derives the same orders.
+  They were kept on the reasoning that removing them would change behaviour on
+  no evidence; the evidence now says keeping them was also right on the merits.
+  Every length in both predicates has now been measured against the route it
+  would actually take, so the item closes.
+- **The rule generalises.** The codelet wins where the alternative is
+  structurally expensive — a radix-11 composite pass, or a Good-Thomas split —
+  and loses wherever the radix kernels handle the decomposition well. That is
+  one statement covering both halves of the boundary.
 - **Instrument note.** The probe first exceeded the 60-second runner bound. The
-  fix was the instrument, not the bound: the equivalence check already runs
-  each arm once per length before timing, so the separate warm-up suite was
-  redundant work. It now passes in 39.6 s across both core classes.
+  fix was the instrument, not the bound: the equivalence check already runs each
+  arm once per length, so the separate warm-up suite was redundant. Each scalar
+  is now its own test with its own budget, passing in about 39 s.
 
 ## ATLAS-APOLLO-RADIX-TABLES-DISAGREE-2026-09-02 — Two radix tables disagree about order, and each is faster somewhere [patch] [perf] — done 2026-09-03 <a id="atlas-apollo-radix-tables-disagree"></a>
 

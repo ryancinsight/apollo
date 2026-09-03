@@ -583,32 +583,33 @@ impl MixedRadixScalar for f64 {
     }
 
     fn use_generated_codelet_plan(n: usize) -> bool {
+        // Measured separately from f32, and the boundaries differ: 96 wins for
+        // f32 and loses for f64, while 99, 275 and 484 do the reverse. Taking
+        // the f32 answer here would have been wrong in four places.
+        //
+        // At f64 the rule is exact: the codelet wins at every accepted length
+        // divisible by 11 and loses at every one that is not. 121 = 11^2 by
+        // 1.33x, 484 = 4*11^2 by 1.26x, 154 = 2*7*11 by 1.23x, 99 = 9*11 and
+        // 275 = 25*11 by 1.13x, 242 by 1.10x, 363 by 1.06x; against 128 by
+        // 2.31x, 180 by 1.97x, 400 by 1.88x, down to 120 by 1.05x. Eleven is
+        // where the composite route needs a radix it has no efficient kernel
+        // for, so the codelet's fixed cost finally pays.
+        //
+        // 72 stays even though the codelet measured 1.06x slower than a
+        // composite pass. `FORCE_COMPOSITE_72` is false for f64, so the plan's
+        // fallback here is `GoodThomas { 9, 8 }`, not the composite the probe
+        // timed -- the measurement does not describe the route this length
+        // would actually take, and 1.06x is far too thin to move it onto an
+        // unmeasured one. f32 forces the composite, so there the removal is
+        // measured and stands.
+        //
+        // 222, 246, 259 and 296 carry a prime above 23, so no prime-2/3
+        // composite exists to compare against and the probe skips them; their
+        // real alternative is the coprime/PFA route. They stay until that is
+        // measured (`#atlas-apollo-codelet-selection-unmeasured`).
         matches!(
             n,
-            72 | 81
-                | 96
-                | 99
-                | 108
-                | 112
-                | 120
-                | 121
-                | 126
-                | 128
-                | 144
-                | 154
-                | 168
-                | 180
-                | 189
-                | 222
-                | 242
-                | 246
-                | 259
-                | 275
-                | 280
-                | 296
-                | 363
-                | 400
-                | 484
+            72 | 99 | 121 | 154 | 222 | 242 | 246 | 259 | 275 | 296 | 363 | 484
         )
     }
 }
