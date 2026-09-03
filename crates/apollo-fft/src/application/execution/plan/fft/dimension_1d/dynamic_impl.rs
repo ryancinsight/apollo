@@ -147,19 +147,25 @@ impl<F: MixedRadixScalar<Complex = Complex<F>>> FftPlan1D<F> {
         let n = shape.n();
         // 256 and 512 decimate down to the same base rather than paying the
         // four-step's six passes at a size where they dominate the transform.
-        // 1024 joins them through the eight-block route, which measured faster
-        // for f64 (1.82 ms against 1.90 ms, clone-inclusive) and *slower* for
-        // f32 (1.24 ms against 0.93 ms) — its two fused four-block chains are
-        // scalar-float bound where the four-step's ping-pong Stockham passes
-        // stay vector-width bound. The eight-block construction is therefore
-        // offered to the eight-byte scalar only (the idiom here: the kernel
-        // instantiates over primitive floats, so width is the type), and the
-        // 10 => dispatch arm falls back to the stock power-of-two route when
+        // 1024 joins them through the eight-block route, for both scalars.
+        //
+        // It was `f64` only, because the eight-block construction measured
+        // slower for `f32` (1.24 ms against the four-step's 0.93). Two changes
+        // since remove that: eight blocks now take hermes'
+        // `deinterleave_pairs8` blend network rather than the strided scalar
+        // gather, and each half of the split runs the same sink-fused chain
+        // the four-block path uses rather than a detached `combine_final4`
+        // pass. Re-measured with both routes in one binary and the arms
+        // alternating, `f32` at n = 1024 is now faster on the split in three
+        // runs of three — 0.5, 0.7 and 1.3% — so the gate's premise is gone
+        // rather than merely narrowed. The margin is thin and stated as such:
+        // what removed the gate is that a 33% regression became a consistent
+        // small win, not that the win is large. The 10 =>
+        // dispatch arm still falls back to the stock power-of-two route when
         // the plan carries no base128 state.
         let base128 =
-            if crate::application::execution::kernel::components::base128::BASE_SPLIT_LENGTHS[..3]
+            if crate::application::execution::kernel::components::base128::BASE_SPLIT_LENGTHS
                 .contains(&n)
-                || (n == 1024 && core::mem::size_of::<F>() == 8)
             {
                 State128::new_if_supported().map(Arc::new)
             } else {

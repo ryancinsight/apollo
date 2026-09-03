@@ -148,12 +148,24 @@ where
                             dst,
                         })
                     }
-                    // Eight blocks have no blend network yet; the strided
-                    // scalar gather below is generic in the block count and
-                    // serves them. Declining here rather than falling into the
-                    // four-block arm matters: that arm asserts its source is
-                    // exactly `BLOCKS * 256` scalars and would panic.
-                    _ => Some(false),
+                    (_, false) => {
+                        hermes_simd::vectorize_lanes::<4, F, _>(split_boundary::GatherBlocks::<
+                            F,
+                            8,
+                        > {
+                            src,
+                            dst,
+                        })
+                    }
+                    (_, true) => {
+                        hermes_simd::vectorize_lanes::<8, F, _>(split_boundary::GatherBlocks::<
+                            F,
+                            8,
+                        > {
+                            src,
+                            dst,
+                        })
+                    }
                 }
                 .unwrap_or(false)
             };
@@ -199,91 +211,42 @@ where
                 return true;
             }
             // Eight blocks: two fused four-block chains and one in-place
-            // level, rather than three separate combine passes.
+            // level.
             //
-            // The level walk is the obvious shape and it loses: three passes
-            // over 16 KB cost more than the flat Stockham route they replace
-            // (f64 2183 ns against 1815, f32 1197 against 933), which is the
-            // same arithmetic the four-step route was rejected for at the top
-            // of this file. `combine_final4` already fuses two levels, so each
-            // half of the split reaches its 512-point spectrum in one pass;
-            // the last level then reads and writes the same array — output `j`
-            // and `j + 512` depend only on inputs `j` and `j + 512` — so it
-            // needs no second buffer and no copy.
+            // Walking the three levels separately loses for the reason the
+            // four-step route was rejected at the top of this file — passes.
+            // `combine_final4` fuses two levels, so each half reaches its
+            // 512-point spectrum in one pass; the last level then reads and
+            // writes the same array, since output `j` and `j + 512` depend
+            // only on inputs `j` and `j + 512`
+            // (`backlog.md#atlas-apollo-eight-block-split`).
             if blocks == 8 {
-                for block in scratch[..n].chunks_exact_mut(BASE) {
-                    if !instance_major::transform_128::<F, INVERSE>(block, plan) {
-                        return false;
-                    }
-                }
                 let half = n / 2;
-                let (scratch_low, scratch_high) = scratch[..n].split_at(half);
-                {
+                let (scratch_low, scratch_high) = scratch[..n].split_at_mut(half);
+                let combined = {
                     let (data_low, data_high) = data.split_at_mut(half);
-                    combine_final4::<F>(data_low, scratch_low, twiddles, BASE);
-                    combine_final4::<F>(data_high, scratch_high, twiddles, BASE);
+                    combine_four_blocks::<F, INVERSE>(data_low, scratch_low, plan, twiddles)
+                        && combine_four_blocks::<F, INVERSE>(
+                            data_high,
+                            scratch_high,
+                            plan,
+                            twiddles,
+                        )
+                };
+                if !combined {
+                    return false;
                 }
                 combine_level_in_place::<F>(data, twiddles, half);
                 return true;
             }
             // Four blocks keep only the even pair's two halves as an
             // intermediate; the shared column pass carries the sinks at
-            // every native width. Block one writes those
-            // halves into the first two output quarters; block three applies
-            // its pair butterfly and the outer level as its registers leave
-            // the base kernel, replacing the intermediates and filling the
-            // last two quarters. The detached scalar final pass disappears.
-            {
-                let inner = &twiddles[BASE - 1..2 * BASE - 1];
-                let outer = &twiddles[2 * BASE - 1..4 * BASE - 1];
-                let (outer_low, outer_high) = outer.split_at(BASE);
-
-                let (b01, b23) = scratch[..n].split_at_mut(2 * BASE);
-                let (b0, b1) = b01.split_at_mut(BASE);
-                let (b2, b3) = b23.split_at_mut(BASE);
-                // Establish that both ordinary base calls run before the
-                // first output mutation. The plan's one selected native
-                // width makes the following two sink calls the same
-                // capability decision.
-                if !instance_major::transform_128::<F, INVERSE>(b0, plan)
-                    || !instance_major::transform_128::<F, INVERSE>(b2, plan)
-                {
-                    return false;
-                }
-                {
-                    let (even, _) = data.split_at_mut(2 * BASE);
-                    let (even_low, even_high) = even.split_at_mut(BASE);
-                    if !instance_major::transform_128_combining::<F, INVERSE>(
-                        b1,
-                        plan,
-                        instance_major::CombineSink {
-                            peer: base_lanes(b0),
-                            tw: base_lanes(inner),
-                            low: base_lanes_mut(even_low),
-                            high: base_lanes_mut(even_high),
-                        },
-                    ) {
-                        return false;
-                    }
-                }
-                let (low, high) = data.split_at_mut(2 * BASE);
-                let (even_low, even_high) = low.split_at_mut(BASE);
-                let (high_low, high_high) = high.split_at_mut(BASE);
-                return instance_major::transform_128_combining_final::<F, INVERSE>(
-                    b3,
-                    plan,
-                    instance_major::FinalCombineSink {
-                        peer: base_lanes(b2),
-                        inner_tw: base_lanes(inner),
-                        even_low: base_lanes_mut(even_low),
-                        even_high: base_lanes_mut(even_high),
-                        outer_low_tw: base_lanes(outer_low),
-                        outer_high_tw: base_lanes(outer_high),
-                        high_low: base_lanes_mut(high_low),
-                        high_high: base_lanes_mut(high_high),
-                    },
-                );
-            }
+            // every native width. Block one writes those halves into the
+            // first two output quarters; block three applies its pair
+            // butterfly and the outer level as its registers leave the base
+            // kernel, replacing the intermediates and filling the last two
+            // quarters. The detached scalar final pass disappears.
+            combine_four_blocks::<F, INVERSE>(data, &mut scratch[..n], plan, twiddles)
         },
     )
 }
@@ -330,11 +293,81 @@ where
     )
 }
 
+/// Four transformed 128-blocks into one `4 * BASE` spectrum, both combine
+/// levels fused into the base kernel's register exit.
+///
+/// The four-block split is this over the whole array; each half of the
+/// eight-block split is this over its half, which is why it is a function
+/// rather than an inline block. The twiddle slices are the same either way:
+/// a half of the eight-block split is a 512-point sub-problem whose levels
+/// have half-lengths `BASE` and `2 * BASE`, exactly the four-block case.
+fn combine_four_blocks<F, const INVERSE: bool>(
+    data: &mut [F::Complex],
+    scratch: &mut [F::Complex],
+    plan: &instance_major::Plan128<F>,
+    twiddles: &[F::Complex],
+) -> bool
+where
+    F: crate::application::execution::kernel::mixed_radix::MixedRadixScalar<
+            Complex = eunomia::Complex<F>,
+        > + eunomia::layout::Pod,
+    eunomia::Complex<F>: eunomia::layout::Pod,
+{
+    let inner = &twiddles[BASE - 1..2 * BASE - 1];
+    let outer = &twiddles[2 * BASE - 1..4 * BASE - 1];
+    let (outer_low, outer_high) = outer.split_at(BASE);
+
+    let (b01, b23) = scratch.split_at_mut(2 * BASE);
+    let (b0, b1) = b01.split_at_mut(BASE);
+    let (b2, b3) = b23.split_at_mut(BASE);
+    // Establish that both ordinary base calls run before the first output
+    // mutation. The plan's one selected native width makes the following two
+    // sink calls the same capability decision.
+    if !instance_major::transform_128::<F, INVERSE>(b0, plan)
+        || !instance_major::transform_128::<F, INVERSE>(b2, plan)
+    {
+        return false;
+    }
+    {
+        let (even, _) = data.split_at_mut(2 * BASE);
+        let (even_low, even_high) = even.split_at_mut(BASE);
+        if !instance_major::transform_128_combining::<F, INVERSE>(
+            b1,
+            plan,
+            instance_major::CombineSink {
+                peer: base_lanes(b0),
+                tw: base_lanes(inner),
+                low: base_lanes_mut(even_low),
+                high: base_lanes_mut(even_high),
+            },
+        ) {
+            return false;
+        }
+    }
+    let (low, high) = data.split_at_mut(2 * BASE);
+    let (even_low, even_high) = low.split_at_mut(BASE);
+    let (high_low, high_high) = high.split_at_mut(BASE);
+    instance_major::transform_128_combining_final::<F, INVERSE>(
+        b3,
+        plan,
+        instance_major::FinalCombineSink {
+            peer: base_lanes(b2),
+            inner_tw: base_lanes(inner),
+            even_low: base_lanes_mut(even_low),
+            even_high: base_lanes_mut(even_high),
+            outer_low_tw: base_lanes(outer_low),
+            outer_high_tw: base_lanes(outer_high),
+            high_low: base_lanes_mut(high_low),
+            high_high: base_lanes_mut(high_high),
+        },
+    )
+}
+
 /// The final radix-2 combine level, in place.
 ///
 /// Output `j` and `j + len` depend only on inputs `j` and `j + len`, so the
-/// halves can be read and written where they already sit — no second buffer,
-/// no copy back, one pass. The twiddle table is stage-major: the level whose
+/// halves are read and written where they already sit — no second buffer, no
+/// copy back, one pass. The twiddle table is stage-major: the level whose
 /// half-length is `len` reads `len` entries starting at `len - 1`, the same
 /// slice `combine_final` takes for its own level.
 fn combine_level_in_place<F>(data: &mut [F::Complex], twiddles: &[F::Complex], len: usize)
@@ -391,6 +424,7 @@ fn combine_final<F>(
 /// combines those with `W_{4 * len}` at `j` and `j + len` — the block
 /// order is the gather's bit-reversed one, which is exactly what makes the
 /// adjacent-pair pairing correct.
+#[cfg(all(test, windows, target_arch = "x86_64"))]
 fn combine_final4<F>(
     out: &mut [F::Complex],
     scratch: &[F::Complex],

@@ -100,10 +100,10 @@ impl<T: LaneScalar + MixedRadixScalar, const BLOCKS: usize> LaneKernel<T>
         }
         // One bound for the whole pass, so the per-chunk compares vanish.
         assert!(
-            (BLOCKS == 2 || BLOCKS == 4)
+            (BLOCKS == 2 || BLOCKS == 4 || BLOCKS == 8)
                 && self.src.len() == BLOCKS * 256
                 && self.dst.len() == self.src.len(),
-            "invariant: two or four 128-sample blocks"
+            "invariant: two, four or eight 128-sample blocks"
         );
         // Chunks per 128-sample block at the dispatched width.
         let cpb = 256 / lanes;
@@ -116,7 +116,7 @@ impl<T: LaneScalar + MixedRadixScalar, const BLOCKS: usize> LaneKernel<T>
                 put_chunk(even, self.dst, g);
                 put_chunk(odd, self.dst, cpb + g);
             }
-        } else {
+        } else if BLOCKS == 4 {
             // Four blocks: one fused four-way pair deinterleave per quad of
             // consecutive chunks yields one chunk of each stride-4
             // subsequence at any width, and the outputs store in the
@@ -132,6 +132,27 @@ impl<T: LaneScalar + MixedRadixScalar, const BLOCKS: usize> LaneKernel<T>
                 put_chunk(b2, self.dst, cpb + k);
                 put_chunk(b1, self.dst, 2 * cpb + k);
                 put_chunk(b3, self.dst, 3 * cpb + k);
+            }
+        } else {
+            // Eight blocks: hermes' eight-way pair split yields one chunk of
+            // every stride-8 subsequence per octet of consecutive chunks, and
+            // the outputs store in the bit-reversed block order
+            // [0, 4, 2, 6, 1, 5, 3, 7] — the three-bit reversal the combine
+            // chain expects, as [0, 2, 1, 3] is the two-bit one above.
+            for k in 0..cpb {
+                let blocks = chunk::<T, A>(self.src, 8 * k).deinterleave_pairs8(
+                    chunk(self.src, 8 * k + 1),
+                    chunk(self.src, 8 * k + 2),
+                    chunk(self.src, 8 * k + 3),
+                    chunk(self.src, 8 * k + 4),
+                    chunk(self.src, 8 * k + 5),
+                    chunk(self.src, 8 * k + 6),
+                    chunk(self.src, 8 * k + 7),
+                );
+                for (position, subsequence) in [0usize, 4, 2, 6, 1, 5, 3, 7].into_iter().enumerate()
+                {
+                    put_chunk(blocks[subsequence], self.dst, position * cpb + k);
+                }
             }
         }
         true

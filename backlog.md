@@ -241,7 +241,7 @@
   The two halves close separately: the prime anomaly is a defect, the composite
   ratio is a tuning gap.
 
-## ATLAS-APOLLO-EIGHT-BLOCK-SPLIT-2026-09-03 — The tuned split stops at 512, and extending it to 1024 does not pay [minor] [perf] — done 2026-09-03 (falsified) <a id="atlas-apollo-eight-block-split"></a>
+## ATLAS-APOLLO-EIGHT-BLOCK-SPLIT-2026-09-03 — Extend the tuned split to 1024 [minor] [perf] — done 2026-09-03 <a id="atlas-apollo-eight-block-split"></a>
 
 - **Finding.** `BASE_SPLIT_LENGTHS` is `[128, 256, 512]`. Those lengths sit at
   +8 to +36% against RustFFT; n = 1024, the first length past the construction,
@@ -298,6 +298,44 @@
 - **Kept from the attempt:** nothing in the tree. `combine_final4` remains
   `#[cfg(test)]`-gated as it was, and the block-count match still routes only
   two and four blocks into the network.
+- **Re-opened and delivered.** The falsification above stands for the shapes it
+  measured; two things it named as missing then landed, and together they turn
+  the result over. Measured with both routes in one binary and the arms
+  alternating in one process, `f32`, `lane-free-fn` being the flat Stockham
+  route and `lane-plan` the split:
+
+  | shape | n = 1024 |
+  | --- | --- |
+  | three ping-ponged levels, scalar gather | +32% |
+  | two `combine_final4` halves, scalar gather | +14% |
+  | two `combine_final4` halves, SIMD gather | +14% |
+  | **two sink-fused halves, SIMD gather** | **-1.1 / -1.4 / -3.0%** |
+
+  Three independent runs at the final shape, all negative. n = 512 is unmoved
+  at -21% against flat, so the four-block path did not pay for the change.
+- **The two pieces.** Hermes gained `deinterleave_pairs8`
+  (`hermes#153`, `#154`), so eight blocks take a blend network instead of the
+  strided scalar gather — worth about 10% here, less than the 15% the n = 512
+  ablation predicted. That alone left the split 14% behind. The rest came from
+  fusing each half's combines into the base kernel's register exit rather than
+  running `combine_final4` over it: the four-block chain is now a function,
+  `combine_four_blocks`, called once by the four-block path over the whole
+  array and twice by the eight-block path over each half. That is worth about
+  16 points and is what took the split past the flat route.
+- **Absolute, against the references at n = 1024** (element-wise minimum of two
+  runs): `f64` 1541 ns against RustFFT's 1252 and PhastFT's 1375 — from +58%
+  against RustFFT to **+23%**, and the largest single power-of-two gain on the
+  board. `f32` 938 against 573 and 840, which is where it already was: the
+  split is a wash there in absolute terms even though it beats the flat route
+  in the same binary, so `f32` n = 1024 stays an open cell.
+- **Why the earlier attempt read as falsified.** It measured the right thing
+  and drew the right conclusion from what it had. What it lacked was not more
+  patience but two capabilities, one of them in another repository. The
+  arithmetic it recorded — that an eight-way network recovers about a seventh
+  of the gap and would not close 32% — was correct; what it could not predict
+  is that the sink fusion was worth another 16 points on top.
+- 551/551 native tests including the accuracy oracles and the
+  `dft_oracle_sweep`, clippy and fmt clean.
 
 ## ATLAS-APOLLO-BEAT-THE-REFERENCES-2026-09-03 — Apollo must be faster than RustFFT and PhastFT at every size [minor] [perf] — todo <a id="atlas-apollo-beat-the-references"></a>
 
