@@ -1,13 +1,12 @@
 //! The assembled experiment: the N=512 final-store sink against the
 //! incumbent, and the cost of each piece the split produces.
 
-use super::{phase_attribution, run_bench_transform, BenchTransform, ProbeScalar};
+use super::{run_bench_transform, BenchTransform};
 use crate::application::execution::kernel::measurement_cores;
 use crate::application::execution::kernel::mixed_radix::MixedRadixScalar;
 use apollo_bench::{BenchmarkCase, BenchmarkConfig, BenchmarkSuite};
 use eunomia::Complex64;
 use hermes_simd::{ProcessorBinding, ProcessorIndex};
-use rustfft::num_complex::Complex as RustComplex;
 
 #[test]
 #[ignore = "paired measurement of the N=512 final-store sink"]

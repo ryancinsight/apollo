@@ -1,7 +1,7 @@
 //! The inner gate: the small-size transforms this construction is built
 //! from, measured against the reference implementations at both scalars.
 
-use super::{phase_attribution, run_bench_transform, BenchTransform, ProbeScalar};
+use super::{phase_attribution, ProbeScalar};
 use crate::application::execution::kernel::measurement_cores;
 use crate::application::execution::kernel::mixed_radix::MixedRadixScalar;
 use apollo_bench::{BenchmarkCase, BenchmarkConfig, BenchmarkSuite};

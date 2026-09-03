@@ -6,11 +6,7 @@
 //! phase attribution, and the scalar bridge every probe measures through.
 //! Each probe group lives in its own module beside it.
 
-use crate::application::execution::kernel::measurement_cores;
-use apollo_bench::{BenchmarkCase, BenchmarkConfig, BenchmarkSuite};
 use eunomia::Complex64;
-use hermes_simd::{ProcessorBinding, ProcessorIndex};
-use rustfft::num_complex::Complex as RustComplex;
 
 use crate::application::execution::kernel::mixed_radix::MixedRadixScalar;
 // Re-imported here so each probe module reaches them as `super::…` rather
