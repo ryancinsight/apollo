@@ -68,7 +68,14 @@ jobs:
       # The merge ref carries the same base plus exactly the PR's change, so
       # the pair differs by the PR alone -- and an identical pair correctly
       # skips measurement.
-      CANDIDATE_REF: ${{ github.event_name == 'pull_request' && format('refs/pull/{0}/merge', github.event.pull_request.number) || inputs.candidate_ref }}
+      # The PR head commit, not `refs/pull/N/merge`. That merge ref is
+      # ephemeral: GitHub deletes it the moment the PR merges, so a run that
+      # is still fetching when auto-merge lands fails with "couldn't find
+      # remote ref" and takes the regression check down with it — the whole
+      # workflow's recent failures are that race, not a measured regression.
+      # `head.sha` is immutable, and pairing it with `base.sha` also isolates
+      # the PR's own commits rather than folding in whatever base moved to.
+      CANDIDATE_REF: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || inputs.candidate_ref }}
       CARGO_TARGET_DIR: ${{ github.workspace }}/target
       REVISION: ${{ matrix.revision }}
     steps:
