@@ -1,3 +1,29 @@
+## A whole module class compiles only off-CI (2026-09-02) <a id="windows-gated-modules"></a>
+
+`base128::pinned_probe` is declared
+`#[cfg(all(test, windows, target_arch = "x86_64"))]`, and every CI job runs
+Linux. The module therefore never compiles in CI, so no CI run can see any
+diagnostic it emits. Eleven imports left behind by the probe split sat unused on
+`main` while the `ci` workflow reported green on that very commit; the same
+command CI runs — `cargo clippy --locked --workspace --all-targets
+--all-features -- -D warnings` — fails immediately on a Windows checkout.
+
+Nothing was wrong with the gate command. The gate ran on a platform where the
+code under it does not exist, and a platform `cfg` is invisible to a green tick:
+the run reports on what it compiled, never on what it skipped.
+
+**The rule:** a platform-gated module needs a job on that platform, or it has no
+gate at all. The unused imports are the cheap symptom; the same blind spot
+covers every warning, lint, and type error the module could carry, and it grows
+with the module. Either add a Windows job that compiles the `cfg(windows)`
+test targets, or state in the module that it is developer-run only and accept
+that its diagnostics are a local responsibility — but do not read a green CI
+tick as covering it.
+
+Related: the probe measures TSC phase counters through Hermes processor
+binding, so the gate is deliberate, not accidental. The blind spot is the
+consequence of the gate, not an argument against it.
+
 ## A fix measured on one length class regressed another (2026-09-02) <a id="length-class-split"></a>
 
 Routing the one-shot `FftPrecision` entry through the cached plan was measured

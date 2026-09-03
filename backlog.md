@@ -39,6 +39,35 @@
 - **Probe extended to both length classes** (96, 100, 384 added), so the sweep
   that missed this cannot miss the next one.
 - 547/547 native tests, doctests, clippy clean, fmt clean.
+## APOLLO-FFT-CROSS-THREAD-PLAN-RETENTION-2026-09-02 — Kernel plan caches kept one copy per thread [patch] [perf] — complete <a id="cross-thread-plan-retention"></a>
+
+- **Delivered.** `cached_plan`, `cached_four_step_planes`, and
+  `cached_resident_plan` now sit behind a process-wide map, following the
+  two-level pattern the twiddle caches and `orchestration::cache::plans`
+  already use. The thread-local map stays the lock-free fast path; a miss takes
+  the shared table instead of building a private one.
+- **Finding.** Each looked up a thread-local map and, on a miss, built its own
+  table, so the `Arc` shared only within one thread and nothing evicted the
+  copies. `BatchedPlan` owns `len - 1` twiddle pairs and `FourStepPlanes` two
+  `m x m` planes, both 16n bytes at `f64`; `ResidentPlan` owns a fixed 32 x 32
+  matrix.
+- **Domain, checked rather than assumed.** These caches sit behind
+  `planar_applies`: a power of two with an even trailing-zero count, at least 4
+  and *strictly below* `PARALLEL_ROW_THRESHOLD` = 65,536. The largest length
+  reaching them is 16,384 (directly, or via `planar_split_applies` from
+  32,768), where the pair is 262,128 + 262,144 bytes. Summed over the
+  applicable lengths and both directions this is order-of-a-megabyte per
+  thread. An earlier draft of this entry quoted the 8,396,816 bytes the
+  retained-footprint probe attributes to n = 262,144; that length never reaches
+  this route, and the figure belongs to the globally shared twiddle tables.
+- **Evidence.** `batched_plans_and_planes_are_shared_across_threads` is the
+  regression guard: it fails on the prior code with two distinct addresses from
+  two threads and passes once the map is shared. `cross_thread_plan_retention`
+  measures the byte figure inside the route's domain.
+- **Also.** Building under the write lock deadlocked first: a read guard held in
+  an `if let` scrutinee outlives the `else` arm and the lock is not reentrant.
+  The nextest 60-second termination budget caught it. All three sites bind the
+  read result before taking the write lock.
 
 ## ATLAS-APOLLO-PLAN-UNDERSELECTS-COMPOSITE-2026-09-02 — The cached plan is slower than the ad-hoc dispatcher for composite lengths [patch] [perf] — todo <a id="atlas-apollo-plan-underselects-composite"></a>
 
