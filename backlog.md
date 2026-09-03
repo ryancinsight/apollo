@@ -1,5 +1,66 @@
 # Apollo Backlog
 
+## ATLAS-APOLLO-WORKER-RETENTION-2026-09-03 — Per-worker scratch is retained for the process, and the mnemosyne share has no release path [minor] [perf] — todo <a id="atlas-apollo-worker-retention"></a>
+
+- **Integrator:** unclaimed; **branch:** none; **lease:** none.
+- **Last-update:** 2026-09-03.
+- **Outcome:** bound the memory a parallel transform leaves resident after it
+  completes, and give the mnemosyne scratch pool a release path so worker
+  threads do not hold their high-water mark for the life of the process.
+- **Measurement (2026-09-03, this host).** `worker_scratch_retention` in
+  `kernel/retained_footprint.rs`, an `#[ignore]`d probe run with
+  `--run-ignored all`: `Complex64`, 128 chunks driven through
+  `moirai::for_each_chunk_mut_with::<moirai::Parallel, _, _>`, ledgers read
+  while the executor's own workers are still alive. 24 workers observed.
+
+  | window | global retained | mnemosyne-direct retained |
+  | --- | --- | --- |
+  | pool warmup | 1,006,304 B | 540,672 B |
+  | first parallel forward | 7,240,420 B | 0 B (0 allocs) |
+  | warm parallel forward | 0 B (0 allocs) | 0 B (0 allocs) |
+
+  The warm pass allocates nothing in either ledger, so reuse is working as
+  designed; the whole cost is retention, not churn.
+- **Attribution.** Two distinct owners, and they must not be conflated:
+  - **540,672 B is mnemosyne's.** Block signature `16384x24 + 2048x72` is
+    exactly `24 x (1 x 16384 + 3 x 2048)` — four pool slots per worker,
+    `MAX_POOL_SLOTS = 4`.
+  - **6,684,672 B is apollo's**, signature `278528x24`: one block per worker
+    from the first parallel forward, in the global ledger with mnemosyne-direct
+    at zero allocations for that window. `278528 = 16 x 17408` at
+    `Complex64`, i.e. an interleaved-scratch/plan block per worker, not a pool
+    slot.
+- **Correction.** A working figure of ~6.96 MB "mnemosyne worker scratch" was
+  carried in session notes and never reached a board. It conflated the two
+  ledgers above. The mnemosyne-owned share is 540,672 B; re-measure before
+  citing either number.
+- **Upstream finding (mnemosyne, source-verified 2026-09-03).**
+  `mnemosyne-arena/src/scratch/pool.rs`: `ScratchPool` holds
+  `[UnsafeCell<AlignedVec<T>>; MAX_POOL_SLOTS]` and its documented home is
+  `thread_local!`. Its public surface is `new`, `with_slot_capacity`,
+  `with_scratch`, `borrow_depth`, `capacity` — **no shrink, clear, or release
+  method exists**, and `scratch/aligned_vec.rs` documents that a shrinking
+  resize "keeps the allocation". So a slot grows to the high-water mark of the
+  largest transform that thread ever ran and is freed only when the thread
+  exits; moirai worker threads live for the process, so in a long-running
+  consumer that is never.
+- **Blocked on contention, not on design.** The mnemosyne board could not take
+  this item when it was found: that repo's tree was on a live peer branch
+  (`feat/phase10-improvements`, committed 52 minutes prior) and already at the
+  two-tree cap, so no lane was available. Recorded here, in the consumer that
+  measured it, until the upstream item can be raised. **Re-open trigger:**
+  mnemosyne main free of that branch.
+- **Direction.** Quiescent reclamation, not eager free: releasing on every
+  `with_scratch` exit would reintroduce the allocation churn the pool exists to
+  remove — the warm pass measuring zero allocations is the property to
+  preserve. Candidates are a capacity ceiling per slot, or release on an idle
+  signal from the executor.
+- **Acceptance oracle:** the warm-pass window still reports zero allocations in
+  both ledgers, and mnemosyne-direct retention after an idle interval falls
+  below the 540,672 B measured here, on the same probe and worker count.
+- **Risk / change class:** [minor] [perf]; upstream is a new pool method plus
+  its trigger, apollo side is measurement only.
+
 ## ATLAS-APOLLO-STRIDED-GATHER-UPSTREAM-2026-09-03 — The split's gather is hand-rolled per block count instead of a substrate primitive [minor] [arch] — todo <a id="atlas-apollo-strided-gather-upstream"></a>
 
 - **The shape of the problem.** Apollo's base-128 split reorders its input by a
@@ -49,6 +110,13 @@
   in place.
 ## ATLAS-APOLLO-FIRST-PARTY-LAYOUT-2026-09-03 — bytemuck and half give way to eunomia, but the last 28 sites need upstream first [patch] [arch] — in progress <a id="atlas-apollo-first-party-layout"></a>
 
+- **Landed 2026-09-03, in dependency order.** eunomia #84 (the layout
+  vocabulary), hermes #151 (`hermes-simd-core` off bytemuck), apollo #309
+  (this migration). Hermes turned out to be a *third* abandoned half of the
+  same sweep — same tree-detached shape, edits timestamped in the same window
+  as the other two — recovered and gated the same way; hermes now has zero
+  bytemuck references in any crate, direct or in `src`. The two gaps below are
+  what still stand between apollo and dropping both dependencies.
 - **Rescued, not authored.** This began as another agent's uncommitted work,
   abandoned about 21 hours in the shared apollo tree on a detached HEAD where
   any checkout would have discarded it. Preserved verbatim on
