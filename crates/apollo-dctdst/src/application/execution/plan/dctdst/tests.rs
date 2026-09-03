@@ -1,7 +1,7 @@
 use super::DctDstPlan;
 use crate::domain::contracts::error::DctDstError;
 use crate::domain::metadata::kind::RealTransformKind;
-use apollo_fft::{f16, PrecisionProfile};
+use apollo_fft::{PrecisionProfile, F16};
 use eunomia::assert_abs_diff_eq;
 use leto::{Array2, Array3};
 use leto::{SliceArg, Storage};
@@ -27,14 +27,14 @@ fn typed_paths_support_f64_f32_and_mixed_f16_storage() {
         assert!((f64::from(*actual) - *expected).abs() < 1.0e-5);
     }
 
-    let signal16 = signal64.map(|value| f16::from_f32(value as f32));
-    let mut out16 = [f16::from_f32(0.0); 8];
+    let signal16 = signal64.map(|value| F16::from_f32(value as f32));
+    let mut out16 = [F16::from_f32(0.0); 8];
     plan.forward_typed_into(
         &signal16,
         &mut out16,
         PrecisionProfile::MIXED_PRECISION_F16_F32,
     )
-    .expect("typed mixed f16 forward");
+    .expect("typed mixed F16 forward");
     for (actual, expected) in out16.iter().zip(expected.iter()) {
         assert!((f64::from(actual.to_f32()) - *expected).abs() < 2.0e-3);
     }

@@ -1,6 +1,6 @@
 //! Value-semantic Radon GPU represented-storage contracts.
 
-use apollo_fft::{f16, PrecisionProfile};
+use apollo_fft::{PrecisionProfile, F16};
 use leto::{Array2, Storage};
 
 use crate::infrastructure::transport::gpu::WgpuError;
@@ -18,7 +18,7 @@ fn typed_flat_mixed_storage_matches_represented_f32_execution() {
 
     let flat_f32: Vec<f32> = vec![1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0, 9.0];
 
-    let flat_f16: Vec<f16> = flat_f32.iter().copied().map(f16::from_f32).collect();
+    let flat_f16: Vec<F16> = flat_f32.iter().copied().map(F16::from_f32).collect();
     let represented_f32: Vec<f32> = flat_f16.iter().map(|v| v.to_f32()).collect();
     let image_represented = Array2::from_shape_vec([3, 3], represented_f32).expect("reshape");
 
@@ -52,9 +52,9 @@ fn typed_leto_forward_and_inverse_match_typed_flat() {
     let angles_leto =
         leto::Array::from_mnemosyne_slice([angles.len()], &angles).expect("leto angles");
     let plan = backend.plan(GeometryPlan::new(3, 3, angles.len(), 5, 1.0));
-    let flat_f16: Vec<f16> = vec![1.0_f32, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0, 9.0]
+    let flat_f16: Vec<F16> = vec![1.0_f32, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0, 9.0]
         .into_iter()
-        .map(f16::from_f32)
+        .map(F16::from_f32)
         .collect();
     let image_leto =
         leto::Array::from_mnemosyne_slice([3, 3], &flat_f16).expect("typed leto image");
@@ -80,10 +80,10 @@ fn typed_leto_forward_and_inverse_match_typed_flat() {
         expected_forward.as_slice().expect("contiguous forward")
     );
 
-    let sinogram_f16: Vec<f16> = expected_forward
+    let sinogram_f16: Vec<F16> = expected_forward
         .iter()
         .copied()
-        .map(f16::from_f32)
+        .map(F16::from_f32)
         .collect();
     let sinogram_leto = leto::Array::from_mnemosyne_slice(
         [
@@ -122,11 +122,11 @@ fn typed_flat_path_rejects_profile_mismatch() {
     };
     let angles = vec![0.0_f32, std::f32::consts::FRAC_PI_2];
     let plan = backend.plan(GeometryPlan::new(3, 3, angles.len(), 5, 1.0));
-    let flat_f16: Vec<f16> =
-        vec![f16::from_f32(1.0); plan.payload().rows() * plan.payload().cols()];
+    let flat_f16: Vec<F16> =
+        vec![F16::from_f32(1.0); plan.payload().rows() * plan.payload().cols()];
 
     let err = backend
-        .execute_forward_flat_typed::<f16>(
+        .execute_forward_flat_typed::<F16>(
             &plan,
             PrecisionProfile::LOW_PRECISION_F32,
             &flat_f16,

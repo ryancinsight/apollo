@@ -320,7 +320,7 @@ correspondingly weaker.
 
 ## Resolution: compact storage uses the cached plan route (2026-09-02) <a id="half-storage-plan-route"></a>
 
-The compact `Complex<f16>` entry now resolves the existing cached `f32`
+The compact `Complex<F16>` entry now resolves the existing cached `f32`
 `FftPlan1D` for lengths above the register-resident range, then performs one
 bulk widen/plan execution/narrow sequence. Lengths 2, 4, 8, 16, and 32 retain
 their measured stack-resident codelet route. The implementation is in the API
@@ -410,8 +410,8 @@ twiddles. Every caller of that entry pays it, not only half storage.
 
 That fix is not a kernel change. The base states live only inside
 `FftPlan1D`, so reaching them means the storage transform must go through the
-plan cache — which already exists and already maps `f16` to the `f32` plan
-(`PlanCacheProvider for f16`) — and that is an upward dependency from the
+plan cache — which already exists and already maps `F16` to the `f32` plan
+(`PlanCacheProvider for F16`) — and that is an upward dependency from the
 execution layer to orchestration, so it is a placement decision rather than a
 patch. Filed as `ATLAS-APOLLO-STORAGE-ROUTE-MISSES-THE-PLAN-2026-09-02` with
 these numbers; n = 64 is deliberately left out of the stack path above,
@@ -420,7 +420,7 @@ rather than remove it.
 
 ## Half-storage transforms paid more to convert than to transform (2026-09-02) <a id="half-storage-bulk-bridge"></a>
 
-`Complex<f16>` has no native kernel: `precision_bridge` promotes the buffer to
+`Complex<F16>` has no native kernel: `precision_bridge` promotes the buffer to
 `Complex32`, runs the f32 route, and demotes it back. That contract is right —
 x86-64 without AVX512-FP16 has no half arithmetic, so the alternative is
 emulation, and the promotion is where the precision decision belongs. What was
@@ -431,13 +431,12 @@ vocabulary — has carried F16C bulk converters (`F16::widen_slice` /
 verified bit-for-bit against `half`) as public API the whole time.
 
 The bridge trait now has `widen_slice`/`narrow_slice` methods whose defaults are
-the element-wise loops; `Complex<f16>` overrides both with eunomia's bulk
+the element-wise loops; `Complex<F16>` overrides both with eunomia's bulk
 conversion. An interleaved complex buffer needs no shuffling to get there: a
-`Complex<f16>` is two adjacent `binary16` lanes and a `Complex32` two adjacent
-`f32`, so both sides reinterpret as flat lane arrays (`half::f16`,
-`eunomia::F16` and the complex wrappers are all `#[repr(transparent)]`/`repr(C)`
-plain-old-data, and enabling `half`'s `bytemuck` feature makes that a checked
-cast rather than a transmute).
+`Complex<F16>` is two adjacent `binary16` lanes and a `Complex32` two adjacent
+`f32`, so both sides reinterpret as flat lane arrays through Eunomia's checked
+layout surface. Eunomia owns the scalar and complex layout markers and also
+implements the external `bytemuck` marker contract for its types.
 
 **Measured pinned, paired same-session arms (element-wise vs bulk, medians ns):**
 

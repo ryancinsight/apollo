@@ -2,7 +2,7 @@
 
 use crate::application::execution::plan::frft::dimension_1d::FrftPlan;
 use crate::domain::contracts::error::FrftError;
-use apollo_fft::{f16, CpuStorage, PrecisionProfile};
+use apollo_fft::{CpuStorage, PrecisionProfile, F16};
 use eunomia::{Complex32, Complex64};
 use leto::Array1;
 use mnemosyne::scratch::ScratchPool;
@@ -131,7 +131,7 @@ impl FrftStorage for Complex64 {
 
 impl FrftStorage for Complex32 {}
 
-impl FrftStorage for [f16; 2] {}
+impl FrftStorage for [F16; 2] {}
 
 fn validate_lengths(plan: &FrftPlan, input: usize, output: usize) -> Result<(), FrftError> {
     if input != plan.len() || output != plan.len() {

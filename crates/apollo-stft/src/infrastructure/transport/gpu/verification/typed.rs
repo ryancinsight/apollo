@@ -1,7 +1,7 @@
 //! Value-semantic STFT GPU verification for one bounded contract.
 
 use crate::infrastructure::transport::gpu::{StftWgpuPlan, WgpuError};
-use apollo_fft::{f16, PrecisionProfile};
+use apollo_fft::{PrecisionProfile, F16};
 use leto::{SliceArg, Storage};
 
 use super::support::backend;
@@ -12,18 +12,18 @@ fn stft_wgpu_typed_mixed_storage() {
     let Some(backend) = backend() else {
         return;
     };
-    // 8-sample signal: f16 quantization of the alternating pattern is exact for these values.
+    // 8-sample signal: F16 quantization of the alternating pattern is exact for these values.
     let signal_f32: Vec<f32> = vec![0.0, 1.0, 0.0, -1.0, 0.0, 1.0, 0.0, -1.0];
-    let signal_f16: Vec<f16> = signal_f32.iter().map(|&x| f16::from_f32(x)).collect();
-    // Represented input: f16 promoted back to f32 (round-trip defines the reference).
+    let signal_f16: Vec<F16> = signal_f32.iter().map(|&x| F16::from_f32(x)).collect();
+    // Represented input: F16 promoted back to f32 (round-trip defines the reference).
     let represented: Vec<f32> = signal_f16.iter().map(|v| v.to_f32()).collect();
     let plan = StftWgpuPlan::new(FramePlan::new(4, 2));
     // frame_count = 1 + 8.div_ceil(2) = 5; output_len = 5 * 4 = 20.
     let f32_result = backend
         .execute_forward(&plan, &represented)
         .expect("f32 reference");
-    let mut typed_out: Vec<[f16; 2]> =
-        vec![[f16::from_f32(0.0), f16::from_f32(0.0)]; f32_result.len()];
+    let mut typed_out: Vec<[F16; 2]> =
+        vec![[F16::from_f32(0.0), F16::from_f32(0.0)]; f32_result.len()];
     backend
         .execute_forward_typed_into(
             &plan,
@@ -33,7 +33,7 @@ fn stft_wgpu_typed_mixed_storage() {
         )
         .expect("typed mixed forward");
     for (actual, expected) in typed_out.iter().zip(f32_result.iter()) {
-        let expected_f16 = [f16::from_f32(expected.re), f16::from_f32(expected.im)];
+        let expected_f16 = [F16::from_f32(expected.re), F16::from_f32(expected.im)];
         assert_eq!(
             actual[0].to_bits(),
             expected_f16[0].to_bits(),
@@ -123,16 +123,16 @@ fn stft_wgpu_typed_leto() {
     let Some(backend) = backend() else {
         return;
     };
-    let signal_f16: Vec<f16> = [0.0_f32, 1.0, 0.0, -1.0, 0.25, 0.75, -0.25, -0.75]
+    let signal_f16: Vec<F16> = [0.0_f32, 1.0, 0.0, -1.0, 0.25, 0.75, -0.25, -0.75]
         .into_iter()
-        .map(f16::from_f32)
+        .map(F16::from_f32)
         .collect();
     let plan = StftWgpuPlan::new(FramePlan::new(4, 2));
     let frame_count = 1 + signal_f16.len().div_ceil(plan.payload().hop_len());
     let output_len = frame_count * plan.payload().frame_len();
 
-    let mut expected_forward: Vec<[f16; 2]> =
-        vec![[f16::from_f32(0.0), f16::from_f32(0.0)]; output_len];
+    let mut expected_forward: Vec<[F16; 2]> =
+        vec![[F16::from_f32(0.0), F16::from_f32(0.0)]; output_len];
     backend
         .execute_forward_typed_into(
             &plan,
@@ -145,7 +145,7 @@ fn stft_wgpu_typed_leto() {
     let leto_signal =
         leto::Array1::from_shape_vec([signal_f16.len()], signal_f16.clone()).expect("signal");
     let actual_forward = backend
-        .execute_forward_leto_typed::<f16, [f16; 2]>(
+        .execute_forward_leto_typed::<F16, [F16; 2]>(
             &plan,
             PrecisionProfile::MIXED_PRECISION_F16_F32,
             leto_signal.view(),
@@ -156,7 +156,7 @@ fn stft_wgpu_typed_leto() {
         expected_forward.as_slice()
     );
 
-    let mut expected_inverse = vec![f16::from_f32(0.0); signal_f16.len()];
+    let mut expected_inverse = vec![F16::from_f32(0.0); signal_f16.len()];
     backend
         .execute_inverse_typed_into(
             &plan,
@@ -168,7 +168,7 @@ fn stft_wgpu_typed_leto() {
         .expect("typed slice inverse");
 
     let actual_inverse = backend
-        .execute_inverse_leto_typed::<[f16; 2], f16>(
+        .execute_inverse_leto_typed::<[F16; 2], F16>(
             &plan,
             PrecisionProfile::MIXED_PRECISION_F16_F32,
             actual_forward.view(),
@@ -186,23 +186,23 @@ fn stft_wgpu_typed_profile_mismatch() {
     let Some(backend) = backend() else {
         return;
     };
-    // f16 signal: I::PROFILE == MIXED_PRECISION_F16_F32.
+    // F16 signal: I::PROFILE == MIXED_PRECISION_F16_F32.
     // Passing LOW_PRECISION_F32 as input_precision must trigger InvalidPrecisionProfile
     // before any GPU work is attempted.
-    let signal_f16: Vec<f16> = vec![
-        f16::from_f32(0.0),
-        f16::from_f32(1.0),
-        f16::from_f32(0.0),
-        f16::from_f32(-1.0),
-        f16::from_f32(0.0),
-        f16::from_f32(1.0),
-        f16::from_f32(0.0),
-        f16::from_f32(-1.0),
+    let signal_f16: Vec<F16> = vec![
+        F16::from_f32(0.0),
+        F16::from_f32(1.0),
+        F16::from_f32(0.0),
+        F16::from_f32(-1.0),
+        F16::from_f32(0.0),
+        F16::from_f32(1.0),
+        F16::from_f32(0.0),
+        F16::from_f32(-1.0),
     ];
     let plan = StftWgpuPlan::new(FramePlan::new(4, 2));
     let frame_count = 1 + signal_f16.len().div_ceil(plan.payload().hop_len());
     let output_len = frame_count * plan.payload().frame_len();
-    let mut out: Vec<[f16; 2]> = vec![[f16::from_f32(0.0), f16::from_f32(0.0)]; output_len];
+    let mut out: Vec<[F16; 2]> = vec![[F16::from_f32(0.0), F16::from_f32(0.0)]; output_len];
     let error = backend
         .execute_forward_typed_into(
             &plan,

@@ -211,7 +211,7 @@ impl FrftPlan {
         inverse_plan.forward_complex64_slice_into(input, output)
     }
 
-    /// Execute the forward FrFT for `Complex64`, `Complex32`, or mixed `[f16; 2]` storage.
+    /// Execute the forward FrFT for `Complex64`, `Complex32`, or mixed `[F16; 2]` storage.
     pub fn forward_typed_into<T: FrftStorage>(
         &self,
         input: &Array1<T>,
@@ -221,7 +221,7 @@ impl FrftPlan {
         T::forward_into(self, input, output, profile)
     }
 
-    /// Execute the inverse FrFT for `Complex64`, `Complex32`, or mixed `[f16; 2]` storage.
+    /// Execute the inverse FrFT for `Complex64`, `Complex32`, or mixed `[F16; 2]` storage.
     pub fn inverse_typed_into<T: FrftStorage>(
         &self,
         input: &Array1<T>,

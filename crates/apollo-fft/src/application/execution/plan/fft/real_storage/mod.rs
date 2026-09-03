@@ -1,7 +1,7 @@
 //! Generic real-storage FFT dispatch.
 //!
 //! Defines the [`RealFftData`] trait that maps a real-domain storage scalar
-//! (`f64`, `f32`, `f16`) to the complex spectrum produced by the underlying
+//! (`f64`, `f32`, `F16`) to the complex spectrum produced by the underlying
 //! plan. The plan scalar's native complex type `Complex<PlanScalar>` *is* the
 //! spectrum type, so every transform method lives here as a single canonical
 //! default body; storage scalars define only the two boundary conversions.
@@ -29,7 +29,7 @@ use fill::{fill_real, fill_spectrum};
 ///
 /// The spectrum element type is always the plan scalar's native complex type:
 /// `f64` storage uses `Complex<f64>`, while lower-precision storage variants
-/// (`f32`, `f16`) use `Complex<f32>`. Implementors define only the two
+/// (`f32`, `F16`) use `Complex<f32>`. Implementors define only the two
 /// storage-boundary conversions; every transform method has one canonical
 /// default body, so no per-precision algorithm forks exist.
 pub trait RealFftData: Copy + Send + Sync + 'static
@@ -41,7 +41,7 @@ where
     type PlanScalar: MixedRadixScalar;
 
     /// Promote a real storage value to a spectrum element with zero imaginary
-    /// part. Documented storage-boundary widening (e.g. `f16` → `f32`), not an
+    /// part. Documented storage-boundary widening (e.g. `F16` → `f32`), not an
     /// arithmetic-path cast: plan arithmetic stays in `PlanScalar`.
     fn to_spectrum(self) -> Complex<Self::PlanScalar>;
 

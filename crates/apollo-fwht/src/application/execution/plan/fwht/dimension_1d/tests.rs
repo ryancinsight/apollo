@@ -1,5 +1,5 @@
 use super::*;
-use apollo_fft::f16;
+use apollo_fft::F16;
 use eunomia::assert_relative_eq;
 use proptest::prelude::*;
 
@@ -213,25 +213,25 @@ fn leto_typed_strided_f16_matches_leto_typed_path() {
 
     let plan = FwhtPlan::new(8).expect("valid plan");
     let signal = Array1::from(vec![
-        f16::from_f32(1.0),
-        f16::from_f32(-2.0),
-        f16::from_f32(0.5),
-        f16::from_f32(2.25),
-        f16::from_f32(-4.0),
-        f16::from_f32(1.5),
-        f16::from_f32(0.0),
-        f16::from_f32(-0.75),
+        F16::from_f32(1.0),
+        F16::from_f32(-2.0),
+        F16::from_f32(0.5),
+        F16::from_f32(2.25),
+        F16::from_f32(-4.0),
+        F16::from_f32(1.5),
+        F16::from_f32(0.0),
+        F16::from_f32(-0.75),
     ]);
     let interleaved = signal
         .iter()
         .copied()
-        .flat_map(|value| [value, f16::from_f32(99.0)])
+        .flat_map(|value| [value, F16::from_f32(99.0)])
         .collect::<Vec<_>>();
     let leto_input = leto::Array1::from_shape_vec([interleaved.len()], interleaved).unwrap();
     let strided = leto_input
         .slice_with::<1>(&[SliceArg::range(Some(0), None, 2)])
         .unwrap();
-    let mut expected = Array1::from_elem([8], f16::from_f32(0.0));
+    let mut expected = Array1::from_elem([8], F16::from_f32(0.0));
     plan.forward_typed_into(
         &signal,
         &mut expected,
@@ -268,14 +268,14 @@ fn typed_paths_support_f64_f32_and_mixed_f16_storage() {
         assert!((f64::from(*actual) - *expected).abs() < 1.0e-5);
     }
 
-    let signal16 = signal64.mapv(|value| f16::from_f32(value as f32));
-    let mut out16 = Array1::from_elem([8], f16::from_f32(0.0));
+    let signal16 = signal64.mapv(|value| F16::from_f32(value as f32));
+    let mut out16 = Array1::from_elem([8], F16::from_f32(0.0));
     plan.forward_typed_into(
         &signal16,
         &mut out16,
         PrecisionProfile::MIXED_PRECISION_F16_F32,
     )
-    .expect("typed mixed f16 forward");
+    .expect("typed mixed F16 forward");
     for (actual, expected) in out16.iter().zip(expected.iter()) {
         let quantization_bound = expected.abs() * 2.0_f64.powi(-10) + 2.0_f64.powi(-14);
         assert!((f64::from(actual.to_f32()) - *expected).abs() <= quantization_bound);
@@ -292,13 +292,13 @@ fn typed_paths_support_f64_f32_and_mixed_f16_storage() {
         assert!((f64::from(*actual) - f64::from(*expected)).abs() < 1.0e-5);
     }
 
-    let mut recovered16 = Array1::from_elem([8], f16::from_f32(0.0));
+    let mut recovered16 = Array1::from_elem([8], F16::from_f32(0.0));
     plan.inverse_typed_into(
         &out16,
         &mut recovered16,
         PrecisionProfile::MIXED_PRECISION_F16_F32,
     )
-    .expect("typed mixed f16 inverse");
+    .expect("typed mixed F16 inverse");
     for (actual, expected) in recovered16.iter().zip(signal64.iter()) {
         let quantization_bound = expected.abs() * 2.0_f64.powi(-10) + 2.0_f64.powi(-14);
         assert!((f64::from(actual.to_f32()) - *expected).abs() <= quantization_bound);
@@ -309,24 +309,24 @@ fn typed_paths_support_f64_f32_and_mixed_f16_storage() {
 fn mixed_f16_typed_paths_reuse_f32_workspace() {
     let plan = FwhtPlan::new(8).expect("valid plan");
     let signal = Array1::from(vec![
-        f16::from_f32(1.0),
-        f16::from_f32(-2.0),
-        f16::from_f32(0.5),
-        f16::from_f32(2.25),
-        f16::from_f32(-4.0),
-        f16::from_f32(1.5),
-        f16::from_f32(0.0),
-        f16::from_f32(-0.75),
+        F16::from_f32(1.0),
+        F16::from_f32(-2.0),
+        F16::from_f32(0.5),
+        F16::from_f32(2.25),
+        F16::from_f32(-4.0),
+        F16::from_f32(1.5),
+        F16::from_f32(0.0),
+        F16::from_f32(-0.75),
     ]);
-    let mut first = Array1::from_elem([8], f16::from_f32(0.0));
-    let mut second = Array1::from_elem([8], f16::from_f32(0.0));
+    let mut first = Array1::from_elem([8], F16::from_f32(0.0));
+    let mut second = Array1::from_elem([8], F16::from_f32(0.0));
 
     plan.forward_typed_into(
         &signal,
         &mut first,
         PrecisionProfile::MIXED_PRECISION_F16_F32,
     )
-    .expect("first mixed f16 forward");
+    .expect("first mixed F16 forward");
     let forward_caps =
         crate::application::execution::plan::fwht::storage::typed_scratch_capacities();
     plan.forward_typed_into(
@@ -334,7 +334,7 @@ fn mixed_f16_typed_paths_reuse_f32_workspace() {
         &mut second,
         PrecisionProfile::MIXED_PRECISION_F16_F32,
     )
-    .expect("second mixed f16 forward");
+    .expect("second mixed F16 forward");
 
     assert_eq!(
         crate::application::execution::plan::fwht::storage::typed_scratch_capacities(),
@@ -345,14 +345,14 @@ fn mixed_f16_typed_paths_reuse_f32_workspace() {
         assert_relative_eq!(actual.to_f32(), expected.to_f32(), epsilon = 0.0);
     }
 
-    let mut recovered_first = Array1::from_elem([8], f16::from_f32(0.0));
-    let mut recovered_second = Array1::from_elem([8], f16::from_f32(0.0));
+    let mut recovered_first = Array1::from_elem([8], F16::from_f32(0.0));
+    let mut recovered_second = Array1::from_elem([8], F16::from_f32(0.0));
     plan.inverse_typed_into(
         &first,
         &mut recovered_first,
         PrecisionProfile::MIXED_PRECISION_F16_F32,
     )
-    .expect("first mixed f16 inverse");
+    .expect("first mixed F16 inverse");
     let inverse_caps =
         crate::application::execution::plan::fwht::storage::typed_scratch_capacities();
     plan.inverse_typed_into(
@@ -360,7 +360,7 @@ fn mixed_f16_typed_paths_reuse_f32_workspace() {
         &mut recovered_second,
         PrecisionProfile::MIXED_PRECISION_F16_F32,
     )
-    .expect("second mixed f16 inverse");
+    .expect("second mixed F16 inverse");
 
     assert_eq!(
         crate::application::execution::plan::fwht::storage::typed_scratch_capacities(),

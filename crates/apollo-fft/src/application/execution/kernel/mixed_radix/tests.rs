@@ -4,8 +4,7 @@ use super::super::test_utils::max_abs_err_64;
 use super::*;
 use crate::application::execution::kernel::direct::{dft_forward, dft_inverse};
 use crate::application::execution::kernel::{fft_forward, fft_inverse};
-use eunomia::{Complex, Complex32, Complex64};
-use half::f16;
+use eunomia::{Complex, Complex32, Complex64, F16};
 
 #[test]
 fn mixed_forward_n32_matches_direct() {
@@ -284,27 +283,27 @@ fn mixed_reduced_stockham_forward_inverse_roundtrip_n4096() {
 #[test]
 fn compact_half_storage_impulse_has_flat_spectrum() {
     let n = 8usize;
-    let mut data = vec![Complex::new(f16::ZERO, f16::ZERO); n];
-    data[0] = Complex::new(f16::from_f32(1.0), f16::ZERO);
+    let mut data = vec![Complex::new(F16::ZERO, F16::ZERO); n];
+    data[0] = Complex::new(F16::from_f32(1.0), F16::ZERO);
     fft_forward(&mut data);
     for (bin, value) in data.iter().enumerate() {
         assert!(
             (value.re.to_f32() - 1.0).abs() < 5.0e-3,
-            "bin {bin} real part must equal 1 within f16 storage error"
+            "bin {bin} real part must equal 1 within F16 storage error"
         );
         assert!(
             value.im.to_f32().abs() < 5.0e-3,
-            "bin {bin} imaginary part must equal 0 within f16 storage error"
+            "bin {bin} imaginary part must equal 0 within F16 storage error"
         );
     }
 }
 
 #[test]
 fn compact_half_storage_roundtrip_stays_within_storage_error() {
-    let input: Vec<Complex<f16>> = (0..64)
+    let input: Vec<Complex<F16>> = (0..64)
         .map(|index| {
             let value = (index as f32 * 0.23 - 1.5).tanh();
-            Complex::new(f16::from_f32(value), f16::ZERO)
+            Complex::new(F16::from_f32(value), F16::ZERO)
         })
         .collect();
     let mut data = input.clone();
@@ -317,7 +316,7 @@ fn compact_half_storage_roundtrip_stays_within_storage_error() {
         .fold(0.0f32, f32::max);
     assert!(
         max_err < 5.0e-2,
-        "f16 storage roundtrip max error {max_err:.4e}"
+        "F16 storage roundtrip max error {max_err:.4e}"
     );
 }
 

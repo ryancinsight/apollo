@@ -1,5 +1,44 @@
 # Apollo Backlog
 
+## ATLAS-APOLLO-FIRST-PARTY-LAYOUT-2026-09-03 — bytemuck and half give way to eunomia, but the last 28 sites need upstream first [patch] [arch] — in progress <a id="atlas-apollo-first-party-layout"></a>
+
+- **Rescued, not authored.** This began as another agent's uncommitted work,
+  abandoned about 21 hours in the shared apollo tree on a detached HEAD where
+  any checkout would have discarded it. Preserved verbatim on
+  `rescue/apollo-eunomia-cast-sweep`, then ported onto current main (36 commits
+  of drift, two conflicts) and finished to a compiling, gated state.
+- **What it does.** Moves apollo off two third-party layout dependencies onto
+  the first-party provider: `bytemuck::{cast_slice, Pod}` to
+  `eunomia::layout::*`, and `half::f16` to `eunomia::F16`. Net across the
+  workspace: bytemuck references 168 to 28, `half::` 20 to 5, with 140
+  `eunomia::layout` uses in their place.
+- **Why the last 28 cannot follow yet — two upstream gaps.**
+  1. **eunomia has no derive macros.** apollo's GPU parameter structs are
+     `#[repr(C)] #[derive(Clone, Copy, Debug, Pod, Zeroable)]`. eunomia's
+     `layout::marker` declares `Pod`/`Zeroable` as `unsafe trait`s with no
+     proc-macro counterpart, so each of those structs would need a hand-written
+     `unsafe impl` carrying its own soundness argument. That belongs in eunomia
+     as a derive, not in twelve hand-rolled impls downstream.
+  2. **hephaestus's public API is typed on `bytemuck::Pod`.**
+     `hephaestus-core`'s window surfaces — `launch.rs`, `pooling.rs`,
+     `prepared.rs` — bound their scalars on `bytemuck::Pod`, and apollo passes
+     types across that boundary. eunomia's `Pod` is a different trait, so no
+     amount of apollo-side work removes the dependency while the consumer
+     contract requires the other one.
+- **So the campaign has an order, and apollo is last.** eunomia gains the
+  derives; hephaestus migrates its public bounds (upstream ownership — the
+  provider adoption starts at the deepest crate); apollo then finishes the
+  remaining 28 and drops both dependencies from its manifests. Attempting the
+  apollo half alone is what produced the state this rescue found: manifests
+  with the dependency removed and call sites that still needed it.
+- **Manifests corrected in the port.** The abandoned work had already dropped
+  `bytemuck` from ten crate manifests while 28 call sites still used it, so the
+  tree did not compile. Restored to the eight crates that genuinely still need
+  it; it leaves only where nothing references it.
+- **Acceptance.** `bytemuck` and `half` absent from every apollo manifest and
+  from `cargo tree`, with no hand-rolled `unsafe impl Pod` in apollo standing in
+  for a derive eunomia should own.
+
 ## ATLAS-APOLLO-F32-NONPOT-WIDTH-2026-09-03 — f32 loses far more than f64 on non-power-of-two lengths [patch] [perf] — todo <a id="atlas-apollo-f32-nonpot-width"></a>
 
 - **Finding.** On composite and prime lengths apollo's `f32` is much further

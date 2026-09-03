@@ -6,7 +6,7 @@ use crate::domain::signal::analytic::{envelope_values_into, phase_values_into, A
 use crate::infrastructure::kernel::direct::{
     analytic_signal, analytic_signal_into, hilbert_transform, hilbert_transform_into,
 };
-use apollo_fft::{f16, CpuStorage, PrecisionProfile};
+use apollo_fft::{CpuStorage, PrecisionProfile, F16};
 use eunomia::Complex64;
 use mnemosyne::scratch::ScratchPool;
 
@@ -82,7 +82,7 @@ impl HilbertPlan {
         analytic_signal_into(signal, output)
     }
 
-    /// Compute the analytic signal for `f64`, `f32`, or mixed `f16` input storage.
+    /// Compute the analytic signal for `f64`, `f32`, or mixed `F16` input storage.
     ///
     /// The owner computation remains the `f64` analytic-mask path. Lower
     /// storage profiles are converted once at input, so the output preserves
@@ -124,7 +124,7 @@ impl HilbertPlan {
         hilbert_transform_into(signal, output)
     }
 
-    /// Compute Hilbert quadrature for `f64`, `f32`, or mixed `f16` storage.
+    /// Compute Hilbert quadrature for `f64`, `f32`, or mixed `F16` storage.
     pub fn transform_typed_into<T: HilbertStorage>(
         &self,
         signal: &[T],
@@ -293,7 +293,7 @@ impl HilbertStorage for f64 {
 
 impl HilbertStorage for f32 {}
 
-impl HilbertStorage for f16 {}
+impl HilbertStorage for F16 {}
 
 fn validate_profile(actual: PrecisionProfile, expected: PrecisionProfile) -> HilbertResult<()> {
     if actual.matches_storage_and_compute(expected) {
@@ -405,22 +405,22 @@ mod tests {
             assert!((f64::from(*actual) - *expected).abs() < 1.0e-5);
         }
 
-        let signal16: Vec<f16> = signal64
+        let signal16: Vec<F16> = signal64
             .iter()
-            .map(|value| f16::from_f32(*value as f32))
+            .map(|value| F16::from_f32(*value as f32))
             .collect();
         let expected16_input: Vec<f64> = signal16
             .iter()
             .map(|value| f64::from(value.to_f32()))
             .collect();
-        let expected16 = plan.transform(&expected16_input).expect("f16 represented");
-        let mut out16 = vec![f16::from_f32(0.0); len];
+        let expected16 = plan.transform(&expected16_input).expect("F16 represented");
+        let mut out16 = vec![F16::from_f32(0.0); len];
         plan.transform_typed_into(
             &signal16,
             &mut out16,
             PrecisionProfile::MIXED_PRECISION_F16_F32,
         )
-        .expect("typed f16 transform");
+        .expect("typed F16 transform");
         for (actual, expected) in out16.iter().zip(expected16.iter()) {
             let quantization_bound = expected.abs() * 2.0_f64.powi(-10) + 2.0_f64.powi(-14);
             assert!((f64::from(actual.to_f32()) - *expected).abs() <= quantization_bound);

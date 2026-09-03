@@ -380,9 +380,9 @@ impl FwhtPlan {
         Ok(())
     }
 
-    /// Execute the unnormalized FWHT for `f64`, `f32`, or mixed `f16` storage.
+    /// Execute the unnormalized FWHT for `f64`, `f32`, or mixed `F16` storage.
     ///
-    /// `f64` and `f32` use native Hadamard butterflies. Mixed `f16` storage
+    /// `f64` and `f32` use native Hadamard butterflies. Mixed `F16` storage
     /// converts through `f32` compute and quantizes once into the caller-owned
     /// output.
     pub fn forward_typed_into<T: FwhtStorage>(
@@ -394,7 +394,7 @@ impl FwhtPlan {
         T::forward_into(self, input, output, profile)
     }
 
-    /// Execute the normalized inverse FWHT for `f64`, `f32`, or mixed `f16` storage.
+    /// Execute the normalized inverse FWHT for `f64`, `f32`, or mixed `F16` storage.
     pub fn inverse_typed_into<T: FwhtStorage>(
         &self,
         input: &Array1<T>,

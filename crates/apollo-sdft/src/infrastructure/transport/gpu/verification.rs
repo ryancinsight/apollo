@@ -7,7 +7,7 @@ mod tests {
         SdftWgpuBackend, SdftWgpuPlan, WgpuCapabilities, WgpuError,
     };
     use crate::SdftPlan;
-    use apollo_fft::{f16, PrecisionProfile};
+    use apollo_fft::{PrecisionProfile, F16};
     use eunomia::Complex32;
     use leto::{SliceArg, Storage};
 
@@ -137,13 +137,13 @@ mod tests {
         // 6. typed_mixed_storage_matches_represented_f32_execution
         {
             let samples: [f32; 8] = [1.0, 0.5, -0.5, -1.0, 0.5, 1.0, -0.25, 0.75];
-            let reduced_samples: Vec<f16> = samples.iter().map(|&x| f16::from_f32(x)).collect();
+            let reduced_samples: Vec<F16> = samples.iter().map(|&x| F16::from_f32(x)).collect();
             let represented: Vec<f32> = reduced_samples.iter().map(|v| v.to_f32()).collect();
             let plan = backend.plan(WindowPlan::new(reduced_samples.len(), 4));
             let reference = backend
                 .execute_forward(&plan, &represented)
                 .expect("f32 reference");
-            let mut typed_out: Vec<[f16; 2]> = vec![[f16::from_f32(0.0), f16::from_f32(0.0)]; 4];
+            let mut typed_out: Vec<[F16; 2]> = vec![[F16::from_f32(0.0), F16::from_f32(0.0)]; 4];
             backend
                 .execute_forward_typed_into(
                     &plan,
@@ -153,7 +153,7 @@ mod tests {
                 )
                 .expect("typed mixed forward");
             for (actual, expected) in typed_out.iter().zip(reference.iter()) {
-                let expected_reduced = [f16::from_f32(expected.re), f16::from_f32(expected.im)];
+                let expected_reduced = [F16::from_f32(expected.re), F16::from_f32(expected.im)];
                 assert_eq!(
                     actual[0].to_bits(),
                     expected_reduced[0].to_bits(),
@@ -174,12 +174,12 @@ mod tests {
         // 7. typed_leto_forward_matches_typed_slice_forward
         {
             let samples: [f32; 8] = [1.0, 0.5, -0.5, -1.0, 0.5, 1.0, -0.25, 0.75];
-            let reduced_samples: Vec<f16> = samples.iter().map(|&x| f16::from_f32(x)).collect();
+            let reduced_samples: Vec<F16> = samples.iter().map(|&x| F16::from_f32(x)).collect();
             let input =
                 leto::Array1::from_shape_vec([reduced_samples.len()], reduced_samples.clone())
                     .expect("input");
             let plan = backend.plan(WindowPlan::new(reduced_samples.len(), 4));
-            let mut expected: Vec<[f16; 2]> = vec![[f16::from_f32(0.0), f16::from_f32(0.0)]; 4];
+            let mut expected: Vec<[F16; 2]> = vec![[F16::from_f32(0.0), F16::from_f32(0.0)]; 4];
             backend
                 .execute_forward_typed_into(
                     &plan,
@@ -189,7 +189,7 @@ mod tests {
                 )
                 .expect("typed slice forward");
             let actual = backend
-                .execute_forward_leto_typed::<f16, [f16; 2]>(
+                .execute_forward_leto_typed::<F16, [F16; 2]>(
                     &plan,
                     PrecisionProfile::MIXED_PRECISION_F16_F32,
                     input.view(),
@@ -213,8 +213,8 @@ mod tests {
 
         // 8. typed_path_rejects_profile_mismatch
         {
-            let reduced_samples: Vec<f16> = vec![f16::from_f32(1.0); 8];
-            let mut out: Vec<[f16; 2]> = vec![[f16::from_f32(0.0), f16::from_f32(0.0)]; 4];
+            let reduced_samples: Vec<F16> = vec![F16::from_f32(1.0); 8];
+            let mut out: Vec<[F16; 2]> = vec![[F16::from_f32(0.0), F16::from_f32(0.0)]; 4];
             let plan = backend.plan(WindowPlan::new(reduced_samples.len(), 4));
             let error = backend
                 .execute_forward_typed_into(

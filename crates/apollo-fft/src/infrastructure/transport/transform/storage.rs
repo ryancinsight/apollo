@@ -6,9 +6,10 @@
 //! onto an element (identity for the native type, promote/quantize for
 //! reduced-precision forms).
 
+use eunomia::F16;
 use mnemosyne::scratch::ScratchPool;
 
-use crate::{f16, Complex32, PrecisionProfile};
+use crate::{Complex32, PrecisionProfile};
 
 mod sealed {
     pub trait SealedElement {}
@@ -19,9 +20,9 @@ mod sealed {
     pub trait SealedStorage {}
 
     impl SealedStorage for f32 {}
-    impl SealedStorage for crate::f16 {}
+    impl SealedStorage for eunomia::F16 {}
     impl SealedStorage for crate::Complex32 {}
-    impl SealedStorage for [crate::f16; 2] {}
+    impl SealedStorage for [eunomia::F16; 2] {}
 }
 
 thread_local! {
@@ -167,7 +168,7 @@ impl GpuStorage for f32 {
     }
 }
 
-impl GpuStorage for f16 {
+impl GpuStorage for F16 {
     const PROFILE: PrecisionProfile = PrecisionProfile::MIXED_PRECISION_F16_F32;
 
     fn to_gpu(self) -> f32 {
@@ -175,7 +176,7 @@ impl GpuStorage for f16 {
     }
 
     fn from_gpu(value: f32) -> Self {
-        f16::from_f32(value)
+        F16::from_f32(value)
     }
 }
 
@@ -201,7 +202,7 @@ impl GpuStorage<Complex32> for Complex32 {
     }
 }
 
-impl GpuStorage<Complex32> for [f16; 2] {
+impl GpuStorage<Complex32> for [F16; 2] {
     const PROFILE: PrecisionProfile = PrecisionProfile::MIXED_PRECISION_F16_F32;
 
     fn to_gpu(self) -> Complex32 {
@@ -209,6 +210,6 @@ impl GpuStorage<Complex32> for [f16; 2] {
     }
 
     fn from_gpu(value: Complex32) -> Self {
-        [f16::from_f32(value.re), f16::from_f32(value.im)]
+        [F16::from_f32(value.re), F16::from_f32(value.im)]
     }
 }

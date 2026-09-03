@@ -6,11 +6,11 @@ use super::{DwtLetoCoefficients, DwtPlan};
 use crate::domain::contracts::error::{WaveletError, WaveletResult};
 use crate::domain::spectrum::coefficients::DwtCoefficients;
 use crate::CwtPlan;
-use apollo_fft::{f16, CpuStorage, PrecisionProfile};
+use apollo_fft::{CpuStorage, PrecisionProfile, F16};
 use leto::Array2;
 
 impl DwtPlan {
-    /// Execute a multilevel forward DWT for `f64`, `f32`, or mixed `f16` storage.
+    /// Execute a multilevel forward DWT for `f64`, `f32`, or mixed `F16` storage.
     ///
     /// The owner kernel remains the `f64` orthogonal filter bank. Typed paths
     /// convert represented input into owner arithmetic and quantize once when
@@ -48,7 +48,7 @@ impl DwtPlan {
         dwt_typed_coefficients_to_leto(self.len(), self.levels(), &approximation, &details)
     }
 
-    /// Execute inverse multilevel DWT for `f64`, `f32`, or mixed `f16` storage.
+    /// Execute inverse multilevel DWT for `f64`, `f32`, or mixed `F16` storage.
     pub fn inverse_typed_into<T: WaveletStorage>(
         &self,
         approximation: &[T],
@@ -243,4 +243,4 @@ impl WaveletStorage for f64 {
 
 impl WaveletStorage for f32 {}
 
-impl WaveletStorage for f16 {}
+impl WaveletStorage for F16 {}

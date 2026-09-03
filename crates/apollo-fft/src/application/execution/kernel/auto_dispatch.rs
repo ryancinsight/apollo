@@ -44,7 +44,7 @@ where
 /// - Composite mixed-radix DIT for 2/3/5/7-smooth lengths.
 /// - Rader convolution for prime lengths.
 ///
-/// Implemented for `Complex64`, `Complex32`, and `Complex<f16>`.
+/// Implemented for `Complex64`, `Complex32`, and `Complex<F16>`.
 pub trait FftPrecision: Sized {
     /// In-place forward FFT, unnormalized.
     fn fft_forward(data: &mut [Self]);
@@ -285,8 +285,7 @@ mod tests {
     use super::*;
     use crate::application::execution::kernel::direct::{dft_forward, dft_inverse};
     use crate::application::execution::kernel::test_utils::{max_abs_err_32, max_abs_err_64};
-    use eunomia::Complex;
-    use half::f16;
+    use eunomia::{Complex, F16};
 
     #[derive(Clone, Copy)]
     enum CompactTransform {
@@ -313,7 +312,7 @@ mod tests {
             .collect()
     }
 
-    fn max_abs_err_half(got: &[Complex<f16>], expected: &[Complex<f16>]) -> f32 {
+    fn max_abs_err_half(got: &[Complex<F16>], expected: &[Complex<F16>]) -> f32 {
         got.iter()
             .zip(expected.iter())
             .map(|(x, y)| {
@@ -328,9 +327,9 @@ mod tests {
 
     fn assert_compact_transform_matches_direct(transform: CompactTransform) {
         let n = 96usize;
-        let input: Vec<Complex<f16>> = sig32(n)
+        let input: Vec<Complex<F16>> = sig32(n)
             .into_iter()
-            .map(|value| Complex::new(f16::from_f32(value.re), f16::from_f32(value.im)))
+            .map(|value| Complex::new(F16::from_f32(value.re), F16::from_f32(value.im)))
             .collect();
         let promoted: Vec<Complex32> = input
             .iter()
@@ -349,16 +348,16 @@ mod tests {
                 (expected, 1.0)
             }
         };
-        let expected: Vec<Complex<f16>> = expected
+        let expected: Vec<Complex<F16>> = expected
             .into_iter()
-            .map(|value| Complex::new(f16::from_f32(value.re), f16::from_f32(value.im)))
+            .map(|value| Complex::new(F16::from_f32(value.re), F16::from_f32(value.im)))
             .collect();
 
         let input_l1 = promoted
             .iter()
             .map(|value| value.re.abs() + value.im.abs())
             .sum::<f32>();
-        let unit_roundoff = f16::EPSILON.to_f32() * 0.5;
+        let unit_roundoff = F16::EPSILON.to_f32() * 0.5;
         // Each direct output has at most N accumulated terms. The two storage
         // roundings contribute 2u_half; f32 arithmetic contributes at most N*u_f32.
         let compute_roundoff = n as f32 * f32::EPSILON;
@@ -393,9 +392,9 @@ mod tests {
     #[test]
     fn register_resident_storage_lengths_match_direct() {
         for n in [2usize, 4, 8, 16, 32] {
-            let input: Vec<Complex<f16>> = sig32(n)
+            let input: Vec<Complex<F16>> = sig32(n)
                 .into_iter()
-                .map(|value| Complex::new(f16::from_f32(value.re), f16::from_f32(value.im)))
+                .map(|value| Complex::new(F16::from_f32(value.re), F16::from_f32(value.im)))
                 .collect();
             let promoted: Vec<Complex32> = input
                 .iter()
@@ -405,7 +404,7 @@ mod tests {
                 .iter()
                 .map(|value| value.re.abs() + value.im.abs())
                 .sum::<f32>();
-            let unit_roundoff = f16::EPSILON.to_f32() * 0.5;
+            let unit_roundoff = F16::EPSILON.to_f32() * 0.5;
             let compute_roundoff = n as f32 * f32::EPSILON;
 
             for inverse in [false, true] {
@@ -414,9 +413,9 @@ mod tests {
                 } else {
                     dft_forward(&promoted)
                 };
-                let expected: Vec<Complex<f16>> = expected_f32
+                let expected: Vec<Complex<F16>> = expected_f32
                     .into_iter()
-                    .map(|value| Complex::new(f16::from_f32(value.re), f16::from_f32(value.im)))
+                    .map(|value| Complex::new(F16::from_f32(value.re), F16::from_f32(value.im)))
                     .collect();
                 let scale = if inverse { 1.0 / n as f32 } else { 1.0 };
                 let error_bound = std::f32::consts::SQRT_2

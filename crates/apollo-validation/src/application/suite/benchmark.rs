@@ -1,7 +1,7 @@
 use crate::domain::report::{BenchmarkReport, PrecisionBenchmarkReport, PrecisionRunReport};
 use crate::infrastructure::dft_reference::{dft_1d_array, dft_3d_real};
 use crate::infrastructure::numpy::benchmark_fft;
-use apollo_fft::f16;
+use apollo_fft::F16;
 use apollo_fft::{fft_1d_array, ifft_1d_array};
 use apollo_nufft::{
     nufft_type1_1d, nufft_type1_1d_fast, nufft_type1_3d_fast, UniformDomain1D, UniformGrid3D,
@@ -119,13 +119,13 @@ pub fn run_benchmark_suite() -> SuiteResult<BenchmarkReport> {
             PrecisionBenchmarkReport {
                 profile: "mixed_precision".to_string(),
                 forward_ms: Some(elapsed_ms(|| {
-                    let input = signal.mapv(|value| f16::from_f32(value as f32));
+                    let input = signal.mapv(|value| F16::from_f32(value as f32));
                     let _ = fft_1d_array(&input);
                 })),
                 inverse_ms: Some(elapsed_ms(|| {
-                    let input = signal.mapv(|value| f16::from_f32(value as f32));
+                    let input = signal.mapv(|value| F16::from_f32(value as f32));
                     let spectrum = fft_1d_array(&input);
-                    let _ = ifft_1d_array::<f16>(&spectrum);
+                    let _ = ifft_1d_array::<F16>(&spectrum);
                 })),
                 note: None,
             },
@@ -175,14 +175,14 @@ pub(super) fn precision_profile_reports() -> Vec<PrecisionRunReport> {
     let low_reference = low_input.mapv(f64::from);
     let low_error = max_real_abs_delta_3d(&low_reference, &low_recovered_nd);
 
-    // f16/f32 mixed-precision path — compare spectrum against f64 FFT of the f16-represented input.
-    let mixed_input = reference.mapv(|value| f16::from_f32(value as f32));
+    // F16/f32 mixed-precision path — compare spectrum against f64 FFT of the F16-represented input.
+    let mixed_input = reference.mapv(|value| F16::from_f32(value as f32));
     let mixed_input_leto = leto::Array::<_, leto::MnemosyneStorage<_>, 3>::from_mnemosyne_slice(
         [4, 4, 4],
         mixed_input.as_slice().unwrap(),
     )
     .unwrap();
-    let mixed_spectrum = apollo_fft::fft_3d_leto::<f16>(mixed_input_leto.view());
+    let mixed_spectrum = apollo_fft::fft_3d_leto::<F16>(mixed_input_leto.view());
     // Use f64 FFT of the quantized input as the mixed-precision forward reference.
     let mixed_input_f64 = mixed_input.mapv(|v| f64::from(v.to_f32()));
     let mixed_input_f64_leto =
@@ -202,7 +202,7 @@ pub(super) fn precision_profile_reports() -> Vec<PrecisionRunReport> {
             ((f64::from(lv.re) - hv.re).powi(2) + (f64::from(lv.im) - hv.im).powi(2)).sqrt()
         })
         .fold(0.0_f64, f64::max);
-    let mixed_recovered = apollo_fft::ifft_3d_leto::<f16>(mixed_spectrum.view());
+    let mixed_recovered = apollo_fft::ifft_3d_leto::<F16>(mixed_spectrum.view());
     let mixed_recovered_nd =
         leto::Array3::from_shape_vec([4, 4, 4], mixed_recovered.storage().as_slice().to_vec())
             .unwrap()

@@ -12,7 +12,7 @@ use super::{
 };
 use crate::application::execution::kernel::hann::hann_window;
 use crate::domain::contracts::error::StftError;
-use apollo_fft::{f16, PrecisionProfile};
+use apollo_fft::{PrecisionProfile, F16};
 use eunomia::assert_relative_eq;
 use eunomia::{Complex32, Complex64};
 use leto::Array1;
@@ -208,18 +208,18 @@ fn typed_paths_support_f64_f32_and_mixed_f16_storage() {
         assert!((*actual - *expected).abs() < 1.0e-4);
     }
 
-    let signal16 = signal64.mapv(|value| f16::from_f32(value as f32));
+    let signal16 = signal64.mapv(|value| F16::from_f32(value as f32));
     let represented16 = signal16.mapv(|value| f64::from(value.to_f32()));
     let expected16 = plan
         .forward(&represented16)
-        .expect("represented f16 forward");
-    let mut out16 = Array1::from_elem([expected16.size()], [f16::from_f32(0.0); 2]);
+        .expect("represented F16 forward");
+    let mut out16 = Array1::from_elem([expected16.size()], [F16::from_f32(0.0); 2]);
     plan.forward_typed_into(
         &signal16,
         &mut out16,
         PrecisionProfile::MIXED_PRECISION_F16_F32,
     )
-    .expect("typed f16 forward");
+    .expect("typed F16 forward");
     for (actual, expected) in out16.iter().zip(expected16.iter()) {
         let re_bound = expected.re.abs() * 2.0_f64.powi(-10) + 2.0_f64.powi(-14);
         let im_bound = expected.im.abs() * 2.0_f64.powi(-10) + 2.0_f64.powi(-14);

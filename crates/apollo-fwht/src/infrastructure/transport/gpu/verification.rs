@@ -6,7 +6,7 @@ mod tests {
         FwhtWgpuBackend, FwhtWgpuPlan, WgpuCapabilities, WgpuError,
     };
     use crate::FwhtPlan;
-    use apollo_fft::{f16, PrecisionProfile};
+    use apollo_fft::{PrecisionProfile, F16};
     use leto::Array1;
     use leto::{SliceArg, Storage};
 
@@ -180,13 +180,13 @@ mod tests {
         // 9. typed_mixed_storage_matches_represented_f32_execution_when_device_exists
         {
             let represented = [0.5_f32, -1.25, 2.75, 4.0, -3.5, 1.0, 0.25, -0.125];
-            let input: Vec<f16> = represented.iter().copied().map(f16::from_f32).collect();
+            let input: Vec<F16> = represented.iter().copied().map(F16::from_f32).collect();
             let represented_input: Vec<f32> = input.iter().map(|value| value.to_f32()).collect();
             let plan = backend.plan(input.len());
             let expected_forward = backend
                 .execute_forward(&plan, &represented_input)
                 .expect("represented forward");
-            let mut typed_forward = vec![f16::from_f32(0.0); input.len()];
+            let mut typed_forward = vec![F16::from_f32(0.0); input.len()];
 
             backend
                 .execute_forward_typed_into(
@@ -198,14 +198,14 @@ mod tests {
                 .expect("mixed forward");
 
             for (actual, expected) in typed_forward.iter().zip(expected_forward.iter()) {
-                let expected = f16::from_f32(*expected);
+                let expected = F16::from_f32(*expected);
                 assert_eq!(actual.to_bits(), expected.to_bits());
             }
 
             let expected_inverse = backend
                 .execute_inverse(&plan, &expected_forward)
                 .expect("represented inverse");
-            let mut typed_inverse = vec![f16::from_f32(0.0); input.len()];
+            let mut typed_inverse = vec![F16::from_f32(0.0); input.len()];
             backend
                 .execute_inverse_typed_into(
                     &plan,
@@ -223,12 +223,12 @@ mod tests {
         // 10. typed_leto_forward_and_inverse_match_typed_slice_when_device_exists
         {
             let represented = [0.5_f32, -1.25, 2.75, 4.0, -3.5, 1.0, 0.25, -0.125];
-            let input: Vec<f16> = represented.iter().copied().map(f16::from_f32).collect();
+            let input: Vec<F16> = represented.iter().copied().map(F16::from_f32).collect();
             let leto_input =
                 leto::Array1::from_shape_vec([input.len()], input.clone()).expect("input");
             let plan = backend.plan(input.len());
 
-            let mut expected_forward = vec![f16::from_f32(0.0); input.len()];
+            let mut expected_forward = vec![F16::from_f32(0.0); input.len()];
             backend
                 .execute_forward_typed_into(
                     &plan,
@@ -238,7 +238,7 @@ mod tests {
                 )
                 .expect("typed slice forward");
             let actual_forward = backend
-                .execute_forward_leto_typed::<f16, f16>(
+                .execute_forward_leto_typed::<F16, F16>(
                     &plan,
                     PrecisionProfile::MIXED_PRECISION_F16_F32,
                     leto_input.view(),
@@ -252,7 +252,7 @@ mod tests {
             let leto_spectrum =
                 leto::Array1::from_shape_vec([expected_forward.len()], expected_forward.clone())
                     .expect("spectrum");
-            let mut expected_inverse = vec![f16::from_f32(0.0); input.len()];
+            let mut expected_inverse = vec![F16::from_f32(0.0); input.len()];
             backend
                 .execute_inverse_typed_into(
                     &plan,
@@ -262,7 +262,7 @@ mod tests {
                 )
                 .expect("typed slice inverse");
             let actual_inverse = backend
-                .execute_inverse_leto_typed::<f16, f16>(
+                .execute_inverse_leto_typed::<F16, F16>(
                     &plan,
                     PrecisionProfile::MIXED_PRECISION_F16_F32,
                     leto_spectrum.view(),
@@ -277,8 +277,8 @@ mod tests {
         // 11. typed_path_rejects_profile_storage_mismatch_when_device_exists
         {
             let plan = backend.plan(2);
-            let input = [f16::from_f32(1.0), f16::from_f32(-1.0)];
-            let mut output = [f16::from_f32(0.0); 2];
+            let input = [F16::from_f32(1.0), F16::from_f32(-1.0)];
+            let mut output = [F16::from_f32(0.0); 2];
             let error = backend
                 .execute_forward_typed_into(
                     &plan,
@@ -291,12 +291,12 @@ mod tests {
         }
     }
 
-    fn assert_f16_quantized_close(actual: f16, expected: f32) {
+    fn assert_f16_quantized_close(actual: F16, expected: f32) {
         let actual = actual.to_f32();
-        let quantum_bound = expected.abs() * 2.0_f32.powi(-10) + f32::from(f16::MIN_POSITIVE);
+        let quantum_bound = expected.abs() * 2.0_f32.powi(-10) + F16::MIN_POSITIVE.to_f32();
         assert!(
             (actual - expected).abs() <= quantum_bound,
-            "f16 quantization mismatch: actual={actual}, expected={expected}, bound={quantum_bound}"
+            "F16 quantization mismatch: actual={actual}, expected={expected}, bound={quantum_bound}"
         );
     }
 }

@@ -366,7 +366,7 @@ fn transform_base<
 ) -> bool
 where
     T: MixedRadixScalar,
-    Complex<T>: bytemuck::Pod,
+    Complex<T>: eunomia::layout::Pod,
     S: StoreSink<T>,
 {
     assert_eq!(
@@ -374,7 +374,7 @@ where
         LANES,
         "the base transform requires LANES / 2 samples"
     );
-    let flat: &mut [T; LANES] = bytemuck::cast_slice_mut(data)
+    let flat: &mut [T; LANES] = eunomia::layout::cast_slice_mut(data)
         .try_into()
         .expect("invariant: the assertion above fixes the lane count");
     // `MixedRadixScalar` is sealed to f32/f64. Keeping the eight-byte route
@@ -442,7 +442,7 @@ pub(crate) fn transform_128_combining<T, const INVERSE: bool>(
 ) -> bool
 where
     T: MixedRadixScalar,
-    Complex<T>: bytemuck::Pod,
+    Complex<T>: eunomia::layout::Pod,
 {
     transform_base::<T, INVERSE, false, 8, 256, { table_lanes(8) }, _>(data, plan, sink)
 }
@@ -459,7 +459,7 @@ pub(crate) fn transform_128_combining_final<T, const INVERSE: bool>(
 ) -> bool
 where
     T: MixedRadixScalar,
-    Complex<T>: bytemuck::Pod,
+    Complex<T>: eunomia::layout::Pod,
 {
     transform_base::<T, INVERSE, false, 8, 256, { table_lanes(8) }, _>(data, plan, sink)
 }
@@ -485,7 +485,7 @@ pub(crate) fn transform_128<T, const INVERSE: bool>(
 ) -> bool
 where
     T: MixedRadixScalar,
-    Complex<T>: bytemuck::Pod,
+    Complex<T>: eunomia::layout::Pod,
 {
     transform_base::<T, INVERSE, false, 8, 256, { table_lanes(8) }, _>(data, plan, DirectSink)
 }
@@ -502,7 +502,7 @@ pub(crate) fn transform_64<T, const INVERSE: bool>(
 ) -> bool
 where
     T: MixedRadixScalar,
-    Complex<T>: bytemuck::Pod,
+    Complex<T>: eunomia::layout::Pod,
 {
     transform_base::<T, INVERSE, false, 4, 128, { table_lanes(4) }, _>(data, plan, DirectSink)
 }
@@ -515,7 +515,7 @@ pub(crate) fn transform_128_measured<T, const INVERSE: bool>(
 ) -> bool
 where
     T: MixedRadixScalar,
-    Complex<T>: bytemuck::Pod,
+    Complex<T>: eunomia::layout::Pod,
 {
     transform_base::<T, INVERSE, true, 8, 256, { table_lanes(8) }, _>(data, plan, DirectSink)
 }

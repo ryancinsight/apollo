@@ -1,4 +1,4 @@
-use apollo_fft::{f16, PrecisionProfile};
+use apollo_fft::{PrecisionProfile, F16};
 use leto::Storage;
 
 use crate::{infrastructure::transport::gpu::WgpuError, RealTransformKind};
@@ -15,7 +15,7 @@ fn mixed_storage_matches_represented_f32_output() {
     let input = represented
         .iter()
         .copied()
-        .map(f16::from_f32)
+        .map(F16::from_f32)
         .collect::<Vec<_>>();
     let represented_input = input.iter().map(|value| value.to_f32()).collect::<Vec<_>>();
     let plan = backend.plan(RealTransformPlan::new(
@@ -25,7 +25,7 @@ fn mixed_storage_matches_represented_f32_output() {
     let expected = backend
         .execute_forward(&plan, &represented_input)
         .expect("represented f32 forward");
-    let mut actual = vec![f16::from_f32(0.0); input.len()];
+    let mut actual = vec![F16::from_f32(0.0); input.len()];
     backend
         .execute_forward_typed_into(
             &plan,
@@ -36,7 +36,7 @@ fn mixed_storage_matches_represented_f32_output() {
         .expect("mixed forward");
 
     for (actual, expected) in actual.iter().zip(expected.iter()) {
-        assert_eq!(actual.to_bits(), f16::from_f32(*expected).to_bits());
+        assert_eq!(actual.to_bits(), F16::from_f32(*expected).to_bits());
     }
 }
 
@@ -49,13 +49,13 @@ fn typed_leto_boundaries_match_typed_slice_execution() {
     let input = represented
         .iter()
         .copied()
-        .map(f16::from_f32)
+        .map(F16::from_f32)
         .collect::<Vec<_>>();
     let plan = backend.plan(RealTransformPlan::new(
         input.len(),
         RealTransformKind::DctII,
     ));
-    let mut expected_forward = vec![f16::from_f32(0.0); input.len()];
+    let mut expected_forward = vec![F16::from_f32(0.0); input.len()];
     backend
         .execute_forward_typed_into(
             &plan,
@@ -66,7 +66,7 @@ fn typed_leto_boundaries_match_typed_slice_execution() {
         .expect("typed forward");
     let leto_input = leto::Array1::from_shape_vec([input.len()], input).expect("Leto input");
     let actual_forward = backend
-        .execute_forward_leto_typed::<f16, f16>(
+        .execute_forward_leto_typed::<F16, F16>(
             &plan,
             PrecisionProfile::MIXED_PRECISION_F16_F32,
             leto_input.view(),
@@ -77,7 +77,7 @@ fn typed_leto_boundaries_match_typed_slice_execution() {
         expected_forward.as_slice()
     );
 
-    let mut expected_inverse = vec![f16::from_f32(0.0); expected_forward.len()];
+    let mut expected_inverse = vec![F16::from_f32(0.0); expected_forward.len()];
     backend
         .execute_inverse_typed_into(
             &plan,
@@ -89,7 +89,7 @@ fn typed_leto_boundaries_match_typed_slice_execution() {
     let leto_spectrum = leto::Array1::from_shape_vec([expected_forward.len()], expected_forward)
         .expect("Leto spectrum");
     let actual_inverse = backend
-        .execute_inverse_leto_typed::<f16, f16>(
+        .execute_inverse_leto_typed::<F16, F16>(
             &plan,
             PrecisionProfile::MIXED_PRECISION_F16_F32,
             leto_spectrum.view(),

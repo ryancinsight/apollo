@@ -29,7 +29,7 @@ pub trait MixedRadixScalar:
     + Copy
     + 'static
     + hermes_simd::LaneScalar
-    + bytemuck::Pod
+    + eunomia::layout::Pod
     + eunomia::Pod
     + ShortWinogradScalar
     + CompositeCache

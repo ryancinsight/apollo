@@ -3,7 +3,7 @@
 use crate::application::execution::kernel::direct::wht_inplace;
 use crate::application::execution::plan::fwht::dimension_1d::FwhtPlan;
 use crate::domain::contracts::error::FwhtError;
-use apollo_fft::{f16, CpuStorage, PrecisionProfile};
+use apollo_fft::{CpuStorage, PrecisionProfile, F16};
 use leto::Array1;
 
 thread_local! {
@@ -138,7 +138,7 @@ impl FwhtStorage for f32 {
     }
 }
 
-impl FwhtStorage for f16 {
+impl FwhtStorage for F16 {
     fn forward_slice_into(
         plan: &FwhtPlan,
         input: &[Self],
@@ -153,7 +153,7 @@ impl FwhtStorage for f16 {
             }
             wht_inplace(compute);
             for (slot, value) in output.iter_mut().zip(compute.iter().copied()) {
-                *slot = f16::from_f32(value);
+                *slot = F16::from_f32(value);
             }
             Ok(())
         })
@@ -174,7 +174,7 @@ impl FwhtStorage for f16 {
             wht_inplace(compute);
             let scale = 1.0_f32 / plan.len() as f32;
             for (slot, value) in output.iter_mut().zip(compute.iter().copied()) {
-                *slot = f16::from_f32(value * scale);
+                *slot = F16::from_f32(value * scale);
             }
             Ok(())
         })

@@ -2,8 +2,7 @@
 
 #![allow(clippy::uninit_vec)]
 
-use eunomia::{Complex, Complex32};
-use half::f16;
+use eunomia::{Complex, Complex32, F16};
 use mnemosyne::scratch::ScratchPool;
 
 thread_local! {
@@ -39,7 +38,7 @@ pub(crate) trait Complex32Bridge: Copy {
     }
 }
 
-impl Complex32Bridge for Complex<f16> {
+impl Complex32Bridge for Complex<F16> {
     #[inline]
     fn to_complex32(self) -> Complex32 {
         Complex32::new(self.re.to_f32(), self.im.to_f32())
@@ -47,7 +46,7 @@ impl Complex32Bridge for Complex<f16> {
 
     #[inline]
     fn from_complex32(value: Complex32) -> Self {
-        Self::new(f16::from_f32(value.re), f16::from_f32(value.im))
+        Self::new(F16::from_f32(value.re), F16::from_f32(value.im))
     }
 
     /// One `vcvtph2ps` per eight lanes through eunomia's bulk widen, which
@@ -61,7 +60,7 @@ impl Complex32Bridge for Complex<f16> {
     }
 
     /// The inverse: one `vcvtps2ph` per eight lanes, rounding to nearest with
-    /// ties to even — the same rounding the element-wise `f16::from_f32` path
+    /// ties to even — the same rounding the element-wise `F16::from_f32` path
     /// applies, so the two agree bit for bit.
     #[inline]
     fn narrow_slice(src: &[Complex32], dst: &mut [Self]) {
@@ -71,31 +70,29 @@ impl Complex32Bridge for Complex<f16> {
 
 /// Interleaved `binary16` samples as the flat lane array eunomia converts.
 ///
-/// `Complex<f16>` is `#[repr(C)]` over two `half::f16`, each
-/// `#[repr(transparent)]` over `u16`, and `eunomia::F16` is likewise
-/// transparent over `u16`; both reinterprets are layout no-ops between
-/// plain-old-data types.
+/// `Complex<F16>` is `#[repr(C)]` over two `F16` lanes, and both types are
+/// plain-old-data with their layout asserted by Eunomia.
 #[inline]
-fn half_lanes(data: &[Complex<f16>]) -> &[eunomia::F16] {
-    eunomia::layout::cast_slice(bytemuck::cast_slice::<_, u16>(data))
+fn half_lanes(data: &[Complex<F16>]) -> &[F16] {
+    eunomia::layout::cast_slice(data)
 }
 
 /// Mutable form of [`half_lanes`].
 #[inline]
-fn half_lanes_mut(data: &mut [Complex<f16>]) -> &mut [eunomia::F16] {
-    eunomia::layout::cast_slice_mut(bytemuck::cast_slice_mut::<_, u16>(data))
+fn half_lanes_mut(data: &mut [Complex<F16>]) -> &mut [F16] {
+    eunomia::layout::cast_slice_mut(data)
 }
 
 /// Interleaved `Complex32` samples as their flat `f32` lane array.
 #[inline]
 fn float_lanes(data: &[Complex32]) -> &[f32] {
-    bytemuck::cast_slice(data)
+    eunomia::layout::cast_slice(data)
 }
 
 /// Mutable form of [`float_lanes`].
 #[inline]
 fn float_lanes_mut(data: &mut [Complex32]) -> &mut [f32] {
-    bytemuck::cast_slice_mut(data)
+    eunomia::layout::cast_slice_mut(data)
 }
 
 /// Execute `kernel` over a reused `Complex32` scratch view and store results back.
@@ -118,32 +115,45 @@ where
 #[cfg(test)]
 mod tests {
     use super::{Complex, Complex32, Complex32Bridge};
-    use half::f16;
+    use eunomia::F16;
 
     /// Every `binary16` bit pattern, including the subnormals, infinities and
     /// NaNs the vector path handles in hardware.
-    fn every_half_pattern() -> Vec<Complex<f16>> {
+    fn every_half_pattern() -> Vec<Complex<F16>> {
         (0..=u16::MAX)
             .step_by(3)
-            .map(|bits| Complex::new(f16::from_bits(bits), f16::from_bits(bits.rotate_left(7))))
+            .map(|bits| Complex::new(F16::from_bits(bits), F16::from_bits(bits.rotate_left(7))))
             .collect()
     }
 
-    /// The bulk widen must agree with the element-wise definition bit for bit:
-    /// it is an acceleration of that contract, not a second one. A NaN payload
-    /// or a subnormal that the vector path rounded differently would show here.
+    /// The bulk widen must agree with the element-wise definition for every
+    /// non-NaN value: it is an acceleration of that contract, not a second one.
+    /// F16C is permitted to quiet signaling NaNs while preserving their NaN
+    /// value class, so NaNs use the semantic part of the conversion contract.
+    fn assert_widened_lane(actual: f32, expected: f32, lane: usize, component: &str) {
+        if expected.is_nan() {
+            assert!(
+                actual.is_nan(),
+                "{component} lane {lane} lost its NaN class"
+            );
+        } else {
+            assert_eq!(
+                actual.to_bits(),
+                expected.to_bits(),
+                "{component} lane {lane} widened differently in bulk"
+            );
+        }
+    }
+
     #[test]
     fn bulk_widen_matches_the_element_wise_bridge() {
         let source = every_half_pattern();
         let mut bulk = vec![Complex32::new(0.0, 0.0); source.len()];
-        <Complex<f16> as Complex32Bridge>::widen_slice(&source, &mut bulk);
+        <Complex<F16> as Complex32Bridge>::widen_slice(&source, &mut bulk);
         for (index, (widened, value)) in bulk.iter().zip(&source).enumerate() {
             let expected = value.to_complex32();
-            assert_eq!(
-                (widened.re.to_bits(), widened.im.to_bits()),
-                (expected.re.to_bits(), expected.im.to_bits()),
-                "lane {index} widened differently in bulk"
-            );
+            assert_widened_lane(widened.re, expected.re, index, "real");
+            assert_widened_lane(widened.im, expected.im, index, "imaginary");
         }
     }
 
@@ -156,7 +166,7 @@ mod tests {
                 let x = index as f32;
                 Complex32::new(
                     (x * 0.013).sin() * 65_600.0,
-                    (x * 0.001).exp() * f32::from(f16::EPSILON) * 0.5,
+                    (x * 0.001).exp() * F16::EPSILON.to_f32() * 0.5,
                 )
             })
             .chain([
@@ -165,10 +175,10 @@ mod tests {
                 Complex32::new(1.0 + f32::EPSILON, -0.0),
             ])
             .collect();
-        let mut bulk = vec![Complex::new(f16::ZERO, f16::ZERO); source.len()];
-        <Complex<f16> as Complex32Bridge>::narrow_slice(&source, &mut bulk);
+        let mut bulk = vec![Complex::new(F16::ZERO, F16::ZERO); source.len()];
+        <Complex<F16> as Complex32Bridge>::narrow_slice(&source, &mut bulk);
         for (index, (narrowed, value)) in bulk.iter().zip(&source).enumerate() {
-            let expected = <Complex<f16> as Complex32Bridge>::from_complex32(*value);
+            let expected = <Complex<F16> as Complex32Bridge>::from_complex32(*value);
             assert_eq!(
                 (narrowed.re.to_bits(), narrowed.im.to_bits()),
                 (expected.re.to_bits(), expected.im.to_bits()),
@@ -183,9 +193,9 @@ mod tests {
     fn widen_then_narrow_is_the_identity_on_storage() {
         let source = every_half_pattern();
         let mut buffer = vec![Complex32::new(0.0, 0.0); source.len()];
-        let mut back = vec![Complex::new(f16::ZERO, f16::ZERO); source.len()];
-        <Complex<f16> as Complex32Bridge>::widen_slice(&source, &mut buffer);
-        <Complex<f16> as Complex32Bridge>::narrow_slice(&buffer, &mut back);
+        let mut back = vec![Complex::new(F16::ZERO, F16::ZERO); source.len()];
+        <Complex<F16> as Complex32Bridge>::widen_slice(&source, &mut buffer);
+        <Complex<F16> as Complex32Bridge>::narrow_slice(&buffer, &mut back);
         for (index, (returned, original)) in back.iter().zip(&source).enumerate() {
             if original.re.is_nan() || original.im.is_nan() {
                 assert!(returned.re.is_nan() || returned.im.is_nan(), "lane {index}");

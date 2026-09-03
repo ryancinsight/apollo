@@ -21,8 +21,8 @@ struct GroupsOneStage<'a, T> {
 
 impl<T> LaneKernel<T> for GroupsOneStage<'_, T>
 where
-    T: LaneScalar + bytemuck::Pod,
-    Complex<T>: bytemuck::Pod
+    T: LaneScalar + eunomia::layout::Pod,
+    Complex<T>: eunomia::layout::Pod
         + Add<Output = Complex<T>>
         + Sub<Output = Complex<T>>
         + Mul<Output = Complex<T>>,
@@ -42,9 +42,9 @@ where
         let vector_end = radix & !(per_register - 1);
 
         if vector_end > 0 {
-            let src_view = simd.view(bytemuck::cast_slice::<Complex<T>, T>(src));
-            let twiddle_view = simd.view(bytemuck::cast_slice::<Complex<T>, T>(twiddles));
-            let mut dst_view = simd.view_mut(bytemuck::cast_slice_mut::<Complex<T>, T>(dst));
+            let src_view = simd.view(eunomia::layout::cast_slice::<Complex<T>, T>(src));
+            let twiddle_view = simd.view(eunomia::layout::cast_slice::<Complex<T>, T>(twiddles));
+            let mut dst_view = simd.view_mut(eunomia::layout::cast_slice_mut::<Complex<T>, T>(dst));
             for j in (0..vector_end).step_by(per_register) {
                 // `2j` and `2j + per_register` are register indices because
                 // `j` steps by `per_register`; `j` and `half_n + j` are too,
@@ -90,8 +90,8 @@ pub(crate) fn stage_groups_one_lanes<T, const LANES: usize>(
     twiddles: &[Complex<T>],
 ) -> bool
 where
-    T: LaneScalar + bytemuck::Pod,
-    Complex<T>: bytemuck::Pod
+    T: LaneScalar + eunomia::layout::Pod,
+    Complex<T>: eunomia::layout::Pod
         + Add<Output = Complex<T>>
         + Sub<Output = Complex<T>>
         + Mul<Output = Complex<T>>,

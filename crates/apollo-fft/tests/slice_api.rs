@@ -1,9 +1,9 @@
 //! Leto and slice FFT boundaries: value parity across dimensional APIs.
 
 use apollo_fft::{
-    f16, fft_1d_array, fft_1d_leto, fft_1d_slice, fft_2d_array, fft_2d_leto, fft_3d_array,
-    fft_3d_leto, ifft_1d_array, ifft_1d_leto, ifft_1d_slice, ifft_2d_array, ifft_2d_leto,
-    ifft_3d_array, ifft_3d_leto,
+    fft_1d_array, fft_1d_leto, fft_1d_slice, fft_2d_array, fft_2d_leto, fft_3d_array, fft_3d_leto,
+    ifft_1d_array, ifft_1d_leto, ifft_1d_slice, ifft_2d_array, ifft_2d_leto, ifft_3d_array,
+    ifft_3d_leto, F16,
 };
 use leto::{Array1, Array2, Array3};
 use leto::{SliceArg, Storage};
@@ -45,26 +45,26 @@ fn slice_matches_array_api_f32() {
 #[test]
 fn slice_matches_array_api_f16_storage() {
     let signal = vec![
-        f16::from_f32(0.3),
-        f16::from_f32(-1.2),
-        f16::from_f32(4.5),
-        f16::from_f32(2.0),
-        f16::from_f32(-0.7),
-        f16::from_f32(1.1),
-        f16::from_f32(3.3),
-        f16::from_f32(-2.5),
+        F16::from_f32(0.3),
+        F16::from_f32(-1.2),
+        F16::from_f32(4.5),
+        F16::from_f32(2.0),
+        F16::from_f32(-0.7),
+        F16::from_f32(1.1),
+        F16::from_f32(3.3),
+        F16::from_f32(-2.5),
     ];
-    let via_slice = fft_1d_slice::<f16>(&signal);
+    let via_slice = fft_1d_slice::<F16>(&signal);
     let via_array =
-        fft_1d_array::<f16>(&Array1::from_shape_vec([signal.len()], signal.clone()).unwrap());
+        fft_1d_array::<F16>(&Array1::from_shape_vec([signal.len()], signal.clone()).unwrap());
     assert_eq!(via_slice.len(), via_array.size());
     for i in 0..via_slice.len() {
         assert_eq!(via_slice[i].re, via_array[[i]].re, "re mismatch at {i}");
         assert_eq!(via_slice[i].im, via_array[[i]].im, "im mismatch at {i}");
     }
 
-    let inv_slice = ifft_1d_slice::<f16>(&via_slice);
-    let inv_array = ifft_1d_array::<f16>(&via_array);
+    let inv_slice = ifft_1d_slice::<F16>(&via_slice);
+    let inv_array = ifft_1d_array::<F16>(&via_array);
     for i in 0..inv_slice.len() {
         assert_eq!(inv_slice[i], inv_array[[i]], "inverse mismatch at {i}");
     }

@@ -34,7 +34,7 @@ pub enum StoragePrecision {
 /// Arithmetic precision used internally by an execution profile.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub enum ComputePrecision {
-    /// Mixed `f16` storage with `f32` compute.
+    /// Mixed `F16` storage with `f32` compute.
     MixedF16F32,
     /// 32-bit floating point compute.
     F32,
@@ -90,7 +90,7 @@ impl PrecisionProfile {
         compute: ComputePrecision::F32,
     };
 
-    /// Mixed-precision profile with `f16` storage and `f32` compute.
+    /// Mixed-precision profile with `F16` storage and `f32` compute.
     pub const MIXED_PRECISION_F16_F32: Self = Self {
         mode: PrecisionMode::MixedPrecision,
         storage: StoragePrecision::F16,

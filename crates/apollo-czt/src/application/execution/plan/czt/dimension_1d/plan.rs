@@ -239,10 +239,10 @@ impl CztPlan {
         Ok(())
     }
 
-    /// Forward CZT for `Complex64`, `Complex32`, or mixed two-lane `f16` storage.
+    /// Forward CZT for `Complex64`, `Complex32`, or mixed two-lane `F16` storage.
     ///
     /// `Complex64` uses the native high-accuracy path. `Complex32` and mixed
-    /// `[f16; 2]` storage convert through the owner kernel and quantize once
+    /// `[F16; 2]` storage convert through the owner kernel and quantize once
     /// into the caller-owned output.
     pub fn forward_typed_into<T: CztStorage>(
         &self,
@@ -356,7 +356,7 @@ impl CztPlan {
         czt_bjork_pereyra_inverse_into(spectrum, output, nodes, self.a)
     }
 
-    /// Inverse CZT for typed `Complex64`, `Complex32`, or mixed `[f16; 2]` storage.
+    /// Inverse CZT for typed `Complex64`, `Complex32`, or mixed `[F16; 2]` storage.
     ///
     /// Converts input once to `Complex64`, applies the exact Vandermonde solve,
     /// and quantizes back to the requested storage type.

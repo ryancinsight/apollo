@@ -57,7 +57,7 @@
 
 use crate::domain::plan::config::SparseFftConfig;
 use crate::domain::spectrum::sparse::SparseSpectrum;
-use apollo_fft::{f16, ApolloError, ApolloResult, CpuStorage, PrecisionProfile};
+use apollo_fft::{ApolloError, ApolloResult, CpuStorage, PrecisionProfile, F16};
 use eunomia::{Complex32, Complex64};
 use leto::Array1;
 use moirai::ParallelSliceMut;
@@ -301,7 +301,7 @@ impl SparseFftPlan {
             .collect()
     }
 
-    /// Forward sparse transform for `Complex64`, `Complex32`, or mixed `[f16; 2]` storage.
+    /// Forward sparse transform for `Complex64`, `Complex32`, or mixed `[F16; 2]` storage.
     ///
     /// The owner path remains the `Complex64` dense FFT plus deterministic top-K
     /// selector. Typed storage converts represented input into owner arithmetic
@@ -341,7 +341,7 @@ impl SparseFftPlan {
         })
     }
 
-    /// Inverse sparse transform for `Complex64`, `Complex32`, or mixed `[f16; 2]` storage.
+    /// Inverse sparse transform for `Complex64`, `Complex32`, or mixed `[F16; 2]` storage.
     pub fn inverse_typed_into<T: SparseComplexStorage>(
         &self,
         frequencies: &[usize],
@@ -482,7 +482,7 @@ impl SparseComplexStorage for Complex64 {
 
 impl SparseComplexStorage for Complex32 {}
 
-impl SparseComplexStorage for [f16; 2] {}
+impl SparseComplexStorage for [F16; 2] {}
 
 fn validate_profile(actual: PrecisionProfile, expected: PrecisionProfile) -> ApolloResult<()> {
     if actual.matches_storage_and_compute(expected) {
@@ -652,12 +652,12 @@ mod tests {
             assert!((actual.im - expected.im).abs() < 1.0e-5);
         }
 
-        let signal16: Vec<[f16; 2]> = signal64
+        let signal16: Vec<[F16; 2]> = signal64
             .iter()
             .map(|value| {
                 [
-                    f16::from_f32(value.re as f32),
-                    f16::from_f32(value.im as f32),
+                    F16::from_f32(value.re as f32),
+                    F16::from_f32(value.im as f32),
                 ]
             })
             .collect();
@@ -665,7 +665,7 @@ mod tests {
             signal16.iter().copied().map(CpuStorage::to_cpu).collect();
         let expected16 = plan
             .forward(&represented16)
-            .expect("represented f16 forward");
+            .expect("represented F16 forward");
         let mut frequencies16 = Vec::new();
         let mut values16 = Vec::new();
         plan.forward_typed_into(
@@ -674,7 +674,7 @@ mod tests {
             &mut values16,
             PrecisionProfile::MIXED_PRECISION_F16_F32,
         )
-        .expect("typed f16 forward");
+        .expect("typed F16 forward");
         assert_eq!(frequencies16, expected16.frequencies);
         for (actual, expected) in values16.iter().zip(expected16.values.iter()) {
             let re_bound = expected.re.abs() * 2.0_f64.powi(-10) + 2.0_f64.powi(-14);

@@ -132,7 +132,6 @@ dependencies = [
  "apollo-leto-interop",
  "bytemuck",
  "eunomia",
- "half",
  "hephaestus-core",
  "hephaestus-cuda",
  "hephaestus-wgpu",
@@ -755,7 +754,7 @@ dependencies = [
 [[package]]
 name = "eunomia"
 version = "0.8.0"
-source = "git+https://github.com/ryancinsight/eunomia#3a8836e32c4a5f6202591432b2eb16d1b2b14891"
+source = "git+https://github.com/ryancinsight/eunomia#3daaf31274c4a0fac03ae46809fe35dcb39d284d"
 dependencies = [
  "bytemuck",
  "libm",
@@ -945,11 +944,9 @@ version = "2.7.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "6ea2d84b969582b4b1864a92dc5d27cd2b77b622a8d79306834f1be5ba20d84b"
 dependencies = [
- "bytemuck",
  "cfg-if",
  "crunchy",
  "num-traits",
- "serde",
  "zerocopy",
 ]
 
@@ -3061,6 +3058,7 @@ dependencies = [
  "anyhow",
  "apollo-fft",
  "eunomia",
+ "mnemosyne-memory",
  "serde_json",
 ]
 

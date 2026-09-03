@@ -61,9 +61,9 @@ Mixed precision is now a first-class Apollo concept:
 
 - CPU defaults to `high_accuracy` (`f64` storage and `f64` compute).
 - CPU also supports opt-in `low_precision` (`f32` storage and `f32` compute).
-- CPU also supports opt-in `mixed_precision` (`half::f16` storage with `f32` compute in the current FFT path).
+- CPU also supports opt-in `mixed_precision` (`eunomia::F16` storage with `f32` compute in the current FFT path).
 - WGPU exposes `low_precision` (`f32` shaders) as the default GPU profile.
-  Mixed `f16`-host / `f32`-GPU typed storage paths are available through each
+  Mixed `F16`-host / `f32`-GPU typed storage paths are available through each
   transform crate's `wgpu` feature except `apollo-ntt`, which uses exact `u32`
   modular residues.
 - Hephaestus provides native-f16 WGPU FFT arithmetic when the acquired device

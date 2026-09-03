@@ -84,7 +84,7 @@ fn dft_row_hermes(input_lanes: &[f64], k: usize, n: usize, sign: f64, tau: f64) 
 #[inline]
 #[cfg(test)]
 fn interleaved_lanes(values: &[Complex64]) -> &[f64] {
-    bytemuck::cast_slice(values)
+    eunomia::layout::cast_slice(values)
 }
 
 #[cfg(test)]

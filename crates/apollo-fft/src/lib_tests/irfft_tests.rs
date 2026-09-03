@@ -1,7 +1,7 @@
 //! Tests for inverse real FFT API.
 
 use crate::*;
-use half::f16;
+use eunomia::F16;
 use leto::{Array1, Array2, Array3};
 
 #[test]
@@ -48,14 +48,14 @@ fn typed_real_inverse_mutating_spectrum_wrappers_reuse_spectrum_storage() {
     }
 
     let field16 = Array2::from_shape_fn([4, 5], |[i, j]| {
-        f16::from_f32(((i as f32 * 0.13) - (j as f32 * 0.19)).cos())
+        F16::from_f32(((i as f32 * 0.13) - (j as f32 * 0.19)).cos())
     });
     let expected_spectrum16 = fft_2d_array(&field16);
-    let expected_recovered16 = ifft_2d_array::<f16>(&expected_spectrum16);
+    let expected_recovered16 = ifft_2d_array::<F16>(&expected_spectrum16);
     let mut spectrum16 = expected_spectrum16.clone();
     let spectrum_ptr16 = spectrum16.as_slice().unwrap().as_ptr();
-    let mut actual_recovered16 = Array2::<f16>::from_elem([4, 5], f16::from_f32(0.0));
-    ifft_2d_array_into_spectrum_scratch::<f16>(&mut spectrum16, &mut actual_recovered16);
+    let mut actual_recovered16 = Array2::<F16>::from_elem([4, 5], F16::from_f32(0.0));
+    ifft_2d_array_into_spectrum_scratch::<F16>(&mut spectrum16, &mut actual_recovered16);
     assert_eq!(spectrum_ptr16, spectrum16.as_slice().unwrap().as_ptr());
     for (expected, actual) in expected_recovered16.iter().zip(actual_recovered16.iter()) {
         assert!((expected.to_f32() - actual.to_f32()).abs() < 1e-3);

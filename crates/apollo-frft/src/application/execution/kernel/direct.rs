@@ -168,7 +168,7 @@ fn fractional_row_hermes(
 
 #[inline]
 fn interleaved_lanes(input: &[Complex64]) -> &[f64] {
-    bytemuck::cast_slice(input)
+    eunomia::layout::cast_slice(input)
 }
 
 fn fill_centered_dft_weight_lanes(lanes: &mut [f64], n: usize, center: f64, sign: f64, u: f64) {

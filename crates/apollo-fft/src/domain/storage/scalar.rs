@@ -10,12 +10,10 @@
 //! conversion ladder from this vocabulary instead of re-implementing
 //! it per crate.
 
-use eunomia::{Complex32, Complex64};
+use eunomia::{Complex32, Complex64, F16};
 use mnemosyne::scratch::ScratchPool;
 
 use crate::domain::metadata::precision::PrecisionProfile;
-use crate::f16;
-
 mod sealed {
     pub trait SealedElement {}
 
@@ -26,10 +24,10 @@ mod sealed {
 
     impl SealedStorage for f64 {}
     impl SealedStorage for f32 {}
-    impl SealedStorage for crate::f16 {}
+    impl SealedStorage for eunomia::F16 {}
     impl SealedStorage for eunomia::Complex64 {}
     impl SealedStorage for eunomia::Complex32 {}
-    impl SealedStorage for [crate::f16; 2] {}
+    impl SealedStorage for [eunomia::F16; 2] {}
 }
 
 thread_local! {
@@ -145,7 +143,7 @@ impl CpuStorage for f32 {
     }
 }
 
-impl CpuStorage for f16 {
+impl CpuStorage for F16 {
     const PROFILE: PrecisionProfile = PrecisionProfile::MIXED_PRECISION_F16_F32;
 
     fn to_cpu(self) -> f64 {
@@ -153,7 +151,7 @@ impl CpuStorage for f16 {
     }
 
     fn from_cpu(value: f64) -> Self {
-        f16::from_f32(value as f32)
+        F16::from_f32(value as f32)
     }
 }
 
@@ -181,7 +179,7 @@ impl CpuStorage<Complex64> for Complex32 {
     }
 }
 
-impl CpuStorage<Complex64> for [f16; 2] {
+impl CpuStorage<Complex64> for [F16; 2] {
     const PROFILE: PrecisionProfile = PrecisionProfile::MIXED_PRECISION_F16_F32;
 
     fn to_cpu(self) -> Complex64 {
@@ -190,8 +188,8 @@ impl CpuStorage<Complex64> for [f16; 2] {
 
     fn from_cpu(value: Complex64) -> Self {
         [
-            f16::from_f32(value.re as f32),
-            f16::from_f32(value.im as f32),
+            F16::from_f32(value.re as f32),
+            F16::from_f32(value.im as f32),
         ]
     }
 }

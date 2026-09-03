@@ -10,13 +10,12 @@ use crate::application::execution::plan::fft::{
 };
 use crate::application::orchestration::cache::plans::PlanCacheProvider;
 use crate::domain::metadata::shape::{Shape1D, Shape2D, Shape3D};
-use eunomia::Complex;
-use half::f16;
+use eunomia::{Complex, F16};
 use leto::{Array1, Array2, Array3};
 
 /// Executes compact complex storage through the `f32` route for its length.
 ///
-/// `Complex<f16>` is a storage representation rather than a native arithmetic
+/// `Complex<F16>` is a storage representation rather than a native arithmetic
 /// scalar on the supported CPU path, so the samples reach `f32` lanes either
 /// way and the only question is which `f32` route runs them. That question is
 /// already answered once, for `Complex32`, and answering it a second time here
@@ -30,11 +29,11 @@ use leto::{Array1, Array2, Array3};
 /// of orchestration, and the thread-local bridge scratch bounds temporary
 /// storage to one transform.
 #[inline]
-fn execute_compact_storage<const INVERSE: bool, const NORMALIZE: bool>(data: &mut [Complex<f16>]) {
+fn execute_compact_storage<const INVERSE: bool, const NORMALIZE: bool>(data: &mut [Complex<F16>]) {
     if data.len() <= 1 {
         return;
     }
-    if try_register_resident_storage::<Complex<f16>, INVERSE, NORMALIZE>(data) {
+    if try_register_resident_storage::<Complex<F16>, INVERSE, NORMALIZE>(data) {
         return;
     }
     run_via_complex32(data, |buffer| {
@@ -50,7 +49,7 @@ fn execute_compact_storage<const INVERSE: bool, const NORMALIZE: bool>(data: &mu
     });
 }
 
-impl FftPrecision for Complex<f16> {
+impl FftPrecision for Complex<F16> {
     #[inline]
     fn fft_forward(data: &mut [Self]) {
         execute_compact_storage::<false, false>(data);
@@ -362,12 +361,12 @@ mod tests {
     #[test]
     fn compact_storage_matches_the_cached_f32_plan() {
         for n in [64, 128, 256, 512] {
-            let input: Vec<Complex<f16>> = (0..n)
+            let input: Vec<Complex<F16>> = (0..n)
                 .map(|index| {
                     let index = index as f32;
                     Complex::new(
-                        f16::from_f32((index * 0.017).sin()),
-                        f16::from_f32((index * 0.023).cos()),
+                        F16::from_f32((index * 0.017).sin()),
+                        F16::from_f32((index * 0.023).cos()),
                     )
                 })
                 .collect();
@@ -381,7 +380,7 @@ mod tests {
             .forward_complex_slice_inplace(&mut expected);
             let expected = expected
                 .into_iter()
-                .map(|value| Complex::new(f16::from_f32(value.re), f16::from_f32(value.im)))
+                .map(|value| Complex::new(F16::from_f32(value.re), F16::from_f32(value.im)))
                 .collect::<Vec<_>>();
 
             let mut actual = input;

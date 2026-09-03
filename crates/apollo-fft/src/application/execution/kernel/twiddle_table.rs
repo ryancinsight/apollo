@@ -22,7 +22,7 @@
 //! ### Precision model
 //!
 //! Angles are computed in f64 arithmetic regardless of the output type `C`.
-//! For `Complex32` and `Complex<f16>`, the f64 sine/cosine is computed first, then
+//! For `Complex32` and `Complex<F16>`, the f64 sine/cosine is computed first, then
 //! narrowed to the target precision. This minimises accumulated angle error
 //! at the cost of one narrowing conversion per entry at table-build time
 //! (a one-time cost amortised over all transform calls that share the table).
@@ -64,9 +64,8 @@
 //! - Van Loan, C. (1992). *Computational Frameworks for the FFT*. SIAM, §2.2.
 
 #![allow(clippy::uninit_vec)]
-use half::f16;
 
-use eunomia::{Complex, Complex32, Complex64};
+use eunomia::{Complex, Complex32, Complex64, F16};
 
 // ── Trait ─────────────────────────────────────────────────────────────────────
 
@@ -128,18 +127,18 @@ impl TwiddleOutput for Complex32 {
     }
 }
 
-impl TwiddleOutput for Complex<f16> {
-    /// Computes cos(a) + i·sin(a) in f64, narrows to f32, then to f16.
+impl TwiddleOutput for Complex<F16> {
+    /// Computes cos(a) + i·sin(a) in f64, narrows to f32, then to F16.
     ///
     /// **Error bound**: relative error ≤ ε_f16 / 2 ≈ 4.88e-4 per component.
     #[inline]
     fn from_angle(a: f64) -> Self {
-        Complex::new(f16::from_f32(a.cos() as f32), f16::from_f32(a.sin() as f32))
+        Complex::new(F16::from_f32(a.cos() as f32), F16::from_f32(a.sin() as f32))
     }
 
     #[inline]
     fn from_components(re: f64, im: f64) -> Self {
-        Complex::new(f16::from_f32(re as f32), f16::from_f32(im as f32))
+        Complex::new(F16::from_f32(re as f32), F16::from_f32(im as f32))
     }
 }
 

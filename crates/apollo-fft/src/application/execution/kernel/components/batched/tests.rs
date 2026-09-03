@@ -289,8 +289,9 @@ fn f32_planar_half_combine_matches_the_scalar_formula() {
     let plane = m * stride;
     let mut even = vec![Complex32::default(); plane];
     let mut odd = vec![Complex32::default(); plane];
-    let (even_re, even_im) = bytemuck::cast_slice_mut::<_, f32>(&mut even).split_at_mut(plane);
-    let (odd_re, odd_im) = bytemuck::cast_slice_mut::<_, f32>(&mut odd).split_at_mut(plane);
+    let (even_re, even_im) =
+        eunomia::layout::cast_slice_mut::<_, f32>(&mut even).split_at_mut(plane);
+    let (odd_re, odd_im) = eunomia::layout::cast_slice_mut::<_, f32>(&mut odd).split_at_mut(plane);
     for row in 0..m {
         for column in 0..m {
             let index = row * stride + column;
@@ -384,7 +385,7 @@ fn f32_reinterleave_takes_the_native_width_and_matches_the_scalar_sink() {
     let handled = hermes_simd::vectorize_lanes::<8, f32, _>(super::boundary::InterleaveRows {
         re: &re,
         im: &im,
-        data: bytemuck::cast_slice_mut(&mut actual),
+        data: eunomia::layout::cast_slice_mut(&mut actual),
         m,
         stride,
     });

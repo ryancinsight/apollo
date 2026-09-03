@@ -33,7 +33,7 @@ impl NufftWgpuBackend {
     /// Execute fast gridded Type-1 1D NUFFT with caller-owned typed storage.
     ///
     /// WGPU arithmetic remains `f32`. `Complex32` storage is passed through and
-    /// mixed `[f16; 2]` storage is promoted once to represented `Complex32`
+    /// mixed `[F16; 2]` storage is promoted once to represented `Complex32`
     /// before dispatch, then quantized back at the output boundary.
     pub fn execute_fast_type1_1d_typed_into<T: NufftComplexStorage>(
         &self,

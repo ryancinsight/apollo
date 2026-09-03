@@ -7,7 +7,7 @@ use crate::infrastructure::kernel::direct::{
     adjoint_backproject, adjoint_backproject_into, forward_project, forward_project_into,
 };
 use crate::infrastructure::kernel::filter::ramp_filter_projection_into;
-use apollo_fft::{f16, CpuStorage, PrecisionProfile};
+use apollo_fft::{CpuStorage, PrecisionProfile, F16};
 use leto::Array2;
 
 /// Reusable 2D parallel-beam Radon plan.
@@ -320,7 +320,7 @@ impl RadonStorage for f64 {
 
 impl RadonStorage for f32 {}
 
-impl RadonStorage for f16 {}
+impl RadonStorage for F16 {}
 
 fn validate_profile(actual: PrecisionProfile, expected: PrecisionProfile) -> RadonResult<()> {
     if actual.matches_storage_and_compute(expected) {
@@ -411,21 +411,21 @@ mod tests {
             assert!((f64::from(*actual) - *expected).abs() < 1.0e-4);
         }
 
-        let image16 = image.mapv(|value| f16::from_f32(value as f32));
+        let image16 = image.mapv(|value| F16::from_f32(value as f32));
         let represented16 = image16.mapv(|value| f64::from(value.to_f32()));
         let expected16 = plan
             .forward(&represented16)
-            .expect("represented f16 forward");
+            .expect("represented F16 forward");
         let mut out16 = Array2::from_elem(
             [plan.geometry.angle_count(), plan.geometry.detector_count()],
-            f16::from_f32(0.0),
+            F16::from_f32(0.0),
         );
         plan.forward_typed_into(
             &image16,
             &mut out16,
             PrecisionProfile::MIXED_PRECISION_F16_F32,
         )
-        .expect("typed f16 forward");
+        .expect("typed F16 forward");
         for (actual, expected) in out16.iter().zip(expected16.values().iter()) {
             let quantization_bound = expected.abs() * 2.0_f64.powi(-10) + 2.0_f64.powi(-14);
             assert!((f64::from(actual.to_f32()) - *expected).abs() <= quantization_bound);

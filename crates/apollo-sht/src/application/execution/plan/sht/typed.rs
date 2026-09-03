@@ -7,7 +7,7 @@ use super::quadrature::{
 use super::ShtPlan;
 use crate::domain::contracts::error::ShtResult;
 use crate::domain::spectrum::coefficients::SphericalHarmonicCoefficients;
-use apollo_fft::{f16, CpuStorage, PrecisionProfile};
+use apollo_fft::{CpuStorage, PrecisionProfile, F16};
 use eunomia::{Complex32, Complex64};
 use leto::Array2;
 
@@ -52,7 +52,7 @@ impl ShtRealStorage for f64 {
 
 impl ShtRealStorage for f32 {}
 
-impl ShtRealStorage for f16 {}
+impl ShtRealStorage for F16 {}
 
 /// Complex sample/coefficient storage accepted by typed SHT paths.
 pub trait ShtComplexStorage: CpuStorage<Complex64> {
@@ -189,4 +189,4 @@ impl ShtComplexStorage for Complex64 {
 
 impl ShtComplexStorage for Complex32 {}
 
-impl ShtComplexStorage for [f16; 2] {}
+impl ShtComplexStorage for [F16; 2] {}

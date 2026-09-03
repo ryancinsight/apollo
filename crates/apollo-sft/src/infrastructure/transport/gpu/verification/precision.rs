@@ -1,6 +1,6 @@
 //! Value-semantic SFT GPU explicit-precision contracts.
 
-use apollo_fft::{f16, PrecisionProfile};
+use apollo_fft::{PrecisionProfile, F16};
 use eunomia::Complex64;
 
 use crate::{
@@ -17,17 +17,17 @@ fn typed_path_rejects_profile_mismatch_when_device_exists() {
         return;
     };
     let plan = SftWgpuPlan::new(SparsityPlan::new(4, 2));
-    let mixed_input: Vec<[f16; 2]> = vec![[f16::from_f32(0.0); 2]; 4];
+    let mixed_input: Vec<[F16; 2]> = vec![[F16::from_f32(0.0); 2]; 4];
 
     let fwd_err = backend
-        .sparse_forward_typed::<[f16; 2]>(&plan, PrecisionProfile::LOW_PRECISION_F32, &mixed_input)
+        .sparse_forward_typed::<[F16; 2]>(&plan, PrecisionProfile::LOW_PRECISION_F32, &mixed_input)
         .expect_err("profile mismatch must fail");
     assert!(matches!(fwd_err, WgpuError::InvalidPrecisionProfile));
 
     let spectrum = SparseSpectrum::new(4);
-    let mut mixed_output: Vec<[f16; 2]> = vec![[f16::from_f32(0.0); 2]; 4];
+    let mut mixed_output: Vec<[F16; 2]> = vec![[F16::from_f32(0.0); 2]; 4];
     let inv_err = backend
-        .sparse_inverse_typed_into::<[f16; 2]>(
+        .sparse_inverse_typed_into::<[F16; 2]>(
             &plan,
             PrecisionProfile::LOW_PRECISION_F32,
             &spectrum,

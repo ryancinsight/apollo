@@ -1,6 +1,6 @@
 //! Direct three-dimensional Type-2 rejection, CPU, Leto, and typed-storage contracts.
 
-use apollo_fft::{f16, PrecisionProfile};
+use apollo_fft::{PrecisionProfile, F16};
 use eunomia::{Complex32, Complex64};
 use leto::{Array3, Storage};
 
@@ -95,7 +95,7 @@ fn type2_typed_storage_matches_represented_input() {
     let positions = positions3d();
     let modes = Array3::from_shape_fn([grid.nx, grid.ny, grid.nz], |[kx, ky, kz]| {
         let (re, im) = mode_components3d(kx, ky, kz);
-        [f16::from_f32(re), f16::from_f32(im)]
+        [F16::from_f32(re), F16::from_f32(im)]
     });
     let expected = backend
         .execute_type2_3d(
@@ -104,7 +104,7 @@ fn type2_typed_storage_matches_represented_input() {
             &positions,
         )
         .expect("represented type2 3D");
-    let mut actual = vec![[f16::from_f32(0.0), f16::from_f32(0.0)]; positions.len()];
+    let mut actual = vec![[F16::from_f32(0.0), F16::from_f32(0.0)]; positions.len()];
     backend
         .execute_type2_3d_typed_into(
             &plan,
@@ -118,11 +118,11 @@ fn type2_typed_storage_matches_represented_input() {
     for (actual, expected) in actual.iter().zip(expected.iter()) {
         assert_eq!(
             actual[0].to_bits(),
-            f16::from_f32(expected.re as f32).to_bits()
+            F16::from_f32(expected.re as f32).to_bits()
         );
         assert_eq!(
             actual[1].to_bits(),
-            f16::from_f32(expected.im as f32).to_bits()
+            F16::from_f32(expected.im as f32).to_bits()
         );
     }
 }

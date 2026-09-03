@@ -201,6 +201,6 @@ pub fn fwht_inplace(data: &mut [f64]) {
 
 /// In-place Walsh-Hadamard transform over a complex slice.
 pub fn fwht_complex_inplace(data: &mut [Complex64]) {
-    let slice_f64 = bytemuck::cast_slice_mut(data);
+    let slice_f64 = eunomia::layout::cast_slice_mut(data);
     wht_inplace_f64(slice_f64, 2);
 }

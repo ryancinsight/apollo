@@ -338,7 +338,7 @@ impl DhtPlan {
         Ok(())
     }
 
-    /// Execute the unnormalized DHT for `f64`, `f32`, or mixed `f16` storage.
+    /// Execute the unnormalized DHT for `f64`, `f32`, or mixed `F16` storage.
     pub fn forward_typed_into<T: HartleyStorage>(
         &self,
         signal: &[T],
@@ -348,7 +348,7 @@ impl DhtPlan {
         T::forward_into(self, signal, output, profile)
     }
 
-    /// Execute the normalized inverse DHT for `f64`, `f32`, or mixed `f16` storage.
+    /// Execute the normalized inverse DHT for `f64`, `f32`, or mixed `F16` storage.
     pub fn inverse_typed_into<T: HartleyStorage>(
         &self,
         spectrum: &[T],

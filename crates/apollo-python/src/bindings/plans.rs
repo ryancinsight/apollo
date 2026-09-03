@@ -2,9 +2,9 @@
 //! wrapping `apollo-fft` plan execution.
 
 use apollo_fft::{
-    f16, fft_1d_complex_inplace, fft_2d_complex_inplace, ifft_1d_complex_inplace,
+    fft_1d_complex_inplace, fft_2d_complex_inplace, ifft_1d_complex_inplace,
     ifft_2d_complex_inplace, Complex32, Complex64, PrecisionProfile, Shape1D, Shape2D, Shape3D,
-    StoragePrecision,
+    StoragePrecision, F16,
 };
 use pyo3::exceptions::PyValueError;
 use pyo3::prelude::*;
@@ -48,7 +48,7 @@ impl PyFftPlan1D {
                 StoragePrecision::F16 => {
                     let input32 = input.extract::<PyReadonlyArray1<f32>>()?;
                     let owned = py_array1_map_to_leto(&input32, "fft input", |value| {
-                        f16::from_f32(*value)
+                        F16::from_f32(*value)
                     })?;
                     let result = py.detach(|| apollo_fft::fft_1d_array(&owned));
                     leto_array1_into_pyarray(py, result)
@@ -77,7 +77,7 @@ impl PyFftPlan1D {
                 StoragePrecision::F16 => {
                     let owned = py_array1_to_leto(&input32, "ifft input")?;
                     let result = py.detach(|| {
-                        apollo_fft::ifft_1d_array::<f16>(&owned).mapv(|value: f16| value.to_f32())
+                        apollo_fft::ifft_1d_array::<F16>(&owned).mapv(|value: F16| value.to_f32())
                     });
                     leto_array1_into_pyarray(py, result)
                 }
@@ -151,7 +151,7 @@ impl PyFftPlan2D {
                 StoragePrecision::F16 => {
                     let input32 = input.extract::<PyReadonlyArray2<f32>>()?;
                     let owned = py_array2_map_to_leto(&input32, "fft input", |value| {
-                        f16::from_f32(*value)
+                        F16::from_f32(*value)
                     })?;
                     let result = py.detach(|| apollo_fft::fft_2d_array(&owned));
                     leto_array2_into_pyarray(py, result)
@@ -180,7 +180,7 @@ impl PyFftPlan2D {
                 StoragePrecision::F16 => {
                     let owned = py_array2_to_leto(&input32, "ifft input")?;
                     let result = py.detach(|| {
-                        apollo_fft::ifft_2d_array::<f16>(&owned).mapv(|value: f16| value.to_f32())
+                        apollo_fft::ifft_2d_array::<F16>(&owned).mapv(|value: F16| value.to_f32())
                     });
                     leto_array2_into_pyarray(py, result)
                 }
@@ -253,7 +253,7 @@ impl PyFftPlan3D {
                 StoragePrecision::F16 => {
                     let input32 = input.extract::<PyReadonlyArray3<f32>>()?;
                     let owned = py_array3_map_to_leto(&input32, "fft input", |value| {
-                        f16::from_f32(*value)
+                        F16::from_f32(*value)
                     })?;
                     let result = py.detach(|| apollo_fft::fft_3d_array(&owned));
                     leto_array3_into_pyarray(py, result)
@@ -282,7 +282,7 @@ impl PyFftPlan3D {
                 StoragePrecision::F16 => {
                     let owned = py_array3_to_leto(&input32, "ifft input")?;
                     let result = py.detach(|| {
-                        apollo_fft::ifft_3d_array::<f16>(&owned).mapv(|value: f16| value.to_f32())
+                        apollo_fft::ifft_3d_array::<F16>(&owned).mapv(|value: F16| value.to_f32())
                     });
                     leto_array3_into_pyarray(py, result)
                 }

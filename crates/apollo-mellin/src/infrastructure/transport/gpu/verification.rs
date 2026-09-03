@@ -3,7 +3,7 @@
 #[cfg(test)]
 mod tests {
     use crate::MellinPlan;
-    use apollo_fft::{f16, PrecisionProfile};
+    use apollo_fft::{PrecisionProfile, F16};
     use leto::{SliceArg, Storage};
 
     use crate::infrastructure::transport::gpu::{
@@ -98,8 +98,8 @@ mod tests {
             let signal_max = 8.0_f32;
             let plan = backend.plan(ScalePlan::new(8, 1.0, 8.0));
 
-            // Quantize to f16 and recover represented f32 for the reference path.
-            let signal_f16: Vec<f16> = signal_f32.iter().copied().map(f16::from_f32).collect();
+            // Quantize to F16 and recover represented f32 for the reference path.
+            let signal_f16: Vec<F16> = signal_f32.iter().copied().map(F16::from_f32).collect();
             let represented_f32: Vec<f32> = signal_f16.iter().map(|v| v.to_f32()).collect();
 
             let expected = backend
@@ -176,7 +176,7 @@ mod tests {
             let signal_min = 1.0_f32;
             let signal_max = 8.0_f32;
             let plan = backend.plan(ScalePlan::new(8, 1.0, 8.0));
-            let signal_f16: Vec<f16> = signal_f32.iter().copied().map(f16::from_f32).collect();
+            let signal_f16: Vec<F16> = signal_f32.iter().copied().map(F16::from_f32).collect();
             let expected = backend
                 .execute_forward_typed(
                     &plan,
@@ -189,7 +189,7 @@ mod tests {
             let leto_signal =
                 leto::Array1::from_shape_vec([signal_f16.len()], signal_f16).expect("leto signal");
             let actual = backend
-                .execute_forward_leto_typed::<f16>(
+                .execute_forward_leto_typed::<F16>(
                     &plan,
                     PrecisionProfile::MIXED_PRECISION_F16_F32,
                     leto_signal.view(),
@@ -203,11 +203,11 @@ mod tests {
         // 7. typed_path_rejects_profile_mismatch
         {
             let plan = backend.plan(ScalePlan::new(8, 1.0, 8.0));
-            let signal_f16: Vec<f16> = vec![f16::from_f32(1.0); 8];
+            let signal_f16: Vec<F16> = vec![F16::from_f32(1.0); 8];
 
-            // f16 carries MIXED_PRECISION_F16_F32; passing LOW_PRECISION_F32 must fail.
+            // F16 carries MIXED_PRECISION_F16_F32; passing LOW_PRECISION_F32 must fail.
             let err = backend
-                .execute_forward_typed::<f16>(
+                .execute_forward_typed::<F16>(
                     &plan,
                     PrecisionProfile::LOW_PRECISION_F32,
                     &signal_f16,

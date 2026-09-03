@@ -1,7 +1,7 @@
 use super::DwtPlan;
 use crate::domain::contracts::error::WaveletError;
 use crate::domain::metadata::wavelet::DiscreteWavelet;
-use apollo_fft::{f16, PrecisionProfile};
+use apollo_fft::{PrecisionProfile, F16};
 use eunomia::assert_abs_diff_eq;
 
 fn detail_buffers<T: Copy>(plan: &DwtPlan, fill: T) -> Vec<Vec<T>> {
@@ -63,20 +63,20 @@ fn typed_dwt_paths_support_f64_f32_and_mixed_f16_storage() {
         assert!((*actual - *expected).abs() < 1.0e-5);
     }
 
-    let signal16 = signal64.map(|value| f16::from_f32(value as f32));
+    let signal16 = signal64.map(|value| F16::from_f32(value as f32));
     let represented16 = signal16.map(|value| f64::from(value.to_f32()));
     let expected16 = plan
         .forward(&represented16)
-        .expect("represented f16 forward");
-    let mut approx16 = vec![f16::from_f32(0.0); 1];
-    let mut details16 = detail_buffers(&plan, f16::from_f32(0.0));
+        .expect("represented F16 forward");
+    let mut approx16 = vec![F16::from_f32(0.0); 1];
+    let mut details16 = detail_buffers(&plan, F16::from_f32(0.0));
     plan.forward_typed_into(
         &signal16,
         &mut approx16,
         &mut details16,
         PrecisionProfile::MIXED_PRECISION_F16_F32,
     )
-    .expect("typed f16 forward");
+    .expect("typed F16 forward");
     for (actual, expected) in approx16.iter().zip(expected16.approximation()) {
         let quantization_bound = expected.abs() * 2.0_f64.powi(-10) + 2.0_f64.powi(-14);
         assert!((f64::from(actual.to_f32()) - *expected).abs() <= quantization_bound);

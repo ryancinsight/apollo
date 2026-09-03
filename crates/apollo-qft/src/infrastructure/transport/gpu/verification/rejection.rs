@@ -1,4 +1,4 @@
-use apollo_fft::{f16, PrecisionProfile};
+use apollo_fft::{PrecisionProfile, F16};
 use eunomia::Complex32;
 
 use crate::infrastructure::transport::gpu::{QftWgpuPlan, WgpuError};
@@ -12,10 +12,10 @@ fn typed_path_rejects_profile_storage_mismatch_when_device_exists() {
     };
     let plan = backend.plan(2);
     let input = [
-        [f16::from_f32(1.0), f16::from_f32(0.0)],
-        [f16::from_f32(-1.0), f16::from_f32(0.5)],
+        [F16::from_f32(1.0), F16::from_f32(0.0)],
+        [F16::from_f32(-1.0), F16::from_f32(0.5)],
     ];
-    let mut output = [[f16::from_f32(0.0); 2]; 2];
+    let mut output = [[F16::from_f32(0.0); 2]; 2];
     let error = backend
         .execute_forward_typed_into(
             &plan,

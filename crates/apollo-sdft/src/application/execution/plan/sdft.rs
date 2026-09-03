@@ -227,7 +227,7 @@ impl SdftState {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use apollo_fft::f16;
+    use apollo_fft::F16;
     use eunomia::assert_abs_diff_eq;
     use eunomia::Complex32;
 
@@ -271,19 +271,19 @@ mod tests {
             assert!((f64::from(actual.im) - expected.im).abs() < 1.0e-5);
         }
 
-        let window16 = window64.map(|value| f16::from_f32(value as f32));
+        let window16 = window64.map(|value| F16::from_f32(value as f32));
         let represented16: Vec<f64> = window16
             .iter()
             .map(|value| f64::from(value.to_f32()))
             .collect();
-        let expected16 = plan.direct_bins(&represented16).expect("represented f16");
-        let mut out16 = vec![[f16::from_f32(0.0); 2]; plan.bin_count()];
+        let expected16 = plan.direct_bins(&represented16).expect("represented F16");
+        let mut out16 = vec![[F16::from_f32(0.0); 2]; plan.bin_count()];
         plan.direct_bins_typed_into(
             &window16,
             &mut out16,
             PrecisionProfile::MIXED_PRECISION_F16_F32,
         )
-        .expect("typed f16 direct");
+        .expect("typed F16 direct");
         for (actual, expected) in out16.iter().zip(expected16.iter()) {
             let re_bound = expected.re.abs() * 2.0_f64.powi(-10) + 2.0_f64.powi(-14);
             let im_bound = expected.im.abs() * 2.0_f64.powi(-10) + 2.0_f64.powi(-14);
