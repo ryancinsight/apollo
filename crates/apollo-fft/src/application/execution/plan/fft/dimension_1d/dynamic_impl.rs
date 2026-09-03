@@ -147,9 +147,19 @@ impl<F: MixedRadixScalar<Complex = Complex<F>>> FftPlan1D<F> {
         let n = shape.n();
         // 256 and 512 decimate down to the same base rather than paying the
         // four-step's six passes at a size where they dominate the transform.
+        // 1024 joins them through the eight-block route, which measured faster
+        // for f64 (1.82 ms against 1.90 ms, clone-inclusive) and *slower* for
+        // f32 (1.24 ms against 0.93 ms) — its two fused four-block chains are
+        // scalar-float bound where the four-step's ping-pong Stockham passes
+        // stay vector-width bound. The eight-block construction is therefore
+        // offered to the eight-byte scalar only (the idiom here: the kernel
+        // instantiates over primitive floats, so width is the type), and the
+        // 10 => dispatch arm falls back to the stock power-of-two route when
+        // the plan carries no base128 state.
         let base128 =
-            if crate::application::execution::kernel::components::base128::BASE_SPLIT_LENGTHS
+            if crate::application::execution::kernel::components::base128::BASE_SPLIT_LENGTHS[..3]
                 .contains(&n)
+                || (n == 1024 && core::mem::size_of::<F>() == 8)
             {
                 State128::new_if_supported().map(Arc::new)
             } else {
@@ -445,9 +455,15 @@ impl<F: MixedRadixScalar<Complex = Complex<F>>> FftPlan1D<F> {
                         }
                     }
                     10 => {
-                        forward_impl = exec_pot_forward_sized::<F, 10>;
-                        inverse_impl = exec_pot_inverse_sized::<F, 10>;
-                        inverse_unnorm_impl = exec_pot_inverse_unnorm_sized::<F, 10>;
+                        if base128.is_some() {
+                            forward_impl = exec_base128_forward::<F>;
+                            inverse_impl = exec_base128_inverse::<F>;
+                            inverse_unnorm_impl = exec_base128_inverse_unnorm::<F>;
+                        } else {
+                            forward_impl = exec_pot_forward_sized::<F, 10>;
+                            inverse_impl = exec_pot_inverse_sized::<F, 10>;
+                            inverse_unnorm_impl = exec_pot_inverse_unnorm_sized::<F, 10>;
+                        }
                     }
                     _ => {
                         forward_impl = exec_pot_forward_generic::<F>;
