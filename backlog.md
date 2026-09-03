@@ -207,6 +207,27 @@
   satisfies — `exact_lanes_supported::<4, T>` answering true through a scalar
   implementation is a known shape in this codebase and would leave `f32`
   running unvectorised while reading as supported.
+- **Instrument built 2026-09-03: `pinned_probe/rader_width.rs`.** Times
+  `rader_prime_forward` for both scalars at the primes 67, 101, 113 and 257,
+  both scalars inside one pinned run per core so the ratio is not assembled
+  across runs. Note the scope difference: it measures the Rader entry point
+  directly, while this item's 674/579 ns figures came from the full transform
+  path, so the two are not the same quantity.
+  - **Established.** Both arms agree within a derived bound at all four
+    lengths — the direct-accumulation term `4 n eps`, `f64` serving as the
+    oracle since its own error is smaller by the epsilon ratio. So `f32` and
+    `f64` compute the same transform, which excludes the two scalars taking
+    different routes.
+  - **Not established: any timing verdict.** The run happened with the host at
+    99% CPU under four concurrent `cargo` and two `rustc` processes, and the
+    contamination shows: samples run 10-50x their own minimum, and the two core
+    classes disagree in *direction*. On minima per iteration, the performance
+    cores read `f32`/`f64` at 1.25 (n=67), 1.01 (101), 1.14 (113) and 0.38
+    (257), while the efficiency cores read 0.73, 0.53, 0.61 and 0.47 — `f32`
+    faster at every length. A quantity whose sign flips with core class under
+    load is measuring the load.
+  - **Next step is a re-run on a quiet host**, not a code change. The anomaly is
+    at this point neither reproduced nor refuted at the Rader entry point.
 - **A third locus, measured 2026-09-03 by the codelet-selection sweep.** That
   sweep timed two routes over the same twenty lengths in one pinned run, once
   per scalar, so it compares `f32` against `f64` *within a route* rather than
