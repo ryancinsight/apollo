@@ -61,7 +61,7 @@ anyhow = "1.0.103"
 bytemuck = { version = "1.25.1", features = ["derive"] }
 csv = "1.4.0"
 eunomia = { version = "0.8.0", git = "https://github.com/ryancinsight/eunomia", default-features = false, features = ["std"] }
-mnemosyne = { package = "mnemosyne-memory", version = "0.7.0", git = "https://github.com/ryancinsight/Mnemosyne.git", rev = "cdf3363db2ff31337c531b24d0025d945ac59a23", features = ["eunomia"] }
+mnemosyne = { package = "mnemosyne-memory", version = "0.7.0", git = "https://github.com/ryancinsight/Mnemosyne.git", rev = "03fe32f4ea669538402bf8fae8d9809610a101a8", features = ["eunomia"] }
 melinoe = { version = "0.9.0", git = "https://github.com/ryancinsight/melinoe.git", default-features = false, features = ["alloc"] }
 hermes-simd = { version = "0.7.0", git = "https://github.com/ryancinsight/hermes.git" }
 half = { version = "2.7.1", features = ["bytemuck", "serde", "use-intrinsics"] }
