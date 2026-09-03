@@ -298,9 +298,11 @@
 - **Kept from the attempt:** nothing in the tree. `combine_final4` remains
   `#[cfg(test)]`-gated as it was, and the block-count match still routes only
   two and four blocks into the network.
-- **Re-opened and delivered.** The falsification above stands for the shapes it
-  measured; two things it named as missing then landed, and together they turn
-  the result over. Measured with both routes in one binary and the arms
+- **Re-opened and delivered, on top of a peer's landing.** `#311` re-applied
+  the reverted implementation and gated it to `f64`, because that shape
+  measured 33% slower for `f32`. This commit supersedes it: the falsification
+  above stands for the shapes it measured, and two things it named as missing
+  then landed, which together turn the result over. Measured with both routes in one binary and the arms
   alternating in one process, `f32`, `lane-free-fn` being the flat Stockham
   route and `lane-plan` the split:
 
@@ -311,8 +313,11 @@
   | two `combine_final4` halves, SIMD gather | +14% |
   | **two sink-fused halves, SIMD gather** | **-1.1 / -1.4 / -3.0%** |
 
-  Three independent runs at the final shape, all negative. n = 512 is unmoved
-  at -21% against flat, so the four-block path did not pay for the change.
+  Three independent runs at the final shape, all negative; three more after
+  rebasing onto `#311` read -0.5, -0.7 and -1.3%. The margin is thin and is
+  stated as such — what removes the `f32` gate is that a 33% regression became
+  a consistent small win, not that the win is large. n = 512 is unmoved at
+  -21% against flat, so the four-block path did not pay for sharing its chain.
 - **The two pieces.** Hermes gained `deinterleave_pairs8`
   (`hermes#153`, `#154`), so eight blocks take a blend network instead of the
   strided scalar gather — worth about 10% here, less than the 15% the n = 512
