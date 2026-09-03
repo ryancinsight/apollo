@@ -107,7 +107,7 @@ jobs:
       # bindings" job instead (maturin develop + pytest).
       #
       - name: Tests
-        run: cargo nextest run --locked --workspace --all-features --exclude apollo-python --no-fail-fast
+        run: cargo nextest run --locked --profile ci --workspace --all-features --exclude apollo-python
       - name: Build benchmark smoke
         run: >-
           cargo test --locked -p apollo-fft --all-features --no-run
