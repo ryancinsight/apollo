@@ -1,30 +1,62 @@
-## Per-thread scratch has no release path (2026-09-02, lead) <a id="scratch-pool-retention"></a>
+## Per-thread scratch holds its high-water mark for the thread's life (2026-09-02, corrected 2026-09-03) <a id="scratch-pool-retention"></a>
 
 Every transform crate reaches `mnemosyne::scratch::ScratchPool` through a
 `thread_local!`. The pool holds `MAX_POOL_SLOTS` = 4 `AlignedVec` slots and
 `with_scratch` grows a slot with `ensure_len` when the request exceeds its
-length. Nothing in `pool.rs` shrinks, truncates, resets, or releases a slot, so
-each slot stays at the high-water mark of whatever that thread ever ran, for the
-life of the thread. Scratch is genuinely per-thread — it is working memory under
-exclusive borrow, not a shareable table — so the fix cannot be the sharing that
-[the plan caches](backlog.md#cross-thread-plan-retention) took; it would have to be a
-decay or high-water release policy, and that is mnemosyne's to own.
+length. Nothing in `pool.rs` shrinks, truncates, or resets a slot, so each slot
+stays at the high-water mark of whatever that thread ever ran.
+
+**Corrected: that is not a leak.** `AlignedVec` implements `Drop` and frees its
+allocation, and the pool lives in a `thread_local!`, so the whole pool is
+released when the thread exits. The cost is a working-set high-water mark
+proportional to the number of *live* threads that reach a given scratch size —
+which still matters, because a work-stealing pool's workers live for the
+process, but it is bounded by that pool's width rather than accumulating.
 
 The retained-footprint probe shows the padded planar scratch as 278,528-byte
 blocks at n = 16,384 (`scratch_len(n) = m * (m + ROW_PAD)`, 128 x 136 complex).
 
-**Not measured, and deliberately not quantified here.** The multiplier depends
-on how many threads reach each scratch size and how the four slots fill, and
-the 8-thread probe window showed three such blocks, not eight — so the naive
-"threads x slots x high-water" arithmetic is already contradicted by the one
-observation available. Sizing this needs its own instrument.
+**The three-blocks-not-eight anomaly is explained, and it was the instrument.**
+The 8-thread probe window showed three such blocks, and the first draft of this
+entry cited that as evidence the naive "threads x slots x high-water"
+arithmetic was contradicted. It is not: the probe spawns transient threads under
+`std::thread::scope`, which joins all of them *inside* the measurement window,
+so their thread-locals drop and their scratch is freed before the ledger is
+read. Three blocks is destructor timing racing the window close, not a fact
+about scratch. Transient threads cannot measure this at all.
 
-**The rule this inherits:** the same day, a magnitude for the plan caches was
-asserted from a probe row at n = 262,144 before checking that the route caps at
-n = 16,384 (`planar_applies` is bounded by `PARALLEL_ROW_THRESHOLD`). The
-mechanism was real and the number was wrong by two orders of magnitude. A
-retention claim needs the domain checked and the bytes measured, not one of the
-two.
+**Measured 2026-09-03, `worker_scratch_retention`.** The instrument this needed
+is long-lived workers, so the probe drives the transform through the executor's
+own pool and reads the ledger while those workers are still alive. At
+n = 16,384 the first parallel forward retains 7,528,076 bytes, of which
+`278528x25` — **6,963,200 bytes** — is per-worker scratch: one padded planar
+buffer for each of the 24 workers plus the calling thread. A second pass over
+the same workers retains nothing, so the figure is a high-water mark, not
+per-call growth.
+
+Two things the same window settles. The plan tables read `262144x1` and
+`131072x2`, not x25, so the cross-thread sharing of
+[the plan caches](backlog.md#cross-thread-plan-retention) holds in the executor
+and not only in a two-thread guard. And `36864x24` is Moirai's 24 worker
+injectors at the size ADR-0036 predicts, arriving as an independent check on
+that decision.
+
+**What the number does and does not license.** Scratch at 278,528 bytes is
+`m * (m + ROW_PAD)` complex against a 262,144-byte signal — 1.06x, which is the
+transpose buffer doing its job, not waste. The cost is that every worker holds
+one at its high-water mark for the life of the pool, and the mark rises with the
+largest length any worker ever runs. Reducing it is not an apollo change: the
+lever is a release or decay policy on `ScratchPool`, and that is mnemosyne's to
+own.
+
+**The rule this inherits, now three times in two days.** A magnitude for the
+plan caches was asserted from a probe row at n = 262,144 before checking that
+the route caps at 16,384; then a per-plan size was read at `n` when the call
+site passes `m`; then this entry claimed "no release path" from a grep of
+`pool.rs` for shrink-shaped names without checking whether the type implements
+`Drop`. Each time the mechanism was real and the claim about it was not. A
+retention claim needs the domain checked, the argument checked, the lifetime
+checked, and the bytes measured — not a subset that happens to be easy to grep.
 
 ## A whole module class compiles only off-CI (2026-09-02) <a id="windows-gated-modules"></a>
 
