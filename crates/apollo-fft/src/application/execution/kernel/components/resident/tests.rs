@@ -117,3 +117,31 @@ fn lengths_other_than_1024_report_unhandled_untouched() {
     assert!(!four_step_resident::<f64, false>(&mut data));
     assert_eq!(data, before, "a declined length must not be mutated");
 }
+
+#[test]
+fn resident_plans_are_shared_across_threads() {
+    // The cache is keyed per thread. If a thread that misses builds its own
+    // `ResidentPlan` rather than taking the shared one, the stage twiddles and
+    // the 32 x 32 four-step matrix exist once per thread and nothing evicts
+    // them. Pointer identity is the direct evidence: one allocation, or one
+    // per thread.
+    use super::ResidentPlanCache;
+
+    let addresses: Vec<usize> = (0..2)
+        .map(|_| {
+            std::thread::spawn(|| {
+                std::sync::Arc::as_ptr(&<f64 as ResidentPlanCache>::cached_resident_plan::<false>(
+                    super::ROW * super::ROW,
+                )) as usize
+            })
+        })
+        .map(|handle| handle.join().expect("plan builder thread must not panic"))
+        .collect();
+
+    assert_eq!(
+        addresses[0],
+        addresses[1],
+        "each thread built its own resident plan for N = {}",
+        super::ROW * super::ROW
+    );
+}

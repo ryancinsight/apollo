@@ -72,7 +72,9 @@ Change-class tags: [patch] backward-compatible fix, [minor] additive non-breakin
   lengths and both directions that is on the order of a megabyte per thread,
   once per thread that touches them. They now sit behind a process-wide map,
   following the two-level pattern the twiddle caches already use, with the
-  thread-local map still the lock-free fast path.
+  thread-local map still the lock-free fast path. Measured at n = 16,384, the
+  8-thread window's retained bytes fall from 1,912,672 to 838,712 and its six
+  131,072-byte plane buffers disappear.
 
 - [patch] `apollo-fft` runs f32 `n = 16` and `n = 32` on eight-lane
   register-resident codelets through the hermes dispatch (a new DFT-16 beside

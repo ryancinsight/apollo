@@ -1,3 +1,31 @@
+## Per-thread scratch has no release path (2026-09-02, lead) <a id="scratch-pool-retention"></a>
+
+Every transform crate reaches `mnemosyne::scratch::ScratchPool` through a
+`thread_local!`. The pool holds `MAX_POOL_SLOTS` = 4 `AlignedVec` slots and
+`with_scratch` grows a slot with `ensure_len` when the request exceeds its
+length. Nothing in `pool.rs` shrinks, truncates, resets, or releases a slot, so
+each slot stays at the high-water mark of whatever that thread ever ran, for the
+life of the thread. Scratch is genuinely per-thread — it is working memory under
+exclusive borrow, not a shareable table — so the fix cannot be the sharing that
+[the plan caches](#cross-thread-plan-retention) took; it would have to be a
+decay or high-water release policy, and that is mnemosyne's to own.
+
+The retained-footprint probe shows the padded planar scratch as 278,528-byte
+blocks at n = 16,384 (`scratch_len(n) = m * (m + ROW_PAD)`, 128 x 136 complex).
+
+**Not measured, and deliberately not quantified here.** The multiplier depends
+on how many threads reach each scratch size and how the four slots fill, and
+the 8-thread probe window showed three such blocks, not eight — so the naive
+"threads x slots x high-water" arithmetic is already contradicted by the one
+observation available. Sizing this needs its own instrument.
+
+**The rule this inherits:** the same day, a magnitude for the plan caches was
+asserted from a probe row at n = 262,144 before checking that the route caps at
+n = 16,384 (`planar_applies` is bounded by `PARALLEL_ROW_THRESHOLD`). The
+mechanism was real and the number was wrong by two orders of magnitude. A
+retention claim needs the domain checked and the bytes measured, not one of the
+two.
+
 ## A whole module class compiles only off-CI (2026-09-02) <a id="windows-gated-modules"></a>
 
 `base128::pinned_probe` is declared

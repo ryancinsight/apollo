@@ -60,10 +60,22 @@
   thread. An earlier draft of this entry quoted the 8,396,816 bytes the
   retained-footprint probe attributes to n = 262,144; that length never reaches
   this route, and the figure belongs to the globally shared twiddle tables.
-- **Evidence.** `batched_plans_and_planes_are_shared_across_threads` is the
-  regression guard: it fails on the prior code with two distinct addresses from
-  two threads and passes once the map is shared. `cross_thread_plan_retention`
-  measures the byte figure inside the route's domain.
+- **Evidence.** `cross_thread_plan_retention`, an ignored probe, measured at
+  n = 16,384 — the largest length the route accepts — with the same windows
+  before and after:
+
+  | Window | Retained before | Retained after |
+  | --- | --- | --- |
+  | 2 threads | 412,632 B | 279,432 B |
+  | 8 threads | 1,912,672 B | 838,712 B |
+
+  The 8-thread block listing goes from `278528x4 131072x6 2032x4 …` to
+  `278528x3 416x4 256x3 116x6`: the six 131,072-byte plane buffers disappear
+  and no plan table is built at all. The 278,528-byte blocks are mnemosyne's
+  padded planar scratch, per-thread by design and unchanged.
+  `batched_plans_and_planes_are_shared_across_threads` and
+  `resident_plans_are_shared_across_threads` are the regression guards; both
+  fail on the prior code with two distinct addresses from two threads.
 - **Also.** Building under the write lock deadlocked first: a read guard held in
   an `if let` scrutinee outlives the `else` arm and the lock is not reentrant.
   The nextest 60-second termination budget caught it. All three sites bind the

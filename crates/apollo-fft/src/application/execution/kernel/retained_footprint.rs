@@ -650,13 +650,18 @@ fn failed_realloc_restores_the_claimed_source() {
 #[test]
 #[ignore = "measurement probe for cross-thread plan retention"]
 fn cross_thread_plan_retention() {
-    // `BatchedPlan`, `FourStepPlanes`, and `ResidentPlan` are cached per
-    // thread. What the caches do on a miss decides whether the O(16n) tables
-    // exist once or once per thread, and nothing evicts them, so a thread pool
-    // sized to the machine multiplies the retained figure this file reports for
-    // one thread. Read the block listing: the 16n-sized rows carry the count.
+    // `BatchedPlan` and `FourStepPlanes` are cached per thread. What the caches
+    // do on a miss decides whether their tables exist once or once per thread,
+    // and nothing evicts them, so a thread pool sized to the machine multiplies
+    // the figure a single-threaded run reports.
+    //
+    // The length must sit inside the planar route's domain or the caches are
+    // never reached: `planar_applies` wants a power of two with an even
+    // trailing-zero count, at least 4 and strictly below
+    // `PARALLEL_ROW_THRESHOLD` (65,536). 16,384 is the largest such length, so
+    // it is the worst case this route can retain.
     let _mnemosyne_hooks = MnemosyneHooks::install();
-    const N: usize = 65_536;
+    const N: usize = 16_384;
 
     for threads in [1usize, 2, 8] {
         println!("threads = {threads}, n = {N} (16n = {} bytes)", N * 16);
