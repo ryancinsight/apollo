@@ -127,6 +127,11 @@
 
 - **Integrator:** Codex on `perf/apollo-rader-width-probe`; this increment
   removes the now-unused direct `half` declaration after Eunomia PR #86.
+- **Evidence, 2026-09-03.** The direct root `half` declaration is removed;
+  `python scripts/lockfile.py --check` passes with 45 first-party git
+  sources. `cargo tree --locked -i half` reports only the transitive
+  `naga` path through Hephaestus WGPU, so complete graph removal remains
+  Hephaestus/provider-owned work rather than an Apollo manifest defect.
 - **Landed 2026-09-03, in dependency order.** eunomia #84 (the layout
   vocabulary), hermes #151 (`hermes-simd-core` off bytemuck), apollo #309
   (this migration). Hermes turned out to be a *third* abandoned half of the
