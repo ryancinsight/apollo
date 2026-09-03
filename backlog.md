@@ -1,5 +1,53 @@
 # Apollo Backlog
 
+## ATLAS-APOLLO-STRIDED-GATHER-UPSTREAM-2026-09-03 — The split's gather is hand-rolled per block count instead of a substrate primitive [minor] [arch] — todo <a id="atlas-apollo-strided-gather-upstream"></a>
+
+- **The shape of the problem.** Apollo's base-128 split reorders its input by a
+  strided gather: subsequence `b` of stride `blocks` starting at the
+  bit-reversed offset `rev(b)`. That is a multi-slice read — `data[j * blocks +
+  offset]` for every `j` — and it is written twice: once as a SIMD blend
+  network in `split_boundary::GatherBlocks`, hand-written for `BLOCKS = 2` and
+  `BLOCKS = 4` and asserting on anything else, and once as a scalar strided
+  loop as the fallback. Every new block count needs a third hand-written
+  network, which is exactly what stopped the eight-block split
+  (`#atlas-apollo-eight-block-split`).
+- **It is worth a measured amount.** Disabling the four-block network at
+  n = 512 costs f64 +7.5% and f32 +15.4%, so the network earns its place — the
+  objection is to where it lives and that it is arity-bound, not to its
+  existence.
+- **The substrate already has the vocabulary, and apollo does not use it.**
+  Leto carries the ndarray-shaped surface — `exact_chunks`,
+  `axis_chunks_iter`, `windows`, `lanes` / `lanes_mut`, `axis_iter`,
+  `task_partitions_mut` — and apollo's hot kernels index raw slices instead.
+  Hermes carries interleaved-complex arithmetic
+  (`interleaved_complex_mul_assign`, `interleaved_complex_dot`) but no
+  lane-permutation primitive: the pair deinterleave apollo needs is defined
+  inside apollo, so no other consumer can reach it and no other backend can
+  implement it.
+- **Where each piece belongs.** The lane-level deinterleave is a hermes
+  capability parameterised by block count, not an apollo one: it is pure
+  register permutation, it has a natural AVX2/AVX-512/NEON implementation per
+  backend, and every mixed-radix consumer in the stack wants it. The
+  block-major view of a strided array is a leto capability — a gather into
+  `blocks` contiguous lanes is `lanes()` with a stride, and leto already
+  models strided views. Hephaestus wants the same decomposition for its device
+  kernels, where a badly shaped gather costs far more than it does on CPU.
+  Filed upstream as `#hs-strided-block-gather`; this item is apollo's side of
+  it — adopting the primitive and deleting the two hand-rolled copies.
+- **Not a refactor for its own sake.** The measured claim is narrow: apollo
+  cannot extend its split past four blocks without a third hand-written
+  network, and the pass-count problem that makes the split worth having at all
+  is a data-movement problem, which is the substrate's concern. Whether a
+  generic primitive matches the hand-written arity-2 and arity-4 networks is
+  itself a measurement — the acceptance below requires it, because a generic
+  gather that costs 7.5% more than the hand-written one would be a regression
+  wearing an architecture argument.
+- **Acceptance.** One strided block gather, owned upstream, generic in block
+  count, measuring no worse than the current hand-written networks at
+  `BLOCKS = 2` and `4`; apollo's `GatherBlocks` and its scalar fallback both
+  deleted; and the eight-block split re-measured against the flat route with it
+  in place.
+
 ## ATLAS-APOLLO-F32-NONPOT-WIDTH-2026-09-03 — f32 loses far more than f64 on non-power-of-two lengths [patch] [perf] — todo <a id="atlas-apollo-f32-nonpot-width"></a>
 
 - **Finding.** On composite and prime lengths apollo's `f32` is much further
@@ -43,7 +91,7 @@
   The two halves close separately: the prime anomaly is a defect, the composite
   ratio is a tuning gap.
 
-## ATLAS-APOLLO-EIGHT-BLOCK-SPLIT-2026-09-03 — The tuned split stops at 512, and n = 1024 is the worst power-of-two gap [minor] [perf] — todo <a id="atlas-apollo-eight-block-split"></a>
+## ATLAS-APOLLO-EIGHT-BLOCK-SPLIT-2026-09-03 — The tuned split stops at 512, and extending it to 1024 does not pay [minor] [perf] — done 2026-09-03 (falsified) <a id="atlas-apollo-eight-block-split"></a>
 
 - **Finding.** `BASE_SPLIT_LENGTHS` is `[128, 256, 512]`. Those lengths sit at
   +8 to +36% against RustFFT; n = 1024, the first length past the construction,
@@ -64,6 +112,42 @@
   committing to a fused eight-block chain.
 - **Acceptance.** n = 1024 is faster than RustFFT at both precisions, with the
   n = 128 to 512 cells unmoved.
+- **Built, measured, and reverted.** The eight-block split is correct — 551/551
+  including the accuracy oracles and the `dft_oracle_sweep` — and it is not
+  faster. Two shapes were measured against the flat Stockham route it would
+  replace (`exec_pot_forward_sized::<10>`, f64 1815 ns / f32 933):
+
+  | combine shape | f64 | f32 |
+  | --- | --- | --- |
+  | three separate levels, ping-ponged | 2183 | 1197 |
+  | two fused `combine_final4` halves + one in-place level | **1795** | **1235** |
+
+  The fused form is a wash at `f64` and **32% worse at `f32`**. Neither is
+  shippable, so the branch is reverted; the construction stands as knowledge,
+  not as code.
+- **Why the fused form still loses, sized rather than guessed.** Eight blocks
+  have no blend network — `GatherBlocks` implements the deinterleave for
+  `BLOCKS = 2` and `4` only — so they take the strided scalar gather. Disabling
+  the four-block network at n = 512 measures what that costs: f64 564.8 -> 607.2
+  (+7.5%), f32 317.1 -> 365.8 (+15.4%). So an eight-way network would recover
+  something like a seventh of the f32 gap and rather less of the f64 one. **It
+  would not close +32%.** The gather is a real cost and it is not the whole
+  cost; the construction itself does not beat the flat route at this length.
+- **What was learned about the shape.** The level walk loses for the reason the
+  four-step route was rejected at the top of `base128/mod.rs`: passes. Fusing
+  two levels via `combine_final4` per half and running the last level in place
+  — output `j` and `j + 512` depend only on inputs `j` and `j + 512`, so it
+  needs no second buffer — takes it from three passes to two and recovers about
+  380 ns at f64, which is most of the way back but not past the flat route.
+- **Re-open trigger.** A generic strided gather in hermes
+  (`#hs-strided-block-gather`) that serves any block count at native width. If
+  that lands, re-measure: the eight-block split would then be one pass of
+  gather, eight base transforms, one fused pass per half and one in-place
+  level, which is the first shape that could plausibly beat the flat route at
+  1024. Without it this item stays closed.
+- **Kept from the attempt:** nothing in the tree. `combine_final4` remains
+  `#[cfg(test)]`-gated as it was, and the block-count match still routes only
+  two and four blocks into the network.
 
 ## ATLAS-APOLLO-BEAT-THE-REFERENCES-2026-09-03 — Apollo must be faster than RustFFT and PhastFT at every size [minor] [perf] — todo <a id="atlas-apollo-beat-the-references"></a>
 
