@@ -123,24 +123,27 @@ fn resident_plans_are_shared_across_threads() {
     // The cache is keyed per thread. If a thread that misses builds its own
     // `ResidentPlan` rather than taking the shared one, the stage twiddles and
     // the 32 x 32 four-step matrix exist once per thread and nothing evicts
-    // them. Pointer identity is the direct evidence: one allocation, or one
-    // per thread.
+    // them.
+    //
+    // Both handles are spawned before either is joined, and both `Arc`s stay
+    // live across the comparison: a per-thread cache dies with its thread, so
+    // comparing raw addresses of dropped allocations could match by reuse.
     use super::ResidentPlanCache;
 
-    let addresses: Vec<usize> = (0..2)
+    let handles: Vec<_> = (0..2)
         .map(|_| {
             std::thread::spawn(|| {
-                std::sync::Arc::as_ptr(&<f64 as ResidentPlanCache>::cached_resident_plan::<false>(
-                    super::ROW * super::ROW,
-                )) as usize
+                <f64 as ResidentPlanCache>::cached_resident_plan::<false>(super::ROW * super::ROW)
             })
         })
+        .collect();
+    let plans: Vec<_> = handles
+        .into_iter()
         .map(|handle| handle.join().expect("plan builder thread must not panic"))
         .collect();
 
-    assert_eq!(
-        addresses[0],
-        addresses[1],
+    assert!(
+        std::sync::Arc::ptr_eq(&plans[0], &plans[1]),
         "each thread built its own resident plan for N = {}",
         super::ROW * super::ROW
     );

@@ -7,7 +7,7 @@ length. Nothing in `pool.rs` shrinks, truncates, resets, or releases a slot, so
 each slot stays at the high-water mark of whatever that thread ever ran, for the
 life of the thread. Scratch is genuinely per-thread — it is working memory under
 exclusive borrow, not a shareable table — so the fix cannot be the sharing that
-[the plan caches](#cross-thread-plan-retention) took; it would have to be a
+[the plan caches](backlog.md#cross-thread-plan-retention) took; it would have to be a
 decay or high-water release policy, and that is mnemosyne's to own.
 
 The retained-footprint probe shows the padded planar scratch as 278,528-byte
@@ -40,8 +40,11 @@ Nothing was wrong with the gate command. The gate ran on a platform where the
 code under it does not exist, and a platform `cfg` is invisible to a green tick:
 the run reports on what it compiled, never on what it skipped.
 
-**The rule:** a platform-gated module needs a job on that platform, or it has no
-gate at all. The unused imports are the cheap symptom; the same blind spot
+**The rule:** a platform-gated module needs a job on that platform, or its
+excluded coverage must be documented as developer-run only. The gate itself is
+correct -- the probe reads TSC counters through Hermes processor binding and
+must not compile elsewhere; what is missing is either a Windows job or a stated
+admission that nothing verifies it. The unused imports are the cheap symptom; the same blind spot
 covers every warning, lint, and type error the module could carry, and it grows
 with the module. Either add a Windows job that compiles the `cfg(windows)`
 test targets, or state in the module that it is developer-run only and accept

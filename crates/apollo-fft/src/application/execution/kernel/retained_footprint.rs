@@ -660,6 +660,16 @@ fn cross_thread_plan_retention() {
     // trailing-zero count, at least 4 and strictly below
     // `PARALLEL_ROW_THRESHOLD` (65,536). 16,384 is the largest such length, so
     // it is the worst case this route can retain.
+    //
+    // Read the windows as *incremental* retention, not as three independent
+    // cold-cache measurements. `window` resets the ledger but cannot clear the
+    // process-global twiddle and plan caches, so the first window pays for
+    // everything shared and the later ones show only what their own threads
+    // add. That is exactly the quantity of interest here -- whether adding
+    // threads adds storage -- but a single window's absolute figure is not a
+    // cold-start footprint, and comparing across thread counts within one run
+    // is only meaningful against the same run's earlier windows. To compare
+    // two revisions, run this probe under each and compare like windows.
     let _mnemosyne_hooks = MnemosyneHooks::install();
     const N: usize = 16_384;
 

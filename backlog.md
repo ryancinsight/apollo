@@ -51,15 +51,21 @@
   copies. `BatchedPlan` owns `len - 1` twiddle pairs and `FourStepPlanes` two
   `m x m` planes, both 16n bytes at `f64`; `ResidentPlan` owns a fixed 32 x 32
   matrix.
-- **Domain, checked rather than assumed.** These caches sit behind
+- **Domain and argument, checked rather than assumed.** These caches sit behind
   `planar_applies`: a power of two with an even trailing-zero count, at least 4
   and *strictly below* `PARALLEL_ROW_THRESHOLD` = 65,536. The largest length
   reaching them is 16,384 (directly, or via `planar_split_applies` from
-  32,768), where the pair is 262,128 + 262,144 bytes. Summed over the
-  applicable lengths and both directions this is order-of-a-megabyte per
-  thread. An earlier draft of this entry quoted the 8,396,816 bytes the
-  retained-footprint probe attributes to n = 262,144; that length never reaches
-  this route, and the figure belongs to the globally shared twiddle tables.
+  32,768). `FourStepPlanes` dominates there at 16n = 262,144 bytes for its two
+  `m x m` planes. `BatchedPlan` does not: `planar_stages` calls
+  `cached_plan(m)`, the row length, so at m = 128 its table is
+  16(m-1) = 2,032 bytes.
+- **Two corrections this entry carries.** An earlier draft quoted the 8,396,816
+  bytes the retained-footprint probe attributes to n = 262,144; that length
+  never reaches this route and the figure belongs to the globally shared
+  twiddle tables. A second draft then quoted 262,128 bytes for `BatchedPlan` by
+  reading its size at `n` rather than at the `m` the call site passes. Both are
+  the same failure: a size asserted from a plausible reading instead of the
+  argument the call site actually supplies.
 - **Evidence.** `cross_thread_plan_retention`, an ignored probe, measured at
   n = 16,384 — the largest length the route accepts — with the same windows
   before and after:

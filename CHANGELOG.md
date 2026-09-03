@@ -63,14 +63,11 @@ Change-class tags: [patch] backward-compatible fix, [minor] additive non-breakin
 - [patch] `apollo-fft` kernel plan caches keep one copy per process rather than
   one per thread. `cached_plan`, `cached_four_step_planes`, and
   `cached_resident_plan` built their own table on a thread-local miss, so the
-  `Arc` shared only within one thread and nothing evicted the copies. Inside the
-  planar route's domain -- a power of two with an even trailing-zero count, at
-  least 4 and below `PARALLEL_ROW_THRESHOLD` -- the largest length is 16,384,
-  where a `BatchedPlan` holds 16(n-1) = 262,128 bytes of twiddles and a
-  `FourStepPlanes` two m x m planes totalling 16n = 262,144 bytes; a
-  `ResidentPlan` adds its fixed 32 x 32 matrix. Summed over the applicable
-  lengths and both directions that is on the order of a megabyte per thread,
-  once per thread that touches them. They now sit behind a process-wide map,
+  `Arc` shared only within one thread and nothing evicted the copies. The
+  dominant term is `FourStepPlanes`, which owns two `m x m` planes -- 16n bytes,
+  262,144 at n = 16,384, the largest length the planar route accepts;
+  `BatchedPlan` is keyed on the row length `m`, not `n`, so it is only
+  16(m-1) = 2,032 bytes there. They now sit behind a process-wide map,
   following the two-level pattern the twiddle caches already use, with the
   thread-local map still the lock-free fast path. Measured at n = 16,384, the
   8-thread window's retained bytes fall from 1,912,672 to 838,712 and its six
