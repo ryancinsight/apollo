@@ -125,6 +125,8 @@
   in place.
 ## ATLAS-APOLLO-FIRST-PARTY-LAYOUT-2026-09-03 — bytemuck and half give way to eunomia, but the last 28 sites need upstream first [patch] [arch] — in progress <a id="atlas-apollo-first-party-layout"></a>
 
+- **Integrator:** Codex on `perf/apollo-rader-width-probe`; this increment
+  removes the now-unused direct `half` declaration after Eunomia PR #86.
 - **Landed 2026-09-03, in dependency order.** eunomia #84 (the layout
   vocabulary), hermes #151 (`hermes-simd-core` off bytemuck), apollo #309
   (this migration). Hermes turned out to be a *third* abandoned half of the
