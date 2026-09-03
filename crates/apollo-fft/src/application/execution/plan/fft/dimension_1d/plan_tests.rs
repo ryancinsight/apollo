@@ -784,78 +784,78 @@ fn planned_n63_f32_composite_forward_matches_direct() {
 }
 
 #[test]
-fn planned_n72_f32_codelet_forward_matches_direct() {
-    assert_f32_codelet_forward_matches_direct(72, 1.0e-4);
+fn planned_n72_f32_forward_matches_direct() {
+    assert_f32_planned_forward_matches_direct(72, 1.0e-4);
 }
 
 #[test]
-fn planned_n108_f32_codelet_forward_matches_direct() {
-    assert_f32_codelet_forward_matches_direct(108, 2.0e-4);
+fn planned_n108_f32_forward_matches_direct() {
+    assert_f32_planned_forward_matches_direct(108, 2.0e-4);
 }
 
 #[test]
-fn planned_n112_f32_codelet_forward_matches_direct() {
-    assert_f32_codelet_forward_matches_direct(112, 3.0e-4);
+fn planned_n112_f32_forward_matches_direct() {
+    assert_f32_planned_forward_matches_direct(112, 3.0e-4);
 }
 
 #[test]
-fn planned_n120_f32_codelet_forward_matches_direct() {
-    assert_f32_codelet_forward_matches_direct(120, 2.0e-4);
+fn planned_n120_f32_forward_matches_direct() {
+    assert_f32_planned_forward_matches_direct(120, 2.0e-4);
 }
 
 #[test]
-fn planned_n121_f32_codelet_forward_matches_direct() {
-    assert_f32_codelet_forward_matches_direct(121, 3.0e-4);
+fn planned_n121_f32_forward_matches_direct() {
+    assert_f32_planned_forward_matches_direct(121, 3.0e-4);
 }
 
 #[test]
-fn planned_n126_f32_codelet_forward_matches_direct() {
-    assert_f32_codelet_forward_matches_direct(126, 2.0e-4);
+fn planned_n126_f32_forward_matches_direct() {
+    assert_f32_planned_forward_matches_direct(126, 2.0e-4);
 }
 
 #[test]
-fn planned_n154_f32_codelet_forward_matches_direct() {
-    assert_f32_codelet_forward_matches_direct(154, 3.0e-4);
+fn planned_n154_f32_forward_matches_direct() {
+    assert_f32_planned_forward_matches_direct(154, 3.0e-4);
 }
 
 #[test]
-fn planned_n168_f32_codelet_forward_matches_direct() {
-    assert_f32_codelet_forward_matches_direct(168, 3.0e-4);
+fn planned_n168_f32_forward_matches_direct() {
+    assert_f32_planned_forward_matches_direct(168, 3.0e-4);
 }
 
 #[test]
-fn planned_n189_f32_codelet_forward_matches_direct() {
-    assert_f32_codelet_forward_matches_direct(189, 4.0e-4);
+fn planned_n189_f32_forward_matches_direct() {
+    assert_f32_planned_forward_matches_direct(189, 4.0e-4);
 }
 
 #[test]
-fn planned_n242_f32_codelet_forward_matches_direct() {
-    assert_f32_codelet_forward_matches_direct(242, 5.0e-4);
+fn planned_n242_f32_forward_matches_direct() {
+    assert_f32_planned_forward_matches_direct(242, 5.0e-4);
 }
 
 #[test]
-fn planned_n275_f32_codelet_forward_matches_direct() {
-    assert_f32_codelet_forward_matches_direct(275, 5.0e-4);
+fn planned_n275_f32_forward_matches_direct() {
+    assert_f32_planned_forward_matches_direct(275, 5.0e-4);
 }
 
 #[test]
-fn planned_n280_f32_codelet_forward_matches_direct() {
-    assert_f32_codelet_forward_matches_direct(280, 6.0e-4);
+fn planned_n280_f32_forward_matches_direct() {
+    assert_f32_planned_forward_matches_direct(280, 6.0e-4);
 }
 
 #[test]
-fn planned_n363_f32_codelet_forward_matches_direct() {
-    assert_f32_codelet_forward_matches_direct(363, 8.0e-4);
+fn planned_n363_f32_forward_matches_direct() {
+    assert_f32_planned_forward_matches_direct(363, 8.0e-4);
 }
 
 #[test]
-fn planned_n400_f32_codelet_forward_matches_direct() {
-    assert_f32_codelet_forward_matches_direct(400, 8.0e-4);
+fn planned_n400_f32_forward_matches_direct() {
+    assert_f32_planned_forward_matches_direct(400, 8.0e-4);
 }
 
 #[test]
-fn planned_n484_f32_codelet_forward_matches_direct() {
-    assert_f32_codelet_forward_matches_direct(484, 1.0e-3);
+fn planned_n484_f32_forward_matches_direct() {
+    assert_f32_planned_forward_matches_direct(484, 1.0e-3);
 }
 
 #[test]
@@ -886,7 +886,15 @@ fn planned_n511_f32_good_thomas_forward_matches_direct() {
     );
 }
 
-fn assert_f32_codelet_forward_matches_direct(n: usize, tolerance: f64) {
+/// The f32 plan's forward transform matches a direct DFT at `n`.
+///
+/// Checks the value only, never the route. These lengths were once all
+/// codelet-routed and the helper was named for it; measurement moved most of
+/// them off that arm (`#atlas-apollo-codelet-selection-unmeasured`), and a name
+/// that says which kernel runs would have to change every time the boundary
+/// moves. What it guards is that the plan computes the right answer whichever
+/// route it picks.
+fn assert_f32_planned_forward_matches_direct(n: usize, tolerance: f64) {
     let plan = FftPlan1D::<f32>::new(Shape1D::new(n).expect("shape"));
     let input: Vec<Complex32> = (0..n)
         .map(|k| {
@@ -937,13 +945,13 @@ fn planned_n72_f64_codelet_forward_matches_direct() {
 }
 
 #[test]
-fn planned_n96_f32_codelet_forward_matches_direct() {
-    assert_f32_codelet_forward_matches_direct(96, 2.0e-4);
+fn planned_n96_f32_forward_matches_direct() {
+    assert_f32_planned_forward_matches_direct(96, 2.0e-4);
 }
 
 #[test]
-fn planned_n99_f32_codelet_forward_matches_direct() {
-    assert_f32_codelet_forward_matches_direct(99, 2.0e-4);
+fn planned_n99_f32_forward_matches_direct() {
+    assert_f32_planned_forward_matches_direct(99, 2.0e-4);
 }
 
 #[test]
