@@ -34,8 +34,8 @@ mod tests;
 mod pinned_probe;
 
 /// Powers of two that decompose down to the 128-point base: 128 itself, and
-/// 256 and 512 by repeated radix-2 decimation.
-pub(crate) const BASE_SPLIT_LENGTHS: [usize; 3] = [128, 256, 512];
+/// 256, 512 and 1024 by repeated radix-2 decimation.
+pub(crate) const BASE_SPLIT_LENGTHS: [usize; 4] = [128, 256, 512, 1024];
 
 /// Length of the base transform every split bottoms out in.
 const BASE: usize = 128;
@@ -130,7 +130,7 @@ where
                             dst,
                         })
                     }
-                    (_, false) => {
+                    (4, false) => {
                         hermes_simd::vectorize_lanes::<4, F, _>(split_boundary::GatherBlocks::<
                             F,
                             4,
@@ -139,7 +139,7 @@ where
                             dst,
                         })
                     }
-                    (_, true) => {
+                    (4, true) => {
                         hermes_simd::vectorize_lanes::<8, F, _>(split_boundary::GatherBlocks::<
                             F,
                             4,
@@ -148,6 +148,12 @@ where
                             dst,
                         })
                     }
+                    // Eight blocks have no blend network yet; the strided
+                    // scalar gather below is generic in the block count and
+                    // serves them. Declining here rather than falling into the
+                    // four-block arm matters: that arm asserts its source is
+                    // exactly `BLOCKS * 256` scalars and would panic.
+                    _ => Some(false),
                 }
                 .unwrap_or(false)
             };
@@ -190,6 +196,34 @@ where
                     return false;
                 }
                 combine_final::<F>(data, scratch, twiddles, BASE);
+                return true;
+            }
+            // Eight blocks: two fused four-block chains and one in-place
+            // level, rather than three separate combine passes.
+            //
+            // The level walk is the obvious shape and it loses: three passes
+            // over 16 KB cost more than the flat Stockham route they replace
+            // (f64 2183 ns against 1815, f32 1197 against 933), which is the
+            // same arithmetic the four-step route was rejected for at the top
+            // of this file. `combine_final4` already fuses two levels, so each
+            // half of the split reaches its 512-point spectrum in one pass;
+            // the last level then reads and writes the same array — output `j`
+            // and `j + 512` depend only on inputs `j` and `j + 512` — so it
+            // needs no second buffer and no copy.
+            if blocks == 8 {
+                for block in scratch[..n].chunks_exact_mut(BASE) {
+                    if !instance_major::transform_128::<F, INVERSE>(block, plan) {
+                        return false;
+                    }
+                }
+                let half = n / 2;
+                let (scratch_low, scratch_high) = scratch[..n].split_at(half);
+                {
+                    let (data_low, data_high) = data.split_at_mut(half);
+                    combine_final4::<F>(data_low, scratch_low, twiddles, BASE);
+                    combine_final4::<F>(data_high, scratch_high, twiddles, BASE);
+                }
+                combine_level_in_place::<F>(data, twiddles, half);
                 return true;
             }
             // Four blocks keep only the even pair's two halves as an
@@ -296,6 +330,29 @@ where
     )
 }
 
+/// The final radix-2 combine level, in place.
+///
+/// Output `j` and `j + len` depend only on inputs `j` and `j + len`, so the
+/// halves can be read and written where they already sit — no second buffer,
+/// no copy back, one pass. The twiddle table is stage-major: the level whose
+/// half-length is `len` reads `len` entries starting at `len - 1`, the same
+/// slice `combine_final` takes for its own level.
+fn combine_level_in_place<F>(data: &mut [F::Complex], twiddles: &[F::Complex], len: usize)
+where
+    F: crate::application::execution::kernel::mixed_radix::MixedRadixScalar<
+        Complex = eunomia::Complex<F>,
+    >,
+{
+    let combine = &twiddles[len - 1..2 * len - 1];
+    let (low, high) = data.split_at_mut(len);
+    for j in 0..len {
+        let rotated = high[j] * combine[j];
+        let even = low[j];
+        low[j] = even + rotated;
+        high[j] = even - rotated;
+    }
+}
+
 /// The last combining stage, reading `scratch` and writing `out`.
 ///
 /// The combining loop stays scalar: a hand-vectorized sibling measured
@@ -334,7 +391,6 @@ fn combine_final<F>(
 /// combines those with `W_{4 * len}` at `j` and `j + len` — the block
 /// order is the gather's bit-reversed one, which is exactly what makes the
 /// adjacent-pair pairing correct.
-#[cfg(all(test, windows, target_arch = "x86_64"))]
 fn combine_final4<F>(
     out: &mut [F::Complex],
     scratch: &[F::Complex],
