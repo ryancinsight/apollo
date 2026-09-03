@@ -38,6 +38,32 @@
   satisfies — `exact_lanes_supported::<4, T>` answering true through a scalar
   implementation is a known shape in this codebase and would leave `f32`
   running unvectorised while reading as supported.
+- **A third locus, measured 2026-09-03 by the codelet-selection sweep.** That
+  sweep timed two routes over the same twenty lengths in one pinned run, once
+  per scalar, so it compares `f32` against `f64` *within a route* rather than
+  against a reference. The two routes answer oppositely:
+
+  | route | median `f32`/`f64` | reading |
+  | --- | --- | --- |
+  | composite | **0.80x** | `f32` is using its extra lanes |
+  | short-Winograd codelet | **1.28x** | `f32` is slower than `f64` at 17 of 20 |
+
+  Worst cases on the codelet arm: n = 144 at 1.83x, 99 at 1.50x, 112 at 1.46x,
+  189 at 1.45x, 120 at 1.44x. This is the same shape as the n = 101 prime
+  anomaly and it is not the Rader path, so whatever leaves `f32` running
+  narrow is not confined to the Rader convolution.
+- **And the codelet arm is not fundamentally narrow.** At n = 96 the same
+  measurement reads 0.50x — the codelet does run at `f32` width there. So the
+  1.28x median is an implementation gap in the other codelets, not a limit of
+  the arm, which makes it a defect on the same footing as the prime half rather
+  than a tuning ratio.
+- **Consequence already visible.** Because the `f32` codelets run narrow, the
+  measured codelet/composite boundary differs by scalar: f32 wins only at 96,
+  121, 154, 242 and 363, while f64 wins at every length divisible by 11
+  (`#atlas-apollo-codelet-selection-unmeasured`). Closing this item should be
+  expected to move that boundary, and the sweep is the instrument that will
+  show it.
+
 - **Acceptance.** apollo `f32` is faster than apollo `f64` at every length in
   the table, and the `f32` gap against RustFFT is no worse than the `f64` gap.
   The two halves close separately: the prime anomaly is a defect, the composite
