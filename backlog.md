@@ -79,26 +79,30 @@
 
   | n | f64 | f32 | class |
   | --- | --- | --- | --- |
-  | 8 | +17 to +23% | +50 to +53% | pot |
-  | 16 | +34% | +6% | pot |
-  | 32 | **+101%** | +23 to +26% | pot |
-  | 64 | **-16 to -17%** | **-8 to -20%** | pot, tuned `State64` |
-  | 128 | +8 to +19% | +4 to +16% | pot, tuned split |
-  | 256 | +18 to +22% | +27 to +36% | pot, tuned split |
-  | 512 | +17 to +24% | -13 to +32% | pot, tuned split |
-  | 1024 | **+64 to +69%** | **+31 to +69%** | pot, untuned |
-  | 4096 | +9 to +31% | +5 to +42% | pot, untuned |
-  | 32768 | -4 to +36% | +23 to +48% | pot |
-  | 100 | **-1 to -14%** | **-25 to -29%** | composite |
-  | 180 | +20 to +43% | **+52 to +67%** | composite |
-  | 384 | +12 to +40% | **+64 to +70%** | composite |
-  | 1000 | +27 to +31% | **-5 to -9%** | composite |
-  | 101 | +14 to +17% | **+91 to +95%** | prime |
-  | 1009 | +4 to +5% | +10 to +27% | prime |
+  | 8 | +14% | +49% | pot |
+  | 16 | +40% | +9% | pot |
+  | 32 | **+105%** | +25% | pot |
+  | 64 | **-12%** | **-2%** | pot, tuned `State64` |
+  | 128 | +8% | +25% | pot, tuned split |
+  | 256 | +20% | +31% | pot, tuned split |
+  | 512 | +23% | +32% | pot, tuned split |
+  | 1024 | **+58%** | **+61%** | pot, untuned |
+  | 4096 | +31% | +36% | pot, untuned |
+  | 32768 | +36% | +42% | pot |
+  | 100 | **-15%** | **-32%** | composite |
+  | 180 | +38% | +49% | composite |
+  | 384 | +35% | +37% | composite |
+  | 1000 | +24% | **-9%** | composite |
+  | 101 | +19% | **+95%** | prime |
+  | 1009 | +18% | +28% | prime |
 
-  Ranges are across runs on a machine with concurrent peer builds; the spread
-  is real and any increment against these numbers must re-measure its own
-  cells rather than trusting this table's precision. The signs are stable.
+  Element-wise minimum of two runs, taken after `#305` narrowed the
+  generated-codelet selection. The machine carries concurrent peer builds and
+  the spread is large — n = 32 `f64` read +33% on one run and +105% on the
+  next — so any increment must re-measure its own cells rather than trust this
+  table's precision. What is stable across every run this session is the set of
+  signs: apollo is ahead at n = 64, n = 100 and `f32` n = 1000, and behind
+  everywhere else.
 - **What the shape says.** Apollo is ahead exactly where it has a hand-tuned
   construction — n = 64 (`State64`) and n = 100 — and behind everywhere else,
   including at lengths where the tuned split applies (128 to 512 sit at
