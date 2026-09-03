@@ -21,19 +21,31 @@
 
   The warm pass allocates nothing in either ledger, so reuse is working as
   designed; the whole cost is retention, not churn.
-- **Attribution.** Two distinct owners, and they must not be conflated:
-  - **540,672 B is mnemosyne's.** Block signature `16384x24 + 2048x72` is
-    exactly `24 x (1 x 16384 + 3 x 2048)` — four pool slots per worker,
-    `MAX_POOL_SLOTS = 4`.
-  - **6,684,672 B is apollo's**, signature `278528x24`: one block per worker
-    from the first parallel forward, in the global ledger with mnemosyne-direct
-    at zero allocations for that window. `278528 = 16 x 17408` at
-    `Complex64`, i.e. an interleaved-scratch/plan block per worker, not a pool
-    slot.
-- **Correction.** A working figure of ~6.96 MB "mnemosyne worker scratch" was
-  carried in session notes and never reached a board. It conflated the two
-  ledgers above. The mnemosyne-owned share is 540,672 B; re-measure before
-  citing either number.
+- **Attribution — revised 2026-09-03, superseding this item's first filing.**
+  Both figures are mnemosyne scratch storage. Apollo's per-worker scratch
+  routes `Stockham` to `ScratchDispatch::with_stockham_impl` to
+  `ScratchBank::with_scratch` (`mixed_radix/caches/scratch.rs`), and
+  `ScratchBank<T, N>` is `[ScratchPool<T>; N]`; apollo holds
+  `ScratchBank<Complex64, 4>`, so up to 16 `AlignedVec` buffers per worker.
+  The `Mnemosyne direct` ledger tracks a narrower hook and does not see them —
+  `ScratchBank` allocates through the global allocator, which is why the
+  6,684,672 B landed in the global column while mnemosyne-direct read zero for
+  that window.
+  - **About 7.2 MB is mnemosyne-owned**, not 540,672 B. The first filing read
+    the ledger's column label as ownership; the allocation path is what
+    settles it.
+  - **Doubling overshoot.** `278528x24` is `24 x 17408` `Complex64` where the
+    transform asked for 16,384. `AlignedVec::ensure_len` grows to
+    `min_len.max(capacity * 2)`, so a slot can land above the size actually
+    requested and, with no shrink path, hold that overshoot for the life of the
+    thread — here 6.25% beyond need, permanently. Bounding the overshoot is
+    cheaper than reclamation and independent of it.
+- **Correction history.** Filed this morning as "540,672 B mnemosyne /
+  6,684,672 B apollo", itself correcting an unrecorded ~6.96 MB session figure
+  that had conflated two ledgers. Reading the allocation path rather than the
+  ledger column moved it again, to about 7.2 MB mnemosyne-owned. Two revisions
+  in one day on one measurement: cite neither number without re-reading the
+  path that produces it.
 - **Upstream finding (mnemosyne, source-verified 2026-09-03).**
   `mnemosyne-arena/src/scratch/pool.rs`: `ScratchPool` holds
   `[UnsafeCell<AlignedVec<T>>; MAX_POOL_SLOTS]` and its documented home is
@@ -56,8 +68,11 @@
   preserve. Candidates are a capacity ceiling per slot, or release on an idle
   signal from the executor.
 - **Acceptance oracle:** the warm-pass window still reports zero allocations in
-  both ledgers, and mnemosyne-direct retention after an idle interval falls
-  below the 540,672 B measured here, on the same probe and worker count.
+  both ledgers — the property the pool exists to produce, and the one eager
+  release would destroy — and total retained scratch after an idle interval
+  falls below the ~7.2 MB measured here, on the same probe and worker count.
+  Read the total across both ledger columns, not the mnemosyne-direct column:
+  that column is what mis-attributed this item twice.
 - **Risk / change class:** [minor] [perf]; upstream is a new pool method plus
   its trigger, apollo side is measurement only.
 
