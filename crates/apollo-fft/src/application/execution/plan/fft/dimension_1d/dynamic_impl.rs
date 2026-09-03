@@ -172,21 +172,18 @@ impl<F: MixedRadixScalar<Complex = Complex<F>>> FftPlan1D<F> {
                 log2,
                 pot: PhantomData,
             }
-        } else if n == 385 {
-            PlanStrategy::Composite {
-                radices: Cow::Borrowed(&[11, 5, 7]),
-            }
         } else if n == 180 {
+            // Kept ahead of the generated-codelet arm on measurement, not
+            // history: n = 180 reaches `ShortWinograd` otherwise, and that
+            // codelet costs 501 ns against 143 for this decomposition — 3.5x.
+            // The order itself is the derived one, which also beat the entry
+            // that used to sit here (`[5, 3, 3, 4]`, 197 ns) by 27%.
             PlanStrategy::Composite {
-                radices: Cow::Borrowed(&[5, 3, 3, 4]),
+                radices: Cow::Borrowed(&[4, 3, 3, 5]),
             }
         } else if n == 144 {
             PlanStrategy::Composite {
                 radices: Cow::Borrowed(&[4, 4, 3, 3]),
-            }
-        } else if n == 176 {
-            PlanStrategy::Composite {
-                radices: Cow::Borrowed(&[11, 4, 4]),
             }
         } else if n == 200 {
             PlanStrategy::Composite {
