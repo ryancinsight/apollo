@@ -23,13 +23,25 @@
   `HALF_CYCLIC_RADER_THRESHOLD = 32`, so n = 101 takes the same backend on
   both. The primitive root is cached for p < 4096, so it is not per-call
   derivation.
-- **Where to look next.** The lane dispatch inside the composite stage
-  application and the Rader convolution, for a capability query that a scalar
-  backend satisfies — `exact_lanes_supported::<4, T>` answering true through a
-  scalar implementation is a known shape in this codebase, and it would leave
-  `f32` running unvectorised while reading as supported.
+- **Narrowed by the absolute numbers, which say this is two problems.** At the
+  composite lengths `f32` *is* faster than `f64` — 313 ns against 499 at
+  n = 384 (0.63x), 142 against 204 at n = 180 (0.70x) — so it is using its
+  width there, and `radix_composite` does carry `f32` AVX2 passes for radix 2,
+  3, 4, 5 and 7. What it does not do is extract as much from the extra lanes as
+  RustFFT: RustFFT's `f32` is 0.53x its own `f64` at n = 384 against apollo's
+  0.63x. That is a narrower claim than "not vectorised", and the composite half
+  of this item is that ratio.
+- **The prime half is the anomaly.** At n = 101 apollo's `f32` (674 ns) is
+  slower than its own `f64` (579). No lane-width argument explains that, and it
+  is the Rader path rather than the composite one. Look at the lane dispatch
+  inside the Rader convolution for a capability query a scalar backend
+  satisfies — `exact_lanes_supported::<4, T>` answering true through a scalar
+  implementation is a known shape in this codebase and would leave `f32`
+  running unvectorised while reading as supported.
 - **Acceptance.** apollo `f32` is faster than apollo `f64` at every length in
   the table, and the `f32` gap against RustFFT is no worse than the `f64` gap.
+  The two halves close separately: the prime anomaly is a defect, the composite
+  ratio is a tuning gap.
 
 ## ATLAS-APOLLO-EIGHT-BLOCK-SPLIT-2026-09-03 — The tuned split stops at 512, and n = 1024 is the worst power-of-two gap [minor] [perf] — todo <a id="atlas-apollo-eight-block-split"></a>
 
