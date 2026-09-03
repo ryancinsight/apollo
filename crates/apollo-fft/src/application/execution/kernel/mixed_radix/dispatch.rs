@@ -82,7 +82,7 @@ fn static_is_prime(n: usize) -> bool {
 /// Avoids the runtime factoring + cache lookup overhead of `cached_prime23_radices`.
 /// Radix-2 pairs are already lowered to radix-4 for optimal stage pairing.
 #[inline]
-fn static_prime23_radices(n: usize) -> Option<&'static [usize]> {
+pub(crate) fn static_prime23_radices(n: usize) -> Option<&'static [usize]> {
     match n {
         2 => Some(&[2]),
         3 => Some(&[3]),
@@ -625,5 +625,80 @@ mod static_radix_table {
             wrong.is_empty(),
             "static radix entries naming a radix the composite kernel cannot              execute (length, radices, offending radix): {wrong:?}"
         );
+    }
+}
+
+#[cfg(test)]
+mod composite_decomposition {
+    use crate::application::execution::plan::fft::dimension_1d::strategy::PlanStrategy;
+
+    /// The radix orders whose cost was measured, pinned so an edit cannot
+    /// change them silently.
+    ///
+    /// `FftPlan1D` and `dispatch_inplace` read their decomposition from
+    /// different tables, and the tables disagree about the *order* of the same
+    /// factors. The order is worth tens of percent, and not in one direction:
+    /// at n = 100 and n = 384 the dispatcher's static order was the faster one
+    /// by 26 to 29%, which is why the plan's ladder now consults that table;
+    /// at n = 180 the plan's own entry beats the static order by 62%
+    /// (189 ns against 500). So neither table is authoritative, and each of
+    /// these choices is a measurement rather than a rule
+    /// (`backlog.md#atlas-apollo-plan-underselects-composite`). Changing one
+    /// means re-measuring it.
+    #[test]
+    fn measured_orders_are_the_ones_selected() {
+        for (n, expected) in [
+            (100usize, &[4usize, 5, 5][..]),
+            (384, &[4, 4, 4, 2, 3][..]),
+            (180, &[5, 3, 3, 4][..]),
+        ] {
+            let plan = crate::FftPlan1D::<f32>::new(
+                crate::Shape1D::new(n).expect("invariant: pinned lengths are non-zero"),
+            );
+            let PlanStrategy::Composite { radices } = &plan.strategy else {
+                panic!("n = {n} is expected to plan as a composite decomposition");
+            };
+            assert_eq!(
+                radices.as_ref(),
+                expected,
+                "n = {n} changed decomposition; re-measure before accepting it"
+            );
+        }
+    }
+
+    /// Which decomposition each route reads for the lengths whose two routes
+    /// measured apart (`backlog.md#atlas-apollo-plan-underselects-composite`).
+    ///
+    /// `dispatch_inplace` reads `static_prime23_radices` first; the plan's
+    /// selection ladder never consults it. This prints both sources beside the
+    /// strategy the plan actually chose, which separates "the routes disagree
+    /// about the decomposition" from "they agree and the plan's execution is
+    /// slower".
+    #[test]
+    #[ignore = "diagnostic for the composite-length route divergence"]
+    fn report_route_sources_for_divergent_lengths() {
+        for n in [96usize, 100, 128, 384, 512, 1000] {
+            let plan = crate::FftPlan1D::<f32>::new(
+                crate::Shape1D::new(n).expect("invariant: diagnostic lengths are non-zero"),
+            );
+            let chosen = match &plan.strategy {
+                PlanStrategy::Identity => "Identity".to_owned(),
+                PlanStrategy::ShortWinograd => "ShortWinograd".to_owned(),
+                PlanStrategy::PowerOfTwo { log2, .. } => format!("PowerOfTwo(log2={log2})"),
+                PlanStrategy::GoodThomas { n1, n2 } => format!("GoodThomas({n1}x{n2})"),
+                PlanStrategy::Composite { radices } => format!("Composite({radices:?})"),
+                PlanStrategy::Rader => "Rader".to_owned(),
+                PlanStrategy::Bluestein => "Bluestein".to_owned(),
+            };
+            let statik = super::static_prime23_radices(n);
+            let cached =
+                crate::application::execution::kernel::mixed_radix::caches::cached_prime23_radices(
+                    n,
+                );
+            println!(
+                "n={n:5} plan={chosen} dispatcher_static={statik:?} cached={:?}",
+                cached.as_deref()
+            );
+        }
     }
 }

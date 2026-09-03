@@ -139,7 +139,13 @@ fn non_power_of_two_lane_route(suite: &mut BenchmarkSuite, core: &str) {
     use crate::application::execution::kernel::mixed_radix::forward_inplace;
     use eunomia::Complex32;
 
-    for n in [96usize, 100, 128, 256, 384, 512, 1000] {
+    // Spans the length classes, not one of them: powers of two, composites
+    // the static radix table carries (384, 243, 720), composites it does not
+    // (100 is carried, 1000 and 250 are not), and a prime (101), which reaches
+    // neither table. `gap_audit.md#length-class-split` is why.
+    for n in [
+        96usize, 100, 101, 128, 176, 180, 243, 250, 256, 384, 385, 512, 720, 1000,
+    ] {
         let source: Vec<Complex32> = (0..n)
             .map(|index| {
                 let x = index as f32;
