@@ -696,3 +696,59 @@ fn cross_thread_plan_retention() {
         });
     }
 }
+
+#[test]
+#[ignore = "measurement probe for worker scratch retention"]
+fn worker_scratch_retention() {
+    // What [`cross_thread_plan_retention`] cannot measure. That probe spawns
+    // transient threads under `std::thread::scope`, which joins them inside the
+    // measurement window; `ScratchPool` lives in a `thread_local!` and
+    // `AlignedVec` frees on `Drop`, so every scratch buffer is released before
+    // the ledger is read. The cost is real only for threads that outlive the
+    // window -- an executor's own workers -- so this drives the transform
+    // through the pool and reads the ledger while those workers are still
+    // alive.
+    //
+    // Block sizes separate the owners: `scratch_len(n) * 16` is the padded
+    // planar scratch (278,528 at n = 16,384), 16n the twiddle table, and the
+    // 131,072-byte pairs the four-step planes.
+    let _mnemosyne_hooks = MnemosyneHooks::install();
+    const N: usize = 16_384;
+    // Comfortably more chunks than any plausible pool width, so every worker
+    // takes at least one and reaches its own scratch.
+    const CHUNKS: usize = 128;
+
+    let mut signal: Vec<Complex64> = (0..N * CHUNKS)
+        .map(|index| {
+            let x = index as f64;
+            Complex64::new((0.017 * x).sin(), 0.25 * (0.031 * x).cos())
+        })
+        .collect();
+
+    // Pool startup is not what this measures.
+    window("pool warmup", || {
+        moirai::for_each_chunk_mut_with::<moirai::Parallel, _, _>(&mut signal, N, |chunk| {
+            std::hint::black_box(chunk);
+        });
+    });
+
+    window("first parallel forward across workers", || {
+        moirai::for_each_chunk_mut_with::<moirai::Parallel, _, _>(&mut signal, N, |chunk| {
+            let plan = crate::FftPlan1D::<f64>::new(
+                crate::Shape1D::new(N).expect("invariant: shape lengths are non-zero"),
+            );
+            plan.forward_complex_slice_inplace(chunk);
+        });
+    });
+
+    // Workers are still alive and their scratch is at its high-water mark, so a
+    // second pass should retain nothing further.
+    window("warm parallel forward across workers", || {
+        moirai::for_each_chunk_mut_with::<moirai::Parallel, _, _>(&mut signal, N, |chunk| {
+            let plan = crate::FftPlan1D::<f64>::new(
+                crate::Shape1D::new(N).expect("invariant: shape lengths are non-zero"),
+            );
+            plan.forward_complex_slice_inplace(chunk);
+        });
+    });
+}
