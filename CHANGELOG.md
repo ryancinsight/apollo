@@ -77,7 +77,11 @@ Change-class tags: [patch] backward-compatible fix, [minor] additive non-breakin
   measured lengths, n = 128 by 2.31x. Every consumer -- the plan, the free
   dispatcher and the const-generic executor -- reads the one predicate, so all
   three follow, and the plan's hand-carved `n == 180` and `n == 144` entries are
-  removed as redundant: the fallthrough derives the same radix orders.
+  removed as redundant: the fallthrough derives the same radix orders. The four
+  lengths carrying a prime above 23 -- 222, 246, 259, 296 -- are measured
+  against the Good-Thomas split the dispatcher actually reaches for them, and
+  the codelet wins all four on both scalars by the widest margins in the sweep
+  (f32 3.23x at n = 222), so they stay on evidence rather than on caution.
 
 - [patch] `apollo-fft` kernel plan caches keep one copy per process rather than
   one per thread. `cached_plan`, `cached_four_step_planes`, and

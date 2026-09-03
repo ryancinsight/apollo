@@ -57,11 +57,15 @@ where
         + Copy
         + Into<f64>,
 {
+    use crate::application::execution::kernel::mixed_radix::caches::cached_coprime_factors;
     use crate::application::execution::kernel::mixed_radix::caches::cached_prime23_radices;
-    use crate::application::execution::kernel::mixed_radix::dispatch::static_prime23_radices;
+    use crate::application::execution::kernel::mixed_radix::dispatch::{
+        static_coprime_factors, static_prime23_radices,
+    };
 
     let arm_codelet: &str = &format!("codelet-{arm}");
     let arm_composite: &str = &format!("composite-{arm}");
+    let arm_pfa: &str = &format!("pfa-{arm}");
 
     for &n in ACCEPTED {
         // The alternative is whatever `dispatch_inplace` reaches once the
@@ -69,10 +73,35 @@ where
         // one. Measuring the cached order for a length the static table
         // answers would time a route the dispatcher never takes.
         let cached = cached_prime23_radices(n);
-        let radices: &[usize] = match (static_prime23_radices(n), cached.as_deref()) {
-            (Some(statik), _) => statik,
-            (None, Some(cached)) => cached,
-            (None, None) => continue,
+        let radices: Option<&[usize]> = match (static_prime23_radices(n), cached.as_deref()) {
+            (Some(statik), _) => Some(statik),
+            (None, Some(cached)) => Some(cached),
+            (None, None) => None,
+        };
+        // A length with a prime above 23 has no prime-2/3 composite; the
+        // dispatcher answers it from the coprime tables instead, so that is the
+        // arm to compare against for 222, 246, 259 and 296.
+        let coprime = radices.and(None).or_else(|| {
+            static_coprime_factors(n)
+                .or_else(|| (n > 64).then(|| cached_coprime_factors(n)).flatten())
+        });
+        let alternative = |data: &mut [eunomia::Complex<F>]| {
+            if let Some(radices) = radices {
+                composite_forward_with_radices(data, radices);
+            } else if let Some((n1, n2)) = coprime {
+                crate::application::execution::kernel::components::good_thomas::pfa_fft::<F, false>(
+                    data, n1, n2,
+                );
+            }
+        };
+        if radices.is_none() && coprime.is_none() {
+            eprintln!("n={n}: neither a prime-2/3 composite nor a coprime split; skipping");
+            continue;
+        }
+        let alt_label = if radices.is_some() {
+            arm_composite
+        } else {
+            arm_pfa
         };
         let source: Vec<eunomia::Complex<F>> = (0..n)
             .map(|index| {
@@ -88,7 +117,7 @@ where
             continue;
         }
         let mut composite_out = source.clone();
-        composite_forward_with_radices(&mut composite_out, radices);
+        alternative(&mut composite_out);
         let gap = relative_gap(&codelet_out, &composite_out);
         assert!(
             gap < 1e-4,
@@ -103,9 +132,9 @@ where
         });
 
         let mut work_composite = source.clone();
-        suite.run(BenchmarkCase::new(core, arm_composite, n), || {
+        suite.run(BenchmarkCase::new(core, alt_label, n), || {
             work_composite.copy_from_slice(&source);
-            composite_forward_with_radices(std::hint::black_box(&mut work_composite), radices);
+            alternative(std::hint::black_box(&mut work_composite));
         });
     }
 }

@@ -52,11 +52,14 @@
   189 at 1.45x, 120 at 1.44x. This is the same shape as the n = 101 prime
   anomaly and it is not the Rader path, so whatever leaves `f32` running
   narrow is not confined to the Rader convolution.
-- **And the codelet arm is not fundamentally narrow.** At n = 96 the same
-  measurement reads 0.50x — the codelet does run at `f32` width there. So the
-  1.28x median is an implementation gap in the other codelets, not a limit of
-  the arm, which makes it a defect on the same footing as the prime half rather
-  than a tuning ratio.
+- **And the codelet arm is not fundamentally narrow — the defect is a subset.**
+  Five of the measured codelets read below 1.0x, so they do run at `f32` width:
+  n = 96 at 0.50x, and the four coprime lengths 222 at 0.85x, 296 at 0.88x,
+  246 at 0.89x and 259 at 0.92x. The remaining fifteen sit between 1.03x and
+  1.83x. So this is an implementation gap in specific codelets rather than a
+  limit of the arm, which makes it a defect on the same footing as the prime
+  half rather than a tuning ratio — and it narrows the search to what those
+  five do differently.
 - **Consequence already visible.** Because the `f32` codelets run narrow, the
   measured codelet/composite boundary differs by scalar: f32 wins only at 96,
   121, 154, 242 and 363, while f64 wins at every length divisible by 11
@@ -211,10 +214,28 @@
   either route. The probe called `short_winograd` directly and so measured a
   route nothing takes; removing 128 from the list changes no behaviour, and its
   3.29x figure describes no live decision.
-- **Still open, and why.** 222, 246, 259 and 296 stay in both lists. Each
-  carries a prime above 23, so no prime-2/3 composite exists to compare against
-  and the probe skips them; their real alternative is the coprime/PFA route and
-  needs its own arm. Removing them would change behaviour on no evidence.
+- **222, 246, 259 and 296 measured against their real alternative.** Each
+  carries a prime above 23, so no prime-2/3 composite exists; the dispatcher
+  answers them from the coprime tables, so the probe now runs
+  `good_thomas::pfa_fft` as the alternative arm for exactly those lengths.
+  The codelet wins all four on both scalars, by the largest margins in the
+  sweep:
+
+  | n | f32 | f64 |
+  | --- | --- | --- |
+  | 222 | 3.23x | 1.96x |
+  | 296 | 3.00x | 1.87x |
+  | 259 | 2.76x | 1.84x |
+  | 246 | 2.07x | 1.55x |
+
+  They were kept on the reasoning that removing them would change behaviour on
+  no evidence; the evidence now says keeping them was also right on the merits.
+  Every length in both predicates has now been measured against the route it
+  would actually take, so the item closes.
+- **The rule generalises.** The codelet wins where the alternative is
+  structurally expensive — a radix-11 composite pass, or a Good-Thomas split —
+  and loses wherever the radix kernels handle the decomposition well. That is
+  one statement covering both halves of the boundary.
 - **Instrument note.** The probe first exceeded the 60-second runner bound. The
   fix was the instrument, not the bound: the equivalence check already runs each
   arm once per length, so the separate warm-up suite was redundant. Each scalar
