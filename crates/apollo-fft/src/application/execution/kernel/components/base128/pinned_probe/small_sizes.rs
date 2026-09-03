@@ -14,7 +14,14 @@ where
     T: ProbeScalar + MixedRadixScalar<Complex = eunomia::Complex<T>>,
     eunomia::Complex<T>: bytemuck::Pod,
 {
-    for n in [8usize, 16, 32, 64, 128, 256, 512, 1024, 4096, 32768] {
+    // Powers of two, then the classes the bar "at all sizes" also covers:
+    // smooth composites, a 2/3/5-smooth length with an odd leading factor, and
+    // primes, which reach Rader or Bluestein. A sweep of powers of two alone
+    // cannot see a result that depends on the length class
+    // (`gap_audit.md#length-class-split`).
+    for n in [
+        8usize, 16, 32, 64, 128, 256, 512, 1024, 4096, 32768, 100, 180, 384, 1000, 101, 1009,
+    ] {
         let src: Vec<eunomia::Complex<T>> = (0..n)
             .map(|i| {
                 let x = i as f64;
@@ -36,7 +43,7 @@ where
             RustComplex::new(T::from_precise(0.0), T::from_precise(0.0));
             rust.get_inplace_scratch_len()
         ];
-        let phast = T::phast_planner(n);
+        let phast = n.is_power_of_two().then(|| T::phast_planner(n));
 
         let mut work = src.clone();
         suite.run(
@@ -73,19 +80,23 @@ where
                 rust.process_with_scratch(std::hint::black_box(&mut rust_work), &mut rust_scratch);
             },
         );
-        let (mut re, mut im) = (re_src.clone(), im_src.clone());
-        suite.run(
-            BenchmarkCase::new(core, format!("phastft-{scalar}"), n),
-            || {
-                re.copy_from_slice(&re_src);
-                im.copy_from_slice(&im_src);
-                T::phast_forward(
-                    std::hint::black_box(&mut re),
-                    std::hint::black_box(&mut im),
-                    &phast,
-                );
-            },
-        );
+        // PhastFT's DIT planner is power-of-two only, so it has no arm at the
+        // other lengths rather than a slow one.
+        if let Some(phast) = &phast {
+            let (mut re, mut im) = (re_src.clone(), im_src.clone());
+            suite.run(
+                BenchmarkCase::new(core, format!("phastft-{scalar}"), n),
+                || {
+                    re.copy_from_slice(&re_src);
+                    im.copy_from_slice(&im_src);
+                    T::phast_forward(
+                        std::hint::black_box(&mut re),
+                        std::hint::black_box(&mut im),
+                        phast,
+                    );
+                },
+            );
+        }
     }
 }
 
