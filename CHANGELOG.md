@@ -60,6 +60,19 @@ Change-class tags: [patch] backward-compatible fix, [minor] additive non-breakin
 
 ### Changed
 
+- [patch] `apollo-fft` routes f32 lengths to the generated short-Winograd
+  codelets only where the codelet is measurably faster. The selection list had
+  never been measured against the decomposition it displaces, and a pinned
+  sweep of all 25 accepted lengths found the codelet slower at sixteen of the
+  twenty-one that have a composite alternative -- n = 400 by 3.78x, 180 by
+  3.42x, 128 by 3.29x, down to 484 by 1.09x -- and faster at five. The f32 list
+  is now `96 | 121 | 154 | 222 | 242 | 246 | 259 | 296 | 363`. The winners are
+  a factor signature rather than a range: 121, 242 and 363 carry 11^2 and 154
+  carries an 11, exactly where the composite route needs an expensive prime
+  radix. Every consumer -- the plan, the free dispatcher and the const-generic
+  executor -- reads the one predicate, so all three follow. f64 is unchanged;
+  its list awaits the same measurement.
+
 - [patch] `apollo-fft` kernel plan caches keep one copy per process rather than
   one per thread. `cached_plan`, `cached_four_step_planes`, and
   `cached_resident_plan` built their own table on a thread-local miss, so the

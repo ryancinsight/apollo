@@ -1086,8 +1086,21 @@ fn planned_n512_f32_pot_zst_forward_matches_direct() {
     );
 }
 
+/// Every length the codelet predicate has ever accepted still transforms
+/// correctly, and the plan routes to `ShortWinograd` exactly where the
+/// predicate says it should.
+///
+/// The routing half reads `use_generated_codelet_plan` rather than a frozen
+/// list: which lengths belong there is a measured question
+/// (`#atlas-apollo-codelet-selection-unmeasured`), and pinning the answer here
+/// would make the test contradict the measurement instead of following it. The
+/// value half stays unconditional -- correctness does not depend on the route.
+/// 128, 144 and 180 are excluded from the routing half only because the plan
+/// answers them before it reaches the predicate at all.
 #[test]
 fn planned_new_winograd_composite_sizes_match_direct() {
+    use crate::application::execution::kernel::mixed_radix::MixedRadixScalar;
+
     let sizes = [
         72, 81, 96, 99, 108, 112, 120, 121, 126, 128, 144, 154, 168, 180, 189, 222, 242, 246, 259,
         275, 280, 296, 363, 400, 484,
@@ -1095,7 +1108,7 @@ fn planned_new_winograd_composite_sizes_match_direct() {
     for &n in &sizes {
         // test f64
         let plan64 = FftPlan1D::<f64>::new(Shape1D::new(n).expect("shape"));
-        if n != 128 && n != 144 && n != 180 {
+        if n != 128 && n != 144 && n != 180 && f64::use_generated_codelet_plan(n) {
             assert!(
                 matches!(plan64.strategy, PlanStrategy::ShortWinograd),
                 "f64 size {n} did not map to ShortWinograd"
@@ -1114,7 +1127,7 @@ fn planned_new_winograd_composite_sizes_match_direct() {
 
         // test f32
         let plan32 = FftPlan1D::<f32>::new(Shape1D::new(n).expect("shape"));
-        if n != 128 && n != 144 && n != 180 {
+        if n != 128 && n != 144 && n != 180 && f32::use_generated_codelet_plan(n) {
             assert!(
                 matches!(plan32.strategy, PlanStrategy::ShortWinograd),
                 "f32 size {n} did not map to ShortWinograd"

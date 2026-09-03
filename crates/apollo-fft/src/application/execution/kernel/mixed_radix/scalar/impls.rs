@@ -292,33 +292,23 @@ impl MixedRadixScalar for f32 {
     }
 
     fn use_generated_codelet_plan(n: usize) -> bool {
-        matches!(
-            n,
-            72 | 81
-                | 96
-                | 99
-                | 108
-                | 112
-                | 120
-                | 121
-                | 126
-                | 128
-                | 144
-                | 154
-                | 168
-                | 180
-                | 189
-                | 222
-                | 242
-                | 246
-                | 259
-                | 275
-                | 280
-                | 296
-                | 363
-                | 400
-                | 484
-        )
+        // Measured, not assumed. `codelet_selection_by_core_type` runs the
+        // codelet against the decomposition `dispatch_inplace` reaches when it
+        // declines, pinned, minimum of 100 samples. The codelet is faster at
+        // these lengths and slower at the sixteen removed from this list --
+        // n = 400 by 3.78x, 180 by 3.42x, 128 by 3.29x, down to 484 by 1.09x.
+        //
+        // The winners are a factor signature rather than a length range:
+        // 121 = 11^2, 242 = 2*11^2, 363 = 3*11^2 and 154 = 2*7*11 are exactly
+        // where the composite route would need an expensive prime radix. 96 is
+        // the one smooth length the codelet still wins.
+        //
+        // 222, 246, 259 and 296 carry a prime above 23, so no prime-2/3
+        // composite exists to compare against and the probe skips them; their
+        // real alternative is the coprime/PFA route. They stay until that is
+        // measured (`#atlas-apollo-codelet-selection-unmeasured`), because
+        // dropping them would change behaviour on no evidence.
+        matches!(n, 96 | 121 | 154 | 222 | 242 | 246 | 259 | 296 | 363)
     }
 }
 
