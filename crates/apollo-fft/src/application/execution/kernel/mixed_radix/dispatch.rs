@@ -638,19 +638,54 @@ mod composite_decomposition {
     /// `FftPlan1D` and `dispatch_inplace` read their decomposition from
     /// different tables, and the tables disagree about the *order* of the same
     /// factors. The order is worth tens of percent, and not in one direction:
-    /// at n = 100 and n = 384 the dispatcher's static order was the faster one
-    /// by 26 to 29%, which is why the plan's ladder now consults that table;
-    /// at n = 180 the plan's own entry beats the static order by 62%
-    /// (189 ns against 500). So neither table is authoritative, and each of
-    /// these choices is a measurement rather than a rule
-    /// (`backlog.md#atlas-apollo-plan-underselects-composite`). Changing one
-    /// means re-measuring it.
+    /// leading with the power-of-two chain wins from n = 60 up, by 13 to 45%,
+    /// and `factorize_composite` now derives that order rather than its
+    /// reverse. These three lengths are the ones whose selection was written
+    /// by hand against the old convention and has since been re-measured
+    /// (`backlog.md#atlas-apollo-radix-tables-disagree`). Changing one means
+    /// re-measuring it.
+    /// The derived order and the hand-written static table must agree
+    /// wherever both exist.
+    ///
+    /// They are two spellings of one decision. The static table was written by
+    /// hand and `factorize_composite` derives the same shape — powers of two
+    /// leading, odd primes ascending — so a disagreement means one of them
+    /// drifted, and whichever drifted is costing 13 to 45% at the lengths it
+    /// covers. This is also what makes the table removable: it is now
+    /// redundant with the derivation rather than a second source of truth.
+    #[test]
+    fn derived_order_matches_the_static_table() {
+        let mut checked = 0usize;
+        for n in 2..=2048usize {
+            let Some(statik) = super::static_prime23_radices(n) else {
+                continue;
+            };
+            let Some(derived) =
+                crate::application::execution::kernel::mixed_radix::caches::cached_prime23_radices(
+                    n,
+                )
+            else {
+                continue;
+            };
+            assert_eq!(
+                derived.as_ref(),
+                statik,
+                "n = {n}: the derived radix order and the static table disagree"
+            );
+            checked += 1;
+        }
+        assert!(
+            checked > 100,
+            "expected the static table to cover many lengths, checked only {checked}"
+        );
+    }
+
     #[test]
     fn measured_orders_are_the_ones_selected() {
         for (n, expected) in [
             (100usize, &[4usize, 5, 5][..]),
             (384, &[4, 4, 4, 2, 3][..]),
-            (180, &[5, 3, 3, 4][..]),
+            (180, &[4, 3, 3, 5][..]),
         ] {
             let plan = crate::FftPlan1D::<f32>::new(
                 crate::Shape1D::new(n).expect("invariant: pinned lengths are non-zero"),
@@ -677,7 +712,7 @@ mod composite_decomposition {
     #[test]
     #[ignore = "diagnostic for the composite-length route divergence"]
     fn report_route_sources_for_divergent_lengths() {
-        for n in [96usize, 100, 128, 384, 512, 1000] {
+        for n in [96usize, 100, 128, 176, 180, 384, 385, 512, 1000] {
             let plan = crate::FftPlan1D::<f32>::new(
                 crate::Shape1D::new(n).expect("invariant: diagnostic lengths are non-zero"),
             );
@@ -699,6 +734,38 @@ mod composite_decomposition {
                 "n={n:5} plan={chosen} dispatcher_static={statik:?} cached={:?}",
                 cached.as_deref()
             );
+        }
+    }
+}
+
+#[cfg(test)]
+mod table_divergence_survey {
+    /// How many lengths the two radix tables order differently, and which.
+    #[test]
+    #[ignore = "survey for the radix-table disagreement"]
+    fn list_lengths_where_the_tables_disagree() {
+        let mut differ = Vec::new();
+        let mut agree = 0usize;
+        for n in 2..=2048usize {
+            let Some(statik) = super::static_prime23_radices(n) else {
+                continue;
+            };
+            let Some(cached) =
+                crate::application::execution::kernel::mixed_radix::caches::cached_prime23_radices(
+                    n,
+                )
+            else {
+                continue;
+            };
+            if statik == cached.as_ref() {
+                agree += 1;
+            } else {
+                differ.push((n, statik, cached));
+            }
+        }
+        println!("agree={agree} differ={}", differ.len());
+        for (n, s, c) in &differ {
+            println!("n={n:5} static={s:?} cached={:?}", c.as_ref());
         }
     }
 }

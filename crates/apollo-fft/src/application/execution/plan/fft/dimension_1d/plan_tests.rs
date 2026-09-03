@@ -452,7 +452,7 @@ fn planned_n385_f64_composite_forward_matches_direct() {
     let n = 385usize;
     let plan = FftPlan1D::<f64>::new(Shape1D::new(n).expect("shape"));
     match &plan.strategy {
-        PlanStrategy::Composite { radices } => assert_eq!(&**radices, &[11, 5, 7]),
+        PlanStrategy::Composite { radices } => assert_eq!(&**radices, &[5, 7, 11]),
         _ => panic!("f64 N=385 must use the planned composite route"),
     }
     let input: Vec<Complex64> = (0..n)
@@ -480,7 +480,7 @@ fn planned_n385_f32_composite_forward_matches_direct() {
     let n = 385usize;
     let plan = FftPlan1D::<f32>::new(Shape1D::new(n).expect("shape"));
     match &plan.strategy {
-        PlanStrategy::Composite { radices } => assert_eq!(&**radices, &[11, 5, 7]),
+        PlanStrategy::Composite { radices } => assert_eq!(&**radices, &[5, 7, 11]),
         _ => panic!("f32 N=385 must use the planned composite route"),
     }
     let input: Vec<Complex32> = (0..n)
@@ -508,7 +508,7 @@ fn planned_n180_f64_composite_forward_matches_direct() {
     let n = 180usize;
     let plan = FftPlan1D::<f64>::new(Shape1D::new(n).expect("shape"));
     match &plan.strategy {
-        PlanStrategy::Composite { radices } => assert_eq!(&**radices, &[5, 3, 3, 4]),
+        PlanStrategy::Composite { radices } => assert_eq!(&**radices, &[4, 3, 3, 5]),
         _ => panic!("f64 N=180 must use the planned composite probe route"),
     }
     let input: Vec<Complex64> = (0..n)
@@ -536,7 +536,7 @@ fn planned_n180_f32_composite_forward_matches_direct() {
     let n = 180usize;
     let plan = FftPlan1D::<f32>::new(Shape1D::new(n).expect("shape"));
     match &plan.strategy {
-        PlanStrategy::Composite { radices } => assert_eq!(&**radices, &[5, 3, 3, 4]),
+        PlanStrategy::Composite { radices } => assert_eq!(&**radices, &[4, 3, 3, 5]),
         _ => panic!("f32 N=180 must use the planned composite probe route"),
     }
     let input: Vec<Complex32> = (0..n)
@@ -620,7 +620,7 @@ fn planned_n176_f64_composite_forward_matches_direct() {
     let n = 176usize;
     let plan = FftPlan1D::<f64>::new(Shape1D::new(n).expect("shape"));
     match &plan.strategy {
-        PlanStrategy::Composite { radices } => assert_eq!(&**radices, &[11, 4, 4]),
+        PlanStrategy::Composite { radices } => assert_eq!(&**radices, &[4, 4, 11]),
         _ => panic!("f64 N=176 must use the planned composite probe route"),
     }
     let input: Vec<Complex64> = (0..n)
@@ -648,7 +648,7 @@ fn planned_n176_f32_composite_forward_matches_direct() {
     let n = 176usize;
     let plan = FftPlan1D::<f32>::new(Shape1D::new(n).expect("shape"));
     match &plan.strategy {
-        PlanStrategy::Composite { radices } => assert_eq!(&**radices, &[11, 4, 4]),
+        PlanStrategy::Composite { radices } => assert_eq!(&**radices, &[4, 4, 11]),
         _ => panic!("f32 N=176 must use the planned composite probe route"),
     }
     let input: Vec<Complex32> = (0..n)

@@ -90,4 +90,5 @@ impl ProbeScalar for f32 {
 
 mod final_store;
 mod lane_routes;
+mod radix_order;
 mod small_sizes;

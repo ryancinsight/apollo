@@ -1,6 +1,32 @@
 # Apollo Backlog
 
-## ATLAS-APOLLO-RADIX-TABLES-DISAGREE-2026-09-02 — Two radix tables disagree about order, and each is faster somewhere [patch] [perf] — todo <a id="atlas-apollo-radix-tables-disagree"></a>
+## ATLAS-APOLLO-CODELET-SELECTION-UNMEASURED-2026-09-03 — The generated-codelet arm is chosen without measurement, and at n = 180 it costs 3.6x [patch] [perf] — todo <a id="atlas-apollo-codelet-selection-unmeasured"></a>
+
+- **Finding.** `use_generated_codelet_plan` routes a length to `ShortWinograd`
+  ahead of any composite decomposition, and nothing checks that the codelet is
+  the faster of the two. At n = 180 it is not: the codelet route measures
+  **501.58 ns against 139.97** for `Composite([4, 3, 3, 5])`, 3.6x. The plan
+  now carries an explicit entry to stay off that arm, which is a guard over
+  this defect rather than a fix for it.
+- **The free dispatcher still pays it.** `dispatch_inplace` tries
+  `F::short_winograd` before its radix tables, so the free route at n = 180
+  costs ~502 ns. `FftPlan2D`'s lane passes take the free route for
+  non-power-of-two axes, so a 180-length axis pays that **per line** — 180
+  lines per pass, two passes.
+- **Not a claim about the codelets in general.** At n = 96 the codelet route is
+  the faster one (87.48 ns against 92.40 for the composite order). So the arm
+  is right somewhere and wrong somewhere, and which is which has never been
+  measured — the same shape as the radix-order defect that
+  `#atlas-apollo-radix-tables-disagree` just closed, one level up.
+- **First step.** Sweep every length `use_generated_codelet_plan` accepts
+  through both routes in one binary — `radix_order.rs` already has the
+  harness — and keep the codelet only where it wins. Expect the answer to be
+  a length range rather than a per-length list.
+- **Acceptance.** No length where the codelet arm is chosen and measures slower
+  than the decomposition it displaced; n = 180's explicit plan entry removed
+  as unnecessary.
+
+## ATLAS-APOLLO-RADIX-TABLES-DISAGREE-2026-09-02 — Two radix tables disagree about order, and each is faster somewhere [patch] [perf] — done 2026-09-03 <a id="atlas-apollo-radix-tables-disagree"></a>
 
 - **Finding.** Apollo carries two sources for the same decision — which order
   to apply the radices of a composite length — and they disagree in both
@@ -32,6 +58,45 @@
 - **Acceptance.** One source for radix order, every entry traceable to a
   measurement, and no length where the route a caller happens to take changes
   its cost by more than the noise band.
+- **Correction to this item's own filing.** It recorded "at n = 180 the plan's
+  `[5, 3, 3, 4]` beats the static `[4, 3, 3, 5]` by 62%". That attribution was
+  wrong. It compared two *routes*, and the free route at n = 180 is not running
+  the static order at all — it reaches `ShortWinograd`. Isolating the order,
+  same kernel and data with only the radix list changed, `[4, 3, 3, 5]` is the
+  fastest of the three: 143 ns, against 197 for `[5, 3, 3, 4]` and 502 for the
+  codelet route. So the static order was never the slow one here, and there was
+  no counter-example: the table is consistent after all.
+- **The disagreement had one cause, and it was systematic.**
+  `factorize_composite` emitted the odd primes first and the radix-2 chain
+  last, under the comment "large odd primes first for cache-optimal stage
+  shape" — a claim with no measurement behind it. It is backwards. Both orders
+  through `composite_forward_with_radices` over identical data, one binary, two
+  runs, `f32`, performance core: leading with the powers of two wins at every
+  length from 60 up — n = 60 +20.9/+22.9%, n = 100 +28.5/+34.3%, n = 180
+  +41.6/+45.5%, n = 720 +33.3/+44.3%, n = 1008 +35.0/+25.7% for the
+  odd-prime-first order. Only n = 12 favours the old shape (about 10%), where
+  the transform is register-resident anyway; below 60 the two sit in the noise.
+- **Delivered:** the emission order is reversed. That collapses the two
+  sources into one — the derivation now reproduces the hand-written static
+  table exactly at every length both carry, 154 of which previously disagreed,
+  held by `derived_order_matches_the_static_table`. The static table is
+  redundant with the derivation rather than a second truth, which is what makes
+  it removable later.
+- **Three hand-listed plan entries were written against the old convention**
+  and are re-measured rather than assumed: n = 176 `[11, 4, 4]` 489.55 ns
+  against derived `[4, 4, 11]` 349.80 (-28%), n = 385 `[11, 5, 7]` 1111.46
+  against `[5, 7, 11]` 901.26 (-19%), n = 180 `[5, 3, 3, 4]` 197.05 against
+  `[4, 3, 3, 5]` 143.28 (-27%). 176 and 385 now fall through to the derivation.
+- **n = 180 keeps an explicit entry, and the reason is worth reading.** Deleting
+  it did not fall through to the derived order — it fell through to
+  `use_generated_codelet_plan`, and the codelet costs **501.58 ns against
+  139.97** for the composite decomposition, 3.6x. The entry is kept ahead of
+  that arm on measurement, carrying the derived order. Removing a stale
+  special case is not free when what sits behind it was never measured either.
+- **Left open:** the free dispatcher still reaches `ShortWinograd` at n = 180
+  and still costs ~502 ns there. The two-dimensional lane passes take the free
+  route for non-power-of-two axes, so a 180-length axis pays it per line.
+  Filed as `#atlas-apollo-codelet-selection-unmeasured`.
 
 ## ATLAS-APOLLO-STORAGE-ROUTE-COMPOSITE-2026-09-02 — The half storage route took the plan at every length, including the ones it loses on [patch] [perf] — done 2026-09-02
 
