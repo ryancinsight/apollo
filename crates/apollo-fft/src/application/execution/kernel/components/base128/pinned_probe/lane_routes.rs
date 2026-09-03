@@ -2,13 +2,9 @@
 //! through the f32 kernel, the two-dimensional route, and lengths that are
 //! not a power of two.
 
-use super::{phase_attribution, run_bench_transform, BenchTransform, ProbeScalar};
 use crate::application::execution::kernel::measurement_cores;
-use crate::application::execution::kernel::mixed_radix::MixedRadixScalar;
 use apollo_bench::{BenchmarkCase, BenchmarkConfig, BenchmarkSuite};
-use eunomia::Complex64;
 use hermes_simd::{ProcessorBinding, ProcessorIndex};
-use rustfft::num_complex::Complex as RustComplex;
 
 /// Half-storage transforms against their own `f32` execution kernel.
 ///
@@ -24,7 +20,13 @@ fn half_storage_against_its_kernel(suite: &mut BenchmarkSuite, core: &str) {
     use eunomia::{Complex, Complex32};
     use half::f16;
 
-    for n in [8usize, 16, 32, 64, 128, 256, 512] {
+    // Both length classes. The power-of-two lengths are where the storage
+    // route grew up — the register-resident bases are all powers of two — and
+    // a sweep whose members all share that property cannot show a result that
+    // depends on it (`gap_audit.md#length-class-split`). 96, 100 and 384 are
+    // the composite lengths where the plan and the free dispatcher measured
+    // apart.
+    for n in [8usize, 16, 32, 64, 96, 100, 128, 256, 384, 512] {
         let source32: Vec<Complex32> = (0..n)
             .map(|index| {
                 let x = index as f32;

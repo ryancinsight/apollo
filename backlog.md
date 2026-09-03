@@ -1,5 +1,45 @@
 # Apollo Backlog
 
+## ATLAS-APOLLO-STORAGE-ROUTE-COMPOSITE-2026-09-02 — The half storage route took the plan at every length, including the ones it loses on [patch] [perf] — done 2026-09-02
+
+- **The storage route had the defect its own scalar had just been cured of.**
+  `execute_compact_storage` resolved `get_1d_plan` for every length past the
+  register-resident codelets. The plan is the faster route only for powers of
+  two (`ATLAS-APOLLO-PLAN-UNDERSELECTS-COMPOSITE`), so composite-length half
+  transforms paid the same 21-29% penalty that
+  `ATLAS-APOLLO-ONESHOT-MISSES-THE-PLAN` had just removed from `Complex32`.
+  The probe could not see it: its sweep was 8, 16, 32, 64, 128, 256, 512 —
+  every length a power of two, the blind spot named in
+  `gap_audit.md#length-class-split` three hours earlier, still open in the
+  instrument that named it.
+- **Delivered by deleting the decision rather than copying it.** The route now
+  calls `<Complex32 as FftPrecision>` inside `run_via_complex32`, so the half
+  type inherits whatever route its compute scalar takes. One decision site: a
+  length class that is re-measured moves both types together, and the
+  duplicate that caused this cannot re-form.
+- **Measured, performance core, min of 100 pinned samples.** `excess` is
+  storage minus (`f32` route + conversion), all three arms in one process, so
+  it is an in-binary attribution rather than a cross-build difference:
+
+  | n | excess before | excess after | storage before | after |
+  | --- | --- | --- | --- | --- |
+  | 96 | +6.36 ns | -2.52 | 92.53 | 82.46 |
+  | 100 | **+33.59** | **-7.11** | 135.67 | **99.50** |
+  | 128 | +5.03 | -6.90 | 82.47 | 73.86 |
+  | 256 | -12.21 | -25.28 | 171.08 | 166.64 |
+  | 384 | **+27.20** | **-31.16** | 365.60 | **312.15** |
+  | 512 | -14.30 | -20.97 | 358.80 | 354.60 |
+
+  Before, n = 100 and n = 384 were the only lengths with positive excess.
+  After, no length is an outlier: -26.7% at n = 100 and -14.6% at n = 384.
+  Both figures reproduce across two runs of the one binary (n = 100 excess
+  -1.79 and -7.11; n = 384 -21.97 and -31.16). The negative band at the larger
+  sizes is the `convert-only` arm overstating in-route conversion, which reads
+  cold data where the route's is already hot.
+- **Probe extended to both length classes** (96, 100, 384 added), so the sweep
+  that missed this cannot miss the next one.
+- 547/547 native tests, doctests, clippy clean, fmt clean.
+
 ## ATLAS-APOLLO-PLAN-UNDERSELECTS-COMPOSITE-2026-09-02 — The cached plan is slower than the ad-hoc dispatcher for composite lengths [patch] [perf] — todo <a id="atlas-apollo-plan-underselects-composite"></a>
 
 - **Finding.** `FftPlan1D::forward_complex_slice_inplace` and
