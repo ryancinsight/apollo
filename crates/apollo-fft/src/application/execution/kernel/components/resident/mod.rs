@@ -191,25 +191,35 @@ macro_rules! impl_resident_cache {
     ($t:ty, $cache:ident, $global:ident) => {
         impl ResidentPlanCache for $t {
             fn cached_resident_plan<const INVERSE: bool>(n: usize) -> Arc<ResidentPlan<Self>> {
+                // Outlined and cold so the thread-local hit stays inlinable; see
+                // the same shape in `components::batched`.
+                #[cold]
+                #[inline(never)]
+                fn miss<const INVERSE: bool>(
+                    key: (usize, bool),
+                    n: usize,
+                ) -> Arc<ResidentPlan<$t>> {
+                    // Drop the read guard before the write path: a guard held in
+                    // an `if let` scrutinee outlives the `else` arm, and this lock
+                    // is not reentrant.
+                    let shared = $global.read().get(&key).cloned();
+                    if let Some(plan) = shared {
+                        return plan;
+                    }
+                    let mut guard = $global.write();
+                    Arc::clone(
+                        guard
+                            .entry(key)
+                            .or_insert_with(|| Arc::new(ResidentPlan::<$t>::new::<INVERSE>(n))),
+                    )
+                }
+
                 $cache.with(|c| {
                     let key = (n, INVERSE);
                     if let Some(plan) = c.borrow().get(&key) {
                         return Arc::clone(plan);
                     }
-                    let shared = $global.read().get(&key).cloned();
-                    let plan = if let Some(plan) = shared {
-                        plan
-                    } else {
-                        // Re-check under the write lock and build there; the read
-                        // guard above is released first because a guard held in an
-                        // `if let` scrutinee outlives the `else` arm.
-                        let mut guard = $global.write();
-                        Arc::clone(
-                            guard
-                                .entry(key)
-                                .or_insert_with(|| Arc::new(ResidentPlan::<$t>::new::<INVERSE>(n))),
-                        )
-                    };
+                    let plan = miss::<INVERSE>(key, n);
                     c.borrow_mut().insert(key, Arc::clone(&plan));
                     plan
                 })

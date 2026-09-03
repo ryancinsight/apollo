@@ -516,27 +516,41 @@ macro_rules! impl_plan_cache {
             const BOUNDARY_LANES: usize = $boundary_lanes;
 
             fn cached_plan<const INVERSE: bool>(len: usize) -> Arc<BatchedPlan<Self>> {
+                // The miss path is outlined and cold so the thread-local hit --
+                // the only path a warm transform takes -- stays small enough to
+                // inline into the caller. Folding the shared-map lookup inline
+                // here regressed `fft_kernel_strategy/generic_selector` at 64 and
+                // 256 in all four counterbalanced comparisons.
+                #[cold]
+                #[inline(never)]
+                fn miss<const INVERSE: bool>(
+                    key: (usize, bool),
+                    len: usize,
+                ) -> Arc<BatchedPlan<$t>> {
+                    // Drop the read guard before the write path: a guard held in
+                    // an `if let` scrutinee outlives the `else` arm, and this lock
+                    // is not reentrant.
+                    let shared = $plan_global.read().get(&key).cloned();
+                    if let Some(plan) = shared {
+                        return plan;
+                    }
+                    // Re-check under the write lock and build there: these tables
+                    // are O(16n), so blocking a concurrent misser costs less than
+                    // letting it build a duplicate the map discards.
+                    let mut guard = $plan_global.write();
+                    Arc::clone(
+                        guard
+                            .entry(key)
+                            .or_insert_with(|| Arc::new(BatchedPlan::<$t>::new::<INVERSE>(len))),
+                    )
+                }
+
                 $cache.with(|c| {
                     let key = (len, INVERSE);
                     if let Some(plan) = c.borrow().get(&key) {
                         return Arc::clone(plan);
                     }
-                    // Drop the read guard before the write path: a guard held in
-                    // an `if let` scrutinee outlives the `else` arm, and this lock
-                    // is not reentrant.
-                    let shared = $plan_global.read().get(&key).cloned();
-                    let plan =
-                        if let Some(plan) = shared {
-                            plan
-                        } else {
-                            // Re-check under the write lock and build there: these
-                            // tables are O(16n), so blocking a concurrent misser costs
-                            // less than letting it build a duplicate the map discards.
-                            let mut guard = $plan_global.write();
-                            Arc::clone(guard.entry(key).or_insert_with(|| {
-                                Arc::new(BatchedPlan::<$t>::new::<INVERSE>(len))
-                            }))
-                        };
+                    let plan = miss::<INVERSE>(key, len);
                     c.borrow_mut().insert(key, Arc::clone(&plan));
                     plan
                 })
@@ -546,20 +560,31 @@ macro_rules! impl_plan_cache {
                 n: usize,
                 m: usize,
             ) -> Arc<FourStepPlanes<Self>> {
+                #[cold]
+                #[inline(never)]
+                fn miss<const INVERSE: bool>(
+                    key: (usize, bool),
+                    n: usize,
+                    m: usize,
+                ) -> Arc<FourStepPlanes<$t>> {
+                    let shared = $planes_global.read().get(&key).cloned();
+                    if let Some(planes) = shared {
+                        return planes;
+                    }
+                    let mut guard = $planes_global.write();
+                    Arc::clone(
+                        guard.entry(key).or_insert_with(|| {
+                            Arc::new(FourStepPlanes::<$t>::new::<INVERSE>(n, m))
+                        }),
+                    )
+                }
+
                 $planes.with(|c| {
                     let key = (n, INVERSE);
                     if let Some(planes) = c.borrow().get(&key) {
                         return Arc::clone(planes);
                     }
-                    let shared = $planes_global.read().get(&key).cloned();
-                    let planes = if let Some(planes) = shared {
-                        planes
-                    } else {
-                        let mut guard = $planes_global.write();
-                        Arc::clone(guard.entry(key).or_insert_with(|| {
-                            Arc::new(FourStepPlanes::<$t>::new::<INVERSE>(n, m))
-                        }))
-                    };
+                    let planes = miss::<INVERSE>(key, n, m);
                     c.borrow_mut().insert(key, Arc::clone(&planes));
                     planes
                 })
