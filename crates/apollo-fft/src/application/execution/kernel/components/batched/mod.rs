@@ -35,9 +35,10 @@
 use crate::application::execution::kernel::mixed_radix::MixedRadixScalar;
 use eunomia::Complex;
 use hermes_simd::{LaneKernel, LaneScalar, Simd, SimdArch, SimdKernel, SimdStorage, Vector};
+use parking_lot::RwLock;
 use std::cell::RefCell;
 use std::collections::HashMap;
-use std::sync::Arc;
+use std::sync::{Arc, LazyLock};
 
 /// Tile side for the in-place transpose, in elements.
 ///
@@ -468,6 +469,22 @@ impl<T: MixedRadixScalar<Complex = Complex<T>>> FourStepPlanes<T> {
 type PlanCache<T> = RefCell<HashMap<(usize, bool), Arc<BatchedPlan<T>>>>;
 type PlanesCache<T> = RefCell<HashMap<(usize, bool), Arc<FourStepPlanes<T>>>>;
 
+/// Process-wide plan storage behind the per-thread caches.
+///
+/// A `BatchedPlan` owns `len - 1` twiddle pairs and a `FourStepPlanes` owns two
+/// planes of `n` scalars, so each is O(16n) bytes at `f64` -- 4 MiB apiece at
+/// n = 262,144. The thread-local maps below are the lock-free fast path, but a
+/// miss used to *build* a private table, so retention multiplied by the worker
+/// count of whatever executor drives the transform. A miss now takes the shared
+/// table and caches the handle, so every thread converges on one allocation.
+type GlobalPlanCache<T> = LazyLock<RwLock<HashMap<(usize, bool), Arc<BatchedPlan<T>>>>>;
+type GlobalPlanesCache<T> = LazyLock<RwLock<HashMap<(usize, bool), Arc<FourStepPlanes<T>>>>>;
+
+static PLAN_GLOBAL_F64: GlobalPlanCache<f64> = LazyLock::new(|| RwLock::new(HashMap::new()));
+static PLAN_GLOBAL_F32: GlobalPlanCache<f32> = LazyLock::new(|| RwLock::new(HashMap::new()));
+static PLANES_GLOBAL_F64: GlobalPlanesCache<f64> = LazyLock::new(|| RwLock::new(HashMap::new()));
+static PLANES_GLOBAL_F32: GlobalPlanesCache<f32> = LazyLock::new(|| RwLock::new(HashMap::new()));
+
 thread_local! {
     static PLAN_CACHE_F64: PlanCache<f64> = RefCell::new(HashMap::new());
     static PLAN_CACHE_F32: PlanCache<f32> = RefCell::new(HashMap::new());
@@ -494,17 +511,46 @@ pub(crate) trait BatchedPlanCache:
 }
 
 macro_rules! impl_plan_cache {
-    ($t:ty, $cache:ident, $planes:ident, $boundary_lanes:expr) => {
+    ($t:ty, $cache:ident, $planes:ident, $plan_global:ident, $planes_global:ident, $boundary_lanes:expr) => {
         impl BatchedPlanCache for $t {
             const BOUNDARY_LANES: usize = $boundary_lanes;
 
             fn cached_plan<const INVERSE: bool>(len: usize) -> Arc<BatchedPlan<Self>> {
+                // The miss path is outlined and cold so the thread-local hit --
+                // the only path a warm transform takes -- stays small enough to
+                // inline into the caller. Folding the shared-map lookup inline
+                // here regressed `fft_kernel_strategy/generic_selector` at 64 and
+                // 256 in all four counterbalanced comparisons.
+                #[cold]
+                #[inline(never)]
+                fn miss<const INVERSE: bool>(
+                    key: (usize, bool),
+                    len: usize,
+                ) -> Arc<BatchedPlan<$t>> {
+                    // Drop the read guard before the write path: a guard held in
+                    // an `if let` scrutinee outlives the `else` arm, and this lock
+                    // is not reentrant.
+                    let shared = $plan_global.read().get(&key).cloned();
+                    if let Some(plan) = shared {
+                        return plan;
+                    }
+                    // Re-check under the write lock and build there: these tables
+                    // are O(16n), so blocking a concurrent misser costs less than
+                    // letting it build a duplicate the map discards.
+                    let mut guard = $plan_global.write();
+                    Arc::clone(
+                        guard
+                            .entry(key)
+                            .or_insert_with(|| Arc::new(BatchedPlan::<$t>::new::<INVERSE>(len))),
+                    )
+                }
+
                 $cache.with(|c| {
                     let key = (len, INVERSE);
                     if let Some(plan) = c.borrow().get(&key) {
                         return Arc::clone(plan);
                     }
-                    let plan = Arc::new(BatchedPlan::<$t>::new::<INVERSE>(len));
+                    let plan = miss::<INVERSE>(key, len);
                     c.borrow_mut().insert(key, Arc::clone(&plan));
                     plan
                 })
@@ -514,12 +560,31 @@ macro_rules! impl_plan_cache {
                 n: usize,
                 m: usize,
             ) -> Arc<FourStepPlanes<Self>> {
+                #[cold]
+                #[inline(never)]
+                fn miss<const INVERSE: bool>(
+                    key: (usize, bool),
+                    n: usize,
+                    m: usize,
+                ) -> Arc<FourStepPlanes<$t>> {
+                    let shared = $planes_global.read().get(&key).cloned();
+                    if let Some(planes) = shared {
+                        return planes;
+                    }
+                    let mut guard = $planes_global.write();
+                    Arc::clone(
+                        guard.entry(key).or_insert_with(|| {
+                            Arc::new(FourStepPlanes::<$t>::new::<INVERSE>(n, m))
+                        }),
+                    )
+                }
+
                 $planes.with(|c| {
                     let key = (n, INVERSE);
                     if let Some(planes) = c.borrow().get(&key) {
                         return Arc::clone(planes);
                     }
-                    let planes = Arc::new(FourStepPlanes::<$t>::new::<INVERSE>(n, m));
+                    let planes = miss::<INVERSE>(key, n, m);
                     c.borrow_mut().insert(key, Arc::clone(&planes));
                     planes
                 })
@@ -528,8 +593,22 @@ macro_rules! impl_plan_cache {
     };
 }
 
-impl_plan_cache!(f64, PLAN_CACHE_F64, PLANES_CACHE_F64, 4);
-impl_plan_cache!(f32, PLAN_CACHE_F32, PLANES_CACHE_F32, 8);
+impl_plan_cache!(
+    f64,
+    PLAN_CACHE_F64,
+    PLANES_CACHE_F64,
+    PLAN_GLOBAL_F64,
+    PLANES_GLOBAL_F64,
+    4
+);
+impl_plan_cache!(
+    f32,
+    PLAN_CACHE_F32,
+    PLANES_CACHE_F32,
+    PLAN_GLOBAL_F32,
+    PLANES_GLOBAL_F32,
+    8
+);
 
 /// Runs the stage set of `batch` transforms of length `plan.len` over planar
 /// `re`/`im`, whose rows the caller has already bit-reversed — which the

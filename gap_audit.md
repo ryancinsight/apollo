@@ -1,3 +1,60 @@
+## Per-thread scratch has no release path (2026-09-02, lead) <a id="scratch-pool-retention"></a>
+
+Every transform crate reaches `mnemosyne::scratch::ScratchPool` through a
+`thread_local!`. The pool holds `MAX_POOL_SLOTS` = 4 `AlignedVec` slots and
+`with_scratch` grows a slot with `ensure_len` when the request exceeds its
+length. Nothing in `pool.rs` shrinks, truncates, resets, or releases a slot, so
+each slot stays at the high-water mark of whatever that thread ever ran, for the
+life of the thread. Scratch is genuinely per-thread — it is working memory under
+exclusive borrow, not a shareable table — so the fix cannot be the sharing that
+[the plan caches](backlog.md#cross-thread-plan-retention) took; it would have to be a
+decay or high-water release policy, and that is mnemosyne's to own.
+
+The retained-footprint probe shows the padded planar scratch as 278,528-byte
+blocks at n = 16,384 (`scratch_len(n) = m * (m + ROW_PAD)`, 128 x 136 complex).
+
+**Not measured, and deliberately not quantified here.** The multiplier depends
+on how many threads reach each scratch size and how the four slots fill, and
+the 8-thread probe window showed three such blocks, not eight — so the naive
+"threads x slots x high-water" arithmetic is already contradicted by the one
+observation available. Sizing this needs its own instrument.
+
+**The rule this inherits:** the same day, a magnitude for the plan caches was
+asserted from a probe row at n = 262,144 before checking that the route caps at
+n = 16,384 (`planar_applies` is bounded by `PARALLEL_ROW_THRESHOLD`). The
+mechanism was real and the number was wrong by two orders of magnitude. A
+retention claim needs the domain checked and the bytes measured, not one of the
+two.
+
+## A whole module class compiles only off-CI (2026-09-02) <a id="windows-gated-modules"></a>
+
+`base128::pinned_probe` is declared
+`#[cfg(all(test, windows, target_arch = "x86_64"))]`, and every CI job runs
+Linux. The module therefore never compiles in CI, so no CI run can see any
+diagnostic it emits. Eleven imports left behind by the probe split sat unused on
+`main` while the `ci` workflow reported green on that very commit; the same
+command CI runs — `cargo clippy --locked --workspace --all-targets
+--all-features -- -D warnings` — fails immediately on a Windows checkout.
+
+Nothing was wrong with the gate command. The gate ran on a platform where the
+code under it does not exist, and a platform `cfg` is invisible to a green tick:
+the run reports on what it compiled, never on what it skipped.
+
+**The rule:** a platform-gated module needs a job on that platform, or its
+excluded coverage must be documented as developer-run only. The gate itself is
+correct -- the probe reads TSC counters through Hermes processor binding and
+must not compile elsewhere; what is missing is either a Windows job or a stated
+admission that nothing verifies it. The unused imports are the cheap symptom; the same blind spot
+covers every warning, lint, and type error the module could carry, and it grows
+with the module. Either add a Windows job that compiles the `cfg(windows)`
+test targets, or state in the module that it is developer-run only and accept
+that its diagnostics are a local responsibility — but do not read a green CI
+tick as covering it.
+
+Related: the probe measures TSC phase counters through Hermes processor
+binding, so the gate is deliberate, not accidental. The blind spot is the
+consequence of the gate, not an argument against it.
+
 ## A fix measured on one length class regressed another (2026-09-02) <a id="length-class-split"></a>
 
 Routing the one-shot `FftPrecision` entry through the cached plan was measured

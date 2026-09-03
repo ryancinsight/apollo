@@ -60,9 +60,10 @@ use crate::application::execution::kernel::components::lane_capability::exact_la
 use crate::application::execution::kernel::mixed_radix::MixedRadixScalar;
 use eunomia::Complex;
 use hermes_simd::{ComplexReg, LaneKernel, LaneScalar, Simd, SimdArch, SimdKernel, SimdStorage};
+use parking_lot::RwLock;
 use std::cell::RefCell;
 use std::collections::HashMap;
-use std::sync::Arc;
+use std::sync::{Arc, LazyLock};
 
 /// Row length: 32 complex samples, sixteen two-sample registers.
 const ROW: usize = 32;
@@ -161,6 +162,19 @@ impl<T: MixedRadixScalar> ResidentPlan<T> {
 
 type ResidentCache<T> = RefCell<HashMap<(usize, bool), Arc<ResidentPlan<T>>>>;
 
+/// Process-wide resident-plan storage behind the per-thread caches.
+///
+/// A `ResidentPlan` owns its stage twiddles and the four-step matrix, so a miss
+/// that built a private copy multiplied retention by the worker count of
+/// whatever executor drives the transform. The thread-local map stays the
+/// lock-free fast path; a miss now takes the shared plan.
+type GlobalResidentCache<T> = LazyLock<RwLock<HashMap<(usize, bool), Arc<ResidentPlan<T>>>>>;
+
+static RESIDENT_GLOBAL_F64: GlobalResidentCache<f64> =
+    LazyLock::new(|| RwLock::new(HashMap::new()));
+static RESIDENT_GLOBAL_F32: GlobalResidentCache<f32> =
+    LazyLock::new(|| RwLock::new(HashMap::new()));
+
 thread_local! {
     static RESIDENT_CACHE_F64: ResidentCache<f64> = RefCell::new(HashMap::new());
     static RESIDENT_CACHE_F32: ResidentCache<f32> = RefCell::new(HashMap::new());
@@ -174,15 +188,38 @@ pub(crate) trait ResidentPlanCache:
 }
 
 macro_rules! impl_resident_cache {
-    ($t:ty, $cache:ident) => {
+    ($t:ty, $cache:ident, $global:ident) => {
         impl ResidentPlanCache for $t {
             fn cached_resident_plan<const INVERSE: bool>(n: usize) -> Arc<ResidentPlan<Self>> {
+                // Outlined and cold so the thread-local hit stays inlinable; see
+                // the same shape in `components::batched`.
+                #[cold]
+                #[inline(never)]
+                fn miss<const INVERSE: bool>(
+                    key: (usize, bool),
+                    n: usize,
+                ) -> Arc<ResidentPlan<$t>> {
+                    // Drop the read guard before the write path: a guard held in
+                    // an `if let` scrutinee outlives the `else` arm, and this lock
+                    // is not reentrant.
+                    let shared = $global.read().get(&key).cloned();
+                    if let Some(plan) = shared {
+                        return plan;
+                    }
+                    let mut guard = $global.write();
+                    Arc::clone(
+                        guard
+                            .entry(key)
+                            .or_insert_with(|| Arc::new(ResidentPlan::<$t>::new::<INVERSE>(n))),
+                    )
+                }
+
                 $cache.with(|c| {
                     let key = (n, INVERSE);
                     if let Some(plan) = c.borrow().get(&key) {
                         return Arc::clone(plan);
                     }
-                    let plan = Arc::new(ResidentPlan::<$t>::new::<INVERSE>(n));
+                    let plan = miss::<INVERSE>(key, n);
                     c.borrow_mut().insert(key, Arc::clone(&plan));
                     plan
                 })
@@ -191,8 +228,8 @@ macro_rules! impl_resident_cache {
     };
 }
 
-impl_resident_cache!(f64, RESIDENT_CACHE_F64);
-impl_resident_cache!(f32, RESIDENT_CACHE_F32);
+impl_resident_cache!(f64, RESIDENT_CACHE_F64, RESIDENT_GLOBAL_F64);
+impl_resident_cache!(f32, RESIDENT_CACHE_F32, RESIDENT_GLOBAL_F32);
 
 #[expect(
     clippy::inline_always,

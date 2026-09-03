@@ -646,3 +646,53 @@ fn failed_realloc_restores_the_claimed_source() {
     assert_eq!(restored_size, size);
     assert_eq!(COUNTER.live.load(Ordering::Relaxed), 64);
 }
+
+#[test]
+#[ignore = "measurement probe for cross-thread plan retention"]
+fn cross_thread_plan_retention() {
+    // `BatchedPlan` and `FourStepPlanes` are cached per thread. What the caches
+    // do on a miss decides whether their tables exist once or once per thread,
+    // and nothing evicts them, so a thread pool sized to the machine multiplies
+    // the figure a single-threaded run reports.
+    //
+    // The length must sit inside the planar route's domain or the caches are
+    // never reached: `planar_applies` wants a power of two with an even
+    // trailing-zero count, at least 4 and strictly below
+    // `PARALLEL_ROW_THRESHOLD` (65,536). 16,384 is the largest such length, so
+    // it is the worst case this route can retain.
+    //
+    // Read the windows as *incremental* retention, not as three independent
+    // cold-cache measurements. `window` resets the ledger but cannot clear the
+    // process-global twiddle and plan caches, so the first window pays for
+    // everything shared and the later ones show only what their own threads
+    // add. That is exactly the quantity of interest here -- whether adding
+    // threads adds storage -- but a single window's absolute figure is not a
+    // cold-start footprint, and comparing across thread counts within one run
+    // is only meaningful against the same run's earlier windows. To compare
+    // two revisions, run this probe under each and compare like windows.
+    let _mnemosyne_hooks = MnemosyneHooks::install();
+    const N: usize = 16_384;
+
+    for threads in [1usize, 2, 8] {
+        println!("threads = {threads}, n = {N} (16n = {} bytes)", N * 16);
+        let label = format!("first forward on {threads} thread(s)");
+        window(&label, || {
+            std::thread::scope(|scope| {
+                for _ in 0..threads {
+                    scope.spawn(|| {
+                        let mut signal: Vec<Complex64> = (0..N)
+                            .map(|index| {
+                                let x = index as f64;
+                                Complex64::new((0.017 * x).sin(), 0.25 * (0.031 * x).cos())
+                            })
+                            .collect();
+                        let plan = crate::FftPlan1D::<f64>::new(
+                            crate::Shape1D::new(N).expect("invariant: shape lengths are non-zero"),
+                        );
+                        plan.forward_complex_slice_inplace(std::hint::black_box(&mut signal));
+                    });
+                }
+            });
+        });
+    }
+}

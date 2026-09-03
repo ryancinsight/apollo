@@ -60,6 +60,19 @@ Change-class tags: [patch] backward-compatible fix, [minor] additive non-breakin
 
 ### Changed
 
+- [patch] `apollo-fft` kernel plan caches keep one copy per process rather than
+  one per thread. `cached_plan`, `cached_four_step_planes`, and
+  `cached_resident_plan` built their own table on a thread-local miss, so the
+  `Arc` shared only within one thread and nothing evicted the copies. The
+  dominant term is `FourStepPlanes`, which owns two `m x m` planes -- 16n bytes,
+  262,144 at n = 16,384, the largest length the planar route accepts;
+  `BatchedPlan` is keyed on the row length `m`, not `n`, so it is only
+  16(m-1) = 2,032 bytes there. They now sit behind a process-wide map,
+  following the two-level pattern the twiddle caches already use, with the
+  thread-local map still the lock-free fast path. Measured at n = 16,384, the
+  8-thread window's retained bytes fall from 1,912,672 to 838,712 and its six
+  131,072-byte plane buffers disappear.
+
 - [patch] `apollo-fft` runs f32 `n = 16` and `n = 32` on eight-lane
   register-resident codelets through the hermes dispatch (a new DFT-16 beside
   the existing DFT-32 in `winograd::composite::radix_four_eight`), with the

@@ -137,6 +137,53 @@
 - **Probe extended to both length classes** (96, 100, 384 added), so the sweep
   that missed this cannot miss the next one.
 - 547/547 native tests, doctests, clippy clean, fmt clean.
+## APOLLO-FFT-CROSS-THREAD-PLAN-RETENTION-2026-09-02 — Kernel plan caches kept one copy per thread [patch] [perf] — complete <a id="cross-thread-plan-retention"></a>
+
+- **Delivered.** `cached_plan`, `cached_four_step_planes`, and
+  `cached_resident_plan` now sit behind a process-wide map, following the
+  two-level pattern the twiddle caches and `orchestration::cache::plans`
+  already use. The thread-local map stays the lock-free fast path; a miss takes
+  the shared table instead of building a private one.
+- **Finding.** Each looked up a thread-local map and, on a miss, built its own
+  table, so the `Arc` shared only within one thread and nothing evicted the
+  copies. `BatchedPlan` owns `len - 1` twiddle pairs and `FourStepPlanes` two
+  `m x m` planes, both 16n bytes at `f64`; `ResidentPlan` owns a fixed 32 x 32
+  matrix.
+- **Domain and argument, checked rather than assumed.** These caches sit behind
+  `planar_applies`: a power of two with an even trailing-zero count, at least 4
+  and *strictly below* `PARALLEL_ROW_THRESHOLD` = 65,536. The largest length
+  reaching them is 16,384 (directly, or via `planar_split_applies` from
+  32,768). `FourStepPlanes` dominates there at 16n = 262,144 bytes for its two
+  `m x m` planes. `BatchedPlan` does not: `planar_stages` calls
+  `cached_plan(m)`, the row length, so at m = 128 its table is
+  16(m-1) = 2,032 bytes.
+- **Two corrections this entry carries.** An earlier draft quoted the 8,396,816
+  bytes the retained-footprint probe attributes to n = 262,144; that length
+  never reaches this route and the figure belongs to the globally shared
+  twiddle tables. A second draft then quoted 262,128 bytes for `BatchedPlan` by
+  reading its size at `n` rather than at the `m` the call site passes. Both are
+  the same failure: a size asserted from a plausible reading instead of the
+  argument the call site actually supplies.
+- **Evidence.** `cross_thread_plan_retention`, an ignored probe, measured at
+  n = 16,384 — the largest length the route accepts — with the same windows
+  before and after:
+
+  | Window | Retained before | Retained after |
+  | --- | --- | --- |
+  | 2 threads | 412,632 B | 279,432 B |
+  | 8 threads | 1,912,672 B | 838,712 B |
+
+  The 8-thread block listing goes from `278528x4 131072x6 2032x4 …` to
+  `278528x3 416x4 256x3 116x6`: the six 131,072-byte plane buffers disappear
+  and no plan table is built at all. The 278,528-byte blocks are mnemosyne's
+  padded planar scratch, per-thread by design and unchanged.
+  `batched_plans_and_planes_are_shared_across_threads` and
+  `resident_plans_are_shared_across_threads` are the regression guards; both
+  fail on the prior code with two distinct addresses from two threads.
+- **Also.** Building under the write lock deadlocked first: a read guard held in
+  an `if let` scrutinee outlives the `else` arm and the lock is not reentrant.
+  The nextest 60-second termination budget caught it. All three sites bind the
+  read result before taking the write lock.
 
 ## ATLAS-APOLLO-PLAN-UNDERSELECTS-COMPOSITE-2026-09-02 — The cached plan is slower than the ad-hoc dispatcher for composite lengths [patch] [perf] — done 2026-09-02 <a id="atlas-apollo-plan-underselects-composite"></a>
 
