@@ -14,13 +14,20 @@ use eunomia::Complex;
 use half::f16;
 use leto::{Array1, Array2, Array3};
 
-/// Executes compact complex storage through the cached `f32` plan.
+/// Executes compact complex storage through the `f32` route for its length.
 ///
 /// `Complex<f16>` is a storage representation rather than a native arithmetic
-/// scalar on the supported CPU path. The widening boundary stays here, beside
-/// the plan-cache lookup, so execution kernels remain independent of
-/// orchestration. The cached plan retains the tuned base states and twiddle
-/// tables across calls while the thread-local bridge scratch bounds temporary
+/// scalar on the supported CPU path, so the samples reach `f32` lanes either
+/// way and the only question is which `f32` route runs them. That question is
+/// already answered once, for `Complex32`, and answering it a second time here
+/// is how this route came to take the cached plan at every length while its
+/// own scalar had learned not to: the plan is the faster route for powers of
+/// two and the slower one for composites
+/// (`auto_dispatch::cached_plan`). Delegating leaves one decision site, so a
+/// length class that is re-measured moves both types together.
+///
+/// The widening boundary stays here, so execution kernels remain independent
+/// of orchestration, and the thread-local bridge scratch bounds temporary
 /// storage to one transform.
 #[inline]
 fn execute_compact_storage<const INVERSE: bool, const NORMALIZE: bool>(data: &mut [Complex<f16>]) {
@@ -30,17 +37,15 @@ fn execute_compact_storage<const INVERSE: bool, const NORMALIZE: bool>(data: &mu
     if try_register_resident_storage::<Complex<f16>, INVERSE, NORMALIZE>(data) {
         return;
     }
-    let shape = Shape1D::new(data.len()).expect("invariant: compact storage is non-empty");
-    let plan = <f16 as PlanCacheProvider>::get_1d_plan(shape);
     run_via_complex32(data, |buffer| {
         if INVERSE {
             if NORMALIZE {
-                plan.inverse_complex_slice_inplace(buffer);
+                <eunomia::Complex32 as FftPrecision>::fft_inverse(buffer);
             } else {
-                plan.inverse_complex_slice_unnorm_inplace(buffer);
+                <eunomia::Complex32 as FftPrecision>::fft_inverse_unnorm(buffer);
             }
         } else {
-            plan.forward_complex_slice_inplace(buffer);
+            <eunomia::Complex32 as FftPrecision>::fft_forward(buffer);
         }
     });
 }
