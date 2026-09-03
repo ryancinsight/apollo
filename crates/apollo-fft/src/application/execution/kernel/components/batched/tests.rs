@@ -420,3 +420,48 @@ fn plans_are_cached_per_length_and_direction() {
         "forward and inverse plans carry conjugate twiddles and must not share"
     );
 }
+
+#[test]
+fn batched_plans_and_planes_are_shared_across_threads() {
+    // `BatchedPlan` owns `tw: Vec<(T, T)>` of `len - 1` entries and
+    // `FourStepPlanes` owns two `Box<[T]>` planes, so each is O(16n) bytes for
+    // `f64`. The caches are keyed per thread; if a thread that misses builds
+    // its own table instead of taking the shared one, retention multiplies by
+    // the worker count of whatever executor drives the transform -- 24 on this
+    // host, so roughly 200 MB for one length at n = 262,144. Pointer identity
+    // is the direct evidence: one allocation, or one per thread.
+    const LEN: usize = 1 << 12;
+    const HALF: usize = 1 << 6;
+
+    let plan_addresses: Vec<usize> = (0..2)
+        .map(|_| {
+            std::thread::spawn(|| {
+                std::sync::Arc::as_ptr(&<f64 as BatchedPlanCache>::cached_plan::<false>(LEN))
+                    as usize
+            })
+        })
+        .map(|handle| handle.join().expect("plan builder thread must not panic"))
+        .collect();
+    assert_eq!(
+        plan_addresses[0],
+        plan_addresses[1],
+        "each thread built its own {LEN}-point batched plan, duplicating \
+         {} bytes of twiddles per thread",
+        (LEN - 1) * core::mem::size_of::<(f64, f64)>()
+    );
+
+    let planes_addresses: Vec<usize> = (0..2)
+        .map(|_| {
+            std::thread::spawn(|| {
+                std::sync::Arc::as_ptr(
+                    &<f64 as BatchedPlanCache>::cached_four_step_planes::<false>(LEN, HALF),
+                ) as usize
+            })
+        })
+        .map(|handle| handle.join().expect("planes builder thread must not panic"))
+        .collect();
+    assert_eq!(
+        planes_addresses[0], planes_addresses[1],
+        "each thread built its own {LEN}-point four-step planes"
+    );
+}

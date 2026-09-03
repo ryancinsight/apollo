@@ -646,3 +646,38 @@ fn failed_realloc_restores_the_claimed_source() {
     assert_eq!(restored_size, size);
     assert_eq!(COUNTER.live.load(Ordering::Relaxed), 64);
 }
+
+#[test]
+#[ignore = "measurement probe for cross-thread plan retention"]
+fn cross_thread_plan_retention() {
+    // `BatchedPlan`, `FourStepPlanes`, and `ResidentPlan` are cached per
+    // thread. What the caches do on a miss decides whether the O(16n) tables
+    // exist once or once per thread, and nothing evicts them, so a thread pool
+    // sized to the machine multiplies the retained figure this file reports for
+    // one thread. Read the block listing: the 16n-sized rows carry the count.
+    let _mnemosyne_hooks = MnemosyneHooks::install();
+    const N: usize = 65_536;
+
+    for threads in [1usize, 2, 8] {
+        println!("threads = {threads}, n = {N} (16n = {} bytes)", N * 16);
+        let label = format!("first forward on {threads} thread(s)");
+        window(&label, || {
+            std::thread::scope(|scope| {
+                for _ in 0..threads {
+                    scope.spawn(|| {
+                        let mut signal: Vec<Complex64> = (0..N)
+                            .map(|index| {
+                                let x = index as f64;
+                                Complex64::new((0.017 * x).sin(), 0.25 * (0.031 * x).cos())
+                            })
+                            .collect();
+                        let plan = crate::FftPlan1D::<f64>::new(
+                            crate::Shape1D::new(N).expect("invariant: shape lengths are non-zero"),
+                        );
+                        plan.forward_complex_slice_inplace(std::hint::black_box(&mut signal));
+                    });
+                }
+            });
+        });
+    }
+}
