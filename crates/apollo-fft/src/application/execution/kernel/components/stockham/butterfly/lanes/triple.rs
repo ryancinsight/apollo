@@ -43,8 +43,8 @@ where
 
 impl<T> LaneKernel<T> for TripleStage<'_, T>
 where
-    T: LaneScalar + bytemuck::Pod,
-    Complex<T>: bytemuck::Pod
+    T: LaneScalar + eunomia::layout::Pod,
+    Complex<T>: eunomia::layout::Pod
         + Add<Output = Complex<T>>
         + Sub<Output = Complex<T>>
         + Mul<Output = Complex<T>>,
@@ -69,7 +69,7 @@ where
         let half_n = n >> 1;
         let per_register = A::LANE_COUNT / 2;
         let vector_end = quarter_groups & !(per_register - 1);
-        let src_view = simd.view(bytemuck::cast_slice::<Complex<T>, T>(src));
+        let src_view = simd.view(eunomia::layout::cast_slice::<Complex<T>, T>(src));
 
         for j in 0..radix {
             let w1 = first_twiddles[j];
@@ -100,7 +100,8 @@ where
                         offset / per_register,
                     ))
                 };
-                let mut dst_view = simd.view_mut(bytemuck::cast_slice_mut::<Complex<T>, T>(dst));
+                let mut dst_view =
+                    simd.view_mut(eunomia::layout::cast_slice_mut::<Complex<T>, T>(dst));
                 for k in (0..vector_end).step_by(per_register) {
                     let x0 = load(src_base + k);
                     let x2 = load(src_base + 2 * quarter_groups + k);
@@ -180,8 +181,8 @@ where
 
 impl<T> LaneKernel<T> for TripleStageRadixOne<'_, T>
 where
-    T: LaneScalar + bytemuck::Pod + Default + PartialOrd,
-    Complex<T>: bytemuck::Pod
+    T: LaneScalar + eunomia::layout::Pod + Default + PartialOrd,
+    Complex<T>: eunomia::layout::Pod
         + Add<Output = Complex<T>>
         + Sub<Output = Complex<T>>
         + Mul<Output = Complex<T>>,
@@ -216,8 +217,8 @@ where
             let third_positive = w3c.im > T::default();
             let w3bv = ComplexReg::<T, A>::splat(w3b);
             let w3dv = ComplexReg::<T, A>::splat(w3d);
-            let src_view = simd.view(bytemuck::cast_slice::<Complex<T>, T>(src));
-            let mut dst_view = simd.view_mut(bytemuck::cast_slice_mut::<Complex<T>, T>(dst));
+            let src_view = simd.view(eunomia::layout::cast_slice::<Complex<T>, T>(src));
+            let mut dst_view = simd.view_mut(eunomia::layout::cast_slice_mut::<Complex<T>, T>(dst));
             let load = |offset: usize| {
                 ComplexReg::from_interleaved(Vector::from_view_chunk(
                     &src_view,
@@ -296,8 +297,8 @@ pub(crate) fn stage_triple_lanes<T, const LANES: usize>(
     third_twiddles: &[Complex<T>],
 ) -> bool
 where
-    T: LaneScalar + bytemuck::Pod,
-    Complex<T>: bytemuck::Pod
+    T: LaneScalar + eunomia::layout::Pod,
+    Complex<T>: eunomia::layout::Pod
         + Add<Output = Complex<T>>
         + Sub<Output = Complex<T>>
         + Mul<Output = Complex<T>>,
@@ -323,8 +324,8 @@ pub(crate) fn stage_triple_radix_one_lanes<T, const LANES: usize>(
     third_twiddles: &[Complex<T>],
 ) -> bool
 where
-    T: LaneScalar + bytemuck::Pod + Default + PartialOrd,
-    Complex<T>: bytemuck::Pod
+    T: LaneScalar + eunomia::layout::Pod + Default + PartialOrd,
+    Complex<T>: eunomia::layout::Pod
         + Add<Output = Complex<T>>
         + Sub<Output = Complex<T>>
         + Mul<Output = Complex<T>>,

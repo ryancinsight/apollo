@@ -144,7 +144,7 @@ fn apply_analytic_mask_hermes(spectrum: &mut [Complex64], positive_end: usize) {
 }
 
 fn complex_lanes_mut(values: &mut [Complex64]) -> &mut [f64] {
-    bytemuck::cast_slice_mut(values)
+    eunomia::layout::cast_slice_mut(values)
 }
 
 fn analytic_mask_scale(len: usize, positive_end: usize, k: usize) -> f64 {

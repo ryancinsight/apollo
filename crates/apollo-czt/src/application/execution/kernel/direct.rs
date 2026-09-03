@@ -89,7 +89,7 @@ fn czt_direct_bin_hermes(input_lanes: &[f64], k: usize, a: Complex64, w: Complex
 
 #[inline]
 fn interleaved_lanes(values: &[Complex64]) -> &[f64] {
-    bytemuck::cast_slice(values)
+    eunomia::layout::cast_slice(values)
 }
 
 fn fill_power_lanes(lanes: &mut [f64], z_inv: Complex64) {

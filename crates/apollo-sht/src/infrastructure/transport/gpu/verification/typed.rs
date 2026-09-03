@@ -1,4 +1,4 @@
-use apollo_fft::{f16, PrecisionProfile};
+use apollo_fft::{PrecisionProfile, F16};
 use eunomia::Complex32;
 use leto::{Array2, Storage};
 
@@ -19,9 +19,9 @@ fn typed_flat_mixed_storage_matches_represented_forward_when_device_exists() {
     let signal: Vec<Complex32> = (0..plan.payload().sample_count())
         .map(|index| Complex32::new(0.5 + index as f32 * 0.1, 0.1 * (index as f32 + 1.0)))
         .collect();
-    let reduced_input: Vec<[f16; 2]> = signal
+    let reduced_input: Vec<[F16; 2]> = signal
         .iter()
-        .map(|value| [f16::from_f32(value.re), f16::from_f32(value.im)])
+        .map(|value| [F16::from_f32(value.re), F16::from_f32(value.im)])
         .collect();
     let represented: Vec<Complex32> = reduced_input
         .iter()
@@ -68,11 +68,11 @@ fn typed_flat_leto_forward_and_inverse_match_slice_when_device_exists() {
         return;
     };
     let plan = ShtWgpuPlan::new(SphericalPlan::new(3, 5, 2));
-    let input: Vec<[f16; 2]> = (0..plan.payload().sample_count())
+    let input: Vec<[F16; 2]> = (0..plan.payload().sample_count())
         .map(|index| {
             [
-                f16::from_f32(0.5 + index as f32 * 0.1),
-                f16::from_f32(0.1 * (index as f32 + 1.0)),
+                F16::from_f32(0.5 + index as f32 * 0.1),
+                F16::from_f32(0.1 * (index as f32 + 1.0)),
             ]
         })
         .collect();
@@ -97,7 +97,7 @@ fn typed_flat_leto_forward_and_inverse_match_slice_when_device_exists() {
             .expect("contiguous coefficients")
     );
 
-    let mut expected_inverse = vec![[f16::from_f32(0.0); 2]; plan.payload().sample_count()];
+    let mut expected_inverse = vec![[F16::from_f32(0.0); 2]; plan.payload().sample_count()];
     backend
         .execute_inverse_flat_typed_into(
             &plan,
@@ -107,7 +107,7 @@ fn typed_flat_leto_forward_and_inverse_match_slice_when_device_exists() {
         )
         .expect("typed slice inverse");
     let actual_inverse = backend
-        .execute_inverse_flat_leto_typed::<[f16; 2]>(
+        .execute_inverse_flat_leto_typed::<[F16; 2]>(
             &plan,
             PrecisionProfile::MIXED_PRECISION_F16_F32,
             actual_forward.view(),
@@ -132,10 +132,10 @@ fn typed_flat_path_rejects_profile_mismatch_when_device_exists() {
         return;
     };
     let plan = ShtWgpuPlan::new(SphericalPlan::new(3, 5, 2));
-    let flat_input = vec![[f16::from_f32(0.0); 2]; plan.payload().sample_count()];
+    let flat_input = vec![[F16::from_f32(0.0); 2]; plan.payload().sample_count()];
 
     let forward_error = backend
-        .execute_forward_flat_typed::<[f16; 2]>(
+        .execute_forward_flat_typed::<[F16; 2]>(
             &plan,
             PrecisionProfile::LOW_PRECISION_F32,
             &flat_input,
@@ -144,9 +144,9 @@ fn typed_flat_path_rejects_profile_mismatch_when_device_exists() {
     assert!(matches!(forward_error, WgpuError::InvalidPrecisionProfile));
 
     let coefficients = SphericalHarmonicCoefficients::zeros(plan.payload().max_degree());
-    let mut output = vec![[f16::from_f32(0.0); 2]; plan.payload().sample_count()];
+    let mut output = vec![[F16::from_f32(0.0); 2]; plan.payload().sample_count()];
     let inverse_error = backend
-        .execute_inverse_flat_typed_into::<[f16; 2]>(
+        .execute_inverse_flat_typed_into::<[F16; 2]>(
             &plan,
             PrecisionProfile::LOW_PRECISION_F32,
             &coefficients,

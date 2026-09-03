@@ -1,4 +1,4 @@
-use apollo_fft::{f16, PrecisionProfile};
+use apollo_fft::{PrecisionProfile, F16};
 use eunomia::{Complex32, Complex64};
 use leto::Array3;
 
@@ -47,9 +47,9 @@ fn fast_type1_3d_typed_mixed_storage_matches_represented_input() {
     let plan = NufftWgpuPlan3D::new(grid, 2, 6);
     let positions = positions3d();
     let values16 = [
-        [f16::from_f32(1.0), f16::from_f32(0.0)],
-        [f16::from_f32(-0.25), f16::from_f32(0.5)],
-        [f16::from_f32(0.75), f16::from_f32(-0.5)],
+        [F16::from_f32(1.0), F16::from_f32(0.0)],
+        [F16::from_f32(-0.25), F16::from_f32(0.5)],
+        [F16::from_f32(0.75), F16::from_f32(-0.5)],
     ];
     let represented: Vec<Complex32> = values16
         .iter()
@@ -60,7 +60,7 @@ fn fast_type1_3d_typed_mixed_storage_matches_represented_input() {
         .expect("represented fast type1 3D");
     let mut actual = Array3::from_elem(
         [grid.nx, grid.ny, grid.nz],
-        [f16::from_f32(0.0), f16::from_f32(0.0)],
+        [F16::from_f32(0.0), F16::from_f32(0.0)],
     );
 
     backend
@@ -75,8 +75,8 @@ fn fast_type1_3d_typed_mixed_storage_matches_represented_input() {
 
     assert_eq!(actual.shape(), expected.shape());
     for (actual, expected) in actual.iter().zip(expected.iter()) {
-        let expected_re = f16::from_f32(expected.re as f32);
-        let expected_im = f16::from_f32(expected.im as f32);
+        let expected_re = F16::from_f32(expected.re as f32);
+        let expected_im = F16::from_f32(expected.im as f32);
         assert_eq!(actual[0].to_bits(), expected_re.to_bits());
         assert_eq!(actual[1].to_bits(), expected_im.to_bits());
     }

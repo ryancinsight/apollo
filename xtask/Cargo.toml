@@ -10,6 +10,7 @@ publish = false
 anyhow = { workspace = true }
 apollo-fft = { path = "../crates/apollo-fft", optional = true }
 eunomia = { workspace = true, optional = true }
+mnemosyne = { workspace = true }
 serde_json = { workspace = true }
 
 [features]

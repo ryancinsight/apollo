@@ -1,6 +1,6 @@
 //! Value-semantic GFT GPU represented-storage contracts.
 
-use apollo_fft::{f16, PrecisionProfile};
+use apollo_fft::{PrecisionProfile, F16};
 use leto::Storage;
 
 use super::support::{backend, path4_plan_and_basis};
@@ -13,9 +13,9 @@ fn typed_leto_forward_and_inverse_match_typed_slice_when_device_exists() {
     };
     let (_cpu_plan, basis, signal) = path4_plan_and_basis();
     let plan = crate::infrastructure::transport::gpu::GftWgpuPlan::new(4);
-    let input: Vec<f16> = signal.iter().copied().map(f16::from_f32).collect();
+    let input: Vec<F16> = signal.iter().copied().map(F16::from_f32).collect();
     let basis_leto = leto::Array1::from_shape_vec([basis.len()], basis).expect("basis");
-    let mut expected_forward = vec![f16::from_f32(0.0); input.len()];
+    let mut expected_forward = vec![F16::from_f32(0.0); input.len()];
     backend
         .execute_forward_typed_into(
             &plan,
@@ -47,7 +47,7 @@ fn typed_leto_forward_and_inverse_match_typed_slice_when_device_exists() {
             .collect::<Vec<_>>()
     );
 
-    let mut expected_inverse = vec![f16::from_f32(0.0); expected_forward.len()];
+    let mut expected_inverse = vec![F16::from_f32(0.0); expected_forward.len()];
     backend
         .execute_inverse_typed_into(
             &plan,
@@ -87,13 +87,13 @@ fn typed_mixed_storage_matches_represented_execution_when_device_exists() {
         return;
     };
     let (_cpu_plan, basis, signal) = path4_plan_and_basis();
-    let input: Vec<f16> = signal.iter().copied().map(f16::from_f32).collect();
+    let input: Vec<F16> = signal.iter().copied().map(F16::from_f32).collect();
     let represented: Vec<f32> = input.iter().map(|value| value.to_f32()).collect();
     let plan = crate::infrastructure::transport::gpu::GftWgpuPlan::new(4);
     let expected_forward = backend
         .execute_forward(&plan, &represented, &basis)
         .expect("represented forward");
-    let mut actual_forward = vec![f16::from_f32(0.0); input.len()];
+    let mut actual_forward = vec![F16::from_f32(0.0); input.len()];
     backend
         .execute_forward_typed_into(
             &plan,
@@ -105,13 +105,13 @@ fn typed_mixed_storage_matches_represented_execution_when_device_exists() {
         .expect("typed mixed forward");
     assert_eq!(actual_forward.len(), expected_forward.len());
     for (actual, expected) in actual_forward.iter().zip(expected_forward.iter()) {
-        assert_eq!(actual.to_bits(), f16::from_f32(*expected).to_bits());
+        assert_eq!(actual.to_bits(), F16::from_f32(*expected).to_bits());
     }
 
     let expected_inverse = backend
         .execute_inverse(&plan, &expected_forward, &basis)
         .expect("represented inverse");
-    let mut actual_inverse = vec![f16::from_f32(0.0); input.len()];
+    let mut actual_inverse = vec![F16::from_f32(0.0); input.len()];
     backend
         .execute_inverse_typed_into(
             &plan,
@@ -122,10 +122,10 @@ fn typed_mixed_storage_matches_represented_execution_when_device_exists() {
         )
         .expect("typed mixed inverse");
     for (actual, expected) in actual_inverse.iter().zip(expected_inverse.iter()) {
-        let quantization_bound = expected.abs() * 2.0_f32.powi(-10) + f32::from(f16::MIN_POSITIVE);
+        let quantization_bound = expected.abs() * 2.0_f32.powi(-10) + F16::MIN_POSITIVE.to_f32();
         assert!(
             (actual.to_f32() - expected).abs() <= quantization_bound,
-            "f16 quantization mismatch: actual={}, expected={expected}",
+            "F16 quantization mismatch: actual={}, expected={expected}",
             actual.to_f32()
         );
     }

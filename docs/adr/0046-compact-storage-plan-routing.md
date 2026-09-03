@@ -7,24 +7,24 @@
 
 ## Context
 
-The public `FftPrecision` implementation for `Complex<f16>` promoted storage
+The public `FftPrecision` implementation for `Complex<F16>` promoted storage
 through the execution dispatch entry. That entry selects a generic Stockham
 route and does not retain the `FftPlan1D` base states or twiddle tables between
 calls. A warm pinned probe measured the resulting storage/plan ratios as 1.99x
 at 64, 2.03x at 128, 1.49x at 256, and 1.32x at 512; the earlier 12–16x
 reading was a first-run-after-build artifact.
 
-`PlanCacheProvider for f16` already maps compact storage to the cached `f32`
+`PlanCacheProvider for F16` already maps compact storage to the cached `f32`
 plan. The missing route is therefore an ownership and placement gap, not a
 new kernel requirement.
 
 ## Decision
 
 1. Keep `FftPrecision` as the public dispatch seam, but define its
-   `Complex<f16>` implementation beside the other cached public complex API
+   `Complex<F16>` implementation beside the other cached public complex API
    operations in `api/cfft.rs`.
 2. Preserve the measured stack-resident route for lengths 2, 4, 8, 16, and
-   32. For larger lengths, resolve `<f16 as PlanCacheProvider>::get_1d_plan`
+   32. For larger lengths, resolve `<F16 as PlanCacheProvider>::get_1d_plan`
    and execute the cached `f32` plan through the existing bulk bridge.
 3. Remove the superseded execution-layer compact forward and inverse entry
    points. Kernel tests call the public seam so they cover the delivered route.

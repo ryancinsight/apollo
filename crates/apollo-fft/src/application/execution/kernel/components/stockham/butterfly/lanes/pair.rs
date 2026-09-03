@@ -24,8 +24,8 @@ struct PairStageRadixOne<'a, T> {
 
 impl<T> LaneKernel<T> for PairStage<'_, T>
 where
-    T: LaneScalar + bytemuck::Pod,
-    Complex<T>: bytemuck::Pod
+    T: LaneScalar + eunomia::layout::Pod,
+    Complex<T>: eunomia::layout::Pod
         + Add<Output = Complex<T>>
         + Sub<Output = Complex<T>>
         + Mul<Output = Complex<T>>,
@@ -48,7 +48,7 @@ where
         let half_n = n >> 1;
         let per_register = A::LANE_COUNT / 2;
         let vector_end = half_groups & !(per_register - 1);
-        let src_view = simd.view(bytemuck::cast_slice::<Complex<T>, T>(src));
+        let src_view = simd.view(eunomia::layout::cast_slice::<Complex<T>, T>(src));
 
         for j in 0..radix {
             let w1 = first_twiddles[j];
@@ -71,7 +71,8 @@ where
                         offset / per_register,
                     ))
                 };
-                let mut dst_view = simd.view_mut(bytemuck::cast_slice_mut::<Complex<T>, T>(dst));
+                let mut dst_view =
+                    simd.view_mut(eunomia::layout::cast_slice_mut::<Complex<T>, T>(dst));
                 for k in (0..vector_end).step_by(per_register) {
                     let x0 = load(src_base + k);
                     let x1 = load(src_base + half_groups + k);
@@ -117,8 +118,8 @@ where
 
 impl<T> LaneKernel<T> for PairStageRadixOne<'_, T>
 where
-    T: LaneScalar + bytemuck::Pod,
-    Complex<T>: bytemuck::Pod
+    T: LaneScalar + eunomia::layout::Pod,
+    Complex<T>: eunomia::layout::Pod
         + Add<Output = Complex<T>>
         + Sub<Output = Complex<T>>
         + Mul<Output = Complex<T>>,
@@ -143,8 +144,8 @@ where
             // As in `PairStage`: `quarter_n >= per_register`, both powers of
             // two, so `quarter_n`, `half_n`, and each `k` are register indices.
             let w3v = ComplexReg::<T, A>::splat(w3);
-            let src_view = simd.view(bytemuck::cast_slice::<Complex<T>, T>(src));
-            let mut dst_view = simd.view_mut(bytemuck::cast_slice_mut::<Complex<T>, T>(dst));
+            let src_view = simd.view(eunomia::layout::cast_slice::<Complex<T>, T>(src));
+            let mut dst_view = simd.view_mut(eunomia::layout::cast_slice_mut::<Complex<T>, T>(dst));
             let load = |offset: usize| {
                 ComplexReg::from_interleaved(Vector::from_view_chunk(
                     &src_view,
@@ -205,8 +206,8 @@ pub(crate) fn stage_pair_lanes<T, const LANES: usize>(
     second_twiddles: &[Complex<T>],
 ) -> bool
 where
-    T: LaneScalar + bytemuck::Pod,
-    Complex<T>: bytemuck::Pod
+    T: LaneScalar + eunomia::layout::Pod,
+    Complex<T>: eunomia::layout::Pod
         + Add<Output = Complex<T>>
         + Sub<Output = Complex<T>>
         + Mul<Output = Complex<T>>,
@@ -230,8 +231,8 @@ pub(crate) fn stage_pair_radix_one_lanes<T, const LANES: usize>(
     second_twiddles: &[Complex<T>],
 ) -> bool
 where
-    T: LaneScalar + bytemuck::Pod,
-    Complex<T>: bytemuck::Pod
+    T: LaneScalar + eunomia::layout::Pod,
+    Complex<T>: eunomia::layout::Pod
         + Add<Output = Complex<T>>
         + Sub<Output = Complex<T>>
         + Mul<Output = Complex<T>>,
@@ -257,8 +258,8 @@ struct PairStageGroupsTwo<'a, T> {
 
 impl<T> LaneKernel<T> for PairStageGroupsTwo<'_, T>
 where
-    T: LaneScalar + bytemuck::Pod,
-    Complex<T>: bytemuck::Pod
+    T: LaneScalar + eunomia::layout::Pod,
+    Complex<T>: eunomia::layout::Pod
         + Add<Output = Complex<T>>
         + Sub<Output = Complex<T>>
         + Mul<Output = Complex<T>>,
@@ -286,10 +287,13 @@ where
             // registers and splits them into the stride-4 subsequences
             // `x0..x3`; its twiddles and outputs are contiguous in `j`, and
             // `quarter_n = radix >= per_register` keeps every store aligned.
-            let src_view = simd.view(bytemuck::cast_slice::<Complex<T>, T>(src));
-            let first_view = simd.view(bytemuck::cast_slice::<Complex<T>, T>(first_twiddles));
-            let second_view = simd.view(bytemuck::cast_slice::<Complex<T>, T>(second_twiddles));
-            let mut dst_view = simd.view_mut(bytemuck::cast_slice_mut::<Complex<T>, T>(dst));
+            let src_view = simd.view(eunomia::layout::cast_slice::<Complex<T>, T>(src));
+            let first_view =
+                simd.view(eunomia::layout::cast_slice::<Complex<T>, T>(first_twiddles));
+            let second_view = simd.view(eunomia::layout::cast_slice::<Complex<T>, T>(
+                second_twiddles,
+            ));
+            let mut dst_view = simd.view_mut(eunomia::layout::cast_slice_mut::<Complex<T>, T>(dst));
             for j in (0..vector_end).step_by(per_register) {
                 let base = (4 * j) / per_register;
                 let (x0, x1, x2, x3) = Vector::from_view_chunk(&src_view, base)
@@ -358,8 +362,8 @@ pub(crate) fn stage_pair_groups_two_lanes<T, const LANES: usize>(
     second_twiddles: &[Complex<T>],
 ) -> bool
 where
-    T: LaneScalar + bytemuck::Pod,
-    Complex<T>: bytemuck::Pod
+    T: LaneScalar + eunomia::layout::Pod,
+    Complex<T>: eunomia::layout::Pod
         + Add<Output = Complex<T>>
         + Sub<Output = Complex<T>>
         + Mul<Output = Complex<T>>,

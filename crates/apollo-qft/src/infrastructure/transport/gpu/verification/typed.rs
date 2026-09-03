@@ -1,15 +1,15 @@
-use apollo_fft::{f16, PrecisionProfile};
+use apollo_fft::{PrecisionProfile, F16};
 use eunomia::Complex32;
 use leto::{Array1, Storage};
 
 use super::support::backend;
 
-fn mixed_input() -> Vec<[f16; 2]> {
+fn mixed_input() -> Vec<[F16; 2]> {
     vec![
-        [f16::from_f32(1.0), f16::from_f32(0.0)],
-        [f16::from_f32(-0.5), f16::from_f32(0.75)],
-        [f16::from_f32(0.25), f16::from_f32(-1.25)],
-        [f16::from_f32(2.0), f16::from_f32(0.5)],
+        [F16::from_f32(1.0), F16::from_f32(0.0)],
+        [F16::from_f32(-0.5), F16::from_f32(0.75)],
+        [F16::from_f32(0.25), F16::from_f32(-1.25)],
+        [F16::from_f32(2.0), F16::from_f32(0.5)],
     ]
 }
 
@@ -27,7 +27,7 @@ fn typed_mixed_storage_matches_represented_f32_when_device_exists() {
     let expected = backend
         .execute_forward(&plan, &represented_f32)
         .expect("f32 forward");
-    let mut typed_output = vec![[f16::from_f32(0.0); 2]; input.len()];
+    let mut typed_output = vec![[F16::from_f32(0.0); 2]; input.len()];
     backend
         .execute_forward_typed_into(
             &plan,
@@ -39,11 +39,11 @@ fn typed_mixed_storage_matches_represented_f32_when_device_exists() {
     for (actual, expected_value) in typed_output.iter().zip(expected.iter()) {
         assert_eq!(
             actual[0].to_bits(),
-            f16::from_f32(expected_value.re).to_bits()
+            F16::from_f32(expected_value.re).to_bits()
         );
         assert_eq!(
             actual[1].to_bits(),
-            f16::from_f32(expected_value.im).to_bits()
+            F16::from_f32(expected_value.im).to_bits()
         );
     }
 }
@@ -57,7 +57,7 @@ fn typed_leto_forward_and_inverse_match_typed_slice_when_device_exists() {
     let leto_input = Array1::from_shape_vec([input.len()], input.clone()).expect("input");
     let plan = backend.plan(input.len());
 
-    let mut expected_forward = vec![[f16::from_f32(0.0); 2]; input.len()];
+    let mut expected_forward = vec![[F16::from_f32(0.0); 2]; input.len()];
     backend
         .execute_forward_typed_into(
             &plan,
@@ -67,7 +67,7 @@ fn typed_leto_forward_and_inverse_match_typed_slice_when_device_exists() {
         )
         .expect("typed slice forward");
     let actual_forward = backend
-        .execute_forward_leto_typed::<[f16; 2], [f16; 2]>(
+        .execute_forward_leto_typed::<[F16; 2], [F16; 2]>(
             &plan,
             PrecisionProfile::MIXED_PRECISION_F16_F32,
             leto_input.view(),
@@ -80,7 +80,7 @@ fn typed_leto_forward_and_inverse_match_typed_slice_when_device_exists() {
 
     let leto_spectrum = Array1::from_shape_vec([expected_forward.len()], expected_forward.clone())
         .expect("spectrum");
-    let mut expected_inverse = vec![[f16::from_f32(0.0); 2]; input.len()];
+    let mut expected_inverse = vec![[F16::from_f32(0.0); 2]; input.len()];
     backend
         .execute_inverse_typed_into(
             &plan,
@@ -90,7 +90,7 @@ fn typed_leto_forward_and_inverse_match_typed_slice_when_device_exists() {
         )
         .expect("typed slice inverse");
     let actual_inverse = backend
-        .execute_inverse_leto_typed::<[f16; 2], [f16; 2]>(
+        .execute_inverse_leto_typed::<[F16; 2], [F16; 2]>(
             &plan,
             PrecisionProfile::MIXED_PRECISION_F16_F32,
             leto_spectrum.view(),

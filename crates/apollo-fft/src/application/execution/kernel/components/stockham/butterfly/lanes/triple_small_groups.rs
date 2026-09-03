@@ -45,8 +45,8 @@ where
 
 impl<T> LaneKernel<T> for TripleStageQuarterGroupsOne<'_, T>
 where
-    T: LaneScalar + bytemuck::Pod,
-    Complex<T>: bytemuck::Pod
+    T: LaneScalar + eunomia::layout::Pod,
+    Complex<T>: eunomia::layout::Pod
         + Add<Output = Complex<T>>
         + Sub<Output = Complex<T>>
         + Mul<Output = Complex<T>>,
@@ -76,11 +76,15 @@ where
             // registers and splits them into `x0..x7`; twiddles and outputs
             // are contiguous in `j`, and `eighth_n = radix >= per_register`
             // keeps every store aligned.
-            let src_view = simd.view(bytemuck::cast_slice::<Complex<T>, T>(src));
-            let first_view = simd.view(bytemuck::cast_slice::<Complex<T>, T>(first_twiddles));
-            let second_view = simd.view(bytemuck::cast_slice::<Complex<T>, T>(second_twiddles));
-            let third_view = simd.view(bytemuck::cast_slice::<Complex<T>, T>(third_twiddles));
-            let mut dst_view = simd.view_mut(bytemuck::cast_slice_mut::<Complex<T>, T>(dst));
+            let src_view = simd.view(eunomia::layout::cast_slice::<Complex<T>, T>(src));
+            let first_view =
+                simd.view(eunomia::layout::cast_slice::<Complex<T>, T>(first_twiddles));
+            let second_view = simd.view(eunomia::layout::cast_slice::<Complex<T>, T>(
+                second_twiddles,
+            ));
+            let third_view =
+                simd.view(eunomia::layout::cast_slice::<Complex<T>, T>(third_twiddles));
+            let mut dst_view = simd.view_mut(eunomia::layout::cast_slice_mut::<Complex<T>, T>(dst));
             for j in (0..vector_end).step_by(per_register) {
                 let base = (8 * j) / per_register;
                 let x = deinterleave_pairs8(core::array::from_fn(|i| {
@@ -183,8 +187,8 @@ pub(crate) fn stage_triple_quarter_groups_one_lanes<T, const LANES: usize>(
     third_twiddles: &[Complex<T>],
 ) -> bool
 where
-    T: LaneScalar + bytemuck::Pod,
-    Complex<T>: bytemuck::Pod
+    T: LaneScalar + eunomia::layout::Pod,
+    Complex<T>: eunomia::layout::Pod
         + Add<Output = Complex<T>>
         + Sub<Output = Complex<T>>
         + Mul<Output = Complex<T>>,

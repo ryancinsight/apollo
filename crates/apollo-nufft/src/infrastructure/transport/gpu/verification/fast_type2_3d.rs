@@ -1,4 +1,4 @@
-use apollo_fft::{f16, PrecisionProfile};
+use apollo_fft::{PrecisionProfile, F16};
 use eunomia::{Complex32, Complex64};
 use leto::Array3;
 
@@ -47,13 +47,13 @@ fn fast_type2_3d_typed_mixed_storage_matches_represented_input() {
     let positions = positions3d();
     let modes16 = Array3::from_shape_fn([grid.nx, grid.ny, grid.nz], |[kx, ky, kz]| {
         let (re, im) = mode_components3d(kx, ky, kz);
-        [f16::from_f32(re), f16::from_f32(im)]
+        [F16::from_f32(re), F16::from_f32(im)]
     });
     let represented = modes16.mapv(|value| Complex32::new(value[0].to_f32(), value[1].to_f32()));
     let expected = backend
         .execute_fast_type2_3d(&plan, &represented, &positions)
         .expect("represented fast type2 3D");
-    let mut actual = vec![[f16::from_f32(0.0), f16::from_f32(0.0)]; positions.len()];
+    let mut actual = vec![[F16::from_f32(0.0), F16::from_f32(0.0)]; positions.len()];
 
     backend
         .execute_fast_type2_3d_typed_into(
@@ -67,8 +67,8 @@ fn fast_type2_3d_typed_mixed_storage_matches_represented_input() {
 
     assert_eq!(actual.len(), expected.len());
     for (actual, expected) in actual.iter().zip(expected.iter()) {
-        let expected_re = f16::from_f32(expected.re as f32);
-        let expected_im = f16::from_f32(expected.im as f32);
+        let expected_re = F16::from_f32(expected.re as f32);
+        let expected_im = F16::from_f32(expected.im as f32);
         assert_eq!(actual[0].to_bits(), expected_re.to_bits());
         assert_eq!(actual[1].to_bits(), expected_im.to_bits());
     }

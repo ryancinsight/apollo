@@ -8,8 +8,7 @@ use apollo_fft::application::execution::kernel::benchmark_kernels;
 use apollo_fft::application::execution::kernel::{direct, fft_forward};
 #[cfg(feature = "kernel-strategy-bench")]
 use eunomia::Complex32;
-use eunomia::{Complex, Complex64};
-use half::f16;
+use eunomia::{Complex, Complex64, F16};
 use std::hint::black_box;
 
 fn signal(len: usize) -> Vec<Complex64> {
@@ -21,13 +20,13 @@ fn signal(len: usize) -> Vec<Complex64> {
         .collect()
 }
 
-fn signal_f16(len: usize) -> Vec<Complex<f16>> {
+fn signal_f16(len: usize) -> Vec<Complex<F16>> {
     (0..len)
         .map(|index| {
             let x = index as f32;
             Complex::new(
-                f16::from_f32((0.017 * x).sin()),
-                f16::from_f32(0.25 * (0.031 * x).cos()),
+                F16::from_f32((0.017 * x).sin()),
+                F16::from_f32(0.25 * (0.031 * x).cos()),
             )
         })
         .collect()

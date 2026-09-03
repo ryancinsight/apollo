@@ -5,7 +5,7 @@ use crate::application::execution::plan::fft::dimension_2d::FftPlan2D;
 use crate::application::execution::plan::fft::dimension_3d::FftPlan3D;
 use crate::application::execution::plan::fft::real_storage::RealFftData;
 use crate::domain::metadata::shape::{Shape1D, Shape2D, Shape3D};
-use half::f16;
+use eunomia::F16;
 use parking_lot::RwLock;
 use std::cell::RefCell;
 use std::collections::HashMap;
@@ -262,7 +262,7 @@ impl PlanCacheProvider for f32 {
     }
 }
 
-impl PlanCacheProvider for f16 {
+impl PlanCacheProvider for F16 {
     #[inline]
     fn get_1d_plan(shape: Shape1D) -> Arc<FftPlan1D<Self::PlanScalar>> {
         <f32 as PlanCacheProvider>::get_1d_plan(shape)

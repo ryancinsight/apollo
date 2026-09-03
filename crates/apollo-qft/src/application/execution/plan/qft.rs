@@ -14,7 +14,7 @@
 
 use crate::domain::contracts::error::{QftError, QftResult};
 use crate::domain::state::dimension::QuantumStateDimension;
-use apollo_fft::{f16, CpuElement, CpuStorage, FftPlan1D, PrecisionProfile, Shape1D};
+use apollo_fft::{CpuElement, CpuStorage, FftPlan1D, PrecisionProfile, Shape1D, F16};
 use eunomia::{Complex32, Complex64};
 use leto::Array1;
 use serde::de::Error as _;
@@ -133,7 +133,7 @@ impl QftPlan {
         Ok(())
     }
 
-    /// Forward QFT for `Complex64`, `Complex32`, or mixed two-lane `f16` storage.
+    /// Forward QFT for `Complex64`, `Complex32`, or mixed two-lane `F16` storage.
     pub fn forward_typed_into<T: QftStorage>(
         &self,
         input: &Array1<T>,
@@ -215,7 +215,7 @@ impl QftPlan {
         Ok(())
     }
 
-    /// Inverse QFT for `Complex64`, `Complex32`, or mixed two-lane `f16` storage.
+    /// Inverse QFT for `Complex64`, `Complex32`, or mixed two-lane `F16` storage.
     pub fn inverse_typed_into<T: QftStorage>(
         &self,
         input: &Array1<T>,
@@ -423,7 +423,7 @@ impl QftStorage for Complex64 {
 
 impl QftStorage for Complex32 {}
 
-impl QftStorage for [f16; 2] {}
+impl QftStorage for [F16; 2] {}
 
 fn validate_profile(actual: PrecisionProfile, expected: PrecisionProfile) -> QftResult<()> {
     if actual.matches_storage_and_compute(expected) {
@@ -712,21 +712,21 @@ mod tests {
         let plan = plan4();
         let input = input64().mapv(|value| {
             [
-                f16::from_f32(value.re as f32),
-                f16::from_f32(value.im as f32),
+                F16::from_f32(value.re as f32),
+                F16::from_f32(value.im as f32),
             ]
         });
         let interleaved = input
             .iter()
             .copied()
-            .flat_map(|value| [value, [f16::from_f32(99.0), f16::from_f32(-99.0)]])
+            .flat_map(|value| [value, [F16::from_f32(99.0), F16::from_f32(-99.0)]])
             .collect::<Vec<_>>();
         let leto_input =
             leto::Array1::from_shape_vec([interleaved.len()], interleaved).expect("leto input");
         let strided = leto_input
             .slice_with::<1>(&[SliceArg::range(Some(0), None, 2)])
             .expect("strided view");
-        let mut expected = Array1::from_elem([plan.len()], [f16::from_f32(0.0); 2]);
+        let mut expected = Array1::from_elem([plan.len()], [F16::from_f32(0.0); 2]);
         plan.forward_typed_into(
             &input,
             &mut expected,
@@ -773,22 +773,22 @@ mod tests {
 
         let input16 = input.mapv(|value| {
             [
-                f16::from_f32(value.re as f32),
-                f16::from_f32(value.im as f32),
+                F16::from_f32(value.re as f32),
+                F16::from_f32(value.im as f32),
             ]
         });
         let represented16 =
             Array1::from((input16.iter().copied().map(CpuStorage::to_cpu)).collect::<Vec<_>>());
         let expected16 = plan
             .forward(&represented16)
-            .expect("represented f16 forward");
-        let mut out16 = Array1::from_elem([plan.len()], [f16::from_f32(0.0); 2]);
+            .expect("represented F16 forward");
+        let mut out16 = Array1::from_elem([plan.len()], [F16::from_f32(0.0); 2]);
         plan.forward_typed_into(
             &input16,
             &mut out16,
             PrecisionProfile::MIXED_PRECISION_F16_F32,
         )
-        .expect("typed mixed f16 forward");
+        .expect("typed mixed F16 forward");
         for (actual, expected) in out16.iter().zip(expected16.iter()) {
             let re_bound = expected.re.abs() * 2.0_f64.powi(-10) + 2.0_f64.powi(-14);
             let im_bound = expected.im.abs() * 2.0_f64.powi(-10) + 2.0_f64.powi(-14);

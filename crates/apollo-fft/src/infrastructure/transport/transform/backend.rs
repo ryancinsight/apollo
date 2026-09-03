@@ -516,7 +516,7 @@ where
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{f16, Complex32};
+    use crate::{Complex32, F16};
 
     struct TestPlanner;
 
@@ -561,13 +561,13 @@ mod tests {
             .is_ok()
         );
         assert!(
-            WgpuTransformBackend::<TestPlanner>::validate_storage_profile::<f16, f32>(
+            WgpuTransformBackend::<TestPlanner>::validate_storage_profile::<F16, f32>(
                 PrecisionProfile::MIXED_PRECISION_F16_F32
             )
             .is_ok()
         );
         assert!(matches!(
-            WgpuTransformBackend::<TestPlanner>::validate_storage_profile::<f16, f32>(
+            WgpuTransformBackend::<TestPlanner>::validate_storage_profile::<F16, f32>(
                 PrecisionProfile::LOW_PRECISION_F32
             ),
             Err(WgpuError::InvalidPrecisionProfile)

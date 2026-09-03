@@ -8,7 +8,7 @@ use hermes_simd::{ProcessorBinding, ProcessorIndex};
 
 /// Half-storage transforms against their own `f32` execution kernel.
 ///
-/// `Complex<f16>` has no native kernel: the storage promotes to `Complex32`,
+/// `Complex<F16>` has no native kernel: the storage promotes to `Complex32`,
 /// runs the f32 route, and demotes back (`precision_bridge`). This probe
 /// separates the two halves of that cost — the same length through the f32
 /// kernel directly is the floor, and the difference is what the promotion and
@@ -17,8 +17,7 @@ use hermes_simd::{ProcessorBinding, ProcessorIndex};
 fn half_storage_against_its_kernel(suite: &mut BenchmarkSuite, core: &str) {
     use crate::application::execution::kernel::mixed_radix::dispatch::dispatch_inplace;
     use crate::application::execution::kernel::FftPrecision;
-    use eunomia::{Complex, Complex32};
-    use half::f16;
+    use eunomia::{Complex, Complex32, F16};
 
     // Both length classes. The power-of-two lengths are where the storage
     // route grew up — the register-resident bases are all powers of two — and
@@ -33,15 +32,15 @@ fn half_storage_against_its_kernel(suite: &mut BenchmarkSuite, core: &str) {
                 Complex32::new((0.017_f32 * x).sin(), 0.25 * (0.031_f32 * x).cos())
             })
             .collect();
-        let source16: Vec<Complex<f16>> = source32
+        let source16: Vec<Complex<F16>> = source32
             .iter()
-            .map(|value| Complex::new(f16::from_f32(value.re), f16::from_f32(value.im)))
+            .map(|value| Complex::new(F16::from_f32(value.re), F16::from_f32(value.im)))
             .collect();
 
         let mut work16 = source16.clone();
         suite.run(BenchmarkCase::new(core, "half-storage", n), || {
             work16.copy_from_slice(&source16);
-            <Complex<f16> as FftPrecision>::fft_forward(std::hint::black_box(&mut work16));
+            <Complex<F16> as FftPrecision>::fft_forward(std::hint::black_box(&mut work16));
         });
 
         // Conversion alone, both directions: what the bridge costs when the
@@ -50,17 +49,17 @@ fn half_storage_against_its_kernel(suite: &mut BenchmarkSuite, core: &str) {
         let mut convert_dst = source32.clone();
         let mut convert_back = source16.clone();
         suite.run(BenchmarkCase::new(core, "convert-only", n), || {
-            <eunomia::Complex<f16> as crate::application::execution::kernel::precision_bridge::Complex32Bridge>::widen_slice(
+            <eunomia::Complex<F16> as crate::application::execution::kernel::precision_bridge::Complex32Bridge>::widen_slice(
                 std::hint::black_box(&source16),
                 std::hint::black_box(&mut convert_dst),
             );
-            <eunomia::Complex<f16> as crate::application::execution::kernel::precision_bridge::Complex32Bridge>::narrow_slice(
+            <eunomia::Complex<F16> as crate::application::execution::kernel::precision_bridge::Complex32Bridge>::narrow_slice(
                 std::hint::black_box(&convert_dst),
                 std::hint::black_box(&mut convert_back),
             );
         });
 
-        // The same public entry point, one scalar up. `Complex<f16>` and
+        // The same public entry point, one scalar up. `Complex<F16>` and
         // `Complex32` reach `FftPrecision::fft_forward` through the same
         // dispatch and pay the same plan-cache lookup on the lengths that use
         // one, so the difference between this arm and the storage arm is the

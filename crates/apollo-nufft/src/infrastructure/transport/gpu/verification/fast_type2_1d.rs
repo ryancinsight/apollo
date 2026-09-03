@@ -1,4 +1,4 @@
-use apollo_fft::{f16, PrecisionProfile};
+use apollo_fft::{PrecisionProfile, F16};
 use eunomia::{Complex32, Complex64};
 use leto::Array1;
 
@@ -60,14 +60,14 @@ fn fast_type2_1d_typed_mixed_storage_matches_represented_input() {
     let plan = NufftWgpuPlan1D::new(domain, 2, 6);
     let positions = [0.0_f32, 0.25, 0.7, 1.15, 1.8];
     let coefficients16 = [
-        [f16::from_f32(1.0), f16::from_f32(0.0)],
-        [f16::from_f32(0.5), f16::from_f32(-0.25)],
-        [f16::from_f32(-0.75), f16::from_f32(0.5)],
-        [f16::from_f32(0.25), f16::from_f32(0.75)],
-        [f16::from_f32(-0.5), f16::from_f32(-0.1)],
-        [f16::from_f32(0.125), f16::from_f32(0.25)],
-        [f16::from_f32(0.8), f16::from_f32(-0.6)],
-        [f16::from_f32(-0.3), f16::from_f32(0.4)],
+        [F16::from_f32(1.0), F16::from_f32(0.0)],
+        [F16::from_f32(0.5), F16::from_f32(-0.25)],
+        [F16::from_f32(-0.75), F16::from_f32(0.5)],
+        [F16::from_f32(0.25), F16::from_f32(0.75)],
+        [F16::from_f32(-0.5), F16::from_f32(-0.1)],
+        [F16::from_f32(0.125), F16::from_f32(0.25)],
+        [F16::from_f32(0.8), F16::from_f32(-0.6)],
+        [F16::from_f32(-0.3), F16::from_f32(0.4)],
     ];
     let represented: Vec<Complex32> = coefficients16
         .iter()
@@ -76,7 +76,7 @@ fn fast_type2_1d_typed_mixed_storage_matches_represented_input() {
     let expected = backend
         .execute_fast_type2_1d(&plan, &represented, &positions)
         .expect("represented fast type2 1D");
-    let mut actual = vec![[f16::from_f32(0.0), f16::from_f32(0.0)]; positions.len()];
+    let mut actual = vec![[F16::from_f32(0.0), F16::from_f32(0.0)]; positions.len()];
 
     backend
         .execute_fast_type2_1d_typed_into(
@@ -90,8 +90,8 @@ fn fast_type2_1d_typed_mixed_storage_matches_represented_input() {
 
     assert_eq!(actual.len(), expected.len());
     for (actual, expected) in actual.iter().zip(expected.iter()) {
-        let expected_re = f16::from_f32(expected.re as f32);
-        let expected_im = f16::from_f32(expected.im as f32);
+        let expected_re = F16::from_f32(expected.re as f32);
+        let expected_im = F16::from_f32(expected.im as f32);
         assert_eq!(actual[0].to_bits(), expected_re.to_bits());
         assert_eq!(actual[1].to_bits(), expected_im.to_bits());
     }

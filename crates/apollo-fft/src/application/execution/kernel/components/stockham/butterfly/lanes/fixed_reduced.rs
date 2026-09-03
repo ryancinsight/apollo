@@ -29,7 +29,7 @@ fn load<A>(simd: Simd<f32, A>, values: &[Complex32]) -> ComplexReg<f32, A>
 where
     A: SimdArch + SimdKernel<f32>,
 {
-    let view = simd.view(bytemuck::cast_slice(values));
+    let view = simd.view(eunomia::layout::cast_slice(values));
     ComplexReg::from_interleaved(Vector::from_view_chunk(&view, 0))
 }
 
@@ -44,7 +44,7 @@ where
 {
     value
         .into_interleaved()
-        .store_unaligned_to_slice(bytemuck::cast_slice_mut(destination))
+        .store_unaligned_to_slice(eunomia::layout::cast_slice_mut(destination))
         .expect("invariant: four complex samples fill eight lanes");
 }
 

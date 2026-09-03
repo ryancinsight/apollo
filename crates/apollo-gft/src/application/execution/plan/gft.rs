@@ -7,7 +7,7 @@
 use crate::domain::contracts::error::{GftError, GftResult};
 use crate::domain::graph::adjacency::GraphAdjacency;
 use crate::infrastructure::kernel::laplacian::spectral_basis;
-use apollo_fft::{f16, CpuStorage, PrecisionProfile};
+use apollo_fft::{CpuStorage, PrecisionProfile, F16};
 use leto::Array1;
 use leto::ArrayView2;
 use mnemosyne::scratch::ScratchPool;
@@ -114,7 +114,7 @@ impl GftPlan {
         Ok(())
     }
 
-    /// Forward GFT for `f64`, `f32`, or mixed `f16` storage.
+    /// Forward GFT for `f64`, `f32`, or mixed `F16` storage.
     ///
     /// The mathematical owner path is the real `f64` graph-basis multiply.
     /// Lower storage profiles convert input into the owner representation and
@@ -128,7 +128,7 @@ impl GftPlan {
         T::forward_into(self, signal, output, profile)
     }
 
-    /// Inverse GFT for `f64`, `f32`, or mixed `f16` storage.
+    /// Inverse GFT for `f64`, `f32`, or mixed `F16` storage.
     pub fn inverse_typed_into<T: GftStorage>(
         &self,
         spectrum: &Array1<T>,
@@ -303,7 +303,7 @@ impl GftStorage for f64 {
 
 impl GftStorage for f32 {}
 
-impl GftStorage for f16 {}
+impl GftStorage for F16 {}
 
 fn validate_profile(actual: PrecisionProfile, expected: PrecisionProfile) -> GftResult<()> {
     if actual.matches_storage_and_compute(expected) {
@@ -388,7 +388,7 @@ mod tests {
             assert!((f64::from(*actual) - *expected).abs() < 1.0e-5);
         }
 
-        let signal16 = signal64.mapv(|value| f16::from_f32(value as f32));
+        let signal16 = signal64.mapv(|value| F16::from_f32(value as f32));
         let expected16_input = Array1::from(
             signal16
                 .iter()
@@ -397,14 +397,14 @@ mod tests {
         );
         let expected16 = plan
             .forward(&expected16_input)
-            .expect("f16 represented forward");
-        let mut out16 = Array1::from_elem([plan.len()], f16::from_f32(0.0));
+            .expect("F16 represented forward");
+        let mut out16 = Array1::from_elem([plan.len()], F16::from_f32(0.0));
         plan.forward_typed_into(
             &signal16,
             &mut out16,
             PrecisionProfile::MIXED_PRECISION_F16_F32,
         )
-        .expect("typed mixed f16 forward");
+        .expect("typed mixed F16 forward");
         for (actual, expected) in out16.iter().zip(expected16.iter()) {
             let quantization_bound = expected.abs() * 2.0_f64.powi(-10) + 2.0_f64.powi(-14);
             assert!((f64::from(actual.to_f32()) - *expected).abs() <= quantization_bound);

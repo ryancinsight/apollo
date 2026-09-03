@@ -494,7 +494,7 @@ thread_local! {
 
 /// Scalars whose batched plans are cached per thread.
 pub(crate) trait BatchedPlanCache:
-    MixedRadixScalar + LaneScalar + bytemuck::Pod + Sized
+    MixedRadixScalar + LaneScalar + eunomia::layout::Pod + Sized
 {
     /// Preferred exact lane width for the in-register boundary passes: the
     /// planar transpose, the half combine, and the reinterleave sink. Eight
@@ -783,14 +783,14 @@ fn plane_geometry(n: usize) -> (usize, usize) {
 /// Panics if `scratch` is shorter than `plane`.
 fn split_plane<T>(scratch: &mut [Complex<T>], plane: usize) -> (&mut [T], &mut [T])
 where
-    T: bytemuck::Pod,
-    Complex<T>: bytemuck::Pod,
+    T: eunomia::layout::Pod,
+    Complex<T>: eunomia::layout::Pod,
 {
     assert!(
         scratch.len() >= plane,
         "scratch must hold two padded planes"
     );
-    let flat: &mut [T] = bytemuck::cast_slice_mut(&mut scratch[..plane]);
+    let flat: &mut [T] = eunomia::layout::cast_slice_mut(&mut scratch[..plane]);
     flat.split_at_mut(plane)
 }
 
@@ -946,7 +946,7 @@ pub(crate) fn four_step_batched<T, const INVERSE: bool>(
             hermes_simd::vectorize_lanes::<8, T, _>(boundary::InterleaveRows {
                 re: &*re,
                 im: &*im,
-                data: bytemuck::cast_slice_mut(&mut *data),
+                data: eunomia::layout::cast_slice_mut(&mut *data),
                 m,
                 stride,
             })
@@ -956,7 +956,7 @@ pub(crate) fn four_step_batched<T, const INVERSE: bool>(
         } || hermes_simd::vectorize_lanes::<4, T, _>(boundary::InterleaveRows {
             re,
             im,
-            data: bytemuck::cast_slice_mut(data),
+            data: eunomia::layout::cast_slice_mut(data),
             m,
             stride,
         })
@@ -1062,8 +1062,8 @@ pub(crate) fn combine_planar_halves<T>(
     assert_eq!(data.len(), 2 * half, "combine spans both halves");
     assert!(twiddles.len() >= half, "one rotation per output pair");
     let plane = m * stride;
-    let (e_re, e_im) = bytemuck::cast_slice::<_, T>(&even[..plane]).split_at(plane);
-    let (o_re, o_im) = bytemuck::cast_slice::<_, T>(&odd[..plane]).split_at(plane);
+    let (e_re, e_im) = eunomia::layout::cast_slice::<_, T>(&even[..plane]).split_at(plane);
+    let (o_re, o_im) = eunomia::layout::cast_slice::<_, T>(&odd[..plane]).split_at(plane);
     let (low, high) = data.split_at_mut(half);
 
     // The stage set left bit-reversed rows, and the permutation rides the
@@ -1073,7 +1073,7 @@ pub(crate) fn combine_planar_halves<T>(
     // side scattered four (gap_audit.md#sink-permutation).
     let bits = m.trailing_zeros();
     sect!("combine", {
-        let twiddle_lanes = bytemuck::cast_slice(twiddles);
+        let twiddle_lanes = eunomia::layout::cast_slice(twiddles);
         let handled =
             if T::BOUNDARY_LANES == 8 {
                 hermes_simd::vectorize_hardware_lanes::<8, T, _>(boundary::CombinePlanarHalves {
@@ -1082,8 +1082,8 @@ pub(crate) fn combine_planar_halves<T>(
                     odd_re: o_re,
                     odd_im: o_im,
                     twiddles: twiddle_lanes,
-                    low: bytemuck::cast_slice_mut(&mut *low),
-                    high: bytemuck::cast_slice_mut(&mut *high),
+                    low: eunomia::layout::cast_slice_mut(&mut *low),
+                    high: eunomia::layout::cast_slice_mut(&mut *high),
                     m,
                     stride,
                 })
@@ -1096,8 +1096,8 @@ pub(crate) fn combine_planar_halves<T>(
                 odd_re: o_re,
                 odd_im: o_im,
                 twiddles: twiddle_lanes,
-                low: bytemuck::cast_slice_mut(&mut *low),
-                high: bytemuck::cast_slice_mut(&mut *high),
+                low: eunomia::layout::cast_slice_mut(&mut *low),
+                high: eunomia::layout::cast_slice_mut(&mut *high),
                 m,
                 stride,
             })

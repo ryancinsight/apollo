@@ -3,7 +3,7 @@
 use super::plan::CztPlan;
 use super::workspace::{forward_workspace_capacity, typed_scratch_capacities};
 use crate::domain::contracts::error::CztError;
-use apollo_fft::{f16, PrecisionProfile};
+use apollo_fft::{PrecisionProfile, F16};
 use eunomia::{assert_abs_diff_eq, assert_relative_eq};
 use eunomia::{Complex32, Complex64};
 use leto::Array1;
@@ -251,17 +251,17 @@ mod general_czt_tests {
 
         let input16 = input64.mapv(|value| {
             [
-                f16::from_f32(value.re as f32),
-                f16::from_f32(value.im as f32),
+                F16::from_f32(value.re as f32),
+                F16::from_f32(value.im as f32),
             ]
         });
-        let mut out16 = Array1::from_elem([plan.output_len()], [f16::from_f32(0.0); 2]);
+        let mut out16 = Array1::from_elem([plan.output_len()], [F16::from_f32(0.0); 2]);
         plan.forward_typed_into(
             &input16,
             &mut out16,
             PrecisionProfile::MIXED_PRECISION_F16_F32,
         )
-        .expect("mixed f16 typed");
+        .expect("mixed F16 typed");
         for (actual, expected) in out16.iter().zip(expected.iter()) {
             let re_bound = expected.re.abs() * 2.0_f64.powi(-10) + 2.0_f64.powi(-14);
             let im_bound = expected.im.abs() * 2.0_f64.powi(-10) + 2.0_f64.powi(-14);

@@ -14,7 +14,7 @@ pub trait FftSample: Copy {
     const ZERO: Self;
 }
 
-impl FftSample for half::f16 {
+impl FftSample for eunomia::F16 {
     const ZERO: Self = Self::ZERO;
 }
 

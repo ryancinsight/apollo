@@ -1,6 +1,6 @@
 //! Value-semantic Hilbert GPU explicit-precision contracts.
 
-use apollo_fft::{f16, PrecisionProfile};
+use apollo_fft::{PrecisionProfile, F16};
 
 use crate::infrastructure::transport::gpu::WgpuError;
 
@@ -12,8 +12,8 @@ fn typed_path_rejects_profile_mismatch_when_device_exists() {
         return;
     };
     let plan = backend.plan(8);
-    let input = vec![f16::from_f32(1.0); 8];
-    let mut output = vec![f16::from_f32(0.0); 8];
+    let input = vec![F16::from_f32(1.0); 8];
+    let mut output = vec![F16::from_f32(0.0); 8];
     let error = backend
         .execute_forward_typed_into(
             &plan,

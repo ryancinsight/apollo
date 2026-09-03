@@ -43,7 +43,7 @@ Follow-up (ZST threading + Cow): pot_inplace_sized<S: PoTStrategy, const LOG2> a
 - Backends must advertise only the precision profiles they truly implement.
 - Apollo never silently upgrades or downgrades a caller into mixed precision; lower-precision paths
   are explicit plan or API choices.
-- Apollo currently defines `mixed_precision` for CPU FFT as `half::f16` storage with `f32` compute.
+- Apollo currently defines `mixed_precision` for CPU FFT as `eunomia::F16` storage with `f32` compute.
 
 ## Documentation Standard
 

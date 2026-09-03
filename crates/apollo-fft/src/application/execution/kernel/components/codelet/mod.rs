@@ -186,11 +186,11 @@ pub(crate) fn try_transform_16<T, const INVERSE: bool, const NORMALIZE: bool>(
     data: &mut [Complex<T>],
 ) -> bool
 where
-    T: LaneScalar + MixedRadixScalar + bytemuck::Pod,
-    Complex<T>: bytemuck::Pod,
+    T: LaneScalar + MixedRadixScalar + eunomia::layout::Pod,
+    Complex<T>: eunomia::layout::Pod,
 {
     assert_eq!(data.len(), 16, "the N = 16 codelet requires 16 samples");
-    let flat: &mut [T] = bytemuck::cast_slice_mut(data);
+    let flat: &mut [T] = eunomia::layout::cast_slice_mut(data);
     hermes_simd::vectorize_lanes::<4, T, _>(Transform16::<T, INVERSE, NORMALIZE> { data: flat })
         .unwrap_or(false)
 }

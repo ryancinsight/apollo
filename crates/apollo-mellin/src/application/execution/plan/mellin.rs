@@ -5,7 +5,7 @@ use crate::domain::metadata::scale::MellinScaleConfig;
 use crate::infrastructure::kernel::resample::{
     calculate_log_resample, log_frequency_spectrum, mellin_moment,
 };
-use apollo_fft::{f16, CpuStorage, PrecisionProfile};
+use apollo_fft::{CpuStorage, PrecisionProfile, F16};
 use eunomia::Complex64;
 /// Dense Mellin log-frequency spectrum.
 #[derive(Debug, Clone, PartialEq)]
@@ -419,18 +419,18 @@ impl MellinStorage for f64 {
 
 impl MellinStorage for f32 {}
 
-impl MellinStorage for f16 {}
+impl MellinStorage for F16 {}
 
 mod gpu_storage_sealed {
     pub trait Sealed {}
 
     impl Sealed for f32 {}
-    impl Sealed for apollo_fft::f16 {}
+    impl Sealed for apollo_fft::F16 {}
 }
 
 /// Input storage admitted by the concrete `f32` Mellin accelerator.
 ///
-/// Native [`f32`] input is borrowed through the host boundary. `f16` input is
+/// Native [`f32`] input is borrowed through the host boundary. `F16` input is
 /// explicitly converted into a reusable `f32` workspace. [`f64`] is excluded
 /// so a high-accuracy CPU input cannot silently narrow before dispatch.
 ///
@@ -458,7 +458,7 @@ impl MellinGpuStorage for f32 {
     }
 }
 
-impl MellinGpuStorage for f16 {
+impl MellinGpuStorage for F16 {
     fn to_gpu(self) -> f32 {
         self.to_f32()
     }
@@ -559,15 +559,15 @@ mod tests {
             assert!((f64::from(*actual) - *expected).abs() < 1.0e-5);
         }
 
-        let signal16 = signal64.map(|value| f16::from_f32(value as f32));
+        let signal16 = signal64.map(|value| F16::from_f32(value as f32));
         let represented16: Vec<f64> = signal16
             .iter()
             .map(|value| f64::from(value.to_f32()))
             .collect();
         let mut expected16 = [0.0_f64; 5];
         plan.forward_resample(&represented16, 1.0, 4.0, &mut expected16)
-            .expect("represented f16 resample");
-        let mut out16 = [f16::from_f32(0.0); 5];
+            .expect("represented F16 resample");
+        let mut out16 = [F16::from_f32(0.0); 5];
         plan.forward_resample_typed_into(
             &signal16,
             1.0,
@@ -575,7 +575,7 @@ mod tests {
             &mut out16,
             PrecisionProfile::MIXED_PRECISION_F16_F32,
         )
-        .expect("typed f16 resample");
+        .expect("typed F16 resample");
         for (actual, expected) in out16.iter().zip(expected16.iter()) {
             let quantization_bound = expected.abs() * 2.0_f64.powi(-10) + 2.0_f64.powi(-14);
             assert!((f64::from(actual.to_f32()) - *expected).abs() <= quantization_bound);

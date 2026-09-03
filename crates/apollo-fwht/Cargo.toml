@@ -20,9 +20,9 @@ parallel = []
 mnemosyne-memory = []
 
 [dependencies]
+bytemuck = { workspace = true }
 hephaestus-core = { workspace = true, optional = true }
 hephaestus-wgpu = { workspace = true, optional = true }
-bytemuck = { workspace = true }
 apollo-fft = { version = "0.27.0", path = "../apollo-fft" }
 apollo-leto-interop = { version = "0.18.0", path = "../apollo-leto-interop" }
 leto = { workspace = true }

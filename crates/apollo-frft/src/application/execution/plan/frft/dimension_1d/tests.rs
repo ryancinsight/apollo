@@ -2,7 +2,7 @@
 
 use super::plan::{frft, frft_leto, FrftPlan};
 use crate::domain::contracts::error::FrftError;
-use apollo_fft::{f16, PrecisionProfile};
+use apollo_fft::{PrecisionProfile, F16};
 use eunomia::{Complex32, Complex64};
 use leto::Array1;
 
@@ -109,14 +109,14 @@ fn leto_typed_strided_f16_matches_leto_typed_path() {
     let plan = FrftPlan::new(n, 0.5).expect("valid plan");
     let logical = Array1::from_shape_fn([n], |[i]| {
         [
-            f16::from_f32((i as f32 * 0.13).sin()),
-            f16::from_f32((i as f32 * 0.31).cos()),
+            F16::from_f32((i as f32 * 0.13).sin()),
+            F16::from_f32((i as f32 * 0.31).cos()),
         ]
     });
     let interleaved = logical
         .iter()
         .copied()
-        .flat_map(|value| [value, [f16::from_f32(99.0), f16::from_f32(-99.0)]])
+        .flat_map(|value| [value, [F16::from_f32(99.0), F16::from_f32(-99.0)]])
         .collect::<Vec<_>>();
     let leto_input =
         leto::Array1::from_shape_vec([interleaved.len()], interleaved).expect("leto input");
@@ -125,7 +125,7 @@ fn leto_typed_strided_f16_matches_leto_typed_path() {
         .slice_with::<1>(&[SliceArg::range(Some(0), None, 2)])
         .expect("strided view");
 
-    let mut expected = Array1::from_elem([n], [f16::from_f32(0.0); 2]);
+    let mut expected = Array1::from_elem([n], [F16::from_f32(0.0); 2]);
     plan.forward_typed_into(
         &logical,
         &mut expected,
@@ -215,11 +215,11 @@ fn typed_paths_support_complex64_complex32_and_mixed_f16_storage() {
 
     let input16 = input64.mapv(|value| {
         [
-            f16::from_f32(value.re as f32),
-            f16::from_f32(value.im as f32),
+            F16::from_f32(value.re as f32),
+            F16::from_f32(value.im as f32),
         ]
     });
-    let mut out16 = Array1::from_elem([n], [f16::from_f32(0.0); 2]);
+    let mut out16 = Array1::from_elem([n], [F16::from_f32(0.0); 2]);
     let input16_reference = input16
         .mapv(|value| Complex64::new(f64::from(value[0].to_f32()), f64::from(value[1].to_f32())));
     let expected16 = plan.forward(&input16_reference).expect("mixed reference");
@@ -228,7 +228,7 @@ fn typed_paths_support_complex64_complex32_and_mixed_f16_storage() {
         &mut out16,
         PrecisionProfile::MIXED_PRECISION_F16_F32,
     )
-    .expect("mixed f16 forward");
+    .expect("mixed F16 forward");
     for (actual, expected) in out16.iter().zip(expected16.iter()) {
         let re_bound = expected.re.abs() * 2.0_f64.powi(-10) + 2.0_f64.powi(-14);
         let im_bound = expected.im.abs() * 2.0_f64.powi(-10) + 2.0_f64.powi(-14);

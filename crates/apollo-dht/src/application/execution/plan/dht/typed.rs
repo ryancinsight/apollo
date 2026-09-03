@@ -2,7 +2,7 @@
 
 use super::plan::DhtPlan;
 use crate::domain::contracts::error::{DhtError, DhtResult};
-use apollo_fft::{f16, CpuElement, CpuStorage, PrecisionProfile};
+use apollo_fft::{CpuElement, CpuStorage, PrecisionProfile, F16};
 
 /// Real storage accepted by typed DHT paths.
 ///
@@ -83,7 +83,7 @@ impl HartleyStorage for f64 {
 
 impl HartleyStorage for f32 {}
 
-impl HartleyStorage for f16 {}
+impl HartleyStorage for F16 {}
 #[inline]
 fn validate_profile(actual: PrecisionProfile, expected: PrecisionProfile) -> DhtResult<()> {
     if actual.matches_storage_and_compute(expected) {

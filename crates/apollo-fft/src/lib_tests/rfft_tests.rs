@@ -2,7 +2,7 @@
 
 use crate::*;
 use eunomia::Complex64;
-use half::f16;
+use eunomia::F16;
 use leto::{Array1, Array2, Array3};
 
 #[test]
@@ -98,17 +98,17 @@ fn static_real_1d_into_wrappers_match_dynamic_paths() {
         assert!((expected - actual).abs() < 1e-5);
     }
 
-    let signal16 = signal64.mapv(|value| f16::from_f32(value as f32));
+    let signal16 = signal64.mapv(|value| F16::from_f32(value as f32));
     let expected16 = fft_1d_array(&signal16);
     let mut spectrum16 = Array1::<Complex32>::zeros([20]);
-    fft_1d_array_static_into::<f16, 20>(&signal16, &mut spectrum16);
+    fft_1d_array_static_into::<F16, 20>(&signal16, &mut spectrum16);
     for (expected, actual) in expected16.iter().zip(spectrum16.iter()) {
         assert!((expected - actual).norm() < 1e-5);
     }
-    let recovered16 = ifft_1d_array::<f16>(&expected16);
-    let mut actual_recovered16 = Array1::<f16>::from_elem([20], f16::from_f32(0.0));
+    let recovered16 = ifft_1d_array::<F16>(&expected16);
+    let mut actual_recovered16 = Array1::<F16>::from_elem([20], F16::from_f32(0.0));
     let mut scratch16 = Array1::<Complex32>::zeros([20]);
-    ifft_1d_array_static_into::<f16, 20>(&expected16, &mut actual_recovered16, &mut scratch16);
+    ifft_1d_array_static_into::<F16, 20>(&expected16, &mut actual_recovered16, &mut scratch16);
     for (expected, actual) in recovered16.iter().zip(actual_recovered16.iter()) {
         assert!((expected.to_f32() - actual.to_f32()).abs() < 1e-3);
     }
@@ -150,17 +150,17 @@ fn static_real_2d_into_wrappers_match_dynamic_paths() {
         assert!((expected - actual).abs() < 1e-5);
     }
 
-    let field16 = field64.mapv(|value| f16::from_f32(value as f32));
+    let field16 = field64.mapv(|value| F16::from_f32(value as f32));
     let expected16 = fft_2d_array(&field16);
     let mut spectrum16 = Array2::<Complex32>::zeros([4, 5]);
-    fft_2d_array_static_into::<f16, 4, 5>(&field16, &mut spectrum16);
+    fft_2d_array_static_into::<F16, 4, 5>(&field16, &mut spectrum16);
     for (expected, actual) in expected16.iter().zip(spectrum16.iter()) {
         assert!((expected - actual).norm() < 1e-5);
     }
-    let recovered16 = ifft_2d_array::<f16>(&expected16);
-    let mut actual_recovered16 = Array2::<f16>::from_elem([4, 5], f16::from_f32(0.0));
+    let recovered16 = ifft_2d_array::<F16>(&expected16);
+    let mut actual_recovered16 = Array2::<F16>::from_elem([4, 5], F16::from_f32(0.0));
     let mut scratch16 = Array2::<Complex32>::zeros([4, 5]);
-    ifft_2d_array_static_into::<f16, 4, 5>(&expected16, &mut actual_recovered16, &mut scratch16);
+    ifft_2d_array_static_into::<F16, 4, 5>(&expected16, &mut actual_recovered16, &mut scratch16);
     for (expected, actual) in recovered16.iter().zip(actual_recovered16.iter()) {
         assert!((expected.to_f32() - actual.to_f32()).abs() < 1e-3);
     }
@@ -200,17 +200,17 @@ fn static_real_3d_into_wrappers_match_dynamic_paths() {
         assert!((expected - actual).abs() < 2e-5);
     }
 
-    let field16 = field64.mapv(|value| f16::from_f32(value as f32));
+    let field16 = field64.mapv(|value| F16::from_f32(value as f32));
     let expected16 = fft_3d_array(&field16);
     let mut spectrum16 = Array3::<Complex32>::zeros([3, 4, 5]);
-    fft_3d_array_static_into::<f16, 3, 4, 5>(&field16, &mut spectrum16);
+    fft_3d_array_static_into::<F16, 3, 4, 5>(&field16, &mut spectrum16);
     for (expected, actual) in expected16.iter().zip(spectrum16.iter()) {
         assert!((expected - actual).norm() < 2e-5);
     }
-    let recovered16 = ifft_3d_array::<f16>(&expected16);
-    let mut actual_recovered16 = Array3::<f16>::from_elem([3, 4, 5], f16::from_f32(0.0));
+    let recovered16 = ifft_3d_array::<F16>(&expected16);
+    let mut actual_recovered16 = Array3::<F16>::from_elem([3, 4, 5], F16::from_f32(0.0));
     let mut scratch16 = Array3::<Complex32>::zeros([3, 4, 5]);
-    ifft_3d_array_static_into::<f16, 3, 4, 5>(&expected16, &mut actual_recovered16, &mut scratch16);
+    ifft_3d_array_static_into::<F16, 3, 4, 5>(&expected16, &mut actual_recovered16, &mut scratch16);
     for (expected, actual) in recovered16.iter().zip(actual_recovered16.iter()) {
         assert!((expected.to_f32() - actual.to_f32()).abs() < 1e-3);
     }
@@ -250,15 +250,15 @@ fn typed_real_1d_2d_into_supports_f64_f32_and_f16_profiles() {
         assert!((expected - actual).abs() < 1e-5);
     }
 
-    let signal16 = signal64.mapv(|value| f16::from_f32(value as f32));
+    let signal16 = signal64.mapv(|value| F16::from_f32(value as f32));
     let expected16 = fft_1d_array(&signal16);
     let mut spectrum16 = Array1::<Complex32>::zeros([20]);
     fft_1d_array_into(&signal16, &mut spectrum16);
     for (expected, actual) in expected16.iter().zip(spectrum16.iter()) {
         assert!((expected - actual).norm() < 1e-5);
     }
-    let recovered16 = ifft_1d_array::<f16>(&spectrum16);
-    let mut actual_recovered16 = Array1::<f16>::from_elem([20], f16::from_f32(0.0));
+    let recovered16 = ifft_1d_array::<F16>(&spectrum16);
+    let mut actual_recovered16 = Array1::<F16>::from_elem([20], F16::from_f32(0.0));
     let mut scratch16 = Array1::<Complex32>::zeros([20]);
     ifft_1d_array_into(&spectrum16, &mut actual_recovered16, &mut scratch16);
     for (expected, actual) in recovered16.iter().zip(actual_recovered16.iter()) {
@@ -300,14 +300,14 @@ fn typed_3d_into_supports_f64_f32_and_f16_profiles() {
         assert!((expected - actual).abs() < 1e-5);
     }
 
-    let field16 = field64.mapv(|value| f16::from_f32(value as f32));
+    let field16 = field64.mapv(|value| F16::from_f32(value as f32));
     let expected16 = fft_3d_array(&field16);
     let mut spectrum16 = Array3::<Complex32>::zeros([nx, ny, nz]);
     fft_3d_array_into(&field16, &mut spectrum16);
     for (expected, actual) in expected16.iter().zip(spectrum16.iter()) {
         assert!((expected - actual).norm() < 1e-5);
     }
-    let mut recovered16 = Array3::<f16>::from_elem([nx, ny, nz], f16::from_f32(0.0));
+    let mut recovered16 = Array3::<F16>::from_elem([nx, ny, nz], F16::from_f32(0.0));
     let mut scratch16 = Array3::<Complex32>::zeros([nx, ny, nz]);
     ifft_3d_array_into(&spectrum16, &mut recovered16, &mut scratch16);
     for (expected, actual) in field16.iter().zip(recovered16.iter()) {
@@ -316,7 +316,7 @@ fn typed_3d_into_supports_f64_f32_and_f16_profiles() {
         let bound = 2.0 * stage_count * unit_roundoff;
         assert!(
             (expected.to_f32() - actual.to_f32()).abs() < bound,
-            "f16 round-trip error: got {}, expected {}",
+            "F16 round-trip error: got {}, expected {}",
             actual.to_f32(),
             expected.to_f32()
         );

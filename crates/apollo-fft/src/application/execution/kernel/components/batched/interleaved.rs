@@ -283,7 +283,7 @@ fn run_stages<T>(data: &mut [Complex<T>], plan: &BatchedPlan<T>)
 where
     T: BatchedPlanCache<Complex = Complex<T>>,
 {
-    let flat: &mut [T] = bytemuck::cast_slice_mut(data);
+    let flat: &mut [T] = eunomia::layout::cast_slice_mut(data);
     hermes_simd::vectorize(InterleavedStages {
         data: flat,
         tw: &plan.tw,
@@ -322,10 +322,10 @@ where
     //    the data, so this is one elementwise vector pass — the layout
     //    agreement the planar kernel never had.
     let twiddles = T::cached_four_step_twiddles::<INVERSE>(n, m, m);
-    let flat: &mut [T] = bytemuck::cast_slice_mut(data);
+    let flat: &mut [T] = eunomia::layout::cast_slice_mut(data);
     hermes_simd::vectorize(TwiddlePass {
         data: flat,
-        twiddles: bytemuck::cast_slice(&twiddles),
+        twiddles: eunomia::layout::cast_slice(&twiddles),
     });
 
     // 3. Transpose so the second axis becomes batch-major, then its stage set;

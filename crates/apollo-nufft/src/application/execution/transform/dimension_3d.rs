@@ -406,7 +406,7 @@ impl NufftPlan3D {
         self.forward_oversampled_grid_into(scratch_grid, output);
     }
 
-    /// Run type-1 3D NUFFT for `Complex64`, `Complex32`, or mixed `[f16; 2]` storage.
+    /// Run type-1 3D NUFFT for `Complex64`, `Complex32`, or mixed `[F16; 2]` storage.
     pub fn type1_typed_into<T: NufftComplexStorage>(
         &self,
         positions: &[(f64, f64, f64)],
@@ -751,7 +751,7 @@ impl NufftPlan3D {
         }
     }
 
-    /// Run type-2 3D NUFFT for `Complex64`, `Complex32`, or mixed `[f16; 2]` storage.
+    /// Run type-2 3D NUFFT for `Complex64`, `Complex32`, or mixed `[F16; 2]` storage.
     pub fn type2_typed_into<T: NufftComplexStorage>(
         &self,
         positions: &[(f64, f64, f64)],

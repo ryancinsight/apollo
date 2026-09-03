@@ -19,8 +19,8 @@ struct BaseStage<'a, T> {
 
 impl<T> LaneKernel<T> for BaseStage<'_, T>
 where
-    T: LaneScalar + bytemuck::Pod,
-    Complex<T>: bytemuck::Pod
+    T: LaneScalar + eunomia::layout::Pod,
+    Complex<T>: eunomia::layout::Pod
         + Add<Output = Complex<T>>
         + Sub<Output = Complex<T>>
         + Mul<Output = Complex<T>>,
@@ -40,7 +40,7 @@ where
         let groups = n / (radix << 1);
         let per_register = A::LANE_COUNT / 2;
         let vector_end = groups & !(per_register - 1);
-        let src_view = simd.view(bytemuck::cast_slice::<Complex<T>, T>(src));
+        let src_view = simd.view(eunomia::layout::cast_slice::<Complex<T>, T>(src));
 
         for j in 0..radix {
             let w = twiddles[j];
@@ -58,7 +58,8 @@ where
                         offset / per_register,
                     ))
                 };
-                let mut dst_view = simd.view_mut(bytemuck::cast_slice_mut::<Complex<T>, T>(dst));
+                let mut dst_view =
+                    simd.view_mut(eunomia::layout::cast_slice_mut::<Complex<T>, T>(dst));
                 for k in (0..vector_end).step_by(per_register) {
                     let a = load(src_base + k);
                     let product = load(src_base + groups + k) * wv;
@@ -97,8 +98,8 @@ pub(crate) fn stage_lanes<T, const LANES: usize>(
     twiddles: &[Complex<T>],
 ) -> bool
 where
-    T: LaneScalar + bytemuck::Pod,
-    Complex<T>: bytemuck::Pod
+    T: LaneScalar + eunomia::layout::Pod,
+    Complex<T>: eunomia::layout::Pod
         + Add<Output = Complex<T>>
         + Sub<Output = Complex<T>>
         + Mul<Output = Complex<T>>,

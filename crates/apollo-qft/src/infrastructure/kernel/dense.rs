@@ -126,7 +126,7 @@ fn qft_row_hermes(
 
 #[inline]
 fn interleaved_lanes(values: &[Complex64]) -> &[f64] {
-    bytemuck::cast_slice(values)
+    eunomia::layout::cast_slice(values)
 }
 
 fn fill_twiddle_lanes(

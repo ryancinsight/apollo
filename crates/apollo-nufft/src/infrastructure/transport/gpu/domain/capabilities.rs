@@ -23,7 +23,7 @@ pub struct NufftWgpuCapabilities {
     pub supports_fast_type1_3d: bool,
     /// Whether fast gridded Type-2 3D NUFFT execution is implemented.
     pub supports_fast_type2_3d: bool,
-    /// Whether mixed-precision (f16/f32/f64) typed storage dispatch is supported.
+    /// Whether mixed-precision (F16/f32/f64) typed storage dispatch is supported.
     pub supports_mixed_precision: bool,
     /// Default precision profile for GPU execution.
     pub default_precision_profile: PrecisionProfile,

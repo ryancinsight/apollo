@@ -140,7 +140,7 @@ impl CwtPlan {
             .ok_or(WaveletError::CoefficientShapeMismatch)
     }
 
-    /// Execute the CWT for `f64`, `f32`, or mixed `f16` storage into a
+    /// Execute the CWT for `f64`, `f32`, or mixed `F16` storage into a
     /// caller-owned matrix with shape `(scales, signal_len)`.
     pub fn transform_typed_into<T: WaveletStorage>(
         &self,
@@ -171,7 +171,7 @@ impl CwtPlan {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use apollo_fft::f16;
+    use apollo_fft::F16;
     use eunomia::assert_abs_diff_eq;
 
     #[test]
@@ -198,16 +198,16 @@ mod tests {
             assert!((f64::from(*actual) - *expected).abs() < 1.0e-5);
         }
 
-        let signal16 = signal64.map(|value| f16::from_f32(value as f32));
+        let signal16 = signal64.map(|value| F16::from_f32(value as f32));
         let represented16 = signal16.map(|value| f64::from(value.to_f32()));
-        let expected16 = plan.transform(&represented16).expect("represented f16 CWT");
-        let mut out16 = Array2::from_elem([2, 4], f16::from_f32(0.0));
+        let expected16 = plan.transform(&represented16).expect("represented F16 CWT");
+        let mut out16 = Array2::from_elem([2, 4], F16::from_f32(0.0));
         plan.transform_typed_into(
             &signal16,
             &mut out16,
             PrecisionProfile::MIXED_PRECISION_F16_F32,
         )
-        .expect("typed f16 CWT");
+        .expect("typed F16 CWT");
         for (actual, expected) in out16.iter().zip(expected16.values().iter()) {
             let quantization_bound = expected.abs() * 2.0_f64.powi(-10) + 2.0_f64.powi(-14);
             assert!((f64::from(actual.to_f32()) - *expected).abs() <= quantization_bound);

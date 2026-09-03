@@ -1,6 +1,6 @@
 use super::DctDstPlan;
 use crate::domain::contracts::error::{DctDstError, DctDstResult};
-use apollo_fft::{f16, CpuStorage, PrecisionProfile};
+use apollo_fft::{CpuStorage, PrecisionProfile, F16};
 use mnemosyne::scratch::ScratchPool;
 
 thread_local! {
@@ -18,7 +18,7 @@ fn with_f64_workspaces<R>(n: usize, f: impl FnOnce(&mut [f64], &mut [f64]) -> R)
 }
 
 impl DctDstPlan {
-    /// Execute the forward transform for `f64`, `f32`, or mixed `f16` storage.
+    /// Execute the forward transform for `f64`, `f32`, or mixed `F16` storage.
     ///
     /// Lower storage profiles reuse the crate's authoritative `f64` transform
     /// and quantize once into the caller-owned output slice. This avoids
@@ -46,7 +46,7 @@ impl DctDstPlan {
             .expect("DCT/DST output length must match Leto output shape"))
     }
 
-    /// Execute the inverse transform for `f64`, `f32`, or mixed `f16` storage.
+    /// Execute the inverse transform for `f64`, `f32`, or mixed `F16` storage.
     pub fn inverse_typed_into<T: RealTransformStorage>(
         &self,
         signal: &[T],
@@ -143,19 +143,19 @@ impl RealTransformStorage for f64 {
 
 impl RealTransformStorage for f32 {}
 
-impl RealTransformStorage for f16 {}
+impl RealTransformStorage for F16 {}
 
 mod sealed {
     pub trait Sealed {}
 
     impl Sealed for f32 {}
-    impl Sealed for apollo_fft::f16 {}
+    impl Sealed for apollo_fft::F16 {}
 }
 
 /// Storage whose compute profile is the concrete `f32` accelerator contract.
 ///
 /// This sealed capability admits native `f32` storage and explicit mixed
-/// `f16`/`f32` storage. High-accuracy `f64` storage is intentionally excluded:
+/// `F16`/`f32` storage. High-accuracy `f64` storage is intentionally excluded:
 /// accepting it would silently narrow the public typed API to the WGPU kernel's
 /// concrete arithmetic.
 ///
@@ -183,13 +183,13 @@ impl RealTransformGpuStorage for f32 {
     }
 }
 
-impl RealTransformGpuStorage for f16 {
+impl RealTransformGpuStorage for F16 {
     fn to_gpu(self) -> f32 {
         self.to_f32()
     }
 
     fn from_gpu(value: f32) -> Self {
-        f16::from_f32(value)
+        F16::from_f32(value)
     }
 }
 

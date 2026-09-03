@@ -6,7 +6,7 @@ use super::ShtPlan;
 use crate::domain::contracts::error::ShtError;
 use crate::domain::spectrum::coefficients::SphericalHarmonicCoefficients;
 use crate::infrastructure::kernel::spherical_harmonic::spherical_harmonic;
-use apollo_fft::{f16, CpuStorage, PrecisionProfile};
+use apollo_fft::{CpuStorage, PrecisionProfile, F16};
 use eunomia::assert_abs_diff_eq;
 use eunomia::{Complex32, Complex64};
 use leto::Array2;
@@ -116,19 +116,19 @@ fn typed_real_forward_supports_f64_f32_and_mixed_f16_storage() {
         assert!((f64::from(actual.im) - expected.im).abs() < 1.0e-5);
     }
 
-    let samples16 = samples64.mapv(|value| f16::from_f32(value as f32));
+    let samples16 = samples64.mapv(|value| F16::from_f32(value as f32));
     let represented16 = samples16.mapv(|value| f64::from(value.to_f32()));
     let expected16 = plan
         .forward_real(&represented16)
-        .expect("represented f16 forward");
-    let mut out16 = Array2::from_elem(shape, [f16::from_f32(0.0), f16::from_f32(0.0)]);
+        .expect("represented F16 forward");
+    let mut out16 = Array2::from_elem(shape, [F16::from_f32(0.0), F16::from_f32(0.0)]);
     plan.forward_real_typed_into(
         &samples16,
         &mut out16,
         PrecisionProfile::MIXED_PRECISION_F16_F32,
         PrecisionProfile::MIXED_PRECISION_F16_F32,
     )
-    .expect("typed f16 real forward");
+    .expect("typed F16 real forward");
     for (actual, expected) in out16.iter().zip(expected16.values().iter()) {
         let re_bound = expected.re.abs() * 2.0_f64.powi(-10) + 2.0_f64.powi(-14);
         let im_bound = expected.im.abs() * 2.0_f64.powi(-10) + 2.0_f64.powi(-14);

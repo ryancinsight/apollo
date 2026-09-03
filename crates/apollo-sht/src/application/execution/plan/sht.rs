@@ -246,7 +246,7 @@ impl ShtPlan {
             .ok_or(ShtError::CoefficientShapeMismatch)
     }
 
-    /// Forward real-sample SHT for `f64`, `f32`, or mixed `f16` sample storage.
+    /// Forward real-sample SHT for `f64`, `f32`, or mixed `F16` sample storage.
     pub fn forward_real_typed_into<T: ShtRealStorage, O: ShtComplexStorage>(
         &self,
         samples: &Array2<T>,
@@ -273,7 +273,7 @@ impl ShtPlan {
         apollo_leto_interop::try_dense_from_array(&output).ok_or(ShtError::CoefficientShapeMismatch)
     }
 
-    /// Forward complex-sample SHT for `Complex64`, `Complex32`, or mixed `[f16; 2]`.
+    /// Forward complex-sample SHT for `Complex64`, `Complex32`, or mixed `[F16; 2]`.
     pub fn forward_complex_typed_into<T: ShtComplexStorage, O: ShtComplexStorage>(
         &self,
         samples: &Array2<T>,

@@ -3,7 +3,7 @@
 use super::plan::CztPlan;
 use super::workspace::{validate_profile, with_complex64_workspaces};
 use crate::domain::contracts::error::CztError;
-use apollo_fft::{f16, CpuStorage, PrecisionProfile};
+use apollo_fft::{CpuStorage, PrecisionProfile, F16};
 use eunomia::{Complex32, Complex64};
 use leto::Array1;
 
@@ -175,12 +175,12 @@ impl CztStorage for Complex32 {
     }
 }
 
-impl CztStorage for [f16; 2] {
+impl CztStorage for [F16; 2] {
     fn to_complex32(self) -> Complex32 {
         Complex32::new(self[0].to_f32(), self[1].to_f32())
     }
 
     fn from_complex32(value: Complex32) -> Self {
-        [f16::from_f32(value.re), f16::from_f32(value.im)]
+        [F16::from_f32(value.re), F16::from_f32(value.im)]
     }
 }

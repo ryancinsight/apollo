@@ -35,9 +35,9 @@ pub(super) fn digit_pair_twiddles<T, A>(
     j: usize,
 ) -> ComplexReg<T, A>
 where
-    T: LaneScalar + bytemuck::Pod,
+    T: LaneScalar + eunomia::layout::Pod,
     A: SimdArch + SimdKernel<T>,
-    Complex<T>: bytemuck::Pod,
+    Complex<T>: eunomia::layout::Pod,
 {
     let low = ComplexReg::<T, A>::splat(twiddles[j]);
     if A::LANE_COUNT / 4 <= 1 {
@@ -64,8 +64,8 @@ struct PairStageQuarterGroupsTwo<'a, T> {
 
 impl<T> LaneKernel<T> for PairStageQuarterGroupsTwo<'_, T>
 where
-    T: LaneScalar + bytemuck::Pod,
-    Complex<T>: bytemuck::Pod
+    T: LaneScalar + eunomia::layout::Pod,
+    Complex<T>: eunomia::layout::Pod
         + Add<Output = Complex<T>>
         + Sub<Output = Complex<T>>
         + Mul<Output = Complex<T>>,
@@ -104,8 +104,8 @@ where
             // gathers each input index across the two digits. Outputs are
             // contiguous over `2j` and `quarter_n = 2 · radix` is a register
             // multiple once the loop runs.
-            let src_view = simd.view(bytemuck::cast_slice::<Complex<T>, T>(src));
-            let mut dst_view = simd.view_mut(bytemuck::cast_slice_mut::<Complex<T>, T>(dst));
+            let src_view = simd.view(eunomia::layout::cast_slice::<Complex<T>, T>(src));
+            let mut dst_view = simd.view_mut(eunomia::layout::cast_slice_mut::<Complex<T>, T>(dst));
             for j in (0..vector_end).step_by(digits) {
                 let base = (8 * j) / per_register;
                 let load = |c: usize| Vector::from_view_chunk(&src_view, base + c);
@@ -173,8 +173,8 @@ pub(crate) fn stage_pair_quarter_groups_two_lanes<T, const LANES: usize>(
     second_twiddles: &[Complex<T>],
 ) -> bool
 where
-    T: LaneScalar + bytemuck::Pod,
-    Complex<T>: bytemuck::Pod
+    T: LaneScalar + eunomia::layout::Pod,
+    Complex<T>: eunomia::layout::Pod
         + Add<Output = Complex<T>>
         + Sub<Output = Complex<T>>
         + Mul<Output = Complex<T>>,
@@ -203,8 +203,8 @@ struct TripleStageGroupsEight<'a, T> {
 
 impl<T> LaneKernel<T> for TripleStageGroupsEight<'_, T>
 where
-    T: LaneScalar + bytemuck::Pod,
-    Complex<T>: bytemuck::Pod
+    T: LaneScalar + eunomia::layout::Pod,
+    Complex<T>: eunomia::layout::Pod
         + Add<Output = Complex<T>>
         + Sub<Output = Complex<T>>
         + Mul<Output = Complex<T>>,
@@ -244,8 +244,8 @@ where
             // input index across the two digits. Outputs are contiguous over
             // `2j`, and `eighth_n = 2 · radix` is a register multiple once the
             // loop runs.
-            let src_view = simd.view(bytemuck::cast_slice::<Complex<T>, T>(src));
-            let mut dst_view = simd.view_mut(bytemuck::cast_slice_mut::<Complex<T>, T>(dst));
+            let src_view = simd.view(eunomia::layout::cast_slice::<Complex<T>, T>(src));
+            let mut dst_view = simd.view_mut(eunomia::layout::cast_slice_mut::<Complex<T>, T>(dst));
             for j in (0..vector_end).step_by(digits) {
                 let base = (16 * j) / per_register;
                 let load = |c: usize| Vector::from_view_chunk(&src_view, base + c);
@@ -351,8 +351,8 @@ pub(crate) fn stage_triple_groups_eight_lanes<T, const LANES: usize>(
     third_twiddles: &[Complex<T>],
 ) -> bool
 where
-    T: LaneScalar + bytemuck::Pod,
-    Complex<T>: bytemuck::Pod
+    T: LaneScalar + eunomia::layout::Pod,
+    Complex<T>: eunomia::layout::Pod
         + Add<Output = Complex<T>>
         + Sub<Output = Complex<T>>
         + Mul<Output = Complex<T>>,

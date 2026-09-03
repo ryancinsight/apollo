@@ -401,7 +401,7 @@ where
 pub(crate) fn four_step_planar<T, const INVERSE: bool>(data: &mut [Complex<T>]) -> bool
 where
     T: ResidentPlanCache,
-    Complex<T>: bytemuck::Pod,
+    Complex<T>: eunomia::layout::Pod,
 {
     if data.len() != ROW * ROW {
         return false;
@@ -436,7 +436,7 @@ where
 
     sect!("t1", { super::transpose_samples(data, ROW) });
     {
-        let flat: &mut [T] = bytemuck::cast_slice_mut(data);
+        let flat: &mut [T] = eunomia::layout::cast_slice_mut(data);
         if !sect!("rows1", {
             hermes_simd::vectorize_lanes::<4, T, _>(PlanarRows::<T, false> {
                 data: flat,
@@ -450,7 +450,7 @@ where
     }
     sect!("t2", { super::transpose_samples(data, ROW) });
     {
-        let flat: &mut [T] = bytemuck::cast_slice_mut(data);
+        let flat: &mut [T] = eunomia::layout::cast_slice_mut(data);
         let handled = sect!("rows2", {
             hermes_simd::vectorize_lanes::<4, T, _>(PlanarRows::<T, true> {
                 data: flat,

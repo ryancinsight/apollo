@@ -172,7 +172,7 @@ pub(super) fn sht_inverse_sample_hermes(
 /// no code with the implementation it judges.
 #[cfg(test)]
 pub(super) fn interleaved_lanes(values: &[Complex64]) -> &[f64] {
-    bytemuck::cast_slice(values)
+    eunomia::layout::cast_slice(values)
 }
 
 #[cfg(test)]

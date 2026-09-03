@@ -15,7 +15,6 @@ hephaestus-cuda = { workspace = true, optional = true }
 bytemuck = { workspace = true }
 apollo-fft-macros = { version = "0.2.0", path = "../apollo-fft-macros" }
 apollo-leto-interop = { version = "0.18.0", path = "../apollo-leto-interop" }
-half = { workspace = true }
 hermes-simd = { workspace = true }
 leto = { workspace = true }
 leto-ops = { workspace = true }

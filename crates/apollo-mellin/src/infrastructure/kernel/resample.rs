@@ -284,7 +284,7 @@ fn inverse_log_frequency_coeff_hermes(
 
 #[inline]
 fn complex_interleaved_lanes(values: &[Complex64]) -> &[f64] {
-    bytemuck::cast_slice(values)
+    eunomia::layout::cast_slice(values)
 }
 
 fn fill_log_frequency_weight_lanes(lanes: &mut [f64], factor: f64, row: usize) {

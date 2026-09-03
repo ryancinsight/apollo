@@ -13,9 +13,9 @@
 //! | Coprime composite  | **Good-Thomas PFA** — CRT remapping without inter-stage twiddles. |
 //! | Prime              | **Rader convolution** — N-1 cyclic convolution with cached spectrum/permutation. |
 //!
-//! ## Dispatch hierarchy (f16)
+//! ## Dispatch hierarchy (F16)
 //!
-//! `Complex<f16>` is storage-only. Lengths 2, 4, 8, 16, and 32 use the
+//! `Complex<F16>` is storage-only. Lengths 2, 4, 8, 16, and 32 use the
 //! stack-resident f32 codelets; larger lengths are owned by the public API,
 //! which resolves a cached f32 plan and uses `run_via_complex32`.
 //!

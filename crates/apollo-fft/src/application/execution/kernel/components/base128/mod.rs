@@ -42,20 +42,20 @@ const BASE: usize = 128;
 
 fn base_lanes<T>(data: &[eunomia::Complex<T>]) -> &[T; 2 * BASE]
 where
-    T: bytemuck::Pod,
-    eunomia::Complex<T>: bytemuck::Pod,
+    T: eunomia::layout::Pod,
+    eunomia::Complex<T>: eunomia::layout::Pod,
 {
-    bytemuck::cast_slice(data)
+    eunomia::layout::cast_slice(data)
         .try_into()
         .expect("invariant: one base block is exactly 256 scalar lanes")
 }
 
 fn base_lanes_mut<T>(data: &mut [eunomia::Complex<T>]) -> &mut [T; 2 * BASE]
 where
-    T: bytemuck::Pod,
-    eunomia::Complex<T>: bytemuck::Pod,
+    T: eunomia::layout::Pod,
+    eunomia::Complex<T>: eunomia::layout::Pod,
 {
-    bytemuck::cast_slice_mut(data)
+    eunomia::layout::cast_slice_mut(data)
         .try_into()
         .expect("invariant: one base block is exactly 256 scalar lanes")
 }
@@ -89,7 +89,7 @@ where
     F: crate::application::execution::kernel::mixed_radix::MixedRadixScalar<
         Complex = eunomia::Complex<F>,
     >,
-    eunomia::Complex<F>: bytemuck::Pod,
+    eunomia::Complex<F>: eunomia::layout::Pod,
 {
     let n = data.len();
     debug_assert!(BASE_SPLIT_LENGTHS.contains(&n));
@@ -109,8 +109,8 @@ where
             // base kernel's width keeps a four-byte scalar out of the
             // scalar-emulated four-lane frame it previously gathered in.
             let gathered = {
-                let src = bytemuck::cast_slice(&*data);
-                let dst = bytemuck::cast_slice_mut(&mut scratch[..n]);
+                let src = eunomia::layout::cast_slice(&*data);
+                let dst = eunomia::layout::cast_slice_mut(&mut scratch[..n]);
                 match (blocks, plan.native_eight_lanes()) {
                     (2, false) => {
                         hermes_simd::vectorize_lanes::<4, F, _>(split_boundary::GatherBlocks::<
@@ -264,7 +264,7 @@ where
     F: crate::application::execution::kernel::mixed_radix::MixedRadixScalar<
         Complex = eunomia::Complex<F>,
     >,
-    eunomia::Complex<F>: bytemuck::Pod,
+    eunomia::Complex<F>: eunomia::layout::Pod,
 {
     let n = data.len();
     assert_eq!(n, 4 * BASE, "the incumbent probe covers only N=512");
@@ -273,8 +273,8 @@ where
         |scratch| {
             let gathered =
                 hermes_simd::vectorize_lanes::<4, F, _>(split_boundary::GatherBlocks::<F, 4> {
-                    src: bytemuck::cast_slice(&*data),
-                    dst: bytemuck::cast_slice_mut(&mut scratch[..n]),
+                    src: eunomia::layout::cast_slice(&*data),
+                    dst: eunomia::layout::cast_slice_mut(&mut scratch[..n]),
                 })
                 .unwrap_or(false);
             if !gathered {

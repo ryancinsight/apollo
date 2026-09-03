@@ -1,4 +1,4 @@
-use apollo_fft::{f16, PrecisionProfile};
+use apollo_fft::{PrecisionProfile, F16};
 use eunomia::{Complex32, Complex64};
 use leto::Storage;
 
@@ -17,12 +17,12 @@ fn typed_leto_fast_type1_1d_matches_typed_slice_path() {
     let plan = NufftWgpuPlan1D::new(domain, 2, 6);
     let positions = [0.0_f32, 0.25, 0.7, 1.15];
     let values16 = [
-        [f16::from_f32(1.0), f16::from_f32(0.0)],
-        [f16::from_f32(0.5), f16::from_f32(-0.25)],
-        [f16::from_f32(-0.75), f16::from_f32(0.5)],
-        [f16::from_f32(0.25), f16::from_f32(0.75)],
+        [F16::from_f32(1.0), F16::from_f32(0.0)],
+        [F16::from_f32(0.5), F16::from_f32(-0.25)],
+        [F16::from_f32(-0.75), F16::from_f32(0.5)],
+        [F16::from_f32(0.25), F16::from_f32(0.75)],
     ];
-    let mut expected = vec![[f16::from_f32(0.0), f16::from_f32(0.0)]; domain.n];
+    let mut expected = vec![[F16::from_f32(0.0), F16::from_f32(0.0)]; domain.n];
     backend
         .execute_fast_type1_1d_typed_into(
             &plan,
@@ -38,7 +38,7 @@ fn typed_leto_fast_type1_1d_matches_typed_slice_path() {
         leto::Array1::from_shape_vec([values16.len()], values16.to_vec()).expect("values");
 
     let actual = backend
-        .execute_fast_type1_1d_leto_typed::<[f16; 2]>(
+        .execute_fast_type1_1d_leto_typed::<[F16; 2]>(
             &plan,
             PrecisionProfile::MIXED_PRECISION_F16_F32,
             leto_positions.view(),
@@ -94,10 +94,10 @@ fn fast_type1_1d_typed_mixed_storage_matches_represented_input() {
     let plan = NufftWgpuPlan1D::new(domain, 2, 6);
     let positions = [0.0_f32, 0.25, 0.7, 1.15];
     let values16 = [
-        [f16::from_f32(1.0), f16::from_f32(0.0)],
-        [f16::from_f32(0.5), f16::from_f32(-0.25)],
-        [f16::from_f32(-0.75), f16::from_f32(0.5)],
-        [f16::from_f32(0.25), f16::from_f32(0.75)],
+        [F16::from_f32(1.0), F16::from_f32(0.0)],
+        [F16::from_f32(0.5), F16::from_f32(-0.25)],
+        [F16::from_f32(-0.75), F16::from_f32(0.5)],
+        [F16::from_f32(0.25), F16::from_f32(0.75)],
     ];
     let represented: Vec<Complex32> = values16
         .iter()
@@ -106,7 +106,7 @@ fn fast_type1_1d_typed_mixed_storage_matches_represented_input() {
     let expected = backend
         .execute_fast_type1_1d(&plan, &positions, &represented)
         .expect("represented fast type1 1D");
-    let mut actual = vec![[f16::from_f32(0.0), f16::from_f32(0.0)]; domain.n];
+    let mut actual = vec![[F16::from_f32(0.0), F16::from_f32(0.0)]; domain.n];
 
     backend
         .execute_fast_type1_1d_typed_into(
@@ -120,8 +120,8 @@ fn fast_type1_1d_typed_mixed_storage_matches_represented_input() {
 
     assert_eq!(actual.len(), expected.size());
     for (actual, expected) in actual.iter().zip(expected.iter()) {
-        let expected_re = f16::from_f32(expected.re as f32);
-        let expected_im = f16::from_f32(expected.im as f32);
+        let expected_re = F16::from_f32(expected.re as f32);
+        let expected_im = F16::from_f32(expected.im as f32);
         assert_eq!(actual[0].to_bits(), expected_re.to_bits());
         assert_eq!(actual[1].to_bits(), expected_im.to_bits());
     }

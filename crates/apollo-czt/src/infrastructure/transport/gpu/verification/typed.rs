@@ -1,6 +1,6 @@
 //! Value-semantic CZT GPU represented-storage contracts.
 
-use apollo_fft::{f16, PrecisionProfile};
+use apollo_fft::{PrecisionProfile, F16};
 use eunomia::Complex32;
 use leto::Storage;
 
@@ -13,9 +13,9 @@ fn typed_mixed_storage_matches_represented_execution_when_device_exists() {
         return;
     };
     let (a, w) = reference_parameters();
-    let input: Vec<[f16; 2]> = reference_input()
+    let input: Vec<[F16; 2]> = reference_input()
         .iter()
-        .map(|value| [f16::from_f32(value.re), f16::from_f32(value.im)])
+        .map(|value| [F16::from_f32(value.re), F16::from_f32(value.im)])
         .collect();
     let represented: Vec<Complex32> = input
         .iter()
@@ -25,7 +25,7 @@ fn typed_mixed_storage_matches_represented_execution_when_device_exists() {
     let expected = backend
         .execute_forward(&plan, &represented)
         .expect("represented forward");
-    let mut actual = vec![[f16::from_f32(0.0), f16::from_f32(0.0)]; 6];
+    let mut actual = vec![[F16::from_f32(0.0), F16::from_f32(0.0)]; 6];
     backend
         .execute_forward_typed_into(
             &plan,
@@ -36,7 +36,7 @@ fn typed_mixed_storage_matches_represented_execution_when_device_exists() {
         .expect("typed mixed forward");
 
     for (actual, expected) in actual.iter().zip(expected.iter()) {
-        let expected = [f16::from_f32(expected.re), f16::from_f32(expected.im)];
+        let expected = [F16::from_f32(expected.re), F16::from_f32(expected.im)];
         assert_eq!(actual[0].to_bits(), expected[0].to_bits());
         assert_eq!(actual[1].to_bits(), expected[1].to_bits());
     }
@@ -48,12 +48,12 @@ fn typed_leto_forward_matches_typed_slice_when_device_exists() {
         return;
     };
     let (a, w) = reference_parameters();
-    let input: Vec<[f16; 2]> = reference_input()
+    let input: Vec<[F16; 2]> = reference_input()
         .iter()
-        .map(|value| [f16::from_f32(value.re), f16::from_f32(value.im)])
+        .map(|value| [F16::from_f32(value.re), F16::from_f32(value.im)])
         .collect();
     let plan = backend.plan(ChirpPlan::new(input.len(), 6, a, w));
-    let mut expected = vec![[f16::from_f32(0.0), f16::from_f32(0.0)]; 6];
+    let mut expected = vec![[F16::from_f32(0.0), F16::from_f32(0.0)]; 6];
     backend
         .execute_forward_typed_into(
             &plan,
@@ -64,7 +64,7 @@ fn typed_leto_forward_matches_typed_slice_when_device_exists() {
         .expect("typed slice forward");
     let leto_input = leto::Array1::from_shape_vec([input.len()], input).expect("Leto input");
     let actual = backend
-        .execute_forward_leto_typed::<[f16; 2], [f16; 2]>(
+        .execute_forward_leto_typed::<[F16; 2], [F16; 2]>(
             &plan,
             PrecisionProfile::MIXED_PRECISION_F16_F32,
             leto_input.view(),

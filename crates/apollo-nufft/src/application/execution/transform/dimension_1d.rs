@@ -33,7 +33,7 @@
 //! - oversampling factor must satisfy `sigma >= 2`
 //! - kernel width must satisfy `kernel_width >= 2`
 use apollo_fft::{
-    f16, ApolloError, ApolloResult, CpuStorage, FftPlan1D, PrecisionProfile, Shape1D,
+    ApolloError, ApolloResult, CpuStorage, FftPlan1D, PrecisionProfile, Shape1D, F16,
 };
 use eunomia::{Complex32, Complex64};
 use leto::Array1;
@@ -358,7 +358,7 @@ impl NufftPlan1D {
         }
     }
 
-    /// Run type-1 NUFFT for `Complex64`, `Complex32`, or mixed `[f16; 2]` storage.
+    /// Run type-1 NUFFT for `Complex64`, `Complex32`, or mixed `[F16; 2]` storage.
     ///
     /// The owner path remains the `Complex64` Kaiser-Bessel spread, Apollo FFT,
     /// and deconvolution pipeline. Typed storage converts represented input
@@ -425,7 +425,7 @@ impl NufftPlan1D {
         })
     }
 
-    /// Run type-2 NUFFT for `Complex64`, `Complex32`, or mixed `[f16; 2]` storage.
+    /// Run type-2 NUFFT for `Complex64`, `Complex32`, or mixed `[F16; 2]` storage.
     pub fn type2_typed_into<T: NufftComplexStorage>(
         &self,
         fourier_coeffs: &[T],
@@ -556,7 +556,7 @@ impl NufftComplexStorage for Complex32 {
     }
 }
 
-impl NufftComplexStorage for [f16; 2] {}
+impl NufftComplexStorage for [F16; 2] {}
 
 pub(crate) fn validate_profile(
     actual: PrecisionProfile,
@@ -705,7 +705,7 @@ fn nufft_type2_sample_hermes(x: f64, coeff_lanes: &[f64], domain: UniformDomain1
 
 #[inline]
 fn interleaved_lanes(values: &[Complex64]) -> &[f64] {
-    bytemuck::cast_slice(values)
+    eunomia::layout::cast_slice(values)
 }
 
 fn fill_type1_weight_lanes(
@@ -965,19 +965,19 @@ mod tests {
             assert!((f64::from(actual.im) - expected.im).abs() < 1.0e-3);
         }
 
-        let values16: Vec<[f16; 2]> = values64
+        let values16: Vec<[F16; 2]> = values64
             .iter()
             .map(|value| {
                 [
-                    f16::from_f32(value.re as f32),
-                    f16::from_f32(value.im as f32),
+                    F16::from_f32(value.re as f32),
+                    F16::from_f32(value.im as f32),
                 ]
             })
             .collect();
         let represented16: Vec<Complex64> =
             values16.iter().copied().map(CpuStorage::to_cpu).collect();
         let expected16 = plan.type1(&positions, &represented16);
-        let mut output16 = vec![[f16::from_f32(0.0), f16::from_f32(0.0)]; plan.n_out];
+        let mut output16 = vec![[F16::from_f32(0.0), F16::from_f32(0.0)]; plan.n_out];
         plan.type1_typed_into(
             &positions,
             &values16,
@@ -985,7 +985,7 @@ mod tests {
             &mut output16,
             PrecisionProfile::MIXED_PRECISION_F16_F32,
         )
-        .expect("typed f16 type1");
+        .expect("typed F16 type1");
         for (actual, expected) in output16.iter().zip(expected16.iter()) {
             let re_bound = expected.re.abs() * 2.0_f64.powi(-10) + 2.0_f64.powi(-14);
             let im_bound = expected.im.abs() * 2.0_f64.powi(-10) + 2.0_f64.powi(-14);

@@ -63,7 +63,7 @@ pub use domain::metadata::precision::{
 };
 pub use domain::metadata::shape::{HalfSpectrum3D, Shape1D, Shape2D, Shape3D};
 pub use domain::storage::scalar::{CpuElement, CpuStorage};
-pub use half::f16;
+pub use eunomia::F16;
 pub use infrastructure::transport::cpu::CpuBackend;
 #[cfg(feature = "wgpu")]
 pub use infrastructure::transport::transform::{

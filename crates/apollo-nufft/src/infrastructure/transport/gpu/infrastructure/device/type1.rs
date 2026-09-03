@@ -40,7 +40,7 @@ impl NufftWgpuBackend {
 
     /// Execute exact direct Type-1 1D NUFFT with caller-owned typed storage.
     ///
-    /// WGPU arithmetic remains `f32`. Mixed `[f16; 2]` storage is promoted once
+    /// WGPU arithmetic remains `f32`. Mixed `[F16; 2]` storage is promoted once
     /// to represented `Complex32` before dispatch, then quantized at the output
     /// boundary.
     pub fn execute_type1_1d_typed_into<T: NufftComplexStorage>(

@@ -88,7 +88,7 @@ Apollo stores mixed-precision validation thresholds centrally in the validation 
   is exact modular integer arithmetic. It instead exposes exact quantized `u32`
   residue storage for the current 32-bit WGPU modulus surface.
 
-Apollo CPU `mixed_precision` means `half::f16` storage with `f32` compute.
+Apollo CPU `mixed_precision` means `eunomia::F16` storage with `f32` compute.
 Hephaestus separately exposes native-f16 WGPU FFT arithmetic on devices with
 `ShaderF16`.
 
