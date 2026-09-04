@@ -58,14 +58,13 @@ repository = "https://github.com/ryancinsight/apollo"
 
 [workspace.dependencies]
 anyhow = "1.0.103"
-bytemuck = { version = "1.25.1", features = ["derive"] }
 csv = "1.4.0"
 # Temporary co-evolution pin for Eunomia PR #87; remove `rev` after the
 # provider derive delivery merges to main and regenerate Cargo.lock.
 eunomia = { version = "0.8.0", git = "https://github.com/ryancinsight/eunomia", rev = "fdbf12275d35aa1545060a4277644c497ddcda37", default-features = false, features = ["std"] }
 # Temporary co-evolution pin for Mnemosyne PR #123; remove `rev` after the
 # Eunomia source-identity correction merges to main and regenerate Cargo.lock.
-mnemosyne = { package = "mnemosyne-memory", version = "0.7.0", git = "https://github.com/ryancinsight/Mnemosyne.git", rev = "da5c6be", features = ["eunomia"] }
+mnemosyne = { package = "mnemosyne-memory", version = "0.7.0", git = "https://github.com/ryancinsight/Mnemosyne.git", rev = "0e86b2715af7155d8bd93b6f7ce0e43ffa0d8544", features = ["eunomia"] }
 melinoe = { version = "0.9.0", git = "https://github.com/ryancinsight/melinoe.git", default-features = false, features = ["alloc"] }
 # Temporary co-evolution pin for Hermes PR #155; remove `rev` after its
 # provider source-identity correction merges to main and regenerate Cargo.lock.
