@@ -96,6 +96,13 @@
   inverse, 21/13 normalized. The paired instrument reports n = 32 medians of
   `53.847/42.442 ns` for Apollo/RustFFT, missing the `15.28 ns` Apollo target;
   the full 64-double explicit boundary remains canonical.
+- **Radix-8-by-radix-4 four-step rejected at codegen.** Reversing the factor
+  order stages two radix-8 banks, then combines adjacent frequency columns
+  with radix-4 SIMD. The focused route tests pass, but release assembly raises
+  vector stack stores from 22/22/21 to 32/28/28 for forward/inverse/normalized
+  arms and leaves the original schedule's helpers unused. The added bank
+  transpose and twiddle traffic are therefore dominated before timing; the
+  radix-4-by-radix-8 explicit boundary remains canonical.
 - **Two-lane SSE radix-4 staging rejected.** Computing each first-stage complex
   pair with SSE2/FMA and retaining the AVX2 radix-8 consumer passes the 10/10
   value gate. Release codegen lowers the vector stack moves to 19/9 forward,
