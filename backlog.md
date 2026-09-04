@@ -151,10 +151,10 @@
   replacing a derive Eunomia owns; provider-owned transitive edges remain
   explicitly visible in `cargo tree`.
 - **Co-evolution source graph, 2026-09-03.** Apollo follows Eunomia `fdbf122`,
-  direct Mnemosyne `15d39f3`, Hermes `5a399ee`, Leto `1caa846`, Hephaestus
+  direct Mnemosyne `7f173751`, Hermes `5a399ee`, Leto `1caa846`, Hephaestus
   `7ca992d`, and Moirai `773c117` through the workspace dependency table. The
-  lockfile is regenerated standalone; Mnemosyne `da5c6be` remains only through
-  older provider edges and is a separate cross-repo identity item. The exact
+  lockfile is regenerated standalone; older Mnemosyne revisions remain only
+  through provider edges and are separate cross-repo identity items. The exact
   graph passes all-features workspace check, warning-denied Clippy, nextest
   (1,415/1,415 with 29 skipped), doctests, warning-denied rustdoc, and
   formatting. See [ADR 0047](docs/adr/0047-first-party-source-identity-during-coevolution.md).
