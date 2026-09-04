@@ -71,6 +71,13 @@
   versus `22.342/18.276 ns` for the inline explicit-boundary baseline. The
   call boundary is slower than the retained inline form, so the phase remains
   inlined.
+- **Pretransposed scratch rejected.** Moving the four lane permutations from
+  reload to stage storage preserves the 512-byte intermediate and passes the
+  10/10 value gate, but release codegen remains at 22/14 vector stores/reloads
+  for forward and inverse and grows to 22/14 normalized. The paired instrument
+  reports n = 32 medians of `25.923/24.593 ns` for Apollo/RustFFT, slower than
+  the raw-stage explicit-boundary baseline. The raw scratch layout remains
+  canonical.
 - **Falsified, so nobody repeats it:** fusing permute, scale and store per
   output — so the sixteen results do not all span the normalisation block —
   changes nothing. Codegen after: 27 spill stores and 19 reloads against 26 and
