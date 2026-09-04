@@ -1,6 +1,9 @@
 # Apollo Backlog
 
-## ATLAS-APOLLO-N32-F64-LIVENESS-2026-09-04 — The n = 32 f64 arm cannot fit AVX2, and spills 43 times [minor] [perf] — todo <a id="atlas-apollo-n32-f64-liveness"></a>
+## ATLAS-APOLLO-N32-F64-LIVENESS-2026-09-04 — The n = 32 f64 arm cannot fit AVX2, and spills 43 times [minor] [perf] — in-progress <a id="atlas-apollo-n32-f64-liveness"></a>
+
+- **Integrator:** codex; **branch:** `perf/apollo-n32-f64-liveness`; **lease:** `crates/apollo-fft/src/application/execution/kernel/mixed_radix/scalar/small_pot/precise.rs`, `crates/apollo-fft/src/application/execution/kernel/components/base128/pinned_probe/small_sizes.rs`, `crates/apollo-fft/src/application/execution/kernel/components/winograd/`.
+- **Last-update:** 2026-09-04.
 
 - **The measurement, corrected.** On a quiet machine, minimum of two runs with
   RustFFT in the same binary: n = 32 `f64` is apollo 21.21 ns against 15.28,
