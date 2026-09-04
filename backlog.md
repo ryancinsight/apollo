@@ -41,6 +41,13 @@
   Outlining `stage_group` regressed the same instrument to `30.229/22.707 ns`.
   Outlining the radix-8 consumer through an array-returning wrapper likewise
   regressed the candidate to `23.236 ns`; both boundaries remain inlined.
+- **Tail-only boundary rejected.** Retaining the first eight radix-4 vectors
+  and staging only the second eight in `MaybeUninit<[f64; 32]>` passes the same
+  10/10 value gate, but release codegen remains at 22/14 vector stores/reloads
+  for forward and inverse, 21/13 normalized, and 282/300/280 instructions.
+  The paired instrument reports n = 32 medians of `17.216/16.366 ns` for
+  Apollo/RustFFT, so it neither reduces generated spill traffic nor reaches the
+  `15.28 ns` acceptance target. The full explicit boundary remains canonical.
 - **Falsified, so nobody repeats it:** fusing permute, scale and store per
   output — so the sixteen results do not all span the normalisation block —
   changes nothing. Codegen after: 27 spill stores and 19 reloads against 26 and
