@@ -6,7 +6,7 @@
 //! onto an element (identity for the native type, promote/quantize for
 //! reduced-precision forms).
 
-use eunomia::F16;
+use eunomia::{layout::Pod, F16};
 use mnemosyne::scratch::ScratchPool;
 
 use crate::{Complex32, PrecisionProfile};
@@ -38,7 +38,7 @@ thread_local! {
 /// [`Complex32`]. Each element owns thread-local input/output scratch
 /// pools so reduced-precision typed dispatch stays allocation-free.
 pub trait GpuElement:
-    bytemuck::Pod + Default + core::fmt::Debug + Send + Sync + 'static + sealed::SealedElement
+    Pod + Default + core::fmt::Debug + Send + Sync + 'static + sealed::SealedElement
 {
     /// Run `body` over reused input and output scratch of the given
     /// lengths.

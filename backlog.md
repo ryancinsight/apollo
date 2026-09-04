@@ -123,51 +123,52 @@
   `BLOCKS = 2` and `4`; apollo's `GatherBlocks` and its scalar fallback both
   deleted; and the eight-block split re-measured against the flat route with it
   in place.
-## ATLAS-APOLLO-FIRST-PARTY-LAYOUT-2026-09-03 — bytemuck and half give way to eunomia, but the last 28 sites need upstream first [patch] [arch] — in progress <a id="atlas-apollo-first-party-layout"></a>
+## ATLAS-APOLLO-FIRST-PARTY-LAYOUT-2026-09-03 — Apollo GPU layouts use Eunomia [patch] [arch] — in progress <a id="atlas-apollo-first-party-layout"></a>
 
-- **Landed 2026-09-03, in dependency order.** eunomia #84 (the layout
-  vocabulary), hermes #151 (`hermes-simd-core` off bytemuck), apollo #309
-  (this migration). Hermes turned out to be a *third* abandoned half of the
-  same sweep — same tree-detached shape, edits timestamped in the same window
-  as the other two — recovered and gated the same way; hermes now has zero
-  bytemuck references in any crate, direct or in `src`. The two gaps below are
-  what still stand between apollo and dropping both dependencies.
+- **Integrator:** Codex on `perf/apollo-rader-width-probe`; this increment
+  completes Apollo's Eunomia layout migration after Eunomia PR #87.
+- **Evidence, 2026-09-03.** Direct `bytemuck` and `half` declarations are
+  removed; `python scripts/lockfile.py --check` passes with 46 first-party
+  git sources. The locked graph retains provider-owned `bytemuck` through
+  Eunomia and `half` through `naga` under Hephaestus WGPU.
+- **Landed 2026-09-03, in dependency order.** Eunomia #84 supplied the layout
+  vocabulary, Eunomia #87 supplied the derives, Hermes #151 moved
+  `hermes-simd-core` off bytemuck, and Apollo #309 supplied the consumer
+  migration. Apollo's remaining provider-boundary sites now use the upstream
+  Eunomia contract.
 - **Rescued, not authored.** This began as another agent's uncommitted work,
   abandoned about 21 hours in the shared apollo tree on a detached HEAD where
   any checkout would have discarded it. Preserved verbatim on
   `rescue/apollo-eunomia-cast-sweep`, then ported onto current main (36 commits
   of drift, two conflicts) and finished to a compiling, gated state.
-- **What it does.** Moves apollo off two third-party layout dependencies onto
-  the first-party provider: `bytemuck::{cast_slice, Pod}` to
-  `eunomia::layout::*`, and `half::f16` to `eunomia::F16`. Net across the
-  workspace: bytemuck references 168 to 28, `half::` 20 to 5, with 140
-  `eunomia::layout` uses in their place.
-- **Why the last 28 cannot follow yet — two upstream gaps.**
-  1. **eunomia has no derive macros.** apollo's GPU parameter structs are
-     `#[repr(C)] #[derive(Clone, Copy, Debug, Pod, Zeroable)]`. eunomia's
-     `layout::marker` declares `Pod`/`Zeroable` as `unsafe trait`s with no
-     proc-macro counterpart, so each of those structs would need a hand-written
-     `unsafe impl` carrying its own soundness argument. That belongs in eunomia
-     as a derive, not in twelve hand-rolled impls downstream.
-  2. **hephaestus's public API is typed on `bytemuck::Pod`.**
-     `hephaestus-core`'s window surfaces — `launch.rs`, `pooling.rs`,
-     `prepared.rs` — bound their scalars on `bytemuck::Pod`, and apollo passes
-     types across that boundary. eunomia's `Pod` is a different trait, so no
-     amount of apollo-side work removes the dependency while the consumer
-     contract requires the other one.
-- **So the campaign has an order, and apollo is last.** eunomia gains the
-  derives; hephaestus migrates its public bounds (upstream ownership — the
-  provider adoption starts at the deepest crate); apollo then finishes the
-  remaining 28 and drops both dependencies from its manifests. Attempting the
-  apollo half alone is what produced the state this rescue found: manifests
-  with the dependency removed and call sites that still needed it.
-- **Manifests corrected in the port.** The abandoned work had already dropped
-  `bytemuck` from ten crate manifests while 28 call sites still used it, so the
-  tree did not compile. Restored to the eight crates that genuinely still need
-  it; it leaves only where nothing references it.
-- **Acceptance.** `bytemuck` and `half` absent from every apollo manifest and
-  from `cargo tree`, with no hand-rolled `unsafe impl Pod` in apollo standing in
-  for a derive eunomia should own.
+- **What it does.** Moves Apollo's remaining `Pod`/`Zeroable` derives and
+  bounds, slice reinterprets, and Python byte conversions to
+  `eunomia::layout::*`; removes the direct `bytemuck` dependency from the root
+  and every member manifest; and leaves semantic `half` identifiers unrelated
+  to the removed `half` crate untouched.
+- **Acceptance.** `bytemuck` and `half` are absent from every Apollo manifest
+  and direct Rust source, with no hand-rolled `unsafe impl Pod` in Apollo
+  replacing a derive Eunomia owns; provider-owned transitive edges remain
+  explicitly visible in `cargo tree`.
+- **Co-evolution source graph, 2026-09-03.** Apollo follows Eunomia `fdbf122`,
+  direct Mnemosyne `7f173751`, Hermes `5a399ee`, Leto `1caa846`, Hephaestus
+  `7ca992d`, and Moirai `773c117` through the workspace dependency table. The
+  lockfile is regenerated standalone; older Mnemosyne revisions remain only
+  through provider edges and are separate cross-repo identity items. The exact
+  graph passes all-features workspace check, warning-denied Clippy, nextest
+  (1,415/1,415 with 29 skipped), doctests, warning-denied rustdoc, and
+  formatting. See [ADR 0047](docs/adr/0047-first-party-source-identity-during-coevolution.md).
+- **Provider-boundary completion, 2026-09-03.** Apollo manifests and direct
+  Rust source contain neither `bytemuck` nor the `half` crate. `cargo tree
+  --locked -i bytemuck` identifies Eunomia's provider implementation as the
+  remaining `bytemuck` owner; `cargo tree --locked -i half` identifies only
+  the transitive `naga` path through Hephaestus WGPU.
+- **All-features stability evidence, 2026-09-03.** The first aggregate
+  nextest run reached 1,252/1,415 tests before a Windows access violation in
+  NTT's WGPU property test. The NTT package sequence then passed 37/37, and a
+  fresh aggregate run passed 1,415/1,415 with 29 skipped. The transient
+  driver-level abort is retained as a stability signal rather than hidden by
+  a skip or retry.
 
 ## ATLAS-APOLLO-F32-NONPOT-WIDTH-2026-09-03 — f32 loses far more than f64 on non-power-of-two lengths [patch] [perf] — todo <a id="atlas-apollo-f32-nonpot-width"></a>
 
@@ -207,6 +208,27 @@
   satisfies — `exact_lanes_supported::<4, T>` answering true through a scalar
   implementation is a known shape in this codebase and would leave `f32`
   running unvectorised while reading as supported.
+- **Instrument built 2026-09-03: `pinned_probe/rader_width.rs`.** Times
+  `rader_prime_forward` for both scalars at the primes 67, 101, 113 and 257,
+  both scalars inside one pinned run per core so the ratio is not assembled
+  across runs. Note the scope difference: it measures the Rader entry point
+  directly, while this item's 674/579 ns figures came from the full transform
+  path, so the two are not the same quantity.
+  - **Established.** Both arms agree within a derived bound at all four
+    lengths — the direct-accumulation term `4 n eps`, `f64` serving as the
+    oracle since its own error is smaller by the epsilon ratio. So `f32` and
+    `f64` compute the same transform, which excludes the two scalars taking
+    different routes.
+  - **Not established: any timing verdict.** The run happened with the host at
+    99% CPU under four concurrent `cargo` and two `rustc` processes, and the
+    contamination shows: samples run 10-50x their own minimum, and the two core
+    classes disagree in *direction*. On minima per iteration, the performance
+    cores read `f32`/`f64` at 1.25 (n=67), 1.01 (101), 1.14 (113) and 0.38
+    (257), while the efficiency cores read 0.73, 0.53, 0.61 and 0.47 — `f32`
+    faster at every length. A quantity whose sign flips with core class under
+    load is measuring the load.
+  - **Next step is a re-run on a quiet host**, not a code change. The anomaly is
+    at this point neither reproduced nor refuted at the Rader entry point.
 - **A third locus, measured 2026-09-03 by the codelet-selection sweep.** That
   sweep timed two routes over the same twenty lengths in one pinned run, once
   per scalar, so it compares `f32` against `f64` *within a route* rather than

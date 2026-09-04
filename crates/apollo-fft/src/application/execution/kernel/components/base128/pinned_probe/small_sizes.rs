@@ -12,7 +12,7 @@ use rustfft::num_complex::Complex as RustComplex;
 fn small_sizes_for_scalar<T>(suite: &mut BenchmarkSuite, core: &str, scalar: &str)
 where
     T: ProbeScalar + MixedRadixScalar<Complex = eunomia::Complex<T>>,
-    eunomia::Complex<T>: bytemuck::Pod,
+    eunomia::Complex<T>: eunomia::layout::Pod,
 {
     // Powers of two, then the classes the bar "at all sizes" also covers:
     // smooth composites, a 2/3/5-smooth length with an odd leading factor, and

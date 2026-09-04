@@ -29,7 +29,6 @@ leto = { workspace = true }
 eunomia = { workspace = true }
 hephaestus-core = { workspace = true }
 hephaestus-wgpu = { workspace = true }
-bytemuck = { workspace = true }
 pyo3 = { workspace = true }
 
 [lints]

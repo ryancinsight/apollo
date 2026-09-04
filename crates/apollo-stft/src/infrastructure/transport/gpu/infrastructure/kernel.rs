@@ -7,7 +7,7 @@
 use core::marker::PhantomData;
 use std::borrow::Cow;
 
-use bytemuck::{Pod, Zeroable};
+use eunomia::{Pod, Zeroable};
 use hephaestus_core::{GroupedBindingDecl, GroupedKernelInterface, GroupedKernelSource, Wgsl};
 
 /// Shared STFT geometry and dispatch-grid validation.
