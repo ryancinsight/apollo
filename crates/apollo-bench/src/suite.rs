@@ -36,6 +36,23 @@ impl BenchmarkSuite {
         self.records.push(BenchmarkRecord::new(case, summary));
     }
 
+    /// Measures one closure over inputs prepared outside the timed region.
+    ///
+    /// Use this wherever the operation is in-place and each iteration needs a
+    /// fresh input: [`BenchmarkSuite::run`] would time the reset alongside the
+    /// operation, and when two arms reset buffers of different element widths
+    /// that difference is charged to the operation and distorts the ratio
+    /// between them.
+    pub fn run_batched<T>(
+        &mut self,
+        case: BenchmarkCase,
+        setup: impl FnMut() -> T,
+        operation: impl FnMut(&mut T),
+    ) {
+        let summary = measurement::measure_batched(self.config, setup, operation);
+        self.records.push(BenchmarkRecord::new(case, summary));
+    }
+
     /// Returns records in the same order that their closures executed.
     #[must_use]
     pub fn records(&self) -> &[BenchmarkRecord] {
@@ -61,6 +78,40 @@ mod tests {
     use crate::{BenchmarkCase, BenchmarkConfig, BenchmarkMode};
     use std::cell::Cell;
     use std::time::Duration;
+
+    #[test]
+    fn batched_run_excludes_setup_from_the_reported_measurement() {
+        let config =
+            BenchmarkConfig::try_with_budgets(Duration::from_nanos(1), Duration::from_nanos(1))
+                .expect("invariant: non-zero literal durations");
+        let setups = Cell::new(0_u32);
+        let operations = Cell::new(0_u32);
+        let mut suite = BenchmarkSuite::new(config);
+
+        suite.run_batched(
+            BenchmarkCase::new("core", "batched", 8),
+            || {
+                setups.set(setups.get() + 1);
+                vec![0_u64; 8]
+            },
+            |input| {
+                operations.set(operations.get() + 1);
+                input[0] = input[0].wrapping_add(1);
+            },
+        );
+
+        assert_eq!(suite.records().len(), 1, "one case yields one record");
+        assert!(
+            setups.get() >= operations.get(),
+            "every timed operation must have had its input built first:              {} setups against {} operations",
+            setups.get(),
+            operations.get()
+        );
+        assert!(
+            operations.get() > 0,
+            "the batched operation must actually execute"
+        );
+    }
 
     #[test]
     fn suite_measures_the_supplied_closure_and_reports_its_case() {
