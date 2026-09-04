@@ -84,22 +84,27 @@
 
 <a id="apollo-sweep-exceeds-budget"></a>
 
-## APOLLO-SWEEP-EXCEEDS-BUDGET-2026-09-04 — The reference sweep is terminated at the test budget [patch] [perf] — todo
+## APOLLO-SWEEP-EXCEEDS-BUDGET-2026-09-04 — The reference sweep is terminated at the test budget [patch] [perf] — done 2026-09-04
 
-- **Integrator:** unclaimed; **branch:** none; **lease:** none.
-- **Last-update:** 2026-09-04.
-- **Measured.** `small_sizes_against_the_references_by_core_type` is marked
-  SLOW at 30 s and TERMINATED at 60 s under the committed nextest budget. It
-  measures 17 lengths against three engines at two scalars, twice over
-  (a discarded warm-up suite and the reported one), on two core types.
-- **Outcome.** The sweep runs inside the budget without dropping coverage:
-  the per-case budget is the lever (`BenchmarkConfig::regression()` spends
-  100 ms warm-up plus 400 ms measurement per case, so the runtime is
-  analytical, not emergent), or the sweep splits into per-scalar or per-class
-  instruments that each fit. Raising the bound is not the remedy.
-- **Acceptance oracle.** The sweep completes inside the committed budget on
-  both core types, and its reported figures for a shared length match the
-  current ones within noise.
+- **Delivered:** source `8080e030` (branch `perf/sweep-within-budget`). The
+  wall time was analytic — 46 cases per scalar against three engines, twice
+  per core class, at 500 ms per case ≈ 184 s against a 60 s termination — so
+  the per-case budget is what shrank. The discarded warm-up pass now runs in
+  `BenchmarkMode::Smoke` (one observation per case; its figures were never
+  read), and the reported pass uses a new `BenchmarkConfig::sweep()` preset:
+  the 100-sample estimator with a 15 ms warm-up and 75 ms measurement case
+  budget. No case, engine, or core-class coverage was dropped, and the
+  regression contract itself is untouched for every other probe.
+- **Evidence.** Under the committed nextest profile the sweep completes in
+  14.35 s on both core classes (was: SLOW at 30 s, TERMINATED at 60 s). The
+  within-noise clause needed a paired instrument: a same-core back-to-back
+  run of both contracts plus a sweep-contract rerun. Cross-config median
+  ratio 0.975 against a same-config rerun drift of 0.983 — the shift the
+  contract change introduces is inside run-to-run drift, and no case's
+  engine ordering flips beyond the transient load spikes (which appear in
+  the same-config comparison too). The two unmanaged cross-run attempts
+  (162/184 interval misses, arm ratios 0.45–1.0) are what the paired design
+  rules out; recorded so the next reader does not repeat them.
 - **Risk / change class:** [patch] [perf]; instrument only.
 
 <a id="apollo-probe-scale-disagreement"></a>
