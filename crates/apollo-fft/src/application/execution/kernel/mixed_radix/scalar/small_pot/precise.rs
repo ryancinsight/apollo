@@ -204,8 +204,11 @@ pub(in crate::application::execution::kernel::mixed_radix::scalar) unsafe fn sma
             }
         }
         32 => {
-            if !super::n32::try_inplace::<INVERSE, NORMALIZE>(data) {
-                let data_ref = &mut *data.as_mut_ptr().cast::<[Complex64; 32]>();
+            // SAFETY: this unsafe entry's contract requires data.len() == N,
+            // and this match arm fixes N = 32. The exclusive slice borrow
+            // therefore covers exactly the array passed to either codelet.
+            let data_ref = unsafe { &mut *data.as_mut_ptr().cast::<[Complex64; 32]>() };
+            if !super::n32::try_inplace::<INVERSE, NORMALIZE>(data_ref) {
                 crate::application::execution::kernel::components::winograd::dft32_impl::<
                     f64,
                     INVERSE,

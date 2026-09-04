@@ -1,139 +1,19 @@
 # Apollo Backlog
 
-## ATLAS-APOLLO-N32-F64-LIVENESS-2026-09-04 — The n = 32 f64 arm cannot fit AVX2, and spills 43 times [minor] [perf] — in-progress <a id="atlas-apollo-n32-f64-liveness"></a>
+<a id="atlas-apollo-n32-f64-liveness"></a>
+## ATLAS-APOLLO-N32-F64-LIVENESS-2026-09-04 — Bound the n=32 codelet and reduce register pressure [patch] [perf] — in-progress
 
-- **Integrator:** codex; **branch:** `perf/apollo-n32-f64-liveness`.
-- **Last-update:** 2026-09-04.
-- **Residual stash:** `stash@{0}` from 2026-09-02 changes only `Cargo.toml`, pinning
-  Mnemosyne to `7bae4cc` and enabling `bytemuck`; the current tree has advanced
-  to `39d116d` and the live provider has the feature. It is preserved because
-  deleting uncommitted manifest work requires explicit owner approval.
-
-- **The measurement, corrected.** On a quiet machine, minimum of two runs with
-  RustFFT in the same binary: n = 32 `f64` is apollo 21.21 ns against 15.28,
-  **+38.8%** — not the +104% the scoreboard carries, which was taken under
-  concurrent peer builds. Neighbours: n = 16 +26.3%, n = 64 +2.5% (n = 64 has
-  a tuned `State64`).
-- **The mechanism, from codegen rather than inference.** The arm holds the
-  whole transform in registers: sixteen YMM loaded, four `avx_fft4` producing
-  sixteen live values, twiddles, four `avx_fft8` producing sixteen more,
-  sixteen `vperm2f128`, sixteen stores. Disassembling the outlined
-  `vector_arm` gives **26 ymm spill stores and 17 spill reloads in a
-  381-instruction body**, plus the ten `xmm6`-`xmm15` callee-saves the Windows
-  ABI requires — 63 stack operations, about a sixth of the function, which at
-  roughly 30 cycles is most of the 6 ns gap.
-- **Why it cannot be scheduled away.** 32 `Complex64` is 512 bytes, which is
-  **exactly sixteen YMM registers** — the entire AVX2 register file, with
-  nothing left for temporaries. The register-resident premise does not fit this
-  type at this length. The same structure in `f32` needs 256 bytes, eight
-  registers, half the file, which is why `f32` at n = 32 shows nothing like
-  this.
-- **Current increment.** Fusing each transpose half directly into its radix-8
-  consumer remains value-correct, but the refreshed release emission reports
-  25 vector spill stores and 17 reloads in the forward arm (24/13 inverse,
-  25/16 normalized). A lower-level `vaddsubpd` replacement was rejected: its
-  first form had no stable `vsubaddpd` intrinsic, and the corrected
-  sign-negation form failed six n = 32 value tests with errors up to `3.03e1`;
-  the original arithmetic remains authoritative. The exact refreshed
-  liveness instrument reports n = 32 Apollo/RustFFT medians of
-  `38.331/25.710 ns` (minima `27.465/22.403 ns`), so acceptance remains open.
-- **Explicit-boundary increment.** A `MaybeUninit<[f64; 64]>` intermediate
-  stages all sixteen radix-4 vectors before the two radix-8 halves. The
-  focused release value gate passes 10/10. Release assembly reports 22 vector
-  stores and 14 reloads in both forward and inverse arms; the paired liveness
-  instrument reports n = 32 medians of `22.342/18.276 ns` for Apollo/RustFFT.
-  Outlining `stage_group` regressed the same instrument to `30.229/22.707 ns`.
-  Outlining the radix-8 consumer through an array-returning wrapper likewise
-  regressed the candidate to `23.236 ns`; both boundaries remain inlined.
-- **Tail-only boundary rejected.** Retaining the first eight radix-4 vectors
-  and staging only the second eight in `MaybeUninit<[f64; 32]>` passes the same
-  10/10 value gate, but release codegen remains at 22/14 vector stores/reloads
-  for forward and inverse, 21/13 normalized, and 282/300/280 instructions.
-  The paired instrument reports n = 32 medians of `17.216/16.366 ns` for
-  Apollo/RustFFT, so it neither reduces generated spill traffic nor reaches the
-  `15.28 ns` acceptance target. The full explicit boundary remains canonical.
-- **Aligned scratch rejected.** A `#[repr(align(32))]` wrapper with aligned
-  AVX loads and stores passes the 10/10 value gate, but release codegen still
-  reports 22/14 vector stores/reloads for forward and inverse, 21/13
-  normalized, and 282/300/280 instructions. The paired instrument reports
-  n = 32 medians of `27.123/25.322 ns` for Apollo/RustFFT, worse than the
-  explicit-boundary baseline, so alignment does not change the spill shape or
-  satisfy the liveness target. The unaligned full explicit boundary remains
-  canonical.
-- **Direct stage writes rejected.** Passing the existing scratch pointer into
-  `stage_group` and storing each completed YMM directly passes the 10/10 value
-  gate, but release codegen remains at 22/14 vector stores/reloads for forward
-  and inverse, 21/13 normalized, and 282/300/280 instructions. The paired
-  instrument reports n = 32 medians of `26.113/24.566 ns` for Apollo/RustFFT,
-  slower than the explicit-boundary baseline, so removing the array return does
-  not alter the generated spill shape. The returned stage-group boundary
-  remains canonical.
-- **Outlined stage phase rejected.** Outlining all four stage groups into one
-  non-inlined phase removes compiler spill stores from `vector_arm`, but adds
-  an ABI call and callee frame. The 10/10 value gate passes; the paired
-  instrument reports n = 32 medians of `33.840/25.554 ns` for Apollo/RustFFT,
-  versus `22.342/18.276 ns` for the inline explicit-boundary baseline. The
-  call boundary is slower than the retained inline form, so the phase remains
-  inlined.
-- **Pretransposed scratch rejected.** Moving the four lane permutations from
-  reload to stage storage preserves the 512-byte intermediate and passes the
-  10/10 value gate, but release codegen remains at 22/14 vector stores/reloads
-  for forward and inverse and grows to 22/14 normalized. The paired instrument
-  reports n = 32 medians of `25.923/24.593 ns` for Apollo/RustFFT, slower than
-  the raw-stage explicit-boundary baseline. The raw scratch layout remains
-  canonical.
-- **Typed vector scratch rejected.** Replacing the `f64` scratch view with
-  `MaybeUninit<[__m256d; 16]>` and typed aligned reads/writes passes the 10/10
-  value gate, but release codegen remains at 22/14 vector stores/reloads for
-  forward and inverse, 21/13 normalized, and 282/300/280 instructions. The
-  paired instrument reports n = 32 medians of `26.535/24.640 ns` for
-  Apollo/RustFFT, slower than the explicit-boundary baseline. The `f64` scratch
-  representation remains canonical.
-- **Pair-retention scratch rejected.** Retaining the first radix-4 pair in
-  registers and staging the other fourteen vectors in
-  `MaybeUninit<[f64; 56]>` passes the six-test focused release value gate, but
-  release codegen remains at 22/14 vector stores/reloads for forward and
-  inverse, 21/13 normalized. The paired instrument reports n = 32 medians of
-  `53.847/42.442 ns` for Apollo/RustFFT, missing the `15.28 ns` Apollo target;
-  the full 64-double explicit boundary remains canonical.
-- **Radix-8-by-radix-4 four-step rejected at codegen.** Reversing the factor
-  order stages two radix-8 banks, then combines adjacent frequency columns
-  with radix-4 SIMD. The focused route tests pass, but release assembly raises
-  vector stack stores from 22/22/21 to 32/28/28 for forward/inverse/normalized
-  arms and leaves the original schedule's helpers unused. The added bank
-  transpose and twiddle traffic are therefore dominated before timing; the
-  radix-4-by-radix-8 explicit boundary remains canonical.
-- **Two-lane SSE radix-4 staging rejected.** Computing each first-stage complex
-  pair with SSE2/FMA and retaining the AVX2 radix-8 consumer passes the 10/10
-  value gate. Release codegen lowers the vector stack moves to 19/9 forward,
-  17/8 inverse, and 18/9 normalized, but expands the arms to 357/373/358
-  instructions. The paired run measures n = 32 medians of `21.160/24.752 ns`
-  for Apollo/RustFFT, which remains above the recorded `15.28 ns` target; the
-  verified AVX2 stage boundary remains canonical.
-- **Full-SSE final stage rejected.** Replacing the two AVX2 radix-8 consumers
-  with four two-lane SSE transforms passes the 10/10 value gate after matching
-  the AVX twiddle lane order, but release assembly expands to 551/594/557
-  instructions and 69/67/67 stack vector stores with 49 reloads in each arm.
-  Assembly falsifies the memory-pressure hypothesis before timing, so this
-  variant has no admissible performance result.
-- **Falsified, so nobody repeats it:** fusing permute, scale and store per
-  output — so the sixteen results do not all span the normalisation block —
-  changes nothing. Codegen after: 27 spill stores and 19 reloads against 26 and
-  17 before. The outputs are not what dominates liveness; the sixteen `fft8`
-  results are, because each `fft8` call produces one value for *each* output
-  group, so all sixteen stay live until the last group is emitted. Shortening
-  the wrong live range buys nothing.
-- **What would work.** A structure whose intermediate stores are designed
-  rather than placed by the register allocator: two halves with an explicit
-  spill point, or a radix-4 four-step over an intermediate buffer. The traffic
-  does not disappear — it cannot, the data does not fit — but a designed
-  placement can beat 43 compiler-chosen spills, and RustFFT's 15.28 ns is the
-  evidence that some placement does.
-- **Acceptance.** Spill count materially below 43 *and* measured faster than
-  RustFFT's 15.28 ns at n = 32 `f64`, with n = 16 and n = 64 unmoved.
-- **Instrument:** `small_sizes_against_the_references_by_core_type` for the
-  timing; `cargo rustc --release -p apollo-fft --lib -- --emit=asm` and the
-  `vector_arm` symbols for the spill count.
+- **Integrator:** codex; **branch:** `perf/apollo-n32-f64-liveness`; **last-update:** 2026-09-04.
+- **Scope:** n=32 AVX2 codelet, its caller and regression tests; shared radix-8 changes require n=64 controls. No provider migration or public API change.
+- **Acceptance:** fixed-size safe entry; all direction/normalization and guarded-span tests pass; retain a schedule change only with counterbalanced same-host improvement and unchanged n=16/64 controls.
+- **Safety increment verified:** array borrow establishes 32 initialized values; guarded tests cover both AVX alignment residues, assert host dispatch and reject NaN output. Release run `75c7d45c-4e69-4023-bbf7-30840d0020d6` passes 526/526 enabled tests (29 ignored instruments); format, all-target Clippy, doctest, rustdoc and safety ratchet pass. All three emitted AVX bodies match the entry baseline after label normalization.
+- **Retained schedule:** 64-double stack intermediate, radix-4 stages then two radix-8 halves. Prior experiments are archived in `0a3a7a8f:backlog.md`; their cross-run absolute timings are not regression evidence.
+- **Pair-emission experiment:** rejected for unestablished benefit, not proven slowdown. Nine focused and 526 enabled CPU library tests pass; the callback inlines and reduces forward/normalized frames 872→840 bytes.
+- **Counterbalanced n=32 medians [interval], ns:** baseline-first 26.803 [26.757,26.870]→26.950 [26.490,29.773]; candidate-first 26.371 [26.323,26.561]→27.179 [27.110,27.366]. Intervals are descriptive 96.48%; the native comparator also flags the unchanged RustFFT control.
+- **Evidence:** immutable executable hashes, source/assembly snapshots and raw 100-sample CSVs under `../../output/fft-liveness/`, governed by Atlas output retention. Intel Core Ultra 9 285K, CPU 1 performance core, Rust 1.97.0 MSVC. No Miri/sanitizer or cross-target coverage is claimed.
+- **Measurement correction:** historical RustFFT 15.28 ns is not a portable acceptance threshold. Compare matched executables in both orders; control drift prevents causal timing attribution.
+- **Reference-control diagnosis begun:** preserved executables have distinct SHA-256 identities and no PE symbol table; the calibration path and counterbalanced classifier are inspected. Next oracle is a same-executable negative control before another schedule comparison, with unchanged arithmetic and workload.
+- **Residual stash:** `cfe297dde91870790a57e02aaec5925eb91b4f9b` contains old Mnemosyne manifest work; preserved after the tool safety review refused deletion.
 
 ## ATLAS-APOLLO-SIXTEEN-BLOCK-SPLIT-2026-09-03 — n = 2048 is a local peak, and the split does not reach it [minor] [perf] — done 2026-09-03 (falsified) <a id="atlas-apollo-sixteen-block-split"></a>
 
