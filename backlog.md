@@ -40,7 +40,7 @@
 
 ## ATLAS-APOLLO-WORKER-RETENTION-2026-09-03 — Per-worker scratch needs quiescent reclamation [minor] [perf] — done <a id="atlas-apollo-worker-retention"></a>
 
-- **Status:** done; **integrator:** codex; **branch:** `perf/apollo-codelet-remeasure`.
+- **Status:** done; **commit:** `3381cd45`; **branch:** `perf/apollo-codelet-remeasure`.
 - **Last-update:** 2026-09-04.
 - **Outcome:** bound the memory a parallel transform leaves resident after it
   completes, and give the mnemosyne scratch pool a release path so worker
