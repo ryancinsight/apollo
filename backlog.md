@@ -78,6 +78,13 @@
   reports n = 32 medians of `25.923/24.593 ns` for Apollo/RustFFT, slower than
   the raw-stage explicit-boundary baseline. The raw scratch layout remains
   canonical.
+- **Typed vector scratch rejected.** Replacing the `f64` scratch view with
+  `MaybeUninit<[__m256d; 16]>` and typed aligned reads/writes passes the 10/10
+  value gate, but release codegen remains at 22/14 vector stores/reloads for
+  forward and inverse, 21/13 normalized, and 282/300/280 instructions. The
+  paired instrument reports n = 32 medians of `26.535/24.640 ns` for
+  Apollo/RustFFT, slower than the explicit-boundary baseline. The `f64` scratch
+  representation remains canonical.
 - **Falsified, so nobody repeats it:** fusing permute, scale and store per
   output — so the sixteen results do not all span the normalisation block —
   changes nothing. Codegen after: 27 spill stores and 19 reloads against 26 and
