@@ -161,52 +161,13 @@
   `BLOCKS = 2` and `4`; apollo's `GatherBlocks` and its scalar fallback both
   deleted; and the eight-block split re-measured against the flat route with it
   in place.
-## ATLAS-APOLLO-FIRST-PARTY-LAYOUT-2026-09-03 — Apollo GPU layouts use Eunomia [patch] [arch] — in progress <a id="atlas-apollo-first-party-layout"></a>
+## ATLAS-APOLLO-FIRST-PARTY-LAYOUT-2026-09-03 — Apollo GPU layouts use Eunomia [patch] [arch] — done <a id="atlas-apollo-first-party-layout"></a>
 
-- **Integrator:** Codex on `perf/apollo-rader-width-probe`; this increment
-  completes Apollo's Eunomia layout migration after Eunomia PR #87.
-- **Evidence, 2026-09-03.** Direct `bytemuck` and `half` declarations are
-  removed; `python scripts/lockfile.py --check` passes with 46 first-party
-  git sources. The locked graph retains provider-owned `bytemuck` through
-  Eunomia and `half` through `naga` under Hephaestus WGPU.
-- **Landed 2026-09-03, in dependency order.** Eunomia #84 supplied the layout
-  vocabulary, Eunomia #87 supplied the derives, Hermes #151 moved
-  `hermes-simd-core` off bytemuck, and Apollo #309 supplied the consumer
-  migration. Apollo's remaining provider-boundary sites now use the upstream
-  Eunomia contract.
-- **Rescued, not authored.** This began as another agent's uncommitted work,
-  abandoned about 21 hours in the shared apollo tree on a detached HEAD where
-  any checkout would have discarded it. Preserved verbatim on
-  `rescue/apollo-eunomia-cast-sweep`, then ported onto current main (36 commits
-  of drift, two conflicts) and finished to a compiling, gated state.
-- **What it does.** Moves Apollo's remaining `Pod`/`Zeroable` derives and
-  bounds, slice reinterprets, and Python byte conversions to
-  `eunomia::layout::*`; removes the direct `bytemuck` dependency from the root
-  and every member manifest; and leaves semantic `half` identifiers unrelated
-  to the removed `half` crate untouched.
-- **Acceptance.** `bytemuck` and `half` are absent from every Apollo manifest
-  and direct Rust source, with no hand-rolled `unsafe impl Pod` in Apollo
-  replacing a derive Eunomia owns; provider-owned transitive edges remain
-  explicitly visible in `cargo tree`.
-- **Co-evolution source graph, 2026-09-03.** Apollo follows Eunomia `fdbf122`,
-  direct Mnemosyne `7f173751`, Hermes `5a399ee`, Leto `1caa846`, Hephaestus
-  `7ca992d`, and Moirai `773c117` through the workspace dependency table. The
-  lockfile is regenerated standalone; older Mnemosyne revisions remain only
-  through provider edges and are separate cross-repo identity items. The exact
-  graph passes all-features workspace check, warning-denied Clippy, nextest
-  (1,415/1,415 with 29 skipped), doctests, warning-denied rustdoc, and
-  formatting. See [ADR 0047](docs/adr/0047-first-party-source-identity-during-coevolution.md).
-- **Provider-boundary completion, 2026-09-03.** Apollo manifests and direct
-  Rust source contain neither `bytemuck` nor the `half` crate. `cargo tree
-  --locked -i bytemuck` identifies Eunomia's provider implementation as the
-  remaining `bytemuck` owner; `cargo tree --locked -i half` identifies only
-  the transitive `naga` path through Hephaestus WGPU.
-- **All-features stability evidence, 2026-09-03.** The first aggregate
-  nextest run reached 1,252/1,415 tests before a Windows access violation in
-  NTT's WGPU property test. The NTT package sequence then passed 37/37, and a
-  fresh aggregate run passed 1,415/1,415 with 29 skipped. The transient
-  driver-level abort is retained as a stability signal rather than hidden by
-  a skip or retry.
+- **Status:** Merged in PR #315 at `07e2eb54`; Apollo owns no direct `bytemuck`
+  or `half` dependency and uses Eunomia for GPU layout contracts.
+- **Verification:** 1,415/1,415 all-features nextest tests passed with 29
+  skipped; doctests, warning-denied Clippy/rustdoc, formatting, and lockfile
+  checks passed. Provider-owned transitive edges remain documented.
 
 ## ATLAS-APOLLO-F32-NONPOT-WIDTH-2026-09-03 — f32 loses far more than f64 on non-power-of-two lengths [patch] [perf] — todo <a id="atlas-apollo-f32-nonpot-width"></a>
 
