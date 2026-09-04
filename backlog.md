@@ -79,17 +79,12 @@
 
 <a id="apollo-hephaestus-default"></a>
 
-## APOLLO-HEPHAESTUS-DEFAULT-2026-09-04 — Retire the merged Hephaestus co-evolution pin [patch] — in-progress
+## APOLLO-HEPHAESTUS-DEFAULT-2026-09-04 — Retire the merged Hephaestus co-evolution pin [patch] — done
 
-- **Integrator:** Codex; **branch:** `build/apollo-hephaestus-default`;
-  **lease:** `Cargo.toml`, `Cargo.lock` 2026-09-04T13:27-04:00.
-- **Outcome:** restore Apollo's three Hephaestus workspace dependencies to the
-  canonical default-branch git source after Hephaestus PR #273 merged.
-- **Scope / non-goals:** dependency source metadata and its lockfile only; keep
-  Mnemosyne and Moirai pins unchanged; no API or runtime behavior changes.
-- **Acceptance oracle:** one Hephaestus source resolves at the merged default,
-  no `dec3d72` query pin remains, and Apollo's applicable gates pass.
-- **Risk / change class:** [patch]; dependency resolution only.
+- **Result:** Hephaestus resolves once at merged default `f6c9bfdb`; the
+  `dec3d72` query pin is absent while Mnemosyne and Moirai pins remain unchanged.
+- **Evidence:** format, all-target/all-feature check and Clippy, 1,417 Nextest
+  cases, seven doctests, provider audit, and lockfile validation pass.
 
 <a id="apollo-provider-identity"></a>
 
