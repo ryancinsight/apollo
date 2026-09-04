@@ -4,6 +4,10 @@
 
 - **Integrator:** codex; **branch:** `perf/apollo-n32-f64-liveness`.
 - **Last-update:** 2026-09-04.
+- **Residual stash:** `stash@{0}` from 2026-09-02 changes only `Cargo.toml`, pinning
+  Mnemosyne to `7bae4cc` and enabling `bytemuck`; the current tree has advanced
+  to `39d116d` and the live provider has the feature. It is preserved because
+  deleting uncommitted manifest work requires explicit owner approval.
 
 - **The measurement, corrected.** On a quiet machine, minimum of two runs with
   RustFFT in the same binary: n = 32 `f64` is apollo 21.21 ns against 15.28,
@@ -85,6 +89,19 @@
   paired instrument reports n = 32 medians of `26.535/24.640 ns` for
   Apollo/RustFFT, slower than the explicit-boundary baseline. The `f64` scratch
   representation remains canonical.
+- **Two-lane SSE radix-4 staging rejected.** Computing each first-stage complex
+  pair with SSE2/FMA and retaining the AVX2 radix-8 consumer passes the 10/10
+  value gate. Release codegen lowers the vector stack moves to 19/9 forward,
+  17/8 inverse, and 18/9 normalized, but expands the arms to 357/373/358
+  instructions. The paired run measures n = 32 medians of `21.160/24.752 ns`
+  for Apollo/RustFFT, which remains above the recorded `15.28 ns` target; the
+  verified AVX2 stage boundary remains canonical.
+- **Full-SSE final stage rejected.** Replacing the two AVX2 radix-8 consumers
+  with four two-lane SSE transforms passes the 10/10 value gate after matching
+  the AVX twiddle lane order, but release assembly expands to 551/594/557
+  instructions and 69/67/67 stack vector stores with 49 reloads in each arm.
+  Assembly falsifies the memory-pressure hypothesis before timing, so this
+  variant has no admissible performance result.
 - **Falsified, so nobody repeats it:** fusing permute, scale and store per
   output — so the sixteen results do not all span the normalisation block —
   changes nothing. Codegen after: 27 spill stores and 19 reloads against 26 and
