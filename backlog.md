@@ -82,6 +82,72 @@
 - **Evidence:** format, all-target/all-feature check and Clippy, 1,417 Nextest
   cases, seven doctests, provider audit, and lockfile validation pass.
 
+<a id="apollo-n16-f64-gap"></a>
+
+## APOLLO-N16-F64-GAP-2026-09-04 — RustFFT is 18% faster at N=16 f64 [minor] [perf] — done 2026-09-04
+
+- **Integrator:** claude-opus-5; **branch:** `perf/apollo-n16-f64-gap`;
+  **lease:** the N = 16 f64 route and its codelets 2026-09-04T19:30Z.
+- **Last-update:** 2026-09-04.
+- **Measured (release, pinned, three runs).** Apollo's plan route reads
+  10.6 ns on the P-core and 16.7 ns on the E-core; RustFFT reads 9.0 ns and
+  20.0 ns. Apollo loses 18% on the P-core and wins 17% on the E-core, so the
+  gap is specific to the wide core.
+- **Known non-causes.** The register-resident codelet is 13.8 ns, slower than
+  the incumbent route it would replace, so the gap is not the incumbent
+  choosing the wrong kernel
+  ([`#apollo-n16-register-permute`](#apollo-n16-register-permute)). Dispatch is
+  0.3 ns per call.
+- **Attributed: the gap is entirely in the kernel.** A `bare` control arm times
+  `winograd::dft16_impl` with no plan, no dispatch and no length check. It
+  reads 10.6 ns on the P-core against the full route's 10.6 ns, so the route
+  adds nothing measurable and every nanosecond of the 2.2 ns difference to
+  RustFFT's 8.4 ns is in the transform itself.
+- **The route is scalar, and alone in being so.** `small_pot_inplace_sized_precise`
+  carries AVX arms at N = 32 and N = 64; N = 16 calls the scalar Winograd
+  codelet under the note "vector arm measured +8% (call plus probe outweigh
+  the body)". Dispatch measures 0.3 ns in release, so a call-overhead argument
+  cannot account for 8% of a 10.6 ns body, and that measurement predates the
+  profile guard.
+- **Delivered: a four-by-four four-step in registers.** Sixteen complex f64 is
+  eight YMM registers, half the file, so the shape has room for its own
+  temporaries and needs no designed spill. With two samples per register the
+  four samples a first-stage radix-4 needs — `n1`, `n1+4`, `n1+8`, `n1+12` —
+  sit in the same slot of four registers four apart, so
+  `avx_fft4_parallel_precise` runs the first stage on the natural load order
+  with no shuffle at all.
+- **Structure decided by measurement, not by instruction count.** The direct
+  second stage (`avx_fft4_precise` across slots) costs five `vperm2f128` per
+  call plus eight to place the output — twenty-eight cross-lane operations. It
+  measured 7.2 ns on the P-core but **18.8 ns on the E-core, against the
+  scalar codelet's 16.5 ns**. Transposing first costs eight `vperm2f128` and
+  leaves both stages lanewise; that recovers most of the E-core loss and is
+  faster on the P-core as well. Cross-lane movement is what the efficiency
+  cores charge for.
+
+  | arm | P-core | E-core |
+  | --- | --- | --- |
+  | scalar Winograd (incumbent) | 10.4-10.7 ns | 16.5-16.7 ns |
+  | AVX, direct second stage | 7.1-7.4 ns | 18.7-18.8 ns |
+  | **AVX, transpose then lanewise** | **6.6-6.9 ns** | **17.3-17.6 ns** |
+  | RustFFT | 7.6-8.2 ns | 20.0-20.3 ns |
+
+- **Result.** 36% faster on the P-core, and apollo now leads RustFFT there
+  (6.7 ns against 8.0 ns) where it trailed by 18%. The E-core pays 5%
+  (16.6 to 17.4 ns) and still leads RustFFT by 13%. The trade is recorded
+  rather than hidden: there is no per-core dispatch, and the transpose form is
+  the best measured shape for both.
+- **Correctness.** Forward, inverse and normalized-inverse against the direct
+  Winograd oracle; an impulse at every one of the sixteen positions, which is
+  what caught the first output-offset error; and the twiddle table checked
+  entry by entry against `exp(-2 pi i m / 16)` rather than against another
+  table.
+- **Acceptance oracle.** Apollo at or below RustFFT's P-core figure at N = 16
+  f64 with the E-core lead retained, or a recorded attribution of why the
+  remaining difference is structural.
+- **Risk / change class:** [minor] [perf].
+- **Parent:** [`#atlas-apollo-beat-the-references`](#atlas-apollo-beat-the-references).
+
 <a id="apollo-sweep-exceeds-budget"></a>
 
 ## APOLLO-SWEEP-EXCEEDS-BUDGET-2026-09-04 — The reference sweep is terminated at the test budget [patch] [perf] — todo

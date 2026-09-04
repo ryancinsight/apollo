@@ -213,6 +213,19 @@ fn codelet_against_the_incumbent_by_core_type() {
             })
         };
 
+        // The bare codelet the route ends in, with no plan, no dispatch and no
+        // length check: everything between it and `incumbent` is overhead.
+        let mut work = src.clone();
+        let bare = best_block(|| {
+            work.copy_from_slice(&src);
+            let data: &mut [Complex64; 16] = std::hint::black_box(&mut work)
+                .as_mut_slice()
+                .try_into()
+                .expect("invariant: sixteen samples");
+            crate::application::execution::kernel::components::winograd::dft16_impl::<f64, false>(
+                data,
+            );
+        });
         // RustFFT at the same length through the same harness. It is not a
         // competitor here; it is the external control that says whether this
         // probe's absolute scale agrees with the crate's other instruments.
@@ -250,7 +263,7 @@ fn codelet_against_the_incumbent_by_core_type() {
             codelet / incumbent,
         );
         println!(
-            "CTRL cpu={landed:<2} ({}) floor={floor:>5.1}ns dispatch={dispatch:>6.1}ns calibration={calibration:>7.1}ns rustfft={reference:>7.1}ns",
+            "CTRL cpu={landed:<2} ({}) bare={bare:>5.1}ns floor={floor:>5.1}ns dispatch={dispatch:>6.1}ns calibration={calibration:>7.1}ns rustfft={reference:>7.1}ns",
             core.label(),
         );
     }
