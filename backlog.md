@@ -89,6 +89,13 @@
   paired instrument reports n = 32 medians of `26.535/24.640 ns` for
   Apollo/RustFFT, slower than the explicit-boundary baseline. The `f64` scratch
   representation remains canonical.
+- **Pair-retention scratch rejected.** Retaining the first radix-4 pair in
+  registers and staging the other fourteen vectors in
+  `MaybeUninit<[f64; 56]>` passes the six-test focused release value gate, but
+  release codegen remains at 22/14 vector stores/reloads for forward and
+  inverse, 21/13 normalized. The paired instrument reports n = 32 medians of
+  `53.847/42.442 ns` for Apollo/RustFFT, missing the `15.28 ns` Apollo target;
+  the full 64-double explicit boundary remains canonical.
 - **Two-lane SSE radix-4 staging rejected.** Computing each first-stage complex
   pair with SSE2/FMA and retaining the AVX2 radix-8 consumer passes the 10/10
   value gate. Release codegen lowers the vector stack moves to 19/9 forward,
