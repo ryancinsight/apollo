@@ -98,9 +98,21 @@
   choosing the wrong kernel
   ([`#apollo-n16-register-permute`](#apollo-n16-register-permute)). Dispatch is
   0.3 ns per call.
-- **Method.** Attribute the P-core difference: what RustFFT's N = 16 AVX
-  butterfly does per pass against what apollo's route does, from codegen and a
-  per-stage breakdown, before proposing a structure.
+- **Attributed: the gap is entirely in the kernel.** A `bare` control arm times
+  `winograd::dft16_impl` with no plan, no dispatch and no length check. It
+  reads 10.6 ns on the P-core against the full route's 10.6 ns, so the route
+  adds nothing measurable and every nanosecond of the 2.2 ns difference to
+  RustFFT's 8.4 ns is in the transform itself.
+- **The route is scalar, and alone in being so.** `small_pot_inplace_sized_precise`
+  carries AVX arms at N = 32 and N = 64; N = 16 calls the scalar Winograd
+  codelet under the note "vector arm measured +8% (call plus probe outweigh
+  the body)". Dispatch measures 0.3 ns in release, so a call-overhead argument
+  cannot account for 8% of a 10.6 ns body, and that measurement predates the
+  profile guard.
+- **Method.** Build the AVX arm and measure it in release. Sixteen complex f64
+  is eight YMM registers, half the file, so it does not meet the register
+  pressure that made N = 32 spill
+  ([`#atlas-apollo-n32-f64-liveness`](#atlas-apollo-n32-f64-liveness)).
 - **Acceptance oracle.** Apollo at or below RustFFT's P-core figure at N = 16
   f64 with the E-core lead retained, or a recorded attribution of why the
   remaining difference is structural.
