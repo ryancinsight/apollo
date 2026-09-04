@@ -70,11 +70,9 @@ melinoe = { version = "0.9.0", git = "https://github.com/ryancinsight/melinoe.gi
 hermes-simd = { version = "0.7.0", git = "https://github.com/ryancinsight/hermes.git" }
 leto = { version = "0.43.0", git = "https://github.com/ryancinsight/leto.git" }
 leto-ops = { version = "0.43.0", git = "https://github.com/ryancinsight/leto.git" }
-# Hephaestus PR #273 carries the provider-default source graph required by this
-# co-evolution increment. Remove `rev` after that PR merges.
-hephaestus-wgpu = { version = "0.19.0", git = "https://github.com/ryancinsight/hephaestus.git", rev = "dec3d7260167d6bd41ddb03ce69c38462cfd61bf" }
-hephaestus-core = { version = "0.19.0", git = "https://github.com/ryancinsight/hephaestus.git", rev = "dec3d7260167d6bd41ddb03ce69c38462cfd61bf" }
-hephaestus-cuda = { version = "0.19.0", git = "https://github.com/ryancinsight/hephaestus.git", rev = "dec3d7260167d6bd41ddb03ce69c38462cfd61bf" }
+hephaestus-wgpu = { version = "0.19.0", git = "https://github.com/ryancinsight/hephaestus.git" }
+hephaestus-core = { version = "0.19.0", git = "https://github.com/ryancinsight/hephaestus.git" }
+hephaestus-cuda = { version = "0.19.0", git = "https://github.com/ryancinsight/hephaestus.git" }
 proc-macro2 = "1.0.106"
 once_cell = "1.21.4"
 parking_lot = "0.12.5"

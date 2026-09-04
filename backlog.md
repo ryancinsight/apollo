@@ -77,6 +77,15 @@
   only branches mapped to an open item or an enqueued PR.
 - **Risk / change class:** [patch].
 
+<a id="apollo-hephaestus-default"></a>
+
+## APOLLO-HEPHAESTUS-DEFAULT-2026-09-04 — Retire the merged Hephaestus co-evolution pin [patch] — done
+
+- **Result:** Hephaestus resolves once at merged default `f6c9bfdb`; the
+  `dec3d72` query pin is absent while Mnemosyne and Moirai pins remain unchanged.
+- **Evidence:** format, all-target/all-feature check and Clippy, 1,417 Nextest
+  cases, seven doctests, provider audit, and lockfile validation pass.
+
 <a id="apollo-provider-identity"></a>
 
 ## APOLLO-PROVIDER-IDENTITY-2026-09-04 — Four providers resolve through two sources, and the merged pins cannot be dropped alone [patch] [arch] — in-progress

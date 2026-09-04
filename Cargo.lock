@@ -971,7 +971,7 @@ checksum = "2304e00983f87ffb38b55b444b5e3b60a884b5d30c0fca7d82fe33449bbe55ea"
 [[package]]
 name = "hephaestus-core"
 version = "0.19.0"
-source = "git+https://github.com/ryancinsight/hephaestus.git?rev=dec3d7260167d6bd41ddb03ce69c38462cfd61bf#dec3d7260167d6bd41ddb03ce69c38462cfd61bf"
+source = "git+https://github.com/ryancinsight/hephaestus.git#f6c9bfdb5edb3e20c212685e6a4fc32deb6c4d4a"
 dependencies = [
  "aequitas",
  "eunomia",
@@ -983,7 +983,7 @@ dependencies = [
 [[package]]
 name = "hephaestus-cuda"
 version = "0.19.0"
-source = "git+https://github.com/ryancinsight/hephaestus.git?rev=dec3d7260167d6bd41ddb03ce69c38462cfd61bf#dec3d7260167d6bd41ddb03ce69c38462cfd61bf"
+source = "git+https://github.com/ryancinsight/hephaestus.git#f6c9bfdb5edb3e20c212685e6a4fc32deb6c4d4a"
 dependencies = [
  "cuda-oxide",
  "eunomia",
@@ -1000,7 +1000,7 @@ dependencies = [
 [[package]]
 name = "hephaestus-wgpu"
 version = "0.19.0"
-source = "git+https://github.com/ryancinsight/hephaestus.git?rev=dec3d7260167d6bd41ddb03ce69c38462cfd61bf#dec3d7260167d6bd41ddb03ce69c38462cfd61bf"
+source = "git+https://github.com/ryancinsight/hephaestus.git#f6c9bfdb5edb3e20c212685e6a4fc32deb6c4d4a"
 dependencies = [
  "eunomia",
  "hephaestus-core",
@@ -1110,7 +1110,7 @@ checksum = "bbd2bcb4c963f2ddae06a2efc7e9f3591312473c50c6685e1f298068316e66fe"
 [[package]]
 name = "leto"
 version = "0.43.0"
-source = "git+https://github.com/ryancinsight/leto.git#3c1f9f1767f7098ac153b6a5e88a90fd40978ef0"
+source = "git+https://github.com/ryancinsight/leto.git#6548a00c66b1986ba5be05bd2254189e2a22a603"
 dependencies = [
  "aequitas",
  "eunomia",
@@ -1122,7 +1122,7 @@ dependencies = [
 [[package]]
 name = "leto-ops"
 version = "0.43.0"
-source = "git+https://github.com/ryancinsight/leto.git#3c1f9f1767f7098ac153b6a5e88a90fd40978ef0"
+source = "git+https://github.com/ryancinsight/leto.git#6548a00c66b1986ba5be05bd2254189e2a22a603"
 dependencies = [
  "eunomia",
  "hermes-simd",
