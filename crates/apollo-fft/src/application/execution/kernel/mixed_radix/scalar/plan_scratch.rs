@@ -117,3 +117,45 @@ pub(crate) fn with_view_staging<C: PlanScratch, const N: usize, R>(
         ),
     }
 }
+
+/// Releases idle capacity from the plan scratch banks on the current thread.
+pub(crate) fn release_thread_local_scratch() {
+    TL_PLAN_SCRATCH_BANK_64.with(|bank| bank.release());
+    TL_PLAN_SCRATCH_BANK_32.with(|bank| bank.release());
+}
+
+#[cfg(test)]
+pub(crate) fn thread_local_scratch_capacity() -> usize {
+    let capacity_64 = TL_PLAN_SCRATCH_BANK_64.with(|bank| {
+        bank.capacity::<SCRATCH_2D_SLOT>()
+            + bank.capacity::<SCRATCH_3D_Y_SLOT>()
+            + bank.capacity::<SCRATCH_3D_X_SLOT>()
+    });
+    let capacity_32 = TL_PLAN_SCRATCH_BANK_32.with(|bank| {
+        bank.capacity::<SCRATCH_2D_SLOT>()
+            + bank.capacity::<SCRATCH_3D_Y_SLOT>()
+            + bank.capacity::<SCRATCH_3D_X_SLOT>()
+    });
+    capacity_64 + capacity_32
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{release_thread_local_scratch, PlanScratch, TL_PLAN_SCRATCH_BANK_64};
+
+    #[test]
+    fn release_reclaims_idle_plan_capacity() {
+        <eunomia::Complex64 as PlanScratch>::with_2d_scratch_impl(257, |scratch| {
+            scratch[0] = eunomia::Complex64::new(1.0, -2.0);
+        });
+        TL_PLAN_SCRATCH_BANK_64.with(|bank| {
+            assert!(bank.capacity::<0>() >= 257);
+        });
+
+        release_thread_local_scratch();
+
+        TL_PLAN_SCRATCH_BANK_64.with(|bank| {
+            assert_eq!(bank.capacity::<0>(), 0);
+        });
+    }
+}

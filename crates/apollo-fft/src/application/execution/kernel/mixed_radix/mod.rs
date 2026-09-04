@@ -45,3 +45,18 @@ pub(crate) mod traits;
 
 pub(crate) use dispatch::*;
 pub(crate) use scalar::MixedRadixScalar;
+
+pub(crate) fn release_thread_local_scratch() {
+    crate::application::execution::kernel::components::radix_composite::
+        release_thread_local_scratch();
+    caches::scratch::release_thread_local_scratch();
+    scalar::plan_scratch::release_thread_local_scratch();
+}
+
+#[cfg(test)]
+pub(crate) fn thread_local_scratch_capacity() -> usize {
+    crate::application::execution::kernel::components::radix_composite::
+        thread_local_scratch_capacity()
+        + caches::scratch::thread_local_scratch_capacity()
+        + scalar::plan_scratch::thread_local_scratch_capacity()
+}

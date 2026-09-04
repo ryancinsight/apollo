@@ -144,6 +144,7 @@ impl<F: MixedRadixScalar<Complex = Complex<F>>> FftPlan1D<F> {
     /// Create a new 1D plan.
     #[must_use]
     pub fn new(shape: Shape1D) -> Self {
+        crate::ensure_thread_local_scratch_hook_registered();
         let n = shape.n();
         // 256 and 512 decimate down to the same base rather than paying the
         // four-step's six passes at a size where they dominate the transform.

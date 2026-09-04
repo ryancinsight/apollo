@@ -121,6 +121,18 @@ thread_local! {
         const { mnemosyne::scratch::ScratchPool::new() };
 }
 
+/// Releases idle batched four-step scratch on the current thread.
+pub(super) fn release_thread_local_scratch() {
+    TL_COMPOSITE_SCRATCH_64.with(|pool| pool.release());
+    TL_COMPOSITE_SCRATCH_32.with(|pool| pool.release());
+}
+
+#[cfg(test)]
+pub(super) fn thread_local_scratch_capacity() -> usize {
+    TL_COMPOSITE_SCRATCH_64.with(|pool| pool.capacity())
+        + TL_COMPOSITE_SCRATCH_32.with(|pool| pool.capacity())
+}
+
 /// Whether the batched-layout four-step covers this length.
 ///
 /// Square splits only, which is what the four-step gate already admits and what

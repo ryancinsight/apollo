@@ -78,40 +78,39 @@
 - **Re-open trigger:** an approach to 2048 that is not a wider version of this
   one. Its gap is real and among the largest on the board.
 
-## ATLAS-APOLLO-WORKER-RETENTION-2026-09-03 — Per-worker scratch is retained for the process, and the mnemosyne share has no release path [minor] [perf] — todo <a id="atlas-apollo-worker-retention"></a>
+## ATLAS-APOLLO-WORKER-RETENTION-2026-09-03 — Per-worker scratch needs quiescent reclamation [minor] [perf] — done <a id="atlas-apollo-worker-retention"></a>
 
-- **Integrator:** unclaimed; **branch:** none; **lease:** none.
-- **Last-update:** 2026-09-03.
+- **Status:** done; **commit:** `3381cd45`; **branch:** `perf/apollo-codelet-remeasure`.
+- **Last-update:** 2026-09-04.
 - **Outcome:** bound the memory a parallel transform leaves resident after it
   completes, and give the mnemosyne scratch pool a release path so worker
   threads do not hold their high-water mark for the life of the process.
-- **Measurement (2026-09-03, this host).** `worker_scratch_retention` in
+- **Measurement (2026-09-04, this host).** `worker_scratch_retention` in
   `kernel/retained_footprint.rs`, an `#[ignore]`d probe run with
-  `--run-ignored all`: `Complex64`, 128 chunks driven through
-  `moirai::for_each_chunk_mut_with::<moirai::Parallel, _, _>`, ledgers read
-  while the executor's own workers are still alive. 24 workers observed.
+  `--run-ignored ignored-only --no-capture`: `Complex64`, 128 chunks driven
+  through `moirai::for_each_chunk_mut_with::<moirai::Parallel, _, _>`, with
+  two transforms in one live task and ledgers read after worker idle. 24 workers
+  observed.
 
   | window | global retained | mnemosyne-direct retained |
   | --- | --- | --- |
   | pool warmup | 1,006,304 B | 540,672 B |
-  | first parallel forward | 7,240,420 B | 0 B (0 allocs) |
-  | warm parallel forward | 0 B (0 allocs) | 0 B (0 allocs) |
+  | parallel forward + live-task repeat + worker quiescence | 843,404 B | 0 B (0 allocs) |
 
-  The warm pass allocates nothing in either ledger, so reuse is working as
-  designed; the whole cost is retention, not churn.
-- **Attribution — revised 2026-09-03, superseding this item's first filing.**
-  Both figures are mnemosyne scratch storage. Apollo's per-worker scratch
+  The repeated transform in each live worker task allocates nothing after its
+  first transform, and the worker hook releases all observed Apollo scratch
+  capacity before the ledger is read.
+- **Attribution — revised 2026-09-04, superseding the prior figures.**
+  Apollo's per-worker scratch
   routes `Stockham` to `ScratchDispatch::with_stockham_impl` to
   `ScratchBank::with_scratch` (`mixed_radix/caches/scratch.rs`), and
   `ScratchBank<T, N>` is `[ScratchPool<T>; N]`; apollo holds
-  `ScratchBank<Complex64, 4>`, so up to 16 `AlignedVec` buffers per worker.
-  The `Mnemosyne direct` ledger tracks a narrower hook and does not see them —
-  `ScratchBank` allocates through the global allocator, which is why the
-  6,684,672 B landed in the global column while mnemosyne-direct read zero for
-  that window.
-  - **About 7.2 MB is mnemosyne-owned**, not 540,672 B. The first filing read
-    the ledger's column label as ownership; the allocation path is what
-    settles it.
+  `ScratchBank<Complex64, 4>` and the composite route's
+  `ScratchPool<Complex64>` allocate through the global allocator; the
+  `Mnemosyne direct` ledger is a narrower hook and does not see them.
+  - **The released worker footprint is 0 B of Apollo scratch capacity.** The
+    remaining 843,404 B includes the coordinator's unquiesced route state and
+    small executor allocations, not worker-owned scratch.
   - **Doubling overshoot.** `278528x24` is `24 x 17408` `Complex64` where the
     transform asked for 16,384. `AlignedVec::ensure_len` grows to
     `min_len.max(capacity * 2)`, so a slot can land above the size actually
@@ -124,35 +123,29 @@
   ledger column moved it again, to about 7.2 MB mnemosyne-owned. Two revisions
   in one day on one measurement: cite neither number without re-reading the
   path that produces it.
-- **Upstream finding (mnemosyne, source-verified 2026-09-03).**
-  `mnemosyne-arena/src/scratch/pool.rs`: `ScratchPool` holds
-  `[UnsafeCell<AlignedVec<T>>; MAX_POOL_SLOTS]` and its documented home is
-  `thread_local!`. Its public surface is `new`, `with_slot_capacity`,
-  `with_scratch`, `borrow_depth`, `capacity` — **no shrink, clear, or release
-  method exists**, and `scratch/aligned_vec.rs` documents that a shrinking
-  resize "keeps the allocation". So a slot grows to the high-water mark of the
-  largest transform that thread ever ran and is freed only when the thread
-  exits; moirai worker threads live for the process, so in a long-running
-  consumer that is never.
-- **Blocked on contention, not on design.** The mnemosyne board could not take
-  this item when it was found: that repo's tree was on a live peer branch
-  (`feat/phase10-improvements`, committed 52 minutes prior) and already at the
-  two-tree cap, so no lane was available. Recorded here, in the consumer that
-  measured it, until the upstream item can be raised. **Re-open trigger:**
-  mnemosyne main free of that branch.
+- **Upstream release is now available (source-verified 2026-09-04).**
+  `mnemosyne-arena::ScratchPool::release` and `ScratchBank::release` reclaim
+  idle capacity above each recorded provision, while preserving live borrows.
+  Apollo's current paths use the unbounded `with_scratch` entry point, so an
+  explicit quiescent release drops those unprovisioned slots completely.
+- **The consumer seam is explicit.** A release call made on the coordinator
+  thread cannot reclaim a worker's thread-local banks. Apollo registers one
+  consolidated hook with Moirai during dynamic plan construction; Moirai invokes
+  it after each worker reaches its idle boundary. It must not run on every
+  scratch borrow exit.
 - **Direction.** Quiescent reclamation, not eager free: releasing on every
   `with_scratch` exit would reintroduce the allocation churn the pool exists to
-  remove — the warm pass measuring zero allocations is the property to
-  preserve. Candidates are a capacity ceiling per slot, or release on an idle
-  signal from the executor.
-- **Acceptance oracle:** the warm-pass window still reports zero allocations in
-  both ledgers — the property the pool exists to produce, and the one eager
-  release would destroy — and total retained scratch after an idle interval
-  falls below the ~7.2 MB measured here, on the same probe and worker count.
-  Read the total across both ledger columns, not the mnemosyne-direct column:
-  that column is what mis-attributed this item twice.
+  remove. Apollo registers one hook that releases every owner-thread scratch
+  family after Moirai reaches its idle boundary; the probe separately verifies
+  zero allocations across repeated transforms within one live task.
+- **Acceptance oracle:** the repeated transform inside each live worker task
+  reports zero additional allocations, all observed worker-local Apollo
+  scratch capacities are zero after the Moirai idle hook, and total retained
+  scratch across both ledger columns is below the ~7.2 MB baseline on the same
+  probe and worker count. Read the total across both ledger columns, not the
+  Mnemosyne-direct column.
 - **Risk / change class:** [minor] [perf]; upstream is a new pool method plus
-  its trigger, apollo side is measurement only.
+  its trigger, and Apollo adds the consumer hook and route coverage.
 
 ## ATLAS-APOLLO-STRIDED-GATHER-UPSTREAM-2026-09-03 — The split's gather is hand-rolled per block count instead of a substrate primitive [minor] [arch] — todo <a id="atlas-apollo-strided-gather-upstream"></a>
 

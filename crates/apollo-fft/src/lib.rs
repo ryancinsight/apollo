@@ -46,6 +46,45 @@ pub mod api;
 
 pub use application::execution::kernel::mixed_radix::scalar::plan_scratch::PlanScratch;
 
+static THREAD_LOCAL_SCRATCH_HOOK: std::sync::OnceLock<()> = std::sync::OnceLock::new();
+#[cfg(test)]
+static THREAD_LOCAL_SCRATCH_RELEASES: std::sync::atomic::AtomicUsize =
+    std::sync::atomic::AtomicUsize::new(0);
+
+pub(crate) fn ensure_thread_local_scratch_hook_registered() {
+    THREAD_LOCAL_SCRATCH_HOOK.get_or_init(|| {
+        moirai::register_idle_hook(release_thread_local_scratch)
+            .expect("invariant: Apollo's consolidated idle hook fits Moirai's registry");
+    });
+}
+
+/// Releases idle FFT scratch capacity held by the current thread.
+///
+/// Call this at a quiescent boundary on each long-lived worker after its FFT
+/// workload has completed. The function affects only the current thread's
+/// thread-local banks; calling it from a coordinator does not reach worker
+/// banks. It does not invalidate a live scratch borrow, and it is not intended
+/// for the per-transform hot path. Dynamic FFT plan construction registers this
+/// release with Moirai automatically. For const-constructed static plans or
+/// direct kernel entry points, call this once at a runtime boundary before work
+/// is submitted so the worker-idle hook is installed.
+pub fn release_thread_local_scratch() {
+    #[cfg(test)]
+    THREAD_LOCAL_SCRATCH_RELEASES.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+    ensure_thread_local_scratch_hook_registered();
+    application::execution::kernel::mixed_radix::release_thread_local_scratch();
+}
+
+#[cfg(test)]
+pub(crate) fn thread_local_scratch_release_count() -> usize {
+    THREAD_LOCAL_SCRATCH_RELEASES.load(std::sync::atomic::Ordering::Relaxed)
+}
+
+#[cfg(test)]
+pub(crate) fn thread_local_scratch_capacity() -> usize {
+    application::execution::kernel::mixed_radix::thread_local_scratch_capacity()
+}
+
 #[cfg(test)]
 mod lib_tests;
 
