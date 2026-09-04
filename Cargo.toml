@@ -62,9 +62,9 @@ csv = "1.4.0"
 # Temporary co-evolution pin for Eunomia PR #87; remove `rev` after the
 # provider derive delivery merges to main and regenerate Cargo.lock.
 eunomia = { version = "0.8.0", git = "https://github.com/ryancinsight/eunomia", rev = "fdbf12275d35aa1545060a4277644c497ddcda37", default-features = false, features = ["std"] }
-# Temporary co-evolution pin for Mnemosyne PR #123; remove `rev` after the
-# Eunomia source-identity correction merges to main and regenerate Cargo.lock.
-mnemosyne = { package = "mnemosyne-memory", version = "0.7.0", git = "https://github.com/ryancinsight/Mnemosyne.git", rev = "26726d20cb45c88233a83165cf2ec663efee9050", features = ["eunomia"] }
+# Temporary co-evolution pin for Mnemosyne PR #128; remove `rev` after the
+# pooled-scratch release surface merges to main and regenerate Cargo.lock.
+mnemosyne = { package = "mnemosyne-memory", version = "0.7.0", git = "https://github.com/ryancinsight/Mnemosyne.git", rev = "af7a23a", features = ["eunomia"] }
 melinoe = { version = "0.9.0", git = "https://github.com/ryancinsight/melinoe.git", default-features = false, features = ["alloc"] }
 # Temporary co-evolution pin for Hermes PR #155; remove `rev` after its
 # provider source-identity correction merges to main and regenerate Cargo.lock.
@@ -99,9 +99,9 @@ phastft = { version = "0.4.1", default-features = false }
 # exploits real-input symmetry over rustfft: a size-N real transform costs about
 # half a size-N complex one and yields N/2+1 bins instead of N.
 realfft = "3.5.0"
-# Temporary co-evolution pin for Moirai PR #256; remove `rev` after the
-# canonical GPU budget export merges to main and regenerate Cargo.lock.
-moirai = { package = "moirai-runtime", version = "0.5.0", git = "https://github.com/ryancinsight/Moirai.git", rev = "773c117", features = ["melinoe"] }
+# Temporary co-evolution pin for the worker-idle reclamation seam; remove
+# `rev` after Moirai's hook lands on main and regenerate Cargo.lock.
+moirai = { package = "moirai-runtime", version = "0.5.0", git = "https://github.com/ryancinsight/Moirai.git", rev = "83aa411", features = ["melinoe"] }
 serde = { version = "1.0.228", features = ["derive"] }
 serde_json = "1.0.150"
 syn = { version = "2.0.118", features = ["full"] }

@@ -12,6 +12,15 @@ use crate::application::execution::kernel::radix_stage::normalize_scalar;
 use crate::application::execution::kernel::tuning::RADIX_PARALLEL_CHUNK_THRESHOLD;
 pub use cache::CompositeCache;
 
+pub(crate) fn release_thread_local_scratch() {
+    cache::release_thread_local_scratch();
+}
+
+#[cfg(test)]
+pub(crate) fn thread_local_scratch_capacity() -> usize {
+    cache::thread_local_scratch_capacity()
+}
+
 /// Execute a fused multi-stage Stockham composite pass over all output groups.
 ///
 /// Each output group is `prev_len * r_total` elements. `P` controls

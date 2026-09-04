@@ -194,6 +194,7 @@ where
     /// Create a new 2D plan.
     #[must_use]
     pub fn new(shape: Shape2D) -> Self {
+        crate::ensure_thread_local_scratch_hook_registered();
         let (nx, ny) = (shape.nx(), shape.ny());
         Self {
             nx,

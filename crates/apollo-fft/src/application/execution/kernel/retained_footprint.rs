@@ -6,9 +6,10 @@
 //! ~1.0x, but that aggregate combined transform and runtime state. This probe
 //! attributes the global-allocator portion: a windowed counting allocator
 //! opens one window per acquisition stage — forward twiddle table, plan
-//! construction, first transform, warm transform — and a ledger records every
-//! allocation with its size, so each retained block maps to an owner by its byte
-//! signature (`16n` interleaved scratch or twiddle table, `8n` planar half,
+//! construction, first transform, repeated live-task transform, and worker
+//! quiescence — and a ledger records every allocation with its size, so each
+//! retained block maps to an owner by its byte signature (`16n` interleaved
+//! scratch or twiddle table, `8n` planar half,
 //! `2 x FUSE_THRESHOLD x 16` compose arena, and so on). A second ledger receives
 //! Mnemosyne's process-wide allocation hooks, covering local-deque payload arrays
 //! that bypass the installed global allocator.
@@ -25,6 +26,7 @@
 use std::alloc::{GlobalAlloc, Layout, System};
 use std::sync::atomic::{AtomicIsize, AtomicPtr, AtomicUsize, Ordering};
 
+use super::worker_quiescence;
 use crate::application::execution::kernel::mixed_radix::MixedRadixScalar;
 use eunomia::Complex64;
 
@@ -182,6 +184,7 @@ unsafe impl GlobalAlloc for Attributing {
         let pointer = unsafe { System.alloc(l) };
         if count && !pointer.is_null() {
             GLOBAL_ALLOCATIONS.record_alloc(pointer, l.size());
+            worker_quiescence::record_allocation();
         }
         if count {
             leave_window();
@@ -212,6 +215,7 @@ unsafe impl GlobalAlloc for Attributing {
         let pointer = unsafe { System.realloc(p, l, new) };
         if count && !pointer.is_null() {
             GLOBAL_ALLOCATIONS.record_realloc_claimed(old, pointer, new);
+            worker_quiescence::record_allocation();
         } else if let Some((slot, _)) = old {
             // A failed `realloc` leaves the original allocation live.
             GLOBAL_ALLOCATIONS.restore(slot, p);
@@ -713,6 +717,7 @@ fn worker_scratch_retention() {
     // planar scratch (278,528 at n = 16,384), 16n the twiddle table, and the
     // 131,072-byte pairs the four-step planes.
     let _mnemosyne_hooks = MnemosyneHooks::install();
+    worker_quiescence::arm();
     const N: usize = 16_384;
     // Comfortably more chunks than any plausible pool width, so every worker
     // takes at least one and reaches its own scratch.
@@ -732,23 +737,39 @@ fn worker_scratch_retention() {
         });
     });
 
-    window("first parallel forward across workers", || {
+    window("parallel forward through worker quiescence", || {
         moirai::for_each_chunk_mut_with::<moirai::Parallel, _, _>(&mut signal, N, |chunk| {
+            worker_quiescence::record_worker();
             let plan = crate::FftPlan1D::<f64>::new(
                 crate::Shape1D::new(N).expect("invariant: shape lengths are non-zero"),
             );
             plan.forward_complex_slice_inplace(chunk);
         });
-    });
 
-    // Workers are still alive and their scratch is at its high-water mark, so a
-    // second pass should retain nothing further.
-    window("warm parallel forward across workers", || {
+        // Apollo registers its release hook during the first plan
+        // construction. Register the observer afterward so its event follows
+        // Apollo's release in Moirai's ordered hook table.
+        moirai::register_idle_hook(worker_quiescence::observe_idle)
+            .expect("invariant: retention probe observer fits Moirai's registry");
+        worker_quiescence::begin_phase();
         moirai::for_each_chunk_mut_with::<moirai::Parallel, _, _>(&mut signal, N, |chunk| {
+            worker_quiescence::record_worker();
             let plan = crate::FftPlan1D::<f64>::new(
                 crate::Shape1D::new(N).expect("invariant: shape lengths are non-zero"),
             );
             plan.forward_complex_slice_inplace(chunk);
+            let before_warm_repeat = worker_quiescence::allocation_count();
+            plan.forward_complex_slice_inplace(chunk);
+            assert_eq!(
+                worker_quiescence::allocation_count(),
+                before_warm_repeat,
+                "a repeated transform in one live worker task must reuse scratch"
+            );
         });
+        worker_quiescence::wait_for_phase();
+        assert!(
+            crate::thread_local_scratch_release_count() > 0,
+            "Moirai idle hooks must invoke Apollo scratch reclamation"
+        );
     });
 }

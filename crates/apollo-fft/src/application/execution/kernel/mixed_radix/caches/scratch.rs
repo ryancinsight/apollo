@@ -105,3 +105,48 @@ pub(crate) fn with_bluestein_scratch<C: ScratchDispatch, R, F: FnOnce(&mut [C]) 
 ) -> R {
     C::with_bluestein_impl(n, f)
 }
+
+/// Releases idle capacity from the mixed-radix transform scratch banks on the
+/// current thread.
+pub(crate) fn release_thread_local_scratch() {
+    TL_SCRATCH_BANK_64.with(|bank| bank.release());
+    TL_SCRATCH_BANK_32.with(|bank| bank.release());
+}
+
+#[cfg(test)]
+pub(crate) fn thread_local_scratch_capacity() -> usize {
+    let capacity_64 = TL_SCRATCH_BANK_64.with(|bank| {
+        bank.capacity::<STOCKHAM_SLOT>()
+            + bank.capacity::<PFA_SLOT>()
+            + bank.capacity::<RADER_PADDED_SLOT>()
+            + bank.capacity::<BLUESTEIN_SLOT>()
+    });
+    let capacity_32 = TL_SCRATCH_BANK_32.with(|bank| {
+        bank.capacity::<STOCKHAM_SLOT>()
+            + bank.capacity::<PFA_SLOT>()
+            + bank.capacity::<RADER_PADDED_SLOT>()
+            + bank.capacity::<BLUESTEIN_SLOT>()
+    });
+    capacity_64 + capacity_32
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{release_thread_local_scratch, STOCKHAM_SLOT, TL_SCRATCH_BANK_64};
+
+    #[test]
+    fn release_reclaims_idle_mixed_radix_capacity() {
+        TL_SCRATCH_BANK_64.with(|bank| {
+            bank.with_scratch::<STOCKHAM_SLOT, _>(257, |scratch| {
+                scratch[0] = eunomia::Complex64::new(1.0, -2.0);
+            });
+            assert!(bank.capacity::<STOCKHAM_SLOT>() >= 257);
+        });
+
+        release_thread_local_scratch();
+
+        TL_SCRATCH_BANK_64.with(|bank| {
+            assert_eq!(bank.capacity::<STOCKHAM_SLOT>(), 0);
+        });
+    }
+}

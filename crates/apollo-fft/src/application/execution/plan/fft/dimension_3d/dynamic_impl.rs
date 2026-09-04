@@ -44,6 +44,7 @@ where
     /// Create a new 3D plan.
     #[must_use]
     pub fn new(shape: Shape3D) -> Self {
+        crate::ensure_thread_local_scratch_hook_registered();
         let (nx, ny, nz) = (shape.nx(), shape.ny(), shape.nz());
         let m = nz / 2;
         let nz_c_val = m + 1;

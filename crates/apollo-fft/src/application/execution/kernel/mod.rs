@@ -46,6 +46,9 @@ pub(crate) mod measurement_cores;
 mod retained_footprint;
 #[cfg(test)]
 pub(crate) mod test_utils;
+#[cfg(test)]
+#[cfg(not(miri))]
+mod worker_quiescence;
 
 // ── Re-exports (public API) ──────────────────────────────────────────────────
 
