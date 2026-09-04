@@ -48,6 +48,14 @@
   The paired instrument reports n = 32 medians of `17.216/16.366 ns` for
   Apollo/RustFFT, so it neither reduces generated spill traffic nor reaches the
   `15.28 ns` acceptance target. The full explicit boundary remains canonical.
+- **Aligned scratch rejected.** A `#[repr(align(32))]` wrapper with aligned
+  AVX loads and stores passes the 10/10 value gate, but release codegen still
+  reports 22/14 vector stores/reloads for forward and inverse, 21/13
+  normalized, and 282/300/280 instructions. The paired instrument reports
+  n = 32 medians of `27.123/25.322 ns` for Apollo/RustFFT, worse than the
+  explicit-boundary baseline, so alignment does not change the spill shape or
+  satisfy the liveness target. The unaligned full explicit boundary remains
+  canonical.
 - **Falsified, so nobody repeats it:** fusing permute, scale and store per
   output — so the sixteen results do not all span the normalisation block —
   changes nothing. Codegen after: 27 spill stores and 19 reloads against 26 and
