@@ -15,8 +15,8 @@
 
 use std::borrow::Cow;
 
-use bytemuck::{Pod, Zeroable};
 use eunomia::Complex32;
+use eunomia::{Pod, Zeroable};
 use hephaestus_core::{
     Binding, BindingDecl, CommandStream, DispatchGrid, KernelDevice, KernelInterface, KernelSource,
     Wgsl,

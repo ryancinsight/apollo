@@ -1,6 +1,7 @@
 //! Reusable typed Hephaestus storage and prepared STFT dispatch state.
 
 use apollo_fft::{WgpuError, WgpuResult};
+use eunomia::layout::cast_slice;
 use hephaestus_core::{
     ComputeDevice, FftDirection, FftOperands, FftOps, GroupedBinding, GroupedKernelDevice,
     StridedView,
@@ -240,7 +241,7 @@ impl StftGpuBuffers {
     /// Return the forward transform from the most recent buffered execution.
     #[must_use]
     pub fn fwd_output(&self) -> &[eunomia::Complex32] {
-        bytemuck::cast_slice(&self.forward_host)
+        cast_slice(&self.forward_host)
     }
 
     /// Return the reconstructed signal from the most recent buffered execution.

@@ -14,7 +14,6 @@ wgpu = [
     "apollo-fft/wgpu",
     "dep:hephaestus-core",
     "dep:hephaestus-wgpu",
-    "dep:bytemuck"
 ]
 default = ["parallel", "mnemosyne-memory"]
 parallel = []
@@ -23,7 +22,6 @@ mnemosyne-memory = []
 [dependencies]
 hephaestus-core = { workspace = true, optional = true }
 hephaestus-wgpu = { workspace = true, optional = true }
-bytemuck = { workspace = true, optional = true }
 hermes-simd = { workspace = true }
 moirai = { workspace = true }
 mnemosyne = { workspace = true }

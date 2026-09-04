@@ -6,7 +6,7 @@
 //! the sparse-domain surface. The dense DFT/IDFT instantiate the
 //! scaffold directly; sparse selection, sparse reconstruction, and the
 //! `Complex64` quantization boundary extend it through
-//! [`SparseExecution`], since a [`SparseSpectrum`] is a domain structure,
+//! [`SparseExecution`], since a [`crate::SparseSpectrum`] is a domain structure,
 //! not a slice.
 
 mod execution;
