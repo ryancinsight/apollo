@@ -1,5 +1,6 @@
 //! Unrolled small power-of-two codelets, split by SIMD lane density.
 
+mod n32;
 mod precise;
 mod reduced;
 

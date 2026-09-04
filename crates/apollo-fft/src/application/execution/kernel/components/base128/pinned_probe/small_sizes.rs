@@ -9,7 +9,12 @@ use eunomia::Complex64;
 use hermes_simd::{ProcessorBinding, ProcessorIndex};
 use rustfft::num_complex::Complex as RustComplex;
 
-fn small_sizes_for_scalar<T>(suite: &mut BenchmarkSuite, core: &str, scalar: &str)
+const SMALL_SIZE_CASES: [usize; 17] = [
+    8, 16, 32, 64, 128, 256, 512, 1024, 2048, 4096, 32768, 100, 180, 384, 1000, 101, 1009,
+];
+const LIVENESS_CASES: [usize; 3] = [16, 32, 64];
+
+fn small_sizes_for_scalar<T>(suite: &mut BenchmarkSuite, core: &str, scalar: &str, sizes: &[usize])
 where
     T: ProbeScalar + MixedRadixScalar<Complex = eunomia::Complex<T>>,
     eunomia::Complex<T>: eunomia::layout::Pod,
@@ -19,9 +24,7 @@ where
     // primes, which reach Rader or Bluestein. A sweep of powers of two alone
     // cannot see a result that depends on the length class
     // (`gap_audit.md#length-class-split`).
-    for n in [
-        8usize, 16, 32, 64, 128, 256, 512, 1024, 2048, 4096, 32768, 100, 180, 384, 1000, 101, 1009,
-    ] {
+    for &n in sizes {
         let src: Vec<eunomia::Complex<T>> = (0..n)
             .map(|i| {
                 let x = i as f64;
@@ -120,12 +123,12 @@ fn small_sizes_against_the_references_by_core_type() {
         let core = core.label();
         // Discarded pass: see `half_storage_promotion_cost_by_core_type`.
         let mut warmup = BenchmarkSuite::new(BenchmarkConfig::regression());
-        small_sizes_for_scalar::<f64>(&mut warmup, core, "f64");
-        small_sizes_for_scalar::<f32>(&mut warmup, core, "f32");
+        small_sizes_for_scalar::<f64>(&mut warmup, core, "f64", &SMALL_SIZE_CASES);
+        small_sizes_for_scalar::<f32>(&mut warmup, core, "f32", &SMALL_SIZE_CASES);
         drop(warmup);
         let mut suite = BenchmarkSuite::new(BenchmarkConfig::regression());
-        small_sizes_for_scalar::<f64>(&mut suite, core, "f64");
-        small_sizes_for_scalar::<f32>(&mut suite, core, "f32");
+        small_sizes_for_scalar::<f64>(&mut suite, core, "f64", &SMALL_SIZE_CASES);
+        small_sizes_for_scalar::<f32>(&mut suite, core, "f32", &SMALL_SIZE_CASES);
         {
             let src: Vec<Complex64> = (0..128)
                 .map(|i| {
@@ -145,4 +148,35 @@ fn small_sizes_against_the_references_by_core_type() {
         println!("SML cpu={landed} ({core})");
         print!("{}", suite.report());
     }
+}
+
+#[test]
+#[ignore = "focused liveness instrument for the n=16/32/64 f64 codelets"]
+fn n32_f64_liveness_against_rustfft() {
+    let Some(selection) = measurement_cores::selected() else {
+        eprintln!("host reports no processor class information; probe not measurable");
+        return;
+    };
+    let core = selection
+        .cores()
+        .first()
+        .expect("measurement selection must contain one processor class");
+    let cpu = core.processor().get();
+    let _binding =
+        ProcessorBinding::bind(core.processor()).expect("measurement processor must be available");
+    std::thread::yield_now();
+    let landed = ProcessorIndex::current()
+        .expect("Windows supports processor queries")
+        .get();
+    assert_eq!(landed, cpu, "processor binding must remain exact");
+
+    let core = core.label();
+    let mut warmup = BenchmarkSuite::new(BenchmarkConfig::regression());
+    small_sizes_for_scalar::<f64>(&mut warmup, core, "f64", &LIVENESS_CASES);
+    drop(warmup);
+
+    let mut suite = BenchmarkSuite::new(BenchmarkConfig::regression());
+    small_sizes_for_scalar::<f64>(&mut suite, core, "f64", &LIVENESS_CASES);
+    println!("SML liveness cpu={landed} ({core})");
+    print!("{}", suite.report());
 }
