@@ -4,7 +4,7 @@
 //! The execution scaffold is the shared `apollo-fft` transform transport
 //! (ADR 0037); this module owns the SHT kernels, their domain names, and
 //! the harmonic surface. Forward analysis produces
-//! [`SphericalHarmonicCoefficients`] (a `Complex64` domain structure) and
+//! [`crate::SphericalHarmonicCoefficients`] (a `Complex64` domain structure) and
 //! inverse synthesis consumes it with exact-representability checks, so
 //! the surface extends the scaffold through [`HarmonicExecution`] rather
 //! than instantiating its slice contract.

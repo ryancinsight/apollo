@@ -2,7 +2,7 @@
 
 use core::marker::PhantomData;
 
-use bytemuck::{Pod, Zeroable};
+use eunomia::{Pod, Zeroable};
 use hephaestus_core::{BindingDecl, KernelInterface};
 
 /// Threads launched in one accelerator workgroup.

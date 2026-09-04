@@ -2,12 +2,13 @@
 //! binding modules. Conversion-only logic; no domain computation.
 
 use apollo_fft::{Complex32, Complex64, PrecisionMode, PrecisionProfile, StoragePrecision};
+use eunomia::layout::{cast_slice, try_cast_slice, Pod};
 use leto::{Array, Array1, Array2, Array3, ArrayView1, ArrayView2, ArrayView3, Layout, Storage};
 use pyo3::exceptions::PyValueError;
 use pyo3::prelude::*;
 use pyo3::types::PyBytes;
 
-pub(crate) trait PyArrayElement: bytemuck::Pod {
+pub(crate) trait PyArrayElement: Pod {
     const DTYPE: &'static str;
 }
 
@@ -84,7 +85,7 @@ impl<T: PyArrayElement, const N: usize> PyReadonlyArray<T, N> {
             .extract::<bool>()?;
         let bytes_any = input.call_method0("tobytes")?;
         let bytes = bytes_any.cast::<PyBytes>()?;
-        let values = bytemuck::try_cast_slice::<u8, T>(bytes.as_bytes())
+        let values = try_cast_slice::<u8, T>(bytes.as_bytes())
             .map_err(|error| PyValueError::new_err(error.to_string()))?
             .to_vec();
         let expected_len = shape
@@ -376,7 +377,7 @@ pub(crate) fn values_into_pyarray<'py, T: PyArrayElement, const N: usize>(
     shape: [usize; N],
 ) -> PyResult<Py<PyAny>> {
     let numpy = py.import("numpy")?;
-    let bytes = PyBytes::new(py, bytemuck::cast_slice(values));
+    let bytes = PyBytes::new(py, cast_slice(values));
     let array = numpy.getattr("frombuffer")?.call1((bytes, T::DTYPE))?;
     let copied = array.call_method0("copy")?;
     let reshaped = copied.call_method1("reshape", (shape.to_vec(),))?;

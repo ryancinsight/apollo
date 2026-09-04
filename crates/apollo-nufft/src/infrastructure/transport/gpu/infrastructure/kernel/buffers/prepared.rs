@@ -1,7 +1,6 @@
 //! Retained Hephaestus plans and grouped NUFFT-domain dispatch state.
 
-use bytemuck::Pod;
-use eunomia::Complex32;
+use eunomia::{Complex32, Pod};
 use hephaestus_core::{
     DispatchGrid, FftDirection, FftOperands, FftOps, GroupedBinding, GroupedKernelDevice,
     GroupedKernelSource, StridedView, Wgsl,

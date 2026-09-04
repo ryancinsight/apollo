@@ -52,3 +52,4 @@
 | [0044](0044-shape-descriptors-validate-at-construction.md) | Shape descriptors validate at construction | Accepted |
 | [0045](0045-per-isa-fork-onto-hermes-lanes.md) | The per-ISA intrinsic fork retires family by family onto hermes lane kernels, each behind a measurement gate | Accepted |
 | [0046](0046-compact-storage-plan-routing.md) | Route compact storage through cached plans | Accepted |
+| [0047](0047-first-party-source-identity-during-coevolution.md) | First-Party Source Identity During Co-evolution | Accepted |

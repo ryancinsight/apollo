@@ -1,5 +1,43 @@
 # Apollo Backlog
 
+## ATLAS-APOLLO-SIXTEEN-BLOCK-SPLIT-2026-09-03 — n = 2048 is a local peak, and the split does not reach it [minor] [perf] — done 2026-09-03 (falsified) <a id="atlas-apollo-sixteen-block-split"></a>
+
+- **Why it looked promising.** n = 2048 measures worse than both its
+  neighbours and is the only power of two where apollo loses to PhastFT as
+  well — the same signature n = 1024 had before the eight-block split:
+
+  | n | f64 vs RustFFT | f32 vs RustFFT | f32 vs PhastFT |
+  | --- | --- | --- | --- |
+  | 1024 (split) | +25% | +52% | +13% |
+  | **2048 (untuned)** | **+39%** | **+103%** | **+33%** |
+  | 4096 | +20% | +38% | +6% |
+
+- **Built as a generalisation rather than a second special case.** The
+  eight-block branch became `blocks > 4`: every group of four blocks reaches
+  its 512-point spectrum through the same sink-fused `combine_four_blocks`
+  chain, then the remaining radix-2 levels run in place. Eight blocks is two
+  chains and one level, sixteen is four chains and two, and
+  `combine_level_in_place` now walks every adjacent pair rather than assuming
+  one. 551/551 including the accuracy oracles.
+- **Measured and rejected.** Both routes in one binary, arms alternating,
+  `f32`: n = 2048 is **+3.3% and +3.5%** — consistently slower than the flat
+  Stockham route it would replace. n = 1024 in the same runs is -16.0% and
+  -12.4%, so the construction itself is sound and 2048 is simply past its
+  range.
+- **The missing sixteen-way gather is not obviously the answer.** Sixteen
+  blocks take the strided scalar gather, since hermes' pair split stops at
+  eight, and the reflex is to add a sixteen-way and re-measure. The evidence
+  does not support that reflex: the eight-way network's own contribution was
+  never cleanly isolated (see the correction below), so sizing a sixteen-way
+  from it would be sizing from a number that was not measured. Building the
+  primitive first would repeat the error this session already made once.
+- **What is kept.** The generalised `blocks > 4` form and the chunked
+  in-place level, which are a simpler expression of what the eight-block path
+  already did and cover it exactly. `BASE_SPLIT_LENGTHS` stops at 1024 and the
+  plan has no arm for 2048.
+- **Re-open trigger:** an approach to 2048 that is not a wider version of this
+  one. Its gap is real and among the largest on the board.
+
 ## ATLAS-APOLLO-WORKER-RETENTION-2026-09-03 — Per-worker scratch is retained for the process, and the mnemosyne share has no release path [minor] [perf] — todo <a id="atlas-apollo-worker-retention"></a>
 
 - **Integrator:** unclaimed; **branch:** none; **lease:** none.
@@ -123,51 +161,13 @@
   `BLOCKS = 2` and `4`; apollo's `GatherBlocks` and its scalar fallback both
   deleted; and the eight-block split re-measured against the flat route with it
   in place.
-## ATLAS-APOLLO-FIRST-PARTY-LAYOUT-2026-09-03 — bytemuck and half give way to eunomia, but the last 28 sites need upstream first [patch] [arch] — in progress <a id="atlas-apollo-first-party-layout"></a>
+## ATLAS-APOLLO-FIRST-PARTY-LAYOUT-2026-09-03 — Apollo GPU layouts use Eunomia [patch] [arch] — done <a id="atlas-apollo-first-party-layout"></a>
 
-- **Landed 2026-09-03, in dependency order.** eunomia #84 (the layout
-  vocabulary), hermes #151 (`hermes-simd-core` off bytemuck), apollo #309
-  (this migration). Hermes turned out to be a *third* abandoned half of the
-  same sweep — same tree-detached shape, edits timestamped in the same window
-  as the other two — recovered and gated the same way; hermes now has zero
-  bytemuck references in any crate, direct or in `src`. The two gaps below are
-  what still stand between apollo and dropping both dependencies.
-- **Rescued, not authored.** This began as another agent's uncommitted work,
-  abandoned about 21 hours in the shared apollo tree on a detached HEAD where
-  any checkout would have discarded it. Preserved verbatim on
-  `rescue/apollo-eunomia-cast-sweep`, then ported onto current main (36 commits
-  of drift, two conflicts) and finished to a compiling, gated state.
-- **What it does.** Moves apollo off two third-party layout dependencies onto
-  the first-party provider: `bytemuck::{cast_slice, Pod}` to
-  `eunomia::layout::*`, and `half::f16` to `eunomia::F16`. Net across the
-  workspace: bytemuck references 168 to 28, `half::` 20 to 5, with 140
-  `eunomia::layout` uses in their place.
-- **Why the last 28 cannot follow yet — two upstream gaps.**
-  1. **eunomia has no derive macros.** apollo's GPU parameter structs are
-     `#[repr(C)] #[derive(Clone, Copy, Debug, Pod, Zeroable)]`. eunomia's
-     `layout::marker` declares `Pod`/`Zeroable` as `unsafe trait`s with no
-     proc-macro counterpart, so each of those structs would need a hand-written
-     `unsafe impl` carrying its own soundness argument. That belongs in eunomia
-     as a derive, not in twelve hand-rolled impls downstream.
-  2. **hephaestus's public API is typed on `bytemuck::Pod`.**
-     `hephaestus-core`'s window surfaces — `launch.rs`, `pooling.rs`,
-     `prepared.rs` — bound their scalars on `bytemuck::Pod`, and apollo passes
-     types across that boundary. eunomia's `Pod` is a different trait, so no
-     amount of apollo-side work removes the dependency while the consumer
-     contract requires the other one.
-- **So the campaign has an order, and apollo is last.** eunomia gains the
-  derives; hephaestus migrates its public bounds (upstream ownership — the
-  provider adoption starts at the deepest crate); apollo then finishes the
-  remaining 28 and drops both dependencies from its manifests. Attempting the
-  apollo half alone is what produced the state this rescue found: manifests
-  with the dependency removed and call sites that still needed it.
-- **Manifests corrected in the port.** The abandoned work had already dropped
-  `bytemuck` from ten crate manifests while 28 call sites still used it, so the
-  tree did not compile. Restored to the eight crates that genuinely still need
-  it; it leaves only where nothing references it.
-- **Acceptance.** `bytemuck` and `half` absent from every apollo manifest and
-  from `cargo tree`, with no hand-rolled `unsafe impl Pod` in apollo standing in
-  for a derive eunomia should own.
+- **Status:** Merged in PR #315 at `07e2eb54`; Apollo owns no direct `bytemuck`
+  or `half` dependency and uses Eunomia for GPU layout contracts.
+- **Verification:** 1,415/1,415 all-features nextest tests passed with 29
+  skipped; doctests, warning-denied Clippy/rustdoc, formatting, and lockfile
+  checks passed. Provider-owned transitive edges remain documented.
 
 ## ATLAS-APOLLO-F32-NONPOT-WIDTH-2026-09-03 — f32 loses far more than f64 on non-power-of-two lengths [patch] [perf] — todo <a id="atlas-apollo-f32-nonpot-width"></a>
 
@@ -280,7 +280,7 @@
   The two halves close separately: the prime anomaly is a defect, the composite
   ratio is a tuning gap.
 
-## ATLAS-APOLLO-EIGHT-BLOCK-SPLIT-2026-09-03 — The tuned split stops at 512, and extending it to 1024 does not pay [minor] [perf] — done 2026-09-03 (falsified) <a id="atlas-apollo-eight-block-split"></a>
+## ATLAS-APOLLO-EIGHT-BLOCK-SPLIT-2026-09-03 — Extend the tuned split to 1024 [minor] [perf] — done 2026-09-03 <a id="atlas-apollo-eight-block-split"></a>
 
 - **Finding.** `BASE_SPLIT_LENGTHS` is `[128, 256, 512]`. Those lengths sit at
   +8 to +36% against RustFFT; n = 1024, the first length past the construction,
@@ -337,6 +337,63 @@
 - **Kept from the attempt:** nothing in the tree. `combine_final4` remains
   `#[cfg(test)]`-gated as it was, and the block-count match still routes only
   two and four blocks into the network.
+- **Re-opened and delivered, on top of a peer's landing.** `#311` re-applied
+  the reverted implementation and gated it to `f64`, because that shape
+  measured 33% slower for `f32`. This commit supersedes it: the falsification
+  above stands for the shapes it measured, and two things it named as missing
+  then landed, which together turn the result over. Measured with both routes in one binary and the arms
+  alternating in one process, `f32`, `lane-free-fn` being the flat Stockham
+  route and `lane-plan` the split:
+
+  | shape | n = 1024 |
+  | --- | --- |
+  | three ping-ponged levels, scalar gather | +32% |
+  | two `combine_final4` halves, scalar gather | +14% |
+  | two `combine_final4` halves, SIMD gather | +14% |
+  | **two sink-fused halves, SIMD gather** | **-1.1 / -1.4 / -3.0%** |
+
+  Three independent runs at the final shape, all negative. Later runs on a
+  quieter machine read -12.4, -13.7, -15.4 and -16.0%, so the win is far
+  larger than the -0.5 to -1.3% first recorded here: those ran against
+  concurrent peer builds and understated it. The `f32` gate's removal was
+  justified on the understated figure and is better justified on this one.
+  n = 512 is unmoved at -21% against flat, so the four-block path did not pay
+  for sharing its chain.
+- **The two pieces.** Hermes gained `deinterleave_pairs8`
+  (`hermes#153`, `#154`), so eight blocks take a blend network instead of the
+  strided scalar gather — worth about 10% here, less than the 15% the n = 512
+  ablation predicted. That alone left the split 14% behind. The rest came from
+  fusing each half's combines into the base kernel's register exit rather than
+  running `combine_final4` over it: the four-block chain is now a function,
+  `combine_four_blocks`, called once by the four-block path over the whole
+  array and twice by the eight-block path over each half. That is worth about
+  16 points and is what took the split past the flat route.
+- **Absolute, against the references at n = 1024** (element-wise minimum of two
+  runs): `f64` 1541 ns against RustFFT's 1252 and PhastFT's 1375 — from +58%
+  against RustFFT to **+23%**, and the largest single power-of-two gain on the
+  board. `f32` 938 against 573 and 840, which is where it already was: the
+  split is a wash there in absolute terms even though it beats the flat route
+  in the same binary, so `f32` n = 1024 stays an open cell.
+- **Why the earlier attempt read as falsified.** It measured the right thing
+  and drew the right conclusion from what it had. What it lacked was not more
+  patience but two capabilities, one of them in another repository. The
+  arithmetic it recorded — that an eight-way network recovers about a seventh
+  of the gap and would not close 32% — was correct; what it could not predict
+  is that the sink fusion was worth another 16 points on top.
+- 551/551 native tests including the accuracy oracles and the
+  `dft_oracle_sweep`, clippy and fmt clean.
+- **Correction to this item's published table.** The progression in `#314`
+  listed "two `combine_final4` halves, SIMD gather" at +14%, beside the scalar
+  gather row at the same figure, as though both were measured the same way.
+  The second cell was never measured in one binary — it was inferred to show
+  the network alone did not move the verdict. What was actually measured is:
+  the scalar-gather shape at +14% in one binary; the network's effect
+  cross-binary only (f32 1235 ns to 1111, about 10%), which is the weaker mode
+  this session has repeatedly recorded as unreliable at these magnitudes; and
+  the final sink-fused shape at -0.5 to -1.3% in one binary. The combined
+  result stands and is measured. The attribution between the two pieces does
+  not: the fusion is demonstrably the larger part, and the network's separate
+  contribution is not established.
 
 ## ATLAS-APOLLO-BEAT-THE-REFERENCES-2026-09-03 — Apollo must be faster than RustFFT and PhastFT at every size [minor] [perf] — todo <a id="atlas-apollo-beat-the-references"></a>
 
