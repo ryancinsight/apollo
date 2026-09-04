@@ -64,7 +64,7 @@ csv = "1.4.0"
 eunomia = { version = "0.8.0", git = "https://github.com/ryancinsight/eunomia", rev = "fdbf12275d35aa1545060a4277644c497ddcda37", default-features = false, features = ["std"] }
 # Temporary co-evolution pin for Mnemosyne PR #128; remove `rev` after the
 # pooled-scratch release surface merges to main and regenerate Cargo.lock.
-mnemosyne = { package = "mnemosyne-memory", version = "0.7.0", git = "https://github.com/ryancinsight/Mnemosyne.git", rev = "691992222f926577c649a6af53251e895846d1d4", features = ["eunomia"] }
+mnemosyne = { package = "mnemosyne-memory", version = "0.7.0", git = "https://github.com/ryancinsight/Mnemosyne.git", rev = "249a409106644e8343a693a31adbb614df885e15", features = ["eunomia"] }
 melinoe = { version = "0.9.0", git = "https://github.com/ryancinsight/melinoe.git", default-features = false, features = ["alloc"] }
 # Temporary co-evolution pin for Hermes PR #155; remove `rev` after its
 # provider source-identity correction merges to main and regenerate Cargo.lock.
