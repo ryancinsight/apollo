@@ -12,34 +12,42 @@
 //! Neither timing is believed until the two arms are shown to compute the same
 //! transform.
 
-//! # This instrument is not yet sound. Do not read verdicts from it.
+//! # Run it optimized, and read `median_ps` as it stands
 //!
-//! Measured on a quiet host (12% CPU) it still reports **0.4 ns per iteration
-//! for a 17-point transform** — about one cycle — while `assert_is_the_transform`
-//! confirms that same length computes a correct DFT. Correct output at an
-//! impossible time means the timing, not the math, is wrong.
+//! Two things must be right before any number here means anything, and an
+//! earlier revision of this file got both wrong in the same session:
 //!
-//! Three hardening passes did not fix it: a direct-DFT oracle (which did make
-//! the equivalence check live, and is worth keeping), consuming the output so
-//! it cannot be dead, and blinding the input so the transform cannot be hoisted
-//! as a loop-invariant pure function. Across those runs the n = 101 performance
-//! -core ratio read 1.19, then 0.97, then 1.25 — the quantity the probe exists
-//! to measure is not reproducible run to run.
+//! 1. **The profile.** Apollo defines `release`, `bench` and `bench-quick` but
+//!    no `[profile.test]`, so plain `cargo nextest run` builds this at
+//!    opt-level 0 and the timings describe unoptimized code — useless for a
+//!    question about vector width. Run it as
+//!    `cargo nextest run --cargo-profile bench-quick -E
+//!    'test(rader_width_by_core_type)' --run-ignored all --no-capture`.
+//!    The guard below refuses to report from a debug build rather than trusting
+//!    the reader to remember.
+//! 2. **The arithmetic.** `measurement::normalized_picoseconds` already divides
+//!    each sample by `iterations_per_sample`, so the report's `median_ps` *is*
+//!    per-iteration. Dividing it by the `iterations_per_sample` column again
+//!    yields nonsense — it produced an apparent 0.4 ns for a 17-point
+//!    transform, and because the two scalar arms calibrate to different
+//!    iteration counts it also injected a spurious factor into the very ratio
+//!    this probe exists to read.
 //!
-//! So no verdict here is publishable, including the ones that happen to agree
-//! with the item: a single run of this probe appeared to confirm the recorded
-//! n = 101 anomaly at 1.19 against a recorded 1.16, and to localize it to
-//! performance cores. The next run contradicted it. An instrument that reports
-//! one cycle for a 17-point transform cannot be trusted selectively on the
-//! lengths whose answers look plausible.
+//! Those two mistakes together manufactured a phantom: an "unsound instrument"
+//! reporting impossible times, and a run that appeared to confirm the recorded
+//! n = 101 anomaly at 1.19. Neither was real.
 //!
-//! **Open question, and the thing to fix first:** where the sub-nanosecond
-//! reading comes from. Either `BenchmarkConfig::regression()` mis-calibrates
-//! `iterations_per_sample` for sub-microsecond cases — it reported 3352
-//! iterations in a 1.13 ms sample — or something upstream is returning a cached
-//! spectrum for a repeated input. The second would be a correctness question,
-//! not just a measurement one, which is why this is recorded rather than
-//! deleted.
+//! # What it measures, corrected
+//!
+//! Built optimized and read correctly, `f32` is never meaningfully slower than
+//! `f64` at the Rader entry point on either core class. n = 101 measures 872 ns
+//! for `f64` against 804 ns for `f32` (ratio 0.92) on a performance core, and
+//! the larger lengths run 0.76-0.87. The recorded 674-against-579 ns anomaly
+//! does not reproduce here.
+//!
+//! That is a statement about `rader_prime_forward`, not about the full
+//! transform path the item's figures came from; the two are different
+//! quantities, so this narrows the question rather than closing it.
 
 use apollo_bench::{BenchmarkCase, BenchmarkConfig, BenchmarkSuite};
 use eunomia::{Complex32, Complex64};
@@ -155,6 +163,14 @@ fn assert_is_the_transform(n: usize, produced: &[Complex64], reference: &[Comple
 #[test]
 #[ignore = "measurement instrument for the f32 Rader width question"]
 fn rader_width_by_core_type() {
+    // A debug build measures unoptimized code, which cannot answer a question
+    // about vector width. Refuse rather than report a misleading number.
+    if cfg!(debug_assertions) {
+        eprintln!(
+            "rader_width: built without optimization; re-run with --cargo-profile \n             bench-quick. No timings reported."
+        );
+        return;
+    }
     let Some(selection) = measurement_cores::selected() else {
         eprintln!("host reports no processor class information; probe not measurable");
         return;
@@ -190,31 +206,30 @@ fn rader_width_by_core_type() {
             rader_prime_forward::<f32>(&mut reduced_out);
             assert_same_transform(n, &precise_out, &reduced_out);
 
-            let mut precise_work = precise_source.clone();
-            suite.run(BenchmarkCase::new(core, "rader/f64", n), || {
-                precise_work.copy_from_slice(std::hint::black_box(&precise_source));
-                rader_prime_forward::<f64>(std::hint::black_box(&mut precise_work));
-                // Both ends of the loop must be opaque. Hiding only the
-                // output pointer leaves the transform a pure function of an
-                // input that never changes, so it hoists clean out of the timed
-                // loop -- which is what produced sub-nanosecond readings for a
-                // 17-point transform. Blinding the source defeats the
-                // invariance; reading an element keeps the result live.
-                std::hint::black_box(precise_work[0]);
-            });
+            // The reset is setup, not operation. `run` would time the
+            // `copy_from_slice` too, and `Complex64` copies twice the bytes of
+            // `Complex32` -- charging the f64 arm for a wider memcpy and
+            // biasing the very ratio these two cases exist to compare. Each
+            // iteration gets its own buffer, built before the timer starts.
+            suite.run_batched(
+                BenchmarkCase::new(core, "rader/f64", n),
+                || precise_source.clone(),
+                |work| {
+                    rader_prime_forward::<f64>(std::hint::black_box(work));
+                    // Keeps the result live: an unread output is dead work the
+                    // optimizer may drop entirely.
+                    std::hint::black_box(work[0]);
+                },
+            );
 
-            let mut reduced_work = reduced_source.clone();
-            suite.run(BenchmarkCase::new(core, "rader/f32", n), || {
-                reduced_work.copy_from_slice(std::hint::black_box(&reduced_source));
-                rader_prime_forward::<f32>(std::hint::black_box(&mut reduced_work));
-                // Both ends of the loop must be opaque. Hiding only the
-                // output pointer leaves the transform a pure function of an
-                // input that never changes, so it hoists clean out of the timed
-                // loop -- which is what produced sub-nanosecond readings for a
-                // 17-point transform. Blinding the source defeats the
-                // invariance; reading an element keeps the result live.
-                std::hint::black_box(reduced_work[0]);
-            });
+            suite.run_batched(
+                BenchmarkCase::new(core, "rader/f32", n),
+                || reduced_source.clone(),
+                |work| {
+                    rader_prime_forward::<f32>(std::hint::black_box(work));
+                    std::hint::black_box(work[0]);
+                },
+            );
         }
         println!("RADER WIDTH cpu={landed} ({core})");
         print!("{}", suite.report());
