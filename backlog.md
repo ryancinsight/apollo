@@ -82,6 +82,32 @@
 - **Evidence:** format, all-target/all-feature check and Clippy, 1,417 Nextest
   cases, seven doctests, provider audit, and lockfile validation pass.
 
+<a id="apollo-n8-f64-gap"></a>
+
+## APOLLO-N8-F64-GAP-2026-09-04 — N=8 carries the same unexamined "scalar by measurement" note [minor] [perf] — in-progress
+
+- **Integrator:** claude-opus-5; **branch:** `perf/apollo-n8-f64`;
+  **lease:** the N = 8 arm of `small_pot_inplace_sized_precise` and its codelet
+  2026-09-04T21:30Z.
+- **Last-update:** 2026-09-04.
+- **Context.** The N = 8 arm reads "Scalar by measurement: n = 8: vector arm
+  measured +12% (call plus probe outweigh the body); kept scalar" — the same
+  form as the N = 16 note that
+  [`#apollo-n16-f64-gap`](#apollo-n16-f64-gap) disproved by 36%. Dispatch
+  measures 0.3 ns in release, so "call plus probe" cannot account for 12% of a
+  4 ns body, and both notes predate the probe's profile guard.
+- **Shape.** Eight complex f64 is four YMM registers, a quarter of the file.
+  Factored 4 x 2 the first stage is a lanewise radix-2 on `(r0, r2)` and
+  `(r1, r3)` with no shuffle, the transpose is four `vperm2f128`, and the
+  second stage is one lanewise `avx_fft4_parallel_precise` whose four outputs
+  are the four output registers in order — no output permutation at all.
+- **Acceptance oracle.** The direct-DFT oracle in both directions and an
+  impulse at every position, then a release measurement on both core types
+  against the scalar arm it would replace. A loss on either core closes this
+  as falsified with the numbers, as the N = 16 direct form nearly was.
+- **Risk / change class:** [minor] [perf].
+- **Parent:** [`#atlas-apollo-beat-the-references`](#atlas-apollo-beat-the-references).
+
 <a id="apollo-n16-f64-gap"></a>
 
 ## APOLLO-N16-F64-GAP-2026-09-04 — RustFFT is 18% faster at N=16 f64 [minor] [perf] — done 2026-09-04
