@@ -64,6 +64,13 @@
   slower than the explicit-boundary baseline, so removing the array return does
   not alter the generated spill shape. The returned stage-group boundary
   remains canonical.
+- **Outlined stage phase rejected.** Outlining all four stage groups into one
+  non-inlined phase removes compiler spill stores from `vector_arm`, but adds
+  an ABI call and callee frame. The 10/10 value gate passes; the paired
+  instrument reports n = 32 medians of `33.840/25.554 ns` for Apollo/RustFFT,
+  versus `22.342/18.276 ns` for the inline explicit-boundary baseline. The
+  call boundary is slower than the retained inline form, so the phase remains
+  inlined.
 - **Falsified, so nobody repeats it:** fusing permute, scale and store per
   output — so the sixteen results do not all span the normalisation block —
   changes nothing. Codegen after: 27 spill stores and 19 reloads against 26 and
