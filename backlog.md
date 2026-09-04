@@ -2,7 +2,7 @@
 
 <a id="apollo-n16-register-permute"></a>
 
-## APOLLO-N16-REGISTER-PERMUTE-2026-09-04 — The N=16 codelet's promotion gate was never the permutation [minor] [perf] — done 2026-09-04 (falsified)
+## APOLLO-N16-REGISTER-PERMUTE-2026-09-04 — The N=16 codelet's promotion gate was never the permutation [minor] [perf] — done 2026-09-04
 
 - **Integrator:** claude-opus-5; **branch:** `perf/apollo-n16-register-permute`;
   **lease:** `components/codelet/` 2026-09-04T17:00Z.
@@ -27,27 +27,23 @@
   HS-DEINTERLEAVE-PAIRS-AVX2-F32 rejection measured that port's latency
   dominating in a comparable shape. The permutation getting cheaper does not
   imply the codelet wins.
-- **Result: falsified, and the premise with it.** The permutation was built
-  and passes every oracle, including a new index-level check that reproduces
-  `BIT_REVERSED_16` term by term. It measures **slower**:
-  `codelet_against_the_incumbent_by_core_type`, three runs each on a quiet
-  machine, gives 13.1x (12.95, 13.15, 13.16) for the incumbent stack buffer
-  against 14.0x (14.21, 13.89, 14.01) for the register form on the P-core, and
-  10.4x against 10.4x on the E-core — a 7% P-core loss and no E-core change.
-  Eight cross-lane `vperm2f128` cost more than the 32 scalar stores they
-  replace, which is what the HS-DEINTERLEAVE-PAIRS-AVX2-F32 rejection
-  predicted. The source change is not landed; the corrected module header is.
-- **Second correction.** The header recorded the codelet as losing 1.8x on an
-  E-core. Measured now it loses 10.4x there and 13.1x on the P-core. The
-  incumbent route has been optimized repeatedly since that number was written
-  and the codelet has not, so the recorded margin was six times too kind.
-- **Successor question (open).** An order of magnitude of the gap is
-  unattributed. The permutation was never the binding constraint, so the next
-  step is a profile of the codelet body itself — first checking whether it
-  reaches an AVX2 frame at all, since `LANE_COUNT != 4` declines rather than
-  emulates and a scalar-backend dispatch would produce exactly this shape.
-  Until that runs, this module is an instrument too far from its subject to be
-  a useful one, and retiring it is a live option.
+- **Result, corrected.** The permutation is built, passes every oracle
+  including an index-level check that reproduces `BIT_REVERSED_16` term by
+  term, and is **faster**: 13.8 ns against 14.3 ns on the P-core and 31.6 ns
+  against 34.9 ns on the E-core, three runs each in release. That is 3.5% and
+  9.5%. It does not promote the codelet, which still loses 1.3x to the
+  incumbent's 10.6 ns.
+- **First result was wrong, and why.** This item was closed on 2026-09-04 as
+  falsified, reporting the register form 7% slower and the codelet 13x off the
+  incumbent. Those runs were taken without `--release`. Debug reads the
+  incumbent at 242 ns and the codelet at 3000 ns; the distortion is not a
+  constant factor — debug inflates N = 16 by 23x and N = 64 by 300x — so it
+  reversed the verdict rather than scaling it. The recorded 1.8x that the
+  header originally carried was approximately right all along.
+- **Durable fix.** `measurement_cores::selected()` now returns `None` in an
+  unoptimized build, so every pinned probe in the crate declines to produce a
+  table it cannot stand behind. Twelve probe files reach their host through
+  that one function.
 - **Risk / change class:** [minor] [perf]; documentation only as delivered.
 
 <a id="apollo-stranded-branches"></a>
@@ -86,42 +82,48 @@
 - **Evidence:** format, all-target/all-feature check and Clippy, 1,417 Nextest
   cases, seven doctests, provider audit, and lockfile validation pass.
 
-<a id="apollo-probe-scale-disagreement"></a>
+<a id="apollo-sweep-exceeds-budget"></a>
 
-## APOLLO-PROBE-SCALE-DISAGREEMENT-2026-09-04 — Two pinned probes disagree by 25x on one transform and reverse its verdict [patch] [perf] — todo
+## APOLLO-SWEEP-EXCEEDS-BUDGET-2026-09-04 — The reference sweep is terminated at the test budget [patch] [perf] — todo
 
 - **Integrator:** unclaimed; **branch:** none; **lease:** none.
 - **Last-update:** 2026-09-04.
-- **Measured.** At N = 16 f64, pinned to cpu 1, in one binary on a quiet
-  machine, `codelet_against_the_incumbent_by_core_type` reads apollo's plan
-  route at 242 ns and RustFFT at 610 ns. The small-sizes sweep reads the same
-  two calls at 10.7 ns and 7.5 ns. The absolute figures differ by roughly 25x
-  and 80x, and the verdict reverses: apollo is 2.5x faster than RustFFT in one
-  and 41% slower in the other.
-- **The harness is not the difference.** Running `apollo_bench::BenchmarkSuite`
-  on the identical closure inside the codelet probe, same process and same
-  binding, reports 247.9 ns against `best_block`'s 242.9 ns — 2% apart. The
-  probe's floor is 2.3 ns, and its clock calibration (256 dependent f64
-  multiply-adds) reads 626 ns against 553 ns predicted at the 3.7 GHz nominal
-  clock, so the core is not downclocked. Both harnesses are honest; they are
-  measuring different things, or under machine states that differ by more than
-  clock.
-- **Why it matters.** `ATLAS-APOLLO-BEAT-THE-REFERENCES` scores apollo against
-  RustFFT and PhastFT entirely from the small-sizes sweep. If its scale is
-  wrong the ranking may still hold, since both arms would scale together — but
-  that is an assumption, and this pair of readings is evidence against it at
-  one length.
-- **Second defect, same instrument.** The full sweep now exceeds the committed
-  nextest budget: `small_sizes_against_the_references_by_core_type` is
-  terminated at 60 s. A measurement instrument that cannot run inside the
-  budget is not usable, and raising the bound is not the remedy.
-- **Method.** Reconcile the two on one length: same process, same binding,
-  same closure, both harnesses, with RustFFT as the external control. The
-  codelet probe now carries floor, dispatch, and clock-calibration arms for
-  exactly this, so whichever instrument is wrong reports its own anomaly.
-- **Acceptance oracle.** One explanation covering both readings, the wrong
-  instrument corrected, and the scoreboard's affected cells re-measured or
-  confirmed. The sweep runs inside its budget without dropping coverage.
+- **Measured.** `small_sizes_against_the_references_by_core_type` is marked
+  SLOW at 30 s and TERMINATED at 60 s under the committed nextest budget. It
+  measures 17 lengths against three engines at two scalars, twice over
+  (a discarded warm-up suite and the reported one), on two core types.
+- **Outcome.** The sweep runs inside the budget without dropping coverage:
+  the per-case budget is the lever (`BenchmarkConfig::regression()` spends
+  100 ms warm-up plus 400 ms measurement per case, so the runtime is
+  analytical, not emergent), or the sweep splits into per-scalar or per-class
+  instruments that each fit. Raising the bound is not the remedy.
+- **Acceptance oracle.** The sweep completes inside the committed budget on
+  both core types, and its reported figures for a shared length match the
+  current ones within noise.
+- **Risk / change class:** [patch] [perf]; instrument only.
+
+<a id="apollo-probe-scale-disagreement"></a>
+
+## APOLLO-PROBE-SCALE-DISAGREEMENT-2026-09-04 — Two pinned probes disagree by 25x on one transform and reverse its verdict [patch] [perf] — done 2026-09-04 (retracted)
+
+- **Retracted: there was no disagreement.** The two readings came from
+  different build profiles. The codelet probe was run without `--release` and
+  the small-sizes sweep with it; debug reads apollo's N = 16 route at 242 ns
+  and RustFFT at 610 ns, release reads 10.6 ns and 9.0 ns. Nothing about the
+  instruments differed.
+- **Why the controls did not catch it.** The probe's clock calibration is a
+  dependent multiply-add chain, which is latency-bound and therefore reads
+  almost the same in both profiles (626 ns debug, 226 ns release against ~553
+  predicted). A latency-bound control cannot detect an unoptimized build; only
+  a throughput-bound one could, and the honest fix is not a better control but
+  refusing to measure the profile at all.
+- **Delivered instead.** `measurement_cores::selected()` returns `None` under
+  `debug_assertions`, so every pinned probe declines. Verified both ways: a
+  debug run of the codelet probe now emits no measurement lines, and a release
+  run is unchanged.
+- **Standing.** The sweep's separate breach of the 60 s nextest budget is real
+  and is not covered by this retraction; it stays open as
+  `APOLLO-SWEEP-EXCEEDS-BUDGET-2026-09-04`.
 - **Risk / change class:** [patch] [perf]; instruments only, no kernel change.
 
 <a id="apollo-provider-identity"></a>

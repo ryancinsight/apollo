@@ -165,3 +165,71 @@ fn the_codelet_width_request_is_answered_by_hardware_for_f64_only() {
         }
     }
 }
+
+#[test]
+#[ignore = "reconciliation instrument for APOLLO-PROBE-SCALE-DISAGREEMENT"]
+fn scratch_reconcile_sweep_context() {
+    use apollo_bench::{BenchmarkCase, BenchmarkConfig, BenchmarkSuite};
+    use eunomia::Complex64;
+    fn case(suite: &mut BenchmarkSuite, n: usize) {
+        let src: Vec<Complex64> = (0..n)
+            .map(|i| {
+                let x = i as f64;
+                Complex64::new((0.017 * x).sin(), 0.25 * (0.031 * x).cos())
+            })
+            .collect();
+        let plan = crate::FftPlan1D::<f64>::new(crate::Shape1D::new(n).expect("non-zero"));
+        let mut work = src.clone();
+        suite.run(BenchmarkCase::new("solo", "apollo-f64", n), || {
+            work.copy_from_slice(&src);
+            plan.forward_complex_slice_inplace(std::hint::black_box(&mut work));
+        });
+    }
+    // One case alone.
+    let mut solo = BenchmarkSuite::new(BenchmarkConfig::regression());
+    case(&mut solo, 16);
+    print!("SOLO {}", solo.report());
+    // The same case reached through a sweep, warm-up pass included, as the
+    // small-sizes probe does it.
+    let mut warmup = BenchmarkSuite::new(BenchmarkConfig::regression());
+    for n in [8usize, 16, 32, 64] {
+        case(&mut warmup, n);
+    }
+    drop(warmup);
+    let mut swept = BenchmarkSuite::new(BenchmarkConfig::regression());
+    for n in [8usize, 16, 32, 64] {
+        case(&mut swept, n);
+    }
+    print!("SWEPT {}", swept.report());
+    panic!("reconciliation instrument: read the two reports above");
+}
+
+/// The register permutation must reproduce `BIT_REVERSED_16` exactly.
+///
+/// The direct-DFT oracles above would also fail on a wrong permutation, but
+/// only as a diffuse numeric mismatch. This asserts the routing itself, on
+/// index labels rather than values, so a swapped source pair names itself.
+///
+/// The model is the codelet's own shape: register `k` holds samples `2k` and
+/// `2k + 1`, and each `deinterleave_pairs(natural[low], natural[low + 4])`
+/// sends the two first samples to output `position` and the two second samples
+/// to output `position + 4`.
+#[test]
+fn the_register_permutation_reproduces_the_bit_reversal() {
+    let natural: [(usize, usize); 8] = core::array::from_fn(|k| (2 * k, 2 * k + 1));
+    let mut reversed = [(0usize, 0usize); 8];
+    for (position, low) in super::REGISTER_PAIR_ORDER.into_iter().enumerate() {
+        reversed[position] = (natural[low].0, natural[low + 4].0);
+        reversed[position + 4] = (natural[low].1, natural[low + 4].1);
+    }
+
+    let flat: Vec<usize> = reversed
+        .into_iter()
+        .flat_map(|(first, second)| [first, second])
+        .collect();
+    assert_eq!(
+        flat,
+        super::BIT_REVERSED_16.to_vec(),
+        "register permutation does not reproduce the bit-reversed order"
+    );
+}
