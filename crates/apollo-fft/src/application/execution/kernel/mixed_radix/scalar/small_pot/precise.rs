@@ -196,15 +196,17 @@ pub(in crate::application::execution::kernel::mixed_radix::scalar) unsafe fn sma
             }
         }
         16 => {
-            // Scalar by measurement: n = 16: vector arm measured +8% (call plus probe outweigh the body); kept scalar.
-            let data_ref = &mut *data.as_mut_ptr().cast::<[Complex64; 16]>();
-            crate::application::execution::kernel::components::winograd::dft16_impl::<f64, INVERSE>(
-                data_ref,
-            );
-            if INVERSE && NORMALIZE {
-                let scale = Complex64::new(0.0625, 0.0);
-                for x in data_ref.iter_mut() {
-                    *x *= scale;
+            if !super::n16::try_inplace::<INVERSE, NORMALIZE>(data) {
+                let data_ref = &mut *data.as_mut_ptr().cast::<[Complex64; 16]>();
+                crate::application::execution::kernel::components::winograd::dft16_impl::<
+                    f64,
+                    INVERSE,
+                >(data_ref);
+                if INVERSE && NORMALIZE {
+                    let scale = Complex64::new(0.0625, 0.0);
+                    for x in data_ref.iter_mut() {
+                        *x *= scale;
+                    }
                 }
             }
         }
