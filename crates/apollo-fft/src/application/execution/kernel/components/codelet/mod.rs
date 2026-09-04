@@ -19,11 +19,20 @@
 //! cross-lane `vperm2f128` cost more than the scalar stores they replace,
 //! consistent with the port-5 latency that rejected HS-DEINTERLEAVE-PAIRS-AVX2-F32.
 //!
-//! So the permutation was never the binding constraint, and an order of
-//! magnitude of the gap remains unattributed
-//! (`backlog.md#apollo-n16-register-permute`). Until that is profiled, this
-//! module is an instrument whose subject is far enough from the incumbent to
-//! make it a weak one.
+//! So the permutation was never the binding constraint. Neither is the
+//! dispatch: the probe's control arms put `vectorize_lanes` at 11-14 ns per
+//! call with a kernel that does nothing, and
+//! `the_codelet_width_request_is_answered_by_hardware_for_f64_only` pins that
+//! the f64 request reaches a 256-bit backend rather than the scalar emulation
+//! it would silently accept. The f32 request does land on that emulation, but
+//! this codelet is measured at f64.
+//!
+//! An order of magnitude of the gap therefore remains unattributed
+//! (`backlog.md#apollo-n16-register-permute`), and the probe's absolute scale
+//! is itself in question: its RustFFT control reads 610 ns at N = 16 where the
+//! small-sizes sweep reads 7.5 ns for the same transform
+//! (`backlog.md#apollo-probe-scale-disagreement`). Until the two instruments
+//! are reconciled, the ratios here are usable and the nanoseconds are not.
 //!
 //! The reference engines close the small-N range by holding an entire
 //! transform in vector registers: RustFFT's AVX butterflies run six stages in

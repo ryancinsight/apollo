@@ -172,10 +172,74 @@ fn codelet_against_the_incumbent_by_core_type() {
             .get();
         assert_eq!(landed, cpu, "processor binding must remain exact");
         let mut work = src.clone();
+
+        // Three control arms, so the instrument reports its own validity
+        // alongside its verdict.
+        //
+        // `floor` is the timing loop with no work in it. `calibration` is 256
+        // dependent f64 multiply-adds, written as separate operations because
+        // without `+fma` at compile time `f64::mul_add` lowers to a libm call
+        // and would measure the software routine instead of the machine: the
+        // multiply and add latencies are about four cycles each and the chain
+        // cannot overlap, so the true cost is near 2048 cycles, about 550 ns at
+        // the 3.7 GHz nominal clock. A reading far above that means the core is
+        // downclocked and every absolute figure below is scaled with it.
+        // `dispatch` is the codelet's own entry with a kernel that does
+        // nothing, so the per-call cost of `vectorize_lanes` is separated from
+        // the transform it wraps.
+        let floor = best_block(|| {
+            std::hint::black_box(&mut work);
+        });
+        let calibration = best_block(|| {
+            let mut x = std::hint::black_box(1.000_000_1f64);
+            for _ in 0..256 {
+                x = x * 1.000_000_1 + 1.0;
+            }
+            std::hint::black_box(x);
+        });
+        let dispatch = {
+            use hermes_simd::{LaneKernel, Simd, SimdArch, SimdKernel};
+            struct Nothing;
+            impl<T: hermes_simd::LaneScalar> LaneKernel<T> for Nothing {
+                type Output = bool;
+                fn call<A: SimdArch + SimdKernel<T>>(self, _s: Simd<T, A>) -> bool {
+                    true
+                }
+            }
+            best_block(|| {
+                std::hint::black_box(hermes_simd::vectorize_lanes::<4, f64, _>(
+                    std::hint::black_box(Nothing),
+                ));
+            })
+        };
+
+        // RustFFT at the same length through the same harness. It is not a
+        // competitor here; it is the external control that says whether this
+        // probe's absolute scale agrees with the crate's other instruments.
+        let rust = rustfft::FftPlanner::<f64>::new().plan_fft_forward(16);
+        let rust_src: Vec<rustfft::num_complex::Complex<f64>> = src
+            .iter()
+            .map(|v| rustfft::num_complex::Complex::new(v.re, v.im))
+            .collect();
+        let mut rust_scratch =
+            vec![rustfft::num_complex::Complex::new(0.0, 0.0); rust.get_inplace_scratch_len()];
+        let mut rust_work = rust_src.clone();
+        let reference = best_block(|| {
+            rust_work.copy_from_slice(&rust_src);
+            rust.process_with_scratch(std::hint::black_box(&mut rust_work), &mut rust_scratch);
+        });
+
+        // Both measured arms restore the fixture per call. Restoring per block
+        // instead measured the same to within noise, so the growth of repeated
+        // forward transforms is not what either arm is reading.
+        let mut work = src.clone();
         let incumbent = best_block(|| {
+            work.copy_from_slice(&src);
             plan.forward_complex_slice_inplace(std::hint::black_box(&mut work));
         });
+        let mut work = src.clone();
         let codelet = best_block(|| {
+            work.copy_from_slice(&src);
             assert!(try_transform_16::<f64, false, false>(std::hint::black_box(
                 &mut work
             )));
@@ -184,6 +248,10 @@ fn codelet_against_the_incumbent_by_core_type() {
             "CORE cpu={landed:<2} ({}) incumbent={incumbent:>7.1}ns codelet={codelet:>7.1}ns ratio={:.2}",
             core.label(),
             codelet / incumbent,
+        );
+        println!(
+            "CTRL cpu={landed:<2} ({}) floor={floor:>5.1}ns dispatch={dispatch:>6.1}ns calibration={calibration:>7.1}ns rustfft={reference:>7.1}ns",
+            core.label(),
         );
     }
 }
