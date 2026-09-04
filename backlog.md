@@ -251,14 +251,27 @@
   189 at 1.45x, 120 at 1.44x. This is the same shape as the n = 101 prime
   anomaly and it is not the Rader path, so whatever leaves `f32` running
   narrow is not confined to the Rader convolution.
-- **The third locus's cross-scalar ratios inherit both defects above.**
-  `codelet_selection` resets its buffer inside the timed closure and runs under
-  the same unoptimized test profile, so its `f32`-against-`f64` medians carry
-  the wider-memcpy bias and describe opt-level 0 code. Its *within-scalar*
-  comparison — codelet against composite, which is what the boundary work in
-  #306 acted on — is unaffected, since both arms there copy the same bytes.
-  The 1.28x figure below should be re-measured under `bench-quick` with
-  `run_batched` before it is relied on again.
+- **Re-measured 2026-09-04, and the boundary moved.** `codelet_selection` was
+  resetting its buffer inside the timed closure and building at opt-level 0.
+  An earlier note here claimed the *within-scalar* comparison was unaffected
+  "since both arms copy the same bytes" — that is wrong. A constant added to
+  both arms does not bias either one, but it compresses their **ratio** toward
+  1, and the ratio is what the boundary is drawn on. Rebuilt with `run_batched`
+  under `bench-quick`, two lengths crossed:
+  - **f32 drops 242 and 363.** 363 loses on both core types (1.02x, disjoint
+    intervals); 242 loses on the performance core (1.04x, [1412,1446] against
+    [1369,1395]) and only ties on the efficiency core.
+  - **f64 drops 484.** It loses on both core types, 1.15x and 1.34x — and it is
+    divisible by 11, which falsifies the "codelet wins at every accepted length
+    divisible by 11" rule that list stated as exact.
+  - **f64 keeps 242 on mixed evidence**, recorded rather than resolved: 1.06x
+    loss on the performance core against a 0.80x win on the efficiency core,
+    with one compile-time decision covering both.
+  - **The PFA lengths are no longer unmeasured.** 222, 246, 259 and 296 now
+    compare against the coprime/PFA route they actually take, and are the
+    largest wins in the sweep — 0.35x to 0.52x at f32, 0.48x to 0.69x at f64.
+  The cross-scalar 1.28x figure below predates all of this and is not carried
+  forward; the width question is now the dispatch, not the codelet arm.
 
 - **And the codelet arm is not fundamentally narrow — the defect is a subset.**
   Five of the measured codelets read below 1.0x, so they do run at `f32` width:
