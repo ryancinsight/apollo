@@ -3,11 +3,27 @@
 //! **Status: correct, measured, and declined** — this module is compiled for
 //! tests only. The N = 16 codelet passes a direct-DFT oracle in both
 //! directions but loses to the incumbent sized kernel pinned on both core
-//! types (1.8x on an E-core), because its bit reversal runs through a stack
-//! buffer whose scalar stores stall the following vector loads. It stays as a
-//! measurement instrument beside the probe that declined it; promotion to a
-//! production route is gated on hermes gaining a two-register
-//! sample-granularity shuffle so the permutation can run in registers.
+//! types: `codelet_against_the_incumbent_by_core_type` reads 13.1x on the
+//! P-core and 10.4x on the E-core (three runs each, 2026-09-04).
+//!
+//! An earlier revision of this header recorded 1.8x on an E-core and named the
+//! cause as the stack-buffer bit reversal, with promotion gated on hermes
+//! gaining a two-register sample-granularity shuffle. Both claims are now
+//! disproved. The shuffle exists and did all along:
+//! `SimdPermute::deinterleave_pairs` is exactly it, since a lane pair is a
+//! complex sample at this width, and the bit reversal is four of those calls
+//! over the naturally ordered registers — `(w0, w4)` from `(r0, r4)`,
+//! `(w1, w5)` from `(r2, r6)`, `(w2, w6)` from `(r1, r5)`, `(w3, w7)` from
+//! `(r3, r7)`. Implementing it passes every oracle and measures **slower**:
+//! 14.0x against 13.1x on the P-core, unchanged on the E-core. The eight
+//! cross-lane `vperm2f128` cost more than the scalar stores they replace,
+//! consistent with the port-5 latency that rejected HS-DEINTERLEAVE-PAIRS-AVX2-F32.
+//!
+//! So the permutation was never the binding constraint, and an order of
+//! magnitude of the gap remains unattributed
+//! (`backlog.md#apollo-n16-register-permute`). Until that is profiled, this
+//! module is an instrument whose subject is far enough from the incumbent to
+//! make it a weak one.
 //!
 //! The reference engines close the small-N range by holding an entire
 //! transform in vector registers: RustFFT's AVX butterflies run six stages in

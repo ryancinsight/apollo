@@ -2,7 +2,7 @@
 
 <a id="apollo-n16-register-permute"></a>
 
-## APOLLO-N16-REGISTER-PERMUTE-2026-09-04 — The N=16 codelet's promotion gate is already unblocked [minor] [perf] — in-progress
+## APOLLO-N16-REGISTER-PERMUTE-2026-09-04 — The N=16 codelet's promotion gate was never the permutation [minor] [perf] — done 2026-09-04 (falsified)
 
 - **Integrator:** claude-opus-5; **branch:** `perf/apollo-n16-register-permute`;
   **lease:** `components/codelet/` 2026-09-04T17:00Z.
@@ -27,12 +27,28 @@
   HS-DEINTERLEAVE-PAIRS-AVX2-F32 rejection measured that port's latency
   dominating in a comparable shape. The permutation getting cheaper does not
   imply the codelet wins.
-- **Acceptance oracle.** The direct-DFT oracle still passes in both
-  directions, and the pinned probe decides promotion on both core types. A
-  measured loss closes this item as falsified with the numbers recorded, not
-  as a promotion.
-- **Risk / change class:** [minor] [perf]; the module is test-gated, so no
-  production route changes unless the probe promotes it.
+- **Result: falsified, and the premise with it.** The permutation was built
+  and passes every oracle, including a new index-level check that reproduces
+  `BIT_REVERSED_16` term by term. It measures **slower**:
+  `codelet_against_the_incumbent_by_core_type`, three runs each on a quiet
+  machine, gives 13.1x (12.95, 13.15, 13.16) for the incumbent stack buffer
+  against 14.0x (14.21, 13.89, 14.01) for the register form on the P-core, and
+  10.4x against 10.4x on the E-core — a 7% P-core loss and no E-core change.
+  Eight cross-lane `vperm2f128` cost more than the 32 scalar stores they
+  replace, which is what the HS-DEINTERLEAVE-PAIRS-AVX2-F32 rejection
+  predicted. The source change is not landed; the corrected module header is.
+- **Second correction.** The header recorded the codelet as losing 1.8x on an
+  E-core. Measured now it loses 10.4x there and 13.1x on the P-core. The
+  incumbent route has been optimized repeatedly since that number was written
+  and the codelet has not, so the recorded margin was six times too kind.
+- **Successor question (open).** An order of magnitude of the gap is
+  unattributed. The permutation was never the binding constraint, so the next
+  step is a profile of the codelet body itself — first checking whether it
+  reaches an AVX2 frame at all, since `LANE_COUNT != 4` declines rather than
+  emulates and a scalar-backend dispatch would produce exactly this shape.
+  Until that runs, this module is an instrument too far from its subject to be
+  a useful one, and retiring it is a live option.
+- **Risk / change class:** [minor] [perf]; documentation only as delivered.
 
 <a id="apollo-stranded-branches"></a>
 
