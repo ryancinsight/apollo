@@ -20,7 +20,7 @@ where
     // cannot see a result that depends on the length class
     // (`gap_audit.md#length-class-split`).
     for n in [
-        8usize, 16, 32, 64, 128, 256, 512, 1024, 4096, 32768, 100, 180, 384, 1000, 101, 1009,
+        8usize, 16, 32, 64, 128, 256, 512, 1024, 2048, 4096, 32768, 100, 180, 384, 1000, 101, 1009,
     ] {
         let src: Vec<eunomia::Complex<T>> = (0..n)
             .map(|i| {

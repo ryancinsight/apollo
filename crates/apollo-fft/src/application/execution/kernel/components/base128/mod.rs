@@ -35,6 +35,13 @@ mod pinned_probe;
 
 /// Powers of two that decompose down to the 128-point base: 128 itself, and
 /// 256, 512 and 1024 by repeated radix-2 decimation.
+///
+/// 2048 is not among them. Sixteen blocks are four sink-fused chains and two
+/// in-place levels — the same construction, generalised — and measured 3.3 and
+/// 3.5% *slower* than the flat Stockham route it would replace, with both
+/// routes in one binary and the arms alternating. The construction has a
+/// range and 2048 is past it
+/// (`backlog.md#atlas-apollo-sixteen-block-split`).
 pub(crate) const BASE_SPLIT_LENGTHS: [usize; 4] = [128, 256, 512, 1024];
 
 /// Length of the base transform every split bottoms out in.
@@ -148,7 +155,7 @@ where
                             dst,
                         })
                     }
-                    (_, false) => {
+                    (8, false) => {
                         hermes_simd::vectorize_lanes::<4, F, _>(split_boundary::GatherBlocks::<
                             F,
                             8,
@@ -157,7 +164,7 @@ where
                             dst,
                         })
                     }
-                    (_, true) => {
+                    (8, true) => {
                         hermes_simd::vectorize_lanes::<8, F, _>(split_boundary::GatherBlocks::<
                             F,
                             8,
@@ -166,6 +173,10 @@ where
                             dst,
                         })
                     }
+                    // Any wider split takes the strided scalar gather below,
+                    // which is generic in the block count. No length currently
+                    // reaches it: `BASE_SPLIT_LENGTHS` stops at 1024.
+                    _ => Some(false),
                 }
                 .unwrap_or(false)
             };
@@ -220,23 +231,38 @@ where
             // writes the same array, since output `j` and `j + 512` depend
             // only on inputs `j` and `j + 512`
             // (`backlog.md#atlas-apollo-eight-block-split`).
-            if blocks == 8 {
-                let half = n / 2;
-                let (scratch_low, scratch_high) = scratch[..n].split_at_mut(half);
-                let combined = {
-                    let (data_low, data_high) = data.split_at_mut(half);
-                    combine_four_blocks::<F, INVERSE>(data_low, scratch_low, plan, twiddles)
-                        && combine_four_blocks::<F, INVERSE>(
-                            data_high,
-                            scratch_high,
-                            plan,
-                            twiddles,
-                        )
-                };
+            // More than four blocks: each group of four reaches its
+            // 512-point spectrum through the same sink-fused chain the
+            // four-block path uses, then the remaining radix-2 levels run in
+            // place — output `j` and `j + len` depend only on inputs `j` and
+            // `j + len`, so no second buffer and no copy back.
+            //
+            // Eight blocks is two chains and one level; sixteen is four
+            // chains and two. The detached `combine_final4` pass this
+            // replaced left the eight-block split 14% behind the flat
+            // Stockham route; fusing took it past
+            // (`backlog.md#atlas-apollo-eight-block-split`).
+            if blocks > 4 {
+                let quarter = 4 * BASE;
+                let mut combined = true;
+                for (data_group, scratch_group) in data
+                    .chunks_exact_mut(quarter)
+                    .zip(scratch[..n].chunks_exact_mut(quarter))
+                {
+                    if !combine_four_blocks::<F, INVERSE>(data_group, scratch_group, plan, twiddles)
+                    {
+                        combined = false;
+                        break;
+                    }
+                }
                 if !combined {
                     return false;
                 }
-                combine_level_in_place::<F>(data, twiddles, half);
+                let mut len = quarter;
+                while len < n {
+                    combine_level_in_place::<F>(data, twiddles, len);
+                    len *= 2;
+                }
                 return true;
             }
             // Four blocks keep only the even pair's two halves as an
@@ -363,7 +389,8 @@ where
     )
 }
 
-/// The final radix-2 combine level, in place.
+/// One radix-2 combine level, in place, over every adjacent pair of
+/// `len`-blocks.
 ///
 /// Output `j` and `j + len` depend only on inputs `j` and `j + len`, so the
 /// halves are read and written where they already sit — no second buffer, no
@@ -377,12 +404,14 @@ where
     >,
 {
     let combine = &twiddles[len - 1..2 * len - 1];
-    let (low, high) = data.split_at_mut(len);
-    for j in 0..len {
-        let rotated = high[j] * combine[j];
-        let even = low[j];
-        low[j] = even + rotated;
-        high[j] = even - rotated;
+    for pair in data.chunks_exact_mut(2 * len) {
+        let (low, high) = pair.split_at_mut(len);
+        for j in 0..len {
+            let rotated = high[j] * combine[j];
+            let even = low[j];
+            low[j] = even + rotated;
+            high[j] = even - rotated;
+        }
     }
 }
 

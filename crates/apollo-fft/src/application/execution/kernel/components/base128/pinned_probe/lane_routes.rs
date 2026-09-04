@@ -146,7 +146,7 @@ fn non_power_of_two_lane_route(suite: &mut BenchmarkSuite, core: &str) {
     // the flat Stockham route and `lane-plan` is the split, both in one binary,
     // which a cross-build before/after cannot settle at these magnitudes.
     for n in [
-        96usize, 100, 101, 128, 176, 180, 243, 250, 256, 384, 385, 512, 720, 1000, 1024,
+        96usize, 100, 101, 128, 176, 180, 243, 250, 256, 384, 385, 512, 720, 1000, 1024, 2048,
     ] {
         let source: Vec<Complex32> = (0..n)
             .map(|index| {
