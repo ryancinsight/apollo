@@ -1,5 +1,37 @@
 # Apollo Backlog
 
+<a id="apollo-provider-identity"></a>
+
+## APOLLO-PROVIDER-IDENTITY-2026-09-04 — Four providers resolve through two sources, and the merged pins cannot be dropped alone [patch] [arch] — in-progress
+
+- **Integrator:** claude-opus-5; **branch:** `build/apollo-provider-identity`;
+  **lease:** `.provider-identity-baseline`, `docs/adr/0047-*.md`
+  2026-09-04T16:40Z.
+- **Last-update:** 2026-09-04.
+- **Measured.** Apollo's committed lock resolves `eunomia` through two
+  sources, `mnemosyne` through three, and `moirai` through two: four sources
+  in excess of one per repository. Each extra source is a second copy of that
+  provider, so its public types stop matching across the boundary between the
+  consumers that reached it by different routes. ADR 0047's verification
+  section claimed one revision per provider; that claim is false as measured
+  and is corrected in this increment.
+- **Falsified premise.** The obvious remedy — dropping the `rev` pins whose
+  upstream PRs merged (eunomia #87, hermes #155, leto #164, hephaestus #270,
+  all confirmed MERGED against the hosting API) — makes it worse, not better.
+  Removing those four raised the excess from four to eight, because
+  `leto-ops` still pins hermes at `5a399ee` and the unpinned direct edge
+  resolves to hermes main. Moirai's pin is separately still live: its
+  `83aa411` is not an ancestor of Moirai main, so that pin names pending work
+  rather than a merged change.
+- **Outcome.** A dependency-ordered unpin sweep: each provider's own
+  first-party consumers advance before apollo drops its pin, so the excess
+  falls monotonically. `.provider-identity-baseline` holds the current bound,
+  enforced by atlas's canonical lock guard, and is lowered as each fork closes.
+- **Acceptance oracle.** `.provider-identity-baseline` reaches 0 with the
+  canonical guard green, and the workspace passes its full gate on the
+  resulting graph.
+- **Risk / change class:** [patch] [arch]; dependency resolution only.
+
 ## ATLAS-APOLLO-N32-F64-LIVENESS-2026-09-04 — The n = 32 f64 arm cannot fit AVX2, and spills 43 times [minor] [perf] — todo <a id="atlas-apollo-n32-f64-liveness"></a>
 
 - **The measurement, corrected.** On a quiet machine, minimum of two runs with
