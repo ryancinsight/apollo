@@ -82,6 +82,31 @@
 - **Evidence:** format, all-target/all-feature check and Clippy, 1,417 Nextest
   cases, seven doctests, provider audit, and lockfile validation pass.
 
+<a id="apollo-n16-f64-gap"></a>
+
+## APOLLO-N16-F64-GAP-2026-09-04 — RustFFT is 18% faster at N=16 f64 [minor] [perf] — in-progress
+
+- **Integrator:** claude-opus-5; **branch:** `perf/apollo-n16-f64-gap`;
+  **lease:** the N = 16 f64 route and its codelets 2026-09-04T19:30Z.
+- **Last-update:** 2026-09-04.
+- **Measured (release, pinned, three runs).** Apollo's plan route reads
+  10.6 ns on the P-core and 16.7 ns on the E-core; RustFFT reads 9.0 ns and
+  20.0 ns. Apollo loses 18% on the P-core and wins 17% on the E-core, so the
+  gap is specific to the wide core.
+- **Known non-causes.** The register-resident codelet is 13.8 ns, slower than
+  the incumbent route it would replace, so the gap is not the incumbent
+  choosing the wrong kernel
+  ([`#apollo-n16-register-permute`](#apollo-n16-register-permute)). Dispatch is
+  0.3 ns per call.
+- **Method.** Attribute the P-core difference: what RustFFT's N = 16 AVX
+  butterfly does per pass against what apollo's route does, from codegen and a
+  per-stage breakdown, before proposing a structure.
+- **Acceptance oracle.** Apollo at or below RustFFT's P-core figure at N = 16
+  f64 with the E-core lead retained, or a recorded attribution of why the
+  remaining difference is structural.
+- **Risk / change class:** [minor] [perf].
+- **Parent:** [`#atlas-apollo-beat-the-references`](#atlas-apollo-beat-the-references).
+
 <a id="apollo-sweep-exceeds-budget"></a>
 
 ## APOLLO-SWEEP-EXCEEDS-BUDGET-2026-09-04 — The reference sweep is terminated at the test budget [patch] [perf] — todo
