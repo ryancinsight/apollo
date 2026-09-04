@@ -3,8 +3,7 @@
 use core::{marker::PhantomData, mem};
 use std::borrow::Cow;
 
-use bytemuck::{Pod, Zeroable};
-use eunomia::Complex32;
+use eunomia::{Complex32, Pod, Zeroable};
 use hephaestus_core::{
     BindingDecl, GroupedBindingDecl, GroupedKernelInterface, GroupedKernelSource, KernelInterface,
     KernelSource, Wgsl,

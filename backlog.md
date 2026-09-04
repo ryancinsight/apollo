@@ -175,6 +175,14 @@
 - **Acceptance.** `bytemuck` and `half` absent from every apollo manifest and
   from `cargo tree`, with no hand-rolled `unsafe impl Pod` in apollo standing in
   for a derive eunomia should own.
+- **Co-evolution source graph, 2026-09-03.** Apollo now follows Eunomia
+  `fdbf122`, Mnemosyne `da5c6be`, Hermes `5a399ee`, Leto `1caa846`, Hephaestus
+  `7ca992d`, and Moirai `773c117` through the workspace dependency table. A
+  standalone lock scan reports one source revision for each provider; the
+  owning Leto and Hephaestus edges were updated after the consumer scan found
+  their older transitive revisions. The exact graph passes workspace check,
+  warning-denied Clippy, nextest (1,187/1,187 with 29 skipped), doctests,
+  warning-denied rustdoc, and formatting. See [ADR 0047](docs/adr/0047-first-party-source-identity-during-coevolution.md).
 
 ## ATLAS-APOLLO-F32-NONPOT-WIDTH-2026-09-03 — f32 loses far more than f64 on non-power-of-two lengths [patch] [perf] — todo <a id="atlas-apollo-f32-nonpot-width"></a>
 
