@@ -24,6 +24,15 @@
   type at this length. The same structure in `f32` needs 256 bytes, eight
   registers, half the file, which is why `f32` at n = 32 shows nothing like
   this.
+- **Current increment.** Fusing each transpose half directly into its radix-8
+  consumer remains value-correct, but the refreshed release emission reports
+  25 vector spill stores and 17 reloads in the forward arm (24/13 inverse,
+  25/16 normalized). A lower-level `vaddsubpd` replacement was rejected: its
+  first form had no stable `vsubaddpd` intrinsic, and the corrected
+  sign-negation form failed six n = 32 value tests with errors up to `3.03e1`;
+  the original arithmetic remains authoritative. The exact refreshed
+  liveness instrument reports n = 32 Apollo/RustFFT medians of
+  `38.331/25.710 ns` (minima `27.465/22.403 ns`), so acceptance remains open.
 - **Falsified, so nobody repeats it:** fusing permute, scale and store per
   output — so the sixteen results do not all span the normalisation block —
   changes nothing. Codegen after: 27 spill stores and 19 reloads against 26 and
