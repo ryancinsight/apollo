@@ -1,5 +1,45 @@
 # Apollo Backlog
 
+## ATLAS-APOLLO-N32-F64-LIVENESS-2026-09-04 — The n = 32 f64 arm cannot fit AVX2, and spills 43 times [minor] [perf] — todo <a id="atlas-apollo-n32-f64-liveness"></a>
+
+- **The measurement, corrected.** On a quiet machine, minimum of two runs with
+  RustFFT in the same binary: n = 32 `f64` is apollo 21.21 ns against 15.28,
+  **+38.8%** — not the +104% the scoreboard carries, which was taken under
+  concurrent peer builds. Neighbours: n = 16 +26.3%, n = 64 +2.5% (n = 64 has
+  a tuned `State64`).
+- **The mechanism, from codegen rather than inference.** The arm holds the
+  whole transform in registers: sixteen YMM loaded, four `avx_fft4` producing
+  sixteen live values, twiddles, four `avx_fft8` producing sixteen more,
+  sixteen `vperm2f128`, sixteen stores. Disassembling the outlined
+  `vector_arm` gives **26 ymm spill stores and 17 spill reloads in a
+  381-instruction body**, plus the ten `xmm6`-`xmm15` callee-saves the Windows
+  ABI requires — 63 stack operations, about a sixth of the function, which at
+  roughly 30 cycles is most of the 6 ns gap.
+- **Why it cannot be scheduled away.** 32 `Complex64` is 512 bytes, which is
+  **exactly sixteen YMM registers** — the entire AVX2 register file, with
+  nothing left for temporaries. The register-resident premise does not fit this
+  type at this length. The same structure in `f32` needs 256 bytes, eight
+  registers, half the file, which is why `f32` at n = 32 shows nothing like
+  this.
+- **Falsified, so nobody repeats it:** fusing permute, scale and store per
+  output — so the sixteen results do not all span the normalisation block —
+  changes nothing. Codegen after: 27 spill stores and 19 reloads against 26 and
+  17 before. The outputs are not what dominates liveness; the sixteen `fft8`
+  results are, because each `fft8` call produces one value for *each* output
+  group, so all sixteen stay live until the last group is emitted. Shortening
+  the wrong live range buys nothing.
+- **What would work.** A structure whose intermediate stores are designed
+  rather than placed by the register allocator: two halves with an explicit
+  spill point, or a radix-4 four-step over an intermediate buffer. The traffic
+  does not disappear — it cannot, the data does not fit — but a designed
+  placement can beat 43 compiler-chosen spills, and RustFFT's 15.28 ns is the
+  evidence that some placement does.
+- **Acceptance.** Spill count materially below 43 *and* measured faster than
+  RustFFT's 15.28 ns at n = 32 `f64`, with n = 16 and n = 64 unmoved.
+- **Instrument:** `small_sizes_against_the_references_by_core_type` for the
+  timing; `cargo rustc --release -p apollo-fft --lib -- --emit=asm` and the
+  `vector_arm` symbols for the spill count.
+
 ## ATLAS-APOLLO-SIXTEEN-BLOCK-SPLIT-2026-09-03 — n = 2048 is a local peak, and the split does not reach it [minor] [perf] — done 2026-09-03 (falsified) <a id="atlas-apollo-sixteen-block-split"></a>
 
 - **Why it looked promising.** n = 2048 measures worse than both its
@@ -424,7 +464,7 @@
   | --- | --- | --- | --- |
   | 8 | +14% | +49% | pot |
   | 16 | +40% | +9% | pot |
-  | 32 | **+105%** | +25% | pot |
+  | 32 | +39% (see `#atlas-apollo-n32-f64-liveness`; the +105% here was load-inflated) | +25% | pot |
   | 64 | **-12%** | **-2%** | pot, tuned `State64` |
   | 128 | +8% | +25% | pot, tuned split |
   | 256 | +20% | +31% | pot, tuned split |
