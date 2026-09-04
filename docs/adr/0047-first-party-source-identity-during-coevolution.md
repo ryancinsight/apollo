@@ -48,11 +48,28 @@ adapter.
 
 ## Verification
 
-The standalone lockfile check passes. The lockfile and neutral-directory
-`cargo tree` source scans contain one revision for each provider in the table
-above; the previous Leto, Moirai, and Mnemosyne source entries are absent. The
-exact graph passes workspace check, warning-denied Clippy, nextest (1,187/1,187
-with 29 skipped), doctests, warning-denied rustdoc, and formatting.
+The standalone lockfile check passes, and the exact graph passes workspace
+check, warning-denied Clippy, nextest, doctests, warning-denied rustdoc, and
+formatting.
+
+Source identity is **not** one revision per provider, contrary to what this
+section previously recorded. The committed lock resolves Eunomia through two
+sources, Mnemosyne through three, and Moirai through two — four sources in
+excess of one per repository. The count is now measured rather than asserted:
+atlas's canonical lock guard reports it on every run and fails when it exceeds
+`.provider-identity-baseline`, which this repository commits at 4 and lowers as
+the dependency-ordered unpin sweep closes each fork
+([`backlog.md#apollo-provider-identity`](../../backlog.md#apollo-provider-identity)).
 
 The decision changes dependency resolution only; it does not change Apollo's
 public API or numerical kernels.
+
+## Revisions
+
+- **2026-09-04.** The verification section asserted one revision per provider
+  without measuring it; a lock scan showed four sources in excess of one per
+  repository. Corrected, and the claim replaced by a committed bound the lock
+  guard enforces. A merged co-evolution pin is additionally established as not
+  independently removable: dropping four merged pins at once doubled the
+  excess, because transitive first-party consumers still pinned the older
+  revisions.
