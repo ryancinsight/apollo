@@ -156,11 +156,11 @@ impl<F: MixedRadixScalar<Complex = Complex<F>>> FftPlan1D<F> {
         // gather, and each half of the split runs the same sink-fused chain
         // the four-block path uses rather than a detached `combine_final4`
         // pass. Re-measured with both routes in one binary and the arms
-        // alternating, `f32` at n = 1024 is now faster on the split in three
-        // runs of three — 0.5, 0.7 and 1.3% — so the gate's premise is gone
-        // rather than merely narrowed. The margin is thin and stated as such:
-        // what removed the gate is that a 33% regression became a consistent
-        // small win, not that the win is large. The 10 =>
+        // alternating, `f32` at n = 1024 is faster on the split in every run:
+        // -12.4, -13.7, -15.4 and -16.0%. An earlier pair of runs read -0.5 to
+        // -1.3% and is what the gate's removal was first justified on; those
+        // ran against concurrent peer builds and understated it. The gate's
+        // premise — a 33% regression — is gone either way. The 10 =>
         // dispatch arm still falls back to the stock power-of-two route when
         // the plan carries no base128 state.
         let base128 =

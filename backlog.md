@@ -1,5 +1,43 @@
 # Apollo Backlog
 
+## ATLAS-APOLLO-SIXTEEN-BLOCK-SPLIT-2026-09-03 — n = 2048 is a local peak, and the split does not reach it [minor] [perf] — done 2026-09-03 (falsified) <a id="atlas-apollo-sixteen-block-split"></a>
+
+- **Why it looked promising.** n = 2048 measures worse than both its
+  neighbours and is the only power of two where apollo loses to PhastFT as
+  well — the same signature n = 1024 had before the eight-block split:
+
+  | n | f64 vs RustFFT | f32 vs RustFFT | f32 vs PhastFT |
+  | --- | --- | --- | --- |
+  | 1024 (split) | +25% | +52% | +13% |
+  | **2048 (untuned)** | **+39%** | **+103%** | **+33%** |
+  | 4096 | +20% | +38% | +6% |
+
+- **Built as a generalisation rather than a second special case.** The
+  eight-block branch became `blocks > 4`: every group of four blocks reaches
+  its 512-point spectrum through the same sink-fused `combine_four_blocks`
+  chain, then the remaining radix-2 levels run in place. Eight blocks is two
+  chains and one level, sixteen is four chains and two, and
+  `combine_level_in_place` now walks every adjacent pair rather than assuming
+  one. 551/551 including the accuracy oracles.
+- **Measured and rejected.** Both routes in one binary, arms alternating,
+  `f32`: n = 2048 is **+3.3% and +3.5%** — consistently slower than the flat
+  Stockham route it would replace. n = 1024 in the same runs is -16.0% and
+  -12.4%, so the construction itself is sound and 2048 is simply past its
+  range.
+- **The missing sixteen-way gather is not obviously the answer.** Sixteen
+  blocks take the strided scalar gather, since hermes' pair split stops at
+  eight, and the reflex is to add a sixteen-way and re-measure. The evidence
+  does not support that reflex: the eight-way network's own contribution was
+  never cleanly isolated (see the correction below), so sizing a sixteen-way
+  from it would be sizing from a number that was not measured. Building the
+  primitive first would repeat the error this session already made once.
+- **What is kept.** The generalised `blocks > 4` form and the chunked
+  in-place level, which are a simpler expression of what the eight-block path
+  already did and cover it exactly. `BASE_SPLIT_LENGTHS` stops at 1024 and the
+  plan has no arm for 2048.
+- **Re-open trigger:** an approach to 2048 that is not a wider version of this
+  one. Its gap is real and among the largest on the board.
+
 ## ATLAS-APOLLO-WORKER-RETENTION-2026-09-03 — Per-worker scratch is retained for the process, and the mnemosyne share has no release path [minor] [perf] — todo <a id="atlas-apollo-worker-retention"></a>
 
 - **Integrator:** unclaimed; **branch:** none; **lease:** none.
@@ -335,11 +373,13 @@
   | two `combine_final4` halves, SIMD gather | +14% |
   | **two sink-fused halves, SIMD gather** | **-1.1 / -1.4 / -3.0%** |
 
-  Three independent runs at the final shape, all negative; three more after
-  rebasing onto `#311` read -0.5, -0.7 and -1.3%. The margin is thin and is
-  stated as such — what removes the `f32` gate is that a 33% regression became
-  a consistent small win, not that the win is large. n = 512 is unmoved at
-  -21% against flat, so the four-block path did not pay for sharing its chain.
+  Three independent runs at the final shape, all negative. Later runs on a
+  quieter machine read -12.4, -13.7, -15.4 and -16.0%, so the win is far
+  larger than the -0.5 to -1.3% first recorded here: those ran against
+  concurrent peer builds and understated it. The `f32` gate's removal was
+  justified on the understated figure and is better justified on this one.
+  n = 512 is unmoved at -21% against flat, so the four-block path did not pay
+  for sharing its chain.
 - **The two pieces.** Hermes gained `deinterleave_pairs8`
   (`hermes#153`, `#154`), so eight blocks take a blend network instead of the
   strided scalar gather — worth about 10% here, less than the 15% the n = 512
@@ -363,6 +403,18 @@
   is that the sink fusion was worth another 16 points on top.
 - 551/551 native tests including the accuracy oracles and the
   `dft_oracle_sweep`, clippy and fmt clean.
+- **Correction to this item's published table.** The progression in `#314`
+  listed "two `combine_final4` halves, SIMD gather" at +14%, beside the scalar
+  gather row at the same figure, as though both were measured the same way.
+  The second cell was never measured in one binary — it was inferred to show
+  the network alone did not move the verdict. What was actually measured is:
+  the scalar-gather shape at +14% in one binary; the network's effect
+  cross-binary only (f32 1235 ns to 1111, about 10%), which is the weaker mode
+  this session has repeatedly recorded as unreliable at these magnitudes; and
+  the final sink-fused shape at -0.5 to -1.3% in one binary. The combined
+  result stands and is measured. The attribution between the two pieces does
+  not: the fusion is demonstrably the larger part, and the network's separate
+  contribution is not established.
 
 ## ATLAS-APOLLO-BEAT-THE-REFERENCES-2026-09-03 — Apollo must be faster than RustFFT and PhastFT at every size [minor] [perf] — todo <a id="atlas-apollo-beat-the-references"></a>
 
