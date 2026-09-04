@@ -86,6 +86,44 @@
 - **Evidence:** format, all-target/all-feature check and Clippy, 1,417 Nextest
   cases, seven doctests, provider audit, and lockfile validation pass.
 
+<a id="apollo-probe-scale-disagreement"></a>
+
+## APOLLO-PROBE-SCALE-DISAGREEMENT-2026-09-04 — Two pinned probes disagree by 25x on one transform and reverse its verdict [patch] [perf] — todo
+
+- **Integrator:** unclaimed; **branch:** none; **lease:** none.
+- **Last-update:** 2026-09-04.
+- **Measured.** At N = 16 f64, pinned to cpu 1, in one binary on a quiet
+  machine, `codelet_against_the_incumbent_by_core_type` reads apollo's plan
+  route at 242 ns and RustFFT at 610 ns. The small-sizes sweep reads the same
+  two calls at 10.7 ns and 7.5 ns. The absolute figures differ by roughly 25x
+  and 80x, and the verdict reverses: apollo is 2.5x faster than RustFFT in one
+  and 41% slower in the other.
+- **The harness is not the difference.** Running `apollo_bench::BenchmarkSuite`
+  on the identical closure inside the codelet probe, same process and same
+  binding, reports 247.9 ns against `best_block`'s 242.9 ns — 2% apart. The
+  probe's floor is 2.3 ns, and its clock calibration (256 dependent f64
+  multiply-adds) reads 626 ns against 553 ns predicted at the 3.7 GHz nominal
+  clock, so the core is not downclocked. Both harnesses are honest; they are
+  measuring different things, or under machine states that differ by more than
+  clock.
+- **Why it matters.** `ATLAS-APOLLO-BEAT-THE-REFERENCES` scores apollo against
+  RustFFT and PhastFT entirely from the small-sizes sweep. If its scale is
+  wrong the ranking may still hold, since both arms would scale together — but
+  that is an assumption, and this pair of readings is evidence against it at
+  one length.
+- **Second defect, same instrument.** The full sweep now exceeds the committed
+  nextest budget: `small_sizes_against_the_references_by_core_type` is
+  terminated at 60 s. A measurement instrument that cannot run inside the
+  budget is not usable, and raising the bound is not the remedy.
+- **Method.** Reconcile the two on one length: same process, same binding,
+  same closure, both harnesses, with RustFFT as the external control. The
+  codelet probe now carries floor, dispatch, and clock-calibration arms for
+  exactly this, so whichever instrument is wrong reports its own anomaly.
+- **Acceptance oracle.** One explanation covering both readings, the wrong
+  instrument corrected, and the scoreboard's affected cells re-measured or
+  confirmed. The sweep runs inside its budget without dropping coverage.
+- **Risk / change class:** [patch] [perf]; instruments only, no kernel change.
+
 <a id="apollo-provider-identity"></a>
 
 ## APOLLO-PROVIDER-IDENTITY-2026-09-04 — Four providers resolve through two sources, and the merged pins cannot be dropped alone [patch] [arch] — in-progress
