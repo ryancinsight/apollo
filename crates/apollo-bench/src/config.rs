@@ -11,6 +11,8 @@ const SMOKE_SAMPLE_COUNT: NonZeroUsize =
 const BENCHMARK_MODE_ENVIRONMENT: &str = "APOLLO_BENCH_MODE";
 const REGRESSION_WARM_UP: Duration = Duration::from_millis(100);
 const REGRESSION_MEASUREMENT: Duration = Duration::from_millis(400);
+const SWEEP_WARM_UP: Duration = Duration::from_millis(15);
+const SWEEP_MEASUREMENT: Duration = Duration::from_millis(75);
 
 /// Selects full measurement or bounded executable smoke verification.
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
@@ -114,6 +116,29 @@ impl BenchmarkConfig {
         Self {
             warm_up: REGRESSION_WARM_UP,
             measurement: REGRESSION_MEASUREMENT,
+            sample_count: SAMPLE_COUNT,
+            mode: BenchmarkMode::Measurement,
+        }
+    }
+
+    /// Creates the bounded 15-millisecond warm-up and 75-millisecond
+    /// measurement contract used by wide sweeps that must complete inside a
+    /// test harness budget.
+    ///
+    /// A sweep measuring dozens of lengths against several engines on both
+    /// core classes exceeds any committed per-test timeout at the regression
+    /// budgets: the per-case cost is analytic (`warm_up + measurement`), so
+    /// the sweep's wall time is the case count times that constant and only
+    /// the constant can shrink. The 90-millisecond case budget keeps the
+    /// pinned small-sizes sweep under the 30-second harness timeout while the
+    /// 100-sample estimator and both calibration paths stay untouched; a
+    /// reported figure from this contract carries wider intervals, which a
+    /// whole-sweep reading absorbs rather than a per-case verdict.
+    #[must_use]
+    pub const fn sweep() -> Self {
+        Self {
+            warm_up: SWEEP_WARM_UP,
+            measurement: SWEEP_MEASUREMENT,
             sample_count: SAMPLE_COUNT,
             mode: BenchmarkMode::Measurement,
         }
@@ -256,5 +281,15 @@ mod tests {
         assert_eq!(regression.warm_up(), Duration::from_millis(100));
         assert_eq!(regression.measurement(), Duration::from_millis(400));
         assert_eq!(regression.sample_count().get(), 100);
+    }
+
+    #[test]
+    fn sweep_config_has_the_derived_per_case_budget() {
+        let sweep = BenchmarkConfig::sweep();
+
+        assert_eq!(sweep.warm_up(), Duration::from_millis(15));
+        assert_eq!(sweep.measurement(), Duration::from_millis(75));
+        assert_eq!(sweep.sample_count().get(), 100);
+        assert_eq!(sweep.mode(), BenchmarkMode::Measurement);
     }
 }

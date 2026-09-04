@@ -4,7 +4,7 @@
 use super::{phase_attribution, ProbeScalar};
 use crate::application::execution::kernel::measurement_cores;
 use crate::application::execution::kernel::mixed_radix::MixedRadixScalar;
-use apollo_bench::{BenchmarkCase, BenchmarkConfig, BenchmarkSuite};
+use apollo_bench::{BenchmarkCase, BenchmarkConfig, BenchmarkMode, BenchmarkSuite};
 use eunomia::Complex64;
 use hermes_simd::{ProcessorBinding, ProcessorIndex};
 use rustfft::num_complex::Complex as RustComplex;
@@ -119,11 +119,22 @@ fn small_sizes_against_the_references_by_core_type() {
         assert_eq!(landed, cpu, "processor binding must remain exact");
         let core = core.label();
         // Discarded pass: see `half_storage_promotion_cost_by_core_type`.
-        let mut warmup = BenchmarkSuite::new(BenchmarkConfig::regression());
+        // Smoke mode: the pass exists only to absorb first-touch costs
+        // (planner caches, page faults, branch promotion), so one observation
+        // per case is the entire contract — its figures are never read.
+        let mut warmup =
+            BenchmarkSuite::new(BenchmarkMode::Smoke.apply(BenchmarkConfig::regression()));
         small_sizes_for_scalar::<f64>(&mut warmup, core, "f64");
         small_sizes_for_scalar::<f32>(&mut warmup, core, "f32");
         drop(warmup);
-        let mut suite = BenchmarkSuite::new(BenchmarkConfig::regression());
+        // Reported pass: the sweep contract. The per-case cost is analytic
+        // (warm-up + measurement), so the sweep's wall time is the case count
+        // times that constant; at the regression budgets it exceeds the
+        // committed nextest timeout regardless of host speed, which terminated
+        // the sweep under harness (`APOLLO-SWEEP-EXCEEDS-BUDGET-2026-09-04`).
+        // The sweep contract keeps the 100-sample estimator with a 90
+        // millisecond case budget, completing inside the timeout with margin.
+        let mut suite = BenchmarkSuite::new(BenchmarkConfig::sweep());
         small_sizes_for_scalar::<f64>(&mut suite, core, "f64");
         small_sizes_for_scalar::<f32>(&mut suite, core, "f32");
         {
