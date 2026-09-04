@@ -133,7 +133,19 @@ impl Selection {
 /// class-labelled comparison is not measurable and the caller skips rather
 /// than emitting a table with invented headers. A homogeneous host is *not*
 /// absence: it reports one class, and the instrument measures on it.
+///
+/// Also `None` in an unoptimized build, which is the same absence for the same
+/// reason: the numbers exist but mean nothing about the shipped code. A debug
+/// build measured this crate's N = 16 route at 242 ns where release reads
+/// 10.6 ns, and N = 64 at 15 us where release reads 48 ns — the gap is not a
+/// constant factor, so debug figures reverse verdicts rather than merely
+/// scaling them. Every pinned probe reaches its host through this function, so
+/// declining here is what keeps one forgotten `--release` from producing a
+/// table that looks exactly like a measurement.
 pub(crate) fn selected() -> Option<&'static Selection> {
+    if cfg!(debug_assertions) {
+        return None;
+    }
     static SELECTION: OnceLock<Option<Selection>> = OnceLock::new();
     SELECTION.get_or_init(build).as_ref()
 }
