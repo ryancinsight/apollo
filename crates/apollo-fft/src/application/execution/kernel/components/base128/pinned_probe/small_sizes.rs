@@ -8,6 +8,42 @@ use apollo_bench::{BenchmarkCase, BenchmarkConfig, BenchmarkSuite};
 use eunomia::Complex64;
 use hermes_simd::{ProcessorBinding, ProcessorIndex};
 use rustfft::num_complex::Complex as RustComplex;
+use std::time::Duration;
+
+/// The per-case budget this sweep measures under, derived from its own size.
+///
+/// `BenchmarkConfig::regression()` spends 100 ms of warm-up and 400 ms of
+/// measurement, which is the right budget for *one* case. This sweep runs
+/// about ninety: seventeen lengths against apollo and RustFFT at both scalars,
+/// PhastFT at the eleven powers of two, plus the base-128 and half-storage
+/// cases. The discarded warm-up pass repeats the set, and both core types run
+/// the whole thing, so half a second per case is 184 s against a committed
+/// nextest bound of 60 s — the sweep has been terminated rather than reported.
+///
+/// A hundred milliseconds per case brings the reported pass to about 17 s. The
+/// estimator is unchanged at 100 samples; each one simply calibrates to fewer
+/// iterations, which at these lengths still leaves thousands per sample below
+/// N = 1024 and a handful at N = 32768. Sizing the instrument to a committed
+/// bound is instrument design; the alternative — raising the bound — would be
+/// hiding a breach.
+fn sweep_config() -> BenchmarkConfig {
+    BenchmarkConfig::try_with_budgets(Duration::from_millis(20), Duration::from_millis(80))
+        .expect("invariant: both budgets above are non-zero")
+}
+
+/// The discarded pass exists to warm the freshly linked binary, not to produce
+/// numbers, so it runs at half the reported pass's budget.
+///
+/// Half rather than less: at a fifth, the first sweep after a build read
+/// N = 32 at 32.4 ns where the two runs after it read 21.4 and 21.2, and
+/// RustFFT at the same length moved the opposite way. The reported pass is
+/// reproducible to about 1% once the machine is warm, so what the discarded
+/// pass buys is not precision but the absence of a cold first run — and it
+/// buys that only if it is long enough to do the warming.
+fn sweep_warm_up_config() -> BenchmarkConfig {
+    BenchmarkConfig::try_with_budgets(Duration::from_millis(10), Duration::from_millis(40))
+        .expect("invariant: both budgets above are non-zero")
+}
 
 fn small_sizes_for_scalar<T>(suite: &mut BenchmarkSuite, core: &str, scalar: &str)
 where
@@ -119,11 +155,11 @@ fn small_sizes_against_the_references_by_core_type() {
         assert_eq!(landed, cpu, "processor binding must remain exact");
         let core = core.label();
         // Discarded pass: see `half_storage_promotion_cost_by_core_type`.
-        let mut warmup = BenchmarkSuite::new(BenchmarkConfig::regression());
+        let mut warmup = BenchmarkSuite::new(sweep_warm_up_config());
         small_sizes_for_scalar::<f64>(&mut warmup, core, "f64");
         small_sizes_for_scalar::<f32>(&mut warmup, core, "f32");
         drop(warmup);
-        let mut suite = BenchmarkSuite::new(BenchmarkConfig::regression());
+        let mut suite = BenchmarkSuite::new(sweep_config());
         small_sizes_for_scalar::<f64>(&mut suite, core, "f64");
         small_sizes_for_scalar::<f32>(&mut suite, core, "f32");
         {
