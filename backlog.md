@@ -56,6 +56,14 @@
   explicit-boundary baseline, so alignment does not change the spill shape or
   satisfy the liveness target. The unaligned full explicit boundary remains
   canonical.
+- **Direct stage writes rejected.** Passing the existing scratch pointer into
+  `stage_group` and storing each completed YMM directly passes the 10/10 value
+  gate, but release codegen remains at 22/14 vector stores/reloads for forward
+  and inverse, 21/13 normalized, and 282/300/280 instructions. The paired
+  instrument reports n = 32 medians of `26.113/24.566 ns` for Apollo/RustFFT,
+  slower than the explicit-boundary baseline, so removing the array return does
+  not alter the generated spill shape. The returned stage-group boundary
+  remains canonical.
 - **Falsified, so nobody repeats it:** fusing permute, scale and store per
   output — so the sixteen results do not all span the normalisation block —
   changes nothing. Codegen after: 27 spill stores and 19 reloads against 26 and
