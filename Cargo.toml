@@ -59,26 +59,22 @@ repository = "https://github.com/ryancinsight/apollo"
 [workspace.dependencies]
 anyhow = "1.0.103"
 csv = "1.4.0"
-# Temporary co-evolution pin for Eunomia PR #87; remove `rev` after the
-# provider derive delivery merges to main and regenerate Cargo.lock.
-eunomia = { version = "0.8.0", git = "https://github.com/ryancinsight/eunomia", rev = "fdbf12275d35aa1545060a4277644c497ddcda37", default-features = false, features = ["std"] }
+# Eunomia PR #87 is merged; Cargo.lock records the reviewed default source.
+eunomia = { version = "0.8.0", git = "https://github.com/ryancinsight/eunomia", default-features = false, features = ["std"] }
 # Temporary co-evolution pin for Mnemosyne PR #128; remove `rev` after the
 # pooled-scratch release surface merges to main and regenerate Cargo.lock.
 mnemosyne = { package = "mnemosyne-memory", version = "0.7.0", git = "https://github.com/ryancinsight/Mnemosyne.git", rev = "af7a23a", features = ["eunomia"] }
 melinoe = { version = "0.9.0", git = "https://github.com/ryancinsight/melinoe.git", default-features = false, features = ["alloc"] }
-# Temporary co-evolution pin for Hermes PR #155; remove `rev` after its
-# provider source-identity correction merges to main and regenerate Cargo.lock.
-hermes-simd = { version = "0.7.0", git = "https://github.com/ryancinsight/hermes.git", rev = "5a399ee" }
-# Temporary co-evolution pin for Leto PR #164; remove `rev` after its
-# provider source-identity correction merges to main and regenerate Cargo.lock.
-leto = { version = "0.43.0", git = "https://github.com/ryancinsight/leto.git", rev = "1caa846" }
-leto-ops = { version = "0.43.0", git = "https://github.com/ryancinsight/leto.git", rev = "1caa846" }
-# Hephaestus PR #270 carries the merged-Leto source edge and the Eunomia
-# provider identity required by this co-evolution increment. Remove `rev`
-# after that PR merges and regenerate Cargo.lock.
-hephaestus-wgpu = { version = "0.19.0", git = "https://github.com/ryancinsight/hephaestus.git", rev = "7ca992d" }
-hephaestus-core = { version = "0.19.0", git = "https://github.com/ryancinsight/hephaestus.git", rev = "7ca992d" }
-hephaestus-cuda = { version = "0.19.0", git = "https://github.com/ryancinsight/hephaestus.git", rev = "7ca992d" }
+# Hermes PR #156 and Leto PR #168 are merged; Cargo.lock records their reviewed
+# default sources.
+hermes-simd = { version = "0.7.0", git = "https://github.com/ryancinsight/hermes.git" }
+leto = { version = "0.43.0", git = "https://github.com/ryancinsight/leto.git" }
+leto-ops = { version = "0.43.0", git = "https://github.com/ryancinsight/leto.git" }
+# Hephaestus PR #273 carries the provider-default source graph required by this
+# co-evolution increment. Remove `rev` after that PR merges.
+hephaestus-wgpu = { version = "0.19.0", git = "https://github.com/ryancinsight/hephaestus.git", rev = "dec3d7260167d6bd41ddb03ce69c38462cfd61bf" }
+hephaestus-core = { version = "0.19.0", git = "https://github.com/ryancinsight/hephaestus.git", rev = "dec3d7260167d6bd41ddb03ce69c38462cfd61bf" }
+hephaestus-cuda = { version = "0.19.0", git = "https://github.com/ryancinsight/hephaestus.git", rev = "dec3d7260167d6bd41ddb03ce69c38462cfd61bf" }
 proc-macro2 = "1.0.106"
 once_cell = "1.21.4"
 parking_lot = "0.12.5"

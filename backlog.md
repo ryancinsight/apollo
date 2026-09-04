@@ -84,6 +84,8 @@
 - **Integrator:** claude-opus-5; **branch:** `build/apollo-provider-identity`;
   **lease:** `.provider-identity-baseline`, `docs/adr/0047-*.md`
   2026-09-04T16:40Z.
+- **Contributor:** Codex on `build/apollo-provider-default`; **lease:** none;
+  registration-driver increment complete 2026-09-04.
 - **Last-update:** 2026-09-04.
 - **Measured.** Apollo's committed lock resolves `eunomia` through two
   sources, `mnemosyne` through three, and `moirai` through two: four sources
@@ -107,6 +109,13 @@
 - **Acceptance oracle.** `.provider-identity-baseline` reaches 0 with the
   canonical guard green, and the workspace passes its full gate on the
   resulting graph.
+- **Registration-driver increment.** Remove merged Eunomia, Hermes, and Leto
+  pins, and follow Hephaestus PR #273 while hosted verification runs. The
+  immediate oracle is one Eunomia source and a compiling RITK FFT consumer;
+  Mnemosyne #128 and Moirai worker-idle pins remain owned by their live items.
+  Evidence: Eunomia/eunomia-derive resolve only at `02397fa`; all-target
+  workspace check and Clippy pass; `apollo-fft` Nextest passes 553/553 with 29
+  configured skips; format and diff checks pass.
 - **Risk / change class:** [patch] [arch]; dependency resolution only.
 
 ## ATLAS-APOLLO-N32-F64-LIVENESS-2026-09-04 — The n = 32 f64 arm cannot fit AVX2, and spills 43 times [minor] [perf] — todo <a id="atlas-apollo-n32-f64-liveness"></a>
