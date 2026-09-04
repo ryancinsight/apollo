@@ -125,23 +125,42 @@ where
              not the same transform and no timing between them is meaningful"
         );
 
-        let mut work = source.clone();
-        suite.run(BenchmarkCase::new(core, arm_codelet, n), || {
-            work.copy_from_slice(&source);
-            let _ = F::short_winograd::<false, false>(std::hint::black_box(&mut work));
-        });
+        // The reset is setup, not operation. `run` would time the
+        // `copy_from_slice` alongside the transform, and a constant added to
+        // both arms compresses the ratio between them toward 1 -- which is the
+        // quantity this sweep exists to read. `run_batched` builds one input
+        // per iteration before the timer starts.
+        suite.run_batched(
+            BenchmarkCase::new(core, arm_codelet, n),
+            || source.clone(),
+            |work| {
+                let _ = F::short_winograd::<false, false>(std::hint::black_box(work));
+            },
+        );
 
-        let mut work_composite = source.clone();
-        suite.run(BenchmarkCase::new(core, alt_label, n), || {
-            work_composite.copy_from_slice(&source);
-            alternative(std::hint::black_box(&mut work_composite));
-        });
+        suite.run_batched(
+            BenchmarkCase::new(core, alt_label, n),
+            || source.clone(),
+            |work| {
+                alternative(std::hint::black_box(work));
+            },
+        );
     }
 }
 
 #[test]
 #[ignore = "measurement instrument for the codelet-selection boundary"]
 fn codelet_selection_by_core_type() {
+    // A debug build measures unoptimized code, which cannot answer a question
+    // about which route is faster. Refuse rather than report a misleading
+    // number: apollo defines no `[profile.test]`, so a plain `cargo nextest
+    // run` builds this at opt-level 0.
+    if cfg!(debug_assertions) {
+        eprintln!(
+            "codelet_selection: built without optimization; re-run with              --cargo-profile bench-quick. No timings reported."
+        );
+        return;
+    }
     let Some(selection) = measurement_cores::selected() else {
         eprintln!("host reports no processor class information; probe not measurable");
         return;
@@ -175,6 +194,16 @@ fn codelet_selection_f64_by_core_type() {
     // The f64 arm carries its own copy of the accepted list, so its boundary is
     // its own question: the codelet's cost relative to a composite pass differs
     // with the scalar width. Separate test, separate runner budget.
+    // A debug build measures unoptimized code, which cannot answer a question
+    // about which route is faster. Refuse rather than report a misleading
+    // number: apollo defines no `[profile.test]`, so a plain `cargo nextest
+    // run` builds this at opt-level 0.
+    if cfg!(debug_assertions) {
+        eprintln!(
+            "codelet_selection: built without optimization; re-run with              --cargo-profile bench-quick. No timings reported."
+        );
+        return;
+    }
     let Some(selection) = measurement_cores::selected() else {
         eprintln!("host reports no processor class information; probe not measurable");
         return;

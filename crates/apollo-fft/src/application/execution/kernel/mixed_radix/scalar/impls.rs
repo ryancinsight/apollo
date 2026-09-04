@@ -298,17 +298,29 @@ impl MixedRadixScalar for f32 {
         // these lengths and slower at the sixteen removed from this list --
         // n = 400 by 3.78x, 180 by 3.42x, 128 by 3.29x, down to 484 by 1.09x.
         //
-        // The winners are a factor signature rather than a length range:
-        // 121 = 11^2, 242 = 2*11^2, 363 = 3*11^2 and 154 = 2*7*11 are exactly
-        // where the composite route would need an expensive prime radix. 96 is
-        // the one smooth length the codelet still wins.
+        // Re-measured 2026-09-04 after two defects in the instrument were
+        // fixed: the per-iteration buffer reset was inside the timed closure,
+        // and apollo defines no `[profile.test]` so the sweep had been building
+        // at opt-level 0. A constant added to both arms compresses their ratio
+        // toward 1, so the earlier boundary was drawn on flattened numbers.
+        //
+        // Two lengths crossed once it was read correctly. 242 and 363 are gone:
+        // 363 loses on both core types (1.02x, disjoint intervals) and 242
+        // loses on the performance core (1.04x, [1412,1446] against
+        // [1369,1395]) while merely tying on the efficiency core. There is no
+        // core on which either still pays.
+        //
+        // So the tidy "11^2 family" signature does not survive: 121 = 11^2
+        // stays and 154 = 2*7*11 stays, but 242 = 2*11^2 and 363 = 3*11^2 do
+        // not. 96 is the one smooth length the codelet still wins.
         //
         // 222, 246, 259 and 296 carry a prime above 23, so no prime-2/3
-        // composite exists to compare against and the probe skips them; their
-        // real alternative is the coprime/PFA route. They stay until that is
-        // measured (`#atlas-apollo-codelet-selection-unmeasured`), because
-        // dropping them would change behaviour on no evidence.
-        matches!(n, 96 | 121 | 154 | 222 | 242 | 246 | 259 | 296 | 363)
+        // composite exists; the probe compares them against the coprime/PFA
+        // route they actually take. That comparison now exists and they are the
+        // largest wins in the sweep -- 222 at 0.35x, 296 at 0.37x, 259 at 0.40x
+        // and 246 at 0.52x -- which closes
+        // `#atlas-apollo-codelet-selection-unmeasured` for this arm.
+        matches!(n, 96 | 121 | 154 | 222 | 246 | 259 | 296)
     }
 }
 
@@ -587,13 +599,14 @@ impl MixedRadixScalar for f64 {
         // f32 and loses for f64, while 99, 275 and 484 do the reverse. Taking
         // the f32 answer here would have been wrong in four places.
         //
-        // At f64 the rule is exact: the codelet wins at every accepted length
-        // divisible by 11 and loses at every one that is not. 121 = 11^2 by
-        // 1.33x, 484 = 4*11^2 by 1.26x, 154 = 2*7*11 by 1.23x, 99 = 9*11 and
-        // 275 = 25*11 by 1.13x, 242 by 1.10x, 363 by 1.06x; against 128 by
-        // 2.31x, 180 by 1.97x, 400 by 1.88x, down to 120 by 1.05x. Eleven is
-        // where the composite route needs a radix it has no efficient kernel
-        // for, so the codelet's fixed cost finally pays.
+        // The "divisible by 11" rule this list used to state as exact does not
+        // survive re-measurement (2026-09-04, timed reset removed and built
+        // optimized). 484 = 4*11^2 is divisible by 11 and now loses on both
+        // core types -- 1.15x on the performance core, 1.34x on the efficiency
+        // core -- so it is removed. Eleven still describes where the codelet
+        // tends to pay, because that is where the composite route needs a radix
+        // it has no efficient kernel for, but it is a tendency and not a law:
+        // read the measurement, not the factorization.
         //
         // 72 stays even though the codelet measured 1.06x slower than a
         // composite pass. `FORCE_COMPOSITE_72` is false for f64, so the plan's
@@ -603,13 +616,18 @@ impl MixedRadixScalar for f64 {
         // unmeasured one. f32 forces the composite, so there the removal is
         // measured and stands.
         //
-        // 222, 246, 259 and 296 carry a prime above 23, so no prime-2/3
-        // composite exists to compare against and the probe skips them; their
-        // real alternative is the coprime/PFA route. They stay until that is
-        // measured (`#atlas-apollo-codelet-selection-unmeasured`).
+        // 242 stays on mixed evidence, recorded rather than resolved: it loses
+        // on the performance core (1.06x) and wins on the efficiency core
+        // (0.80x). The dispatch is one compile-time decision for both, and a
+        // 20% efficiency-core win against a 6% performance-core loss is not a
+        // clear removal.
+        //
+        // 222, 246, 259 and 296 are now measured against the coprime/PFA route
+        // they actually take, and win decisively there (0.48x to 0.69x), which
+        // closes `#atlas-apollo-codelet-selection-unmeasured` for this arm too.
         matches!(
             n,
-            72 | 99 | 121 | 154 | 222 | 242 | 246 | 259 | 275 | 296 | 363 | 484
+            72 | 99 | 121 | 154 | 222 | 242 | 246 | 259 | 275 | 296 | 363
         )
     }
 }
