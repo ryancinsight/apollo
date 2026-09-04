@@ -33,6 +33,14 @@
   the original arithmetic remains authoritative. The exact refreshed
   liveness instrument reports n = 32 Apollo/RustFFT medians of
   `38.331/25.710 ns` (minima `27.465/22.403 ns`), so acceptance remains open.
+- **Explicit-boundary increment.** A `MaybeUninit<[f64; 64]>` intermediate
+  stages all sixteen radix-4 vectors before the two radix-8 halves. The
+  focused release value gate passes 10/10. Release assembly reports 22 vector
+  stores and 14 reloads in both forward and inverse arms; the paired liveness
+  instrument reports n = 32 medians of `22.342/18.276 ns` for Apollo/RustFFT.
+  Outlining `stage_group` regressed the same instrument to `30.229/22.707 ns`.
+  Outlining the radix-8 consumer through an array-returning wrapper likewise
+  regressed the candidate to `23.236 ns`; both boundaries remain inlined.
 - **Falsified, so nobody repeats it:** fusing permute, scale and store per
   output — so the sixteen results do not all span the normalisation block —
   changes nothing. Codegen after: 27 spill stores and 19 reloads against 26 and

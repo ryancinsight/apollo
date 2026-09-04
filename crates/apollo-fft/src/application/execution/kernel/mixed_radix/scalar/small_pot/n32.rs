@@ -1,5 +1,7 @@
 //! Register-pressure-aware length-32 precise codelet.
 
+use core::mem::MaybeUninit;
+
 use eunomia::Complex64;
 
 #[cfg(target_arch = "x86_64")]
@@ -78,24 +80,50 @@ unsafe fn transpose_pair(
 #[cfg(target_arch = "x86_64")]
 #[target_feature(enable = "avx,fma")]
 #[inline]
-unsafe fn store_output<const INVERSE: bool, const NORMALIZE: bool>(
+unsafe fn store_stage_group<const GROUP: usize>(
     ptr: *mut f64,
-    output0: [std::arch::x86_64::__m256d; 8],
-    output1: [std::arch::x86_64::__m256d; 8],
+    values: [std::arch::x86_64::__m256d; 4],
+) {
+    for (index, value) in values.into_iter().enumerate() {
+        // SAFETY: each stage group owns four adjacent vectors in the 64-double
+        // intermediate, and the caller supplies the complete scratch span.
+        unsafe { std::arch::x86_64::_mm256_storeu_pd(ptr.add(GROUP * 16 + index * 4), value) };
+    }
+}
+
+#[cfg(target_arch = "x86_64")]
+#[target_feature(enable = "avx,fma")]
+#[inline]
+unsafe fn load_stage_half<const GROUP: usize, const HALF: usize>(
+    ptr: *const f64,
+) -> [std::arch::x86_64::__m256d; 2] {
+    // SAFETY: stage_group wrote every vector before the final half is loaded;
+    // each compile-time offset is within the 64-double intermediate.
+    unsafe {
+        transpose_pair(
+            std::arch::x86_64::_mm256_loadu_pd(ptr.add(GROUP * 16 + HALF * 8)),
+            std::arch::x86_64::_mm256_loadu_pd(ptr.add(GROUP * 16 + HALF * 8 + 4)),
+        )
+    }
+}
+
+#[cfg(target_arch = "x86_64")]
+#[target_feature(enable = "avx,fma")]
+#[inline]
+unsafe fn store_output_half<const INVERSE: bool, const NORMALIZE: bool, const OFFSET: usize>(
+    ptr: *mut f64,
+    output: [std::arch::x86_64::__m256d; 8],
 ) {
     let scale = std::arch::x86_64::_mm256_set1_pd(1.0 / 32.0);
-    for (row, (mut left, mut right)) in output0.into_iter().zip(output1).enumerate() {
+    for (row, mut value) in output.into_iter().enumerate() {
         if INVERSE && NORMALIZE {
-            left = std::arch::x86_64::_mm256_mul_pd(left, scale);
-            right = std::arch::x86_64::_mm256_mul_pd(right, scale);
+            value = std::arch::x86_64::_mm256_mul_pd(value, scale);
         }
 
-        // SAFETY: the eight compile-time output rows and their two adjacent
-        // vectors cover exactly the 64-double caller span.
+        // SAFETY: the eight compile-time output rows and the selected adjacent
+        // vector cover one half of the 64-double caller span.
         unsafe {
-            let base = ptr.add(row * 8);
-            std::arch::x86_64::_mm256_storeu_pd(base, left);
-            std::arch::x86_64::_mm256_storeu_pd(base.add(4), right);
+            std::arch::x86_64::_mm256_storeu_pd(ptr.add(row * 8 + OFFSET), value);
         }
     }
 }
@@ -112,30 +140,35 @@ unsafe fn vector_arm<const INVERSE: bool, const NORMALIZE: bool>(data: &mut [Com
     };
     let tw_ptr = tw_table.as_ptr().cast::<f64>();
 
-    // All source vectors are loaded before the final stores, so the complete
-    // transform remains in-place without a scratch allocation or a protected
-    // load frontier.
-    let mid0 = stage_group::<0, INVERSE>(ptr, tw_ptr);
-    let mid1 = stage_group::<1, INVERSE>(ptr, tw_ptr);
-    let mid2 = stage_group::<2, INVERSE>(ptr, tw_ptr);
-    let mid3 = stage_group::<3, INVERSE>(ptr, tw_ptr);
+    // The sixteen radix-4 vectors cannot coexist with the sixteen radix-8
+    // results in AVX2. This explicit stack intermediate makes the spill point
+    // deterministic and releases each output half before the next half runs.
+    let mut middle = MaybeUninit::<[f64; 64]>::uninit();
+    let middle_ptr = middle.as_mut_ptr().cast::<f64>();
+    unsafe {
+        store_stage_group::<0>(middle_ptr, stage_group::<0, INVERSE>(ptr, tw_ptr));
+        store_stage_group::<1>(middle_ptr, stage_group::<1, INVERSE>(ptr, tw_ptr));
+        store_stage_group::<2>(middle_ptr, stage_group::<2, INVERSE>(ptr, tw_ptr));
+        store_stage_group::<3>(middle_ptr, stage_group::<3, INVERSE>(ptr, tw_ptr));
+    }
 
-    let [mid00, mid01] = transpose_pair(mid0[0], mid0[1]);
-    let [mid10, mid11] = transpose_pair(mid1[0], mid1[1]);
-    let [mid20, mid21] = transpose_pair(mid2[0], mid2[1]);
-    let [mid30, mid31] = transpose_pair(mid3[0], mid3[1]);
     let output0 = unsafe {
+        let [mid00, mid01] = load_stage_half::<0, 0>(middle_ptr);
+        let [mid10, mid11] = load_stage_half::<1, 0>(middle_ptr);
+        let [mid20, mid21] = load_stage_half::<2, 0>(middle_ptr);
+        let [mid30, mid31] = load_stage_half::<3, 0>(middle_ptr);
         avx_fft8_parallel_precise::<INVERSE>(mid00, mid01, mid10, mid11, mid20, mid21, mid30, mid31)
     };
+    unsafe { store_output_half::<INVERSE, NORMALIZE, 0>(ptr, output0) };
 
-    let [mid02, mid03] = transpose_pair(mid0[2], mid0[3]);
-    let [mid12, mid13] = transpose_pair(mid1[2], mid1[3]);
-    let [mid22, mid23] = transpose_pair(mid2[2], mid2[3]);
-    let [mid32, mid33] = transpose_pair(mid3[2], mid3[3]);
     let output1 = unsafe {
+        let [mid02, mid03] = load_stage_half::<0, 1>(middle_ptr);
+        let [mid12, mid13] = load_stage_half::<1, 1>(middle_ptr);
+        let [mid22, mid23] = load_stage_half::<2, 1>(middle_ptr);
+        let [mid32, mid33] = load_stage_half::<3, 1>(middle_ptr);
         avx_fft8_parallel_precise::<INVERSE>(mid02, mid03, mid12, mid13, mid22, mid23, mid32, mid33)
     };
-    unsafe { store_output::<INVERSE, NORMALIZE>(ptr, output0, output1) };
+    unsafe { store_output_half::<INVERSE, NORMALIZE, 4>(ptr, output1) };
 }
 
 #[cfg(test)]
