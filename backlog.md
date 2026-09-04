@@ -150,22 +150,30 @@
 
 <a id="apollo-sweep-exceeds-budget"></a>
 
-## APOLLO-SWEEP-EXCEEDS-BUDGET-2026-09-04 — The reference sweep is terminated at the test budget [patch] [perf] — todo
+## APOLLO-SWEEP-EXCEEDS-BUDGET-2026-09-04 — The reference sweep is terminated at the test budget [patch] [perf] — done 2026-09-04
 
-- **Integrator:** unclaimed; **branch:** none; **lease:** none.
-- **Last-update:** 2026-09-04.
-- **Measured.** `small_sizes_against_the_references_by_core_type` is marked
-  SLOW at 30 s and TERMINATED at 60 s under the committed nextest budget. It
-  measures 17 lengths against three engines at two scalars, twice over
-  (a discarded warm-up suite and the reported one), on two core types.
-- **Outcome.** The sweep runs inside the budget without dropping coverage:
-  the per-case budget is the lever (`BenchmarkConfig::regression()` spends
-  100 ms warm-up plus 400 ms measurement per case, so the runtime is
-  analytical, not emergent), or the sweep splits into per-scalar or per-class
-  instruments that each fit. Raising the bound is not the remedy.
-- **Acceptance oracle.** The sweep completes inside the committed budget on
-  both core types, and its reported figures for a shared length match the
-  current ones within noise.
+- **Delivered.** The sweep completes in 23.8 s, inside both the 30 s slow mark
+  and the 60 s termination bound; it was terminated at 60 s before.
+- **The lever was the per-case budget, not the coverage.**
+  `BenchmarkConfig::regression()` spends 100 ms of warm-up and 400 ms of
+  measurement, which is right for one case and wrong for ninety: with the
+  discarded pass repeating the set and both core types running it, half a
+  second per case is 184 s. The reported pass now takes 20 ms plus 80 ms and
+  the discarded pass half of that, since its job is to warm the freshly linked
+  binary rather than to produce numbers. Coverage is unchanged — all
+  seventeen lengths, three engines, two scalars, two core types.
+- **The discarded pass earns its budget.** At a fifth rather than a half, the
+  first sweep after a build read N = 32 at 32.4 ns where the two runs after it
+  read 21.4 and 21.2. Halving is the setting that keeps the cold first run
+  from differing.
+- **Not fixed here, and not this item.** Run-to-run variance at N >= 32
+  remains large enough to flip the apollo-versus-RustFFT verdict — three runs
+  of the delivered configuration give apollo 31.5, 30.7, 21.7 ns at N = 32.
+  That is the same effect
+  [`ATLAS-APOLLO-N32-F64-LIVENESS`](#atlas-apollo-n32-f64-liveness) records
+  from four runs of one unchanged executable, and its investigation owns it.
+  N = 16 is stable to about 4% across the same runs, so the instrument is not
+  uniformly noisy.
 - **Risk / change class:** [patch] [perf]; instrument only.
 
 <a id="apollo-probe-scale-disagreement"></a>
