@@ -1,5 +1,33 @@
 # Apollo Backlog
 
+<a id="apollo-four-step-twiddle-retention"></a>
+## APOLLO-FOUR-STEP-TWIDDLE-RETENTION — Acquire only route-consumed stage tables [patch] — review
+
+- **Integrator:** codex/root; **branch:** `perf/apollo-n32-f64-liveness`; **last-update:** 2026-09-05.
+- **Scope:** generic static/dynamic four-step plan acquisition, direction executors, analytical regression tests, and the reference census scratch contract. Sized and base routes remain outside this change.
+- **Acceptance:** both scalar widths preserve forward, normalized inverse and unnormalized inverse values across even/odd powers; even-power plans stop retaining unused full-length stage tables; warm 1-D execution remains allocation-free.
+- **Model:** the unused table payload is `(N - 1) * size_of::<Complex<T>>()` per direction. Odd-power combine operations retain their own required table; no saving is claimed for them.
+- **Verification:** merged-source release baseline, cold/warm allocation census, analytical sparse spectra, complete affected-package Nextest, warning-denied Clippy, format, doctests and rustdoc; timings remain empirical and require stable controls.
+- **Dependencies:** current main's N=16 and provider-source corrections integrated; expired Mnemosyne PR 128 quarantine removed after source review and standalone verification. No new provider role or public API.
+- **Evidence:** release Nextest 534 passed; standalone full-feature workspace Nextest 1430 passed; Clippy, doctests, rustdoc, provider/security/dependency audits and 196 SemVer checks pass. Six benchmark smoke targets pass in 7.54 seconds. [ADR 0039](docs/adr/0039-one-dimensional-power-of-two-routing.md) records retained-byte results and timing limits; raw runs reside in Atlas ignored `output/apollo-twiddle-retention/`.
+
+<a id="apollo-worker-workspace-lifetime"></a>
+## APOLLO-WORKER-WORKSPACE-LIFETIME — Bound scratch across transform submissions [patch] [arch] — todo
+
+- **Scope:** Apollo multidimensional workspace lifetime across Moirai submissions; Mnemosyne owns storage. Preserve zero idle TLS retention; do not extend scheduler spins or introduce permanent worker caches.
+- **Evidence:** the census baseline reallocates 73,728 bytes per 4096-point worker lane, matching padded planar scratch. Apollo's idle hook releases unprovisioned scratch before Moirai parks. Existing live-task reuse tests do not cover separate calls.
+- **Acceptance:** two transform submissions separated by event-confirmed worker quiescence preserve analytical values and bounded memory; caller-owned workspace reuses scratch across submissions without leaving idle worker allocations.
+- **Verification:** extend the existing retained-footprint observer with distinct submission phases; cover 4096×16 and 4096×4×4; compare allocation bytes and retained capacity without sleeps or timing assertions.
+- **Dependencies:** table-retention item lands first; record workspace ownership in ADR before implementation. Release authority is not required.
+
+<a id="apollo-cuda-crt-linkage"></a>
+## APOLLO-CUDA-CRT-LINKAGE — Remove toolkit static CRT dependency [patch] — todo
+
+- **Scope:** Hephaestus CUDA driver loading consumed by Apollo's all-feature Windows build; preserve driver errors and the existing GPU API.
+- **Evidence:** CUDA 13.3 `cuda.lib` embeds `/DEFAULTLIB:LIBCMT`; `cuda-oxide` 0.4.0 links it, producing LNK4098 in Apollo's dynamic-CRT test binaries. Hephaestus already records the toolkit-loading mismatch in its risk artifact.
+- **Acceptance:** the provider follows its dynamic-driver-loading contract and Apollo links without LNK4098; no `/NODEFAULTLIB` suppression.
+- **Verification:** provider driver success/unavailable-device cases, Windows full-feature link and tests; coordinate provider changes upstream. No release/deploy.
+
 <a id="apollo-n16-register-permute"></a>
 
 ## APOLLO-N16-REGISTER-PERMUTE-2026-09-04 — The N=16 codelet's promotion gate was never the permutation [minor] [perf] — done 2026-09-04
@@ -241,45 +269,20 @@
   configured skips; format and diff checks pass.
 - **Risk / change class:** [patch] [arch]; dependency resolution only.
 
-## ATLAS-APOLLO-N32-F64-LIVENESS-2026-09-04 — The n = 32 f64 arm cannot fit AVX2, and spills 43 times [minor] [perf] — todo <a id="atlas-apollo-n32-f64-liveness"></a>
+<a id="atlas-apollo-n32-f64-liveness"></a>
+## ATLAS-APOLLO-N32-F64-LIVENESS-2026-09-04 — Bound the n=32 codelet and reduce register pressure [patch] [perf] — in-progress
 
-- **The measurement, corrected.** On a quiet machine, minimum of two runs with
-  RustFFT in the same binary: n = 32 `f64` is apollo 21.21 ns against 15.28,
-  **+38.8%** — not the +104% the scoreboard carries, which was taken under
-  concurrent peer builds. Neighbours: n = 16 +26.3%, n = 64 +2.5% (n = 64 has
-  a tuned `State64`).
-- **The mechanism, from codegen rather than inference.** The arm holds the
-  whole transform in registers: sixteen YMM loaded, four `avx_fft4` producing
-  sixteen live values, twiddles, four `avx_fft8` producing sixteen more,
-  sixteen `vperm2f128`, sixteen stores. Disassembling the outlined
-  `vector_arm` gives **26 ymm spill stores and 17 spill reloads in a
-  381-instruction body**, plus the ten `xmm6`-`xmm15` callee-saves the Windows
-  ABI requires — 63 stack operations, about a sixth of the function, which at
-  roughly 30 cycles is most of the 6 ns gap.
-- **Why it cannot be scheduled away.** 32 `Complex64` is 512 bytes, which is
-  **exactly sixteen YMM registers** — the entire AVX2 register file, with
-  nothing left for temporaries. The register-resident premise does not fit this
-  type at this length. The same structure in `f32` needs 256 bytes, eight
-  registers, half the file, which is why `f32` at n = 32 shows nothing like
-  this.
-- **Falsified, so nobody repeats it:** fusing permute, scale and store per
-  output — so the sixteen results do not all span the normalisation block —
-  changes nothing. Codegen after: 27 spill stores and 19 reloads against 26 and
-  17 before. The outputs are not what dominates liveness; the sixteen `fft8`
-  results are, because each `fft8` call produces one value for *each* output
-  group, so all sixteen stay live until the last group is emitted. Shortening
-  the wrong live range buys nothing.
-- **What would work.** A structure whose intermediate stores are designed
-  rather than placed by the register allocator: two halves with an explicit
-  spill point, or a radix-4 four-step over an intermediate buffer. The traffic
-  does not disappear — it cannot, the data does not fit — but a designed
-  placement can beat 43 compiler-chosen spills, and RustFFT's 15.28 ns is the
-  evidence that some placement does.
-- **Acceptance.** Spill count materially below 43 *and* measured faster than
-  RustFFT's 15.28 ns at n = 32 `f64`, with n = 16 and n = 64 unmoved.
-- **Instrument:** `small_sizes_against_the_references_by_core_type` for the
-  timing; `cargo rustc --release -p apollo-fft --lib -- --emit=asm` and the
-  `vector_arm` symbols for the spill count.
+- **Integrator:** codex; **branch:** `perf/apollo-n32-f64-liveness`; **last-update:** 2026-09-04.
+- **Scope:** n=32 AVX2 codelet, its caller and regression tests; shared radix-8 changes require n=64 controls. No provider migration or public API change.
+- **Acceptance:** fixed-size safe entry; all direction/normalization and guarded-span tests pass; retain a schedule change only with counterbalanced same-host improvement and unchanged n=16/64 controls.
+- **Safety increment verified:** array borrow establishes 32 initialized values; guarded tests cover both AVX alignment residues, assert host dispatch and reject NaN output. Release run `75c7d45c-4e69-4023-bbf7-30840d0020d6` passes 526/526 enabled tests (29 ignored instruments); format, all-target Clippy, doctest, rustdoc and safety ratchet pass. All three emitted AVX bodies match the entry baseline after label normalization.
+- **Retained schedule:** 64-double stack intermediate, radix-4 stages then two radix-8 halves. Prior experiments are archived in `0a3a7a8f:backlog.md`; their cross-run absolute timings are not regression evidence.
+- **Pair-emission experiment:** rejected for unestablished benefit, not proven slowdown. Nine focused and 526 enabled CPU library tests pass; the callback inlines and reduces forward/normalized frames 872→840 bytes.
+- **Counterbalanced n=32 medians [interval], ns:** baseline-first 26.803 [26.757,26.870]→26.950 [26.490,29.773]; candidate-first 26.371 [26.323,26.561]→27.179 [27.110,27.366]. Intervals are descriptive 96.48%; the native comparator also flags the unchanged RustFFT control.
+- **Evidence:** immutable executable hashes, source/assembly snapshots and raw 100-sample CSVs under `../../output/fft-liveness/`, governed by Atlas output retention. Intel Core Ultra 9 285K, CPU 1 performance core, Rust 1.97.0 MSVC. No Miri/sanitizer or cross-target coverage is claimed.
+- **Measurement correction:** historical RustFFT 15.28 ns is not a portable acceptance threshold. Compare matched executables in both orders; control drift prevents causal timing attribution.
+- **Reference-control diagnosis:** four runs of the same executable (`CD7EC903C67500A29804DE90A4B94C3D665D466BA91F743203685D8FB105720F`, same pinned core and inputs) produce n=32 Apollo medians 26.539, 26.212, 17.001, 17.138 ns; RustFFT 22.543, 29.248, 20.025, 16.853 ns. Source changes cannot explain this variation; the single-set comparator still flags RustFFT, so this is not a sufficient regression gate. Raw samples are in `../../output/fft-liveness/control/`; planner-state versus host-regime attribution is the next bounded investigation, begun at the public plan constructor and execution entry.
+- **Residual stash:** `cfe297dde91870790a57e02aaec5925eb91b4f9b` contains old Mnemosyne manifest work; preserved after the tool safety review refused deletion.
 
 ## ATLAS-APOLLO-SIXTEEN-BLOCK-SPLIT-2026-09-03 — n = 2048 is a local peak, and the split does not reach it [minor] [perf] — done 2026-09-03 (falsified) <a id="atlas-apollo-sixteen-block-split"></a>
 

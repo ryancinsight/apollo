@@ -4,6 +4,18 @@ use core::marker::PhantomData;
 use std::borrow::Cow;
 use std::sync::Arc;
 
+/// Selects four-step only after the direct and sized plan routes end.
+///
+/// Both plan forms have dedicated power-of-two entries through 1024. Their
+/// scalar-specific sized policy and base kernels remain independent of the
+/// generic route's crossover.
+#[inline]
+pub(super) fn generic_four_step_applies(n: usize) -> bool {
+    const LARGEST_SIZED_PLAN_LENGTH: usize = 1024;
+    n > LARGEST_SIZED_PLAN_LENGTH
+        && crate::application::execution::kernel::pot::one_dimensional_uses_four_step(n)
+}
+
 pub(crate) type CompositeRadices = Cow<'static, [usize]>;
 
 #[inline]
@@ -15,6 +27,8 @@ pub(crate) fn arc_to_cow(arc: Arc<[usize]>) -> CompositeRadices {
 pub(crate) enum PlanStrategy<F: MixedRadixScalar> {
     Identity,
     ShortWinograd,
+    /// The route acquires its own row, matrix, and optional combine tables.
+    FourStep,
     PowerOfTwo {
         twiddle_fwd: Option<Arc<[F::Complex]>>,
         log2: u32,
@@ -38,6 +52,7 @@ impl<F: MixedRadixScalar> Clone for PlanStrategy<F> {
         match self {
             Self::Identity => Self::Identity,
             Self::ShortWinograd => Self::ShortWinograd,
+            Self::FourStep => Self::FourStep,
             Self::PowerOfTwo {
                 twiddle_fwd,
                 log2,
