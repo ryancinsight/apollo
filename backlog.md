@@ -1,24 +1,18 @@
 # Apollo Backlog
 
 <a id="apollo-four-step-twiddle-retention"></a>
-## APOLLO-FOUR-STEP-TWIDDLE-RETENTION — Acquire only route-consumed stage tables [patch] — review
-
-- **Integrator:** codex/root; **branch:** `perf/apollo-n32-f64-liveness`; **last-update:** 2026-09-05.
-- **Scope:** generic static/dynamic four-step plan acquisition, direction executors, analytical regression tests, and the reference census scratch contract. Sized and base routes remain outside this change.
-- **Acceptance:** both scalar widths preserve forward, normalized inverse and unnormalized inverse values across even/odd powers; even-power plans stop retaining unused full-length stage tables; warm 1-D execution remains allocation-free.
-- **Model:** the unused table payload is `(N - 1) * size_of::<Complex<T>>()` per direction. Odd-power combine operations retain their own required table; no saving is claimed for them.
-- **Verification:** merged-source release baseline, cold/warm allocation census, analytical sparse spectra, complete affected-package Nextest, warning-denied Clippy, format, doctests and rustdoc; timings remain empirical and require stable controls.
-- **Dependencies:** current main's N=16 and provider-source corrections integrated; expired Mnemosyne PR 128 quarantine removed after source review and standalone verification. No new provider role or public API.
-- **Evidence:** release Nextest 534 passed; standalone full-feature workspace Nextest 1430 passed; Clippy, doctests, rustdoc, provider/security/dependency audits and 196 SemVer checks pass. Six benchmark smoke targets pass in 7.54 seconds. [ADR 0039](docs/adr/0039-one-dimensional-power-of-two-routing.md) records retained-byte results and timing limits; raw runs reside in Atlas ignored `output/apollo-twiddle-retention/`.
+## APOLLO-FOUR-STEP-TWIDDLE-RETENTION — Acquire only route-consumed stage tables [patch] — done
+- Merged [PR 332](https://github.com/ryancinsight/apollo/pull/332), `f69f9c08`; measured retained bytes fall 25–36% at generic even powers with zero warm 1-D allocations. [ADR 0039](docs/adr/0039-one-dimensional-power-of-two-routing.md) records evidence and limits.
 
 <a id="apollo-worker-workspace-lifetime"></a>
-## APOLLO-WORKER-WORKSPACE-LIFETIME — Bound scratch across transform submissions [patch] [arch] — todo
+## APOLLO-WORKER-WORKSPACE-LIFETIME — Bound scratch across transform submissions [patch] [arch] — in-progress
 
+- **Integrator:** codex/root; **branch:** `codex/fft-workspace-lifetime`; **last-update:** 2026-09-05. ADR 0048 reserved for scratch ownership across submissions.
 - **Scope:** Apollo multidimensional workspace lifetime across Moirai submissions; Mnemosyne owns storage. Preserve zero idle TLS retention; do not extend scheduler spins or introduce permanent worker caches.
 - **Evidence:** the census baseline reallocates 73,728 bytes per 4096-point worker lane, matching padded planar scratch. Apollo's idle hook releases unprovisioned scratch before Moirai parks. Existing live-task reuse tests do not cover separate calls.
 - **Acceptance:** two transform submissions separated by event-confirmed worker quiescence preserve analytical values and bounded memory; caller-owned workspace reuses scratch across submissions without leaving idle worker allocations.
 - **Verification:** extend the existing retained-footprint observer with distinct submission phases; cover 4096×16 and 4096×4×4; compare allocation bytes and retained capacity without sleeps or timing assertions.
-- **Dependencies:** table-retention item lands first; record workspace ownership in ADR before implementation. Release authority is not required.
+- **Dependencies:** table-retention item merged. First action: trace the census → axis-pass → Moirai idle hook → Mnemosyne release path; the existing retained-footprint observer supplies event-based quiescence. Record workspace ownership before implementation; no release authority required.
 
 <a id="apollo-cuda-crt-linkage"></a>
 ## APOLLO-CUDA-CRT-LINKAGE — Remove toolkit static CRT dependency [patch] — todo
