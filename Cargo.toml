@@ -61,7 +61,7 @@ anyhow = "1.0.103"
 csv = "1.4.0"
 # Temporary co-evolution pin for Eunomia PR #87; remove `rev` after the
 # provider derive delivery merges to main and regenerate Cargo.lock.
-eunomia = { version = "0.8.0", git = "https://github.com/ryancinsight/eunomia", rev = "fdbf12275d35aa1545060a4277644c497ddcda37", default-features = false, features = ["std"] }
+eunomia = { version = "0.8.0", git = "https://github.com/ryancinsight/eunomia", rev = "f532b0e", default-features = false, features = ["std"] }
 # Temporary co-evolution pin for Mnemosyne PR #128; remove `rev` after the
 # pooled-scratch release surface merges to main and regenerate Cargo.lock.
 mnemosyne = { package = "mnemosyne-memory", version = "0.7.0", git = "https://github.com/ryancinsight/Mnemosyne.git", rev = "3a5f2a6e6426613fe821a52c5b1405dfe4742d57", features = ["eunomia"] }
