@@ -562,6 +562,38 @@
   expected to move that boundary, and the sweep is the instrument that will
   show it.
 
+- **Fourth locus pinned to a leaf, measured 2026-09-05 (`prime_dispatch_gap_by_core_type`).**
+  A new pinned probe (kept in the tree) times, per prime and scalar, the
+  production plan against the isolated Rader entry in one run — the per-scalar
+  `full − entry` gap is the dispatch/inline-boundary cost, the quantity the
+  earlier instruments could not separate.
+
+  | n (m = p−1) | full/f64 | entry/f64 | full/f32 | entry/f32 |
+  | --- | ---: | ---: | ---: | ---: |
+  | 101 (100 = 2²·5², half-cyclic) | 607 | 645 | **673** | **672** |
+  | 149 (148 non-smooth, Bluestein) | 3352 | 3348 | 1735 | 1868 |
+  | 251 (250 = 2·5³, half-cyclic) | 1248 | 1250 | 935 | 936 |
+
+  - **The dispatch boundary is exonerated.** `full − entry` at n = 101 is
+    +0.6 ns for `f32` and −38 ns for `f64` (the plan's cached tables help it);
+    the efficiency core reads the same shape. The inline-boundary hypothesis
+    — `try_static_rader`'s documented f32-only codegen explosion bleeding
+    into the dynamic path — is dead, and so is any scalar-asymmetric plan
+    gate for primes: both scalars take `PlanStrategy::Rader`.
+  - **The inversion is inside Rader and specific to the m = 100 radix mix.**
+    The same entry reads 0.52x at Bluestein's m = 148 and 0.75x at
+    half-cyclic m = 250 — at n = 101 alone it flips to 1.04x. The half-cyclic
+    convolution's inner transforms at m = 100 are length **50** = m/2, and 50
+    is a short-Winograd size, so the prime anomaly reaches the **`f32`
+    short-Winograd codelet** through `rader_convolve_inplace`'s first
+    dispatch arm. The m = 250 control is the crossed proof: its inner halves
+    are 125, which is not a codelet size, and there `f32` wins.
+  - **Both halves of this item are now one leaf.** The n = 101 prime anomaly
+    and the codelet sweep's 1.28x composite arm indict the same codelet
+    family. Closing the `f32` short-Winograd width gap should clear the prime
+    anomaly without touching Rader at all — and the sweep is the instrument
+    that will show it.
+
 - **Acceptance.** apollo `f32` is faster than apollo `f64` at every length in
   the table, and the `f32` gap against RustFFT is no worse than the `f64` gap.
   The two halves close separately: the prime anomaly is a defect, the composite
