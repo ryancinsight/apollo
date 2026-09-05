@@ -217,6 +217,28 @@ mod tests {
             }
         }
 
+        // Both factorizations have five binary stages: AVX uses 4 x 8,
+        // while dft32_impl recursively uses 2 x 16. With u = epsilon/2,
+        // the stored W32/W16 components differ from their exact half-angle
+        // roots by <4u each, hence complex coefficient error <8u. A complex
+        // multiply contributes <4u and a butterfly addition contributes u;
+        // gamma_16 covers their composition per stage, including FMA's fewer
+        // roundings. Unit-modulus exact twiddles give a per-output error of
+        // gamma_80 * sum |input| for either route. The triangle inequality
+        // adds the two route bounds. Component L1 bounds complex L1 from
+        // above; next_up prevents its positive summation from rounding down.
+        // These fixtures stay normal, so multiplication by 2^-5 is exact
+        // and scales the normalized inverse bound by the same factor.
+        let input_l1 = input.iter().fold(0.0_f64, |sum, value| {
+            ((sum + value.re.abs()).next_up() + value.im.abs()).next_up()
+        });
+        let roundoff = 16.0 * 5.0 * (f64::EPSILON / 2.0);
+        let gamma = (roundoff / (1.0 - roundoff)).next_up();
+        let mut bound = (2.0 * gamma * input_l1).next_up();
+        if INVERSE && NORMALIZE {
+            bound /= 32.0;
+        }
+
         let sentinel = Complex64::new(123.0, -456.0);
         // Adjacent complex offsets exercise both 16-byte alignment residues
         // modulo the 32-byte AVX load width, with guards on both sides.
@@ -235,8 +257,8 @@ mod tests {
                     // Elementwise comparison also rejects NaN; a max reduction
                     // can discard it and report a finite error for bad output.
                     assert!(
-                        error < 1.0e-12,
-                        "n=32 codelet index={index} error={error:e}"
+                        error <= bound,
+                        "n=32 codelet index={index} error={error:e} bound={bound:e}"
                     );
                 }
             } else {

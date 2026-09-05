@@ -14,20 +14,20 @@ use super::executors::{
     exec_base128_forward, exec_base128_inverse, exec_base128_inverse_unnorm, exec_base64_forward,
     exec_base64_inverse, exec_base64_inverse_unnorm, exec_bluestein_forward,
     exec_bluestein_inverse, exec_bluestein_inverse_unnorm, exec_composite_forward,
-    exec_composite_inverse, exec_composite_inverse_unnorm, exec_good_thomas_forward,
-    exec_good_thomas_inverse, exec_good_thomas_inverse_unnorm, exec_identity, exec_pot_forward_16,
-    exec_pot_forward_2, exec_pot_forward_32, exec_pot_forward_4, exec_pot_forward_512,
-    exec_pot_forward_64, exec_pot_forward_8, exec_pot_forward_generic, exec_pot_forward_sized,
-    exec_pot_inverse_16, exec_pot_inverse_2, exec_pot_inverse_32, exec_pot_inverse_4,
-    exec_pot_inverse_512, exec_pot_inverse_64, exec_pot_inverse_8, exec_pot_inverse_generic,
-    exec_pot_inverse_sized, exec_pot_inverse_unnorm_16, exec_pot_inverse_unnorm_2,
-    exec_pot_inverse_unnorm_32, exec_pot_inverse_unnorm_4, exec_pot_inverse_unnorm_512,
-    exec_pot_inverse_unnorm_64, exec_pot_inverse_unnorm_8, exec_pot_inverse_unnorm_generic,
-    exec_pot_inverse_unnorm_sized, exec_rader_forward, exec_rader_inverse,
-    exec_rader_inverse_unnorm, exec_winograd_forward, exec_winograd_inverse,
-    exec_winograd_inverse_unnorm, runtime_tiny_direct_dispatch,
+    exec_composite_inverse, exec_composite_inverse_unnorm, exec_four_step,
+    exec_good_thomas_forward, exec_good_thomas_inverse, exec_good_thomas_inverse_unnorm,
+    exec_identity, exec_pot_forward_16, exec_pot_forward_2, exec_pot_forward_32,
+    exec_pot_forward_4, exec_pot_forward_512, exec_pot_forward_64, exec_pot_forward_8,
+    exec_pot_forward_generic, exec_pot_forward_sized, exec_pot_inverse_16, exec_pot_inverse_2,
+    exec_pot_inverse_32, exec_pot_inverse_4, exec_pot_inverse_512, exec_pot_inverse_64,
+    exec_pot_inverse_8, exec_pot_inverse_generic, exec_pot_inverse_sized,
+    exec_pot_inverse_unnorm_16, exec_pot_inverse_unnorm_2, exec_pot_inverse_unnorm_32,
+    exec_pot_inverse_unnorm_4, exec_pot_inverse_unnorm_512, exec_pot_inverse_unnorm_64,
+    exec_pot_inverse_unnorm_8, exec_pot_inverse_unnorm_generic, exec_pot_inverse_unnorm_sized,
+    exec_rader_forward, exec_rader_inverse, exec_rader_inverse_unnorm, exec_winograd_forward,
+    exec_winograd_inverse, exec_winograd_inverse_unnorm, runtime_tiny_direct_dispatch,
 };
-use super::strategy::{arc_to_cow, PlanStrategy};
+use super::strategy::{arc_to_cow, generic_four_step_applies, PlanStrategy};
 use crate::application::execution::kernel::mixed_radix::scalar::plan_scratch::PlanScratch;
 use crate::application::execution::plan::fft::layout::with_c_order_view;
 
@@ -181,6 +181,8 @@ impl<F: MixedRadixScalar<Complex = Complex<F>>> FftPlan1D<F> {
         };
         let strategy: PlanStrategy<F> = if n <= 1 {
             PlanStrategy::Identity
+        } else if generic_four_step_applies(n) {
+            PlanStrategy::FourStep
         } else if n.is_power_of_two() {
             let log2 = n.trailing_zeros();
             PlanStrategy::PowerOfTwo {
@@ -289,6 +291,11 @@ impl<F: MixedRadixScalar<Complex = Complex<F>>> FftPlan1D<F> {
 
         match &strategy {
             PlanStrategy::Identity => {}
+            PlanStrategy::FourStep => {
+                forward_impl = exec_four_step::<F, false, false>;
+                inverse_impl = exec_four_step::<F, true, true>;
+                inverse_unnorm_impl = exec_four_step::<F, true, false>;
+            }
             PlanStrategy::ShortWinograd => {
                 macro_rules! assign_winograd {
                     ($size:expr) => {

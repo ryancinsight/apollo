@@ -1,15 +1,32 @@
 # Apollo Backlog
 
 <a id="apollo-four-step-twiddle-retention"></a>
-## APOLLO-FOUR-STEP-TWIDDLE-RETENTION — Acquire only route-consumed stage tables [patch] — in-progress
+## APOLLO-FOUR-STEP-TWIDDLE-RETENTION — Acquire only route-consumed stage tables [patch] — review
 
 - **Integrator:** codex/root; **branch:** `perf/apollo-n32-f64-liveness`; **last-update:** 2026-09-05.
 - **Scope:** generic static/dynamic four-step plan acquisition, direction executors, analytical regression tests, and the reference census scratch contract. Sized and base routes remain outside this change.
-- **Acceptance:** both scalar widths preserve forward, normalized inverse and unnormalized inverse values across even/odd powers; even-power plans stop retaining unused full-length stage tables; warm execution remains allocation-free.
+- **Acceptance:** both scalar widths preserve forward, normalized inverse and unnormalized inverse values across even/odd powers; even-power plans stop retaining unused full-length stage tables; warm 1-D execution remains allocation-free.
 - **Model:** the unused table payload is `(N - 1) * size_of::<Complex<T>>()` per direction. Odd-power combine operations retain their own required table; no saving is claimed for them.
 - **Verification:** merged-source release baseline, cold/warm allocation census, analytical sparse spectra, complete affected-package Nextest, warning-denied Clippy, format, doctests and rustdoc; timings remain empirical and require stable controls.
-- **Dependencies:** integrate current main's N=16 and provider-source corrections before changing plan routing; no new provider dependency or public API.
-- **Lease:** codex/memory_audit `crates/apollo-fft/src/application/execution/plan/fft/dimension_1d*` 2026-09-05; codex/measurement_audit `crates/apollo-fft/benches/engine_census.rs` 2026-09-05.
+- **Dependencies:** current main's N=16 and provider-source corrections integrated; expired Mnemosyne PR 128 quarantine removed after source review and standalone verification. No new provider role or public API.
+- **Evidence:** release Nextest 534 passed; standalone full-feature workspace Nextest 1430 passed; Clippy, doctests, rustdoc, provider/security/dependency audits and 196 SemVer checks pass. Six benchmark smoke targets pass in 7.54 seconds. [ADR 0039](docs/adr/0039-one-dimensional-power-of-two-routing.md) records retained-byte results and timing limits; raw runs reside in Atlas ignored `output/apollo-twiddle-retention/`.
+
+<a id="apollo-worker-workspace-lifetime"></a>
+## APOLLO-WORKER-WORKSPACE-LIFETIME — Bound scratch across transform submissions [patch] [arch] — todo
+
+- **Scope:** Apollo multidimensional workspace lifetime across Moirai submissions; Mnemosyne owns storage. Preserve zero idle TLS retention; do not extend scheduler spins or introduce permanent worker caches.
+- **Evidence:** the census baseline reallocates 73,728 bytes per 4096-point worker lane, matching padded planar scratch. Apollo's idle hook releases unprovisioned scratch before Moirai parks. Existing live-task reuse tests do not cover separate calls.
+- **Acceptance:** two transform submissions separated by event-confirmed worker quiescence preserve analytical values and bounded memory; caller-owned workspace reuses scratch across submissions without leaving idle worker allocations.
+- **Verification:** extend the existing retained-footprint observer with distinct submission phases; cover 4096×16 and 4096×4×4; compare allocation bytes and retained capacity without sleeps or timing assertions.
+- **Dependencies:** table-retention item lands first; record workspace ownership in ADR before implementation. Release authority is not required.
+
+<a id="apollo-cuda-crt-linkage"></a>
+## APOLLO-CUDA-CRT-LINKAGE — Remove toolkit static CRT dependency [patch] — todo
+
+- **Scope:** Hephaestus CUDA driver loading consumed by Apollo's all-feature Windows build; preserve driver errors and the existing GPU API.
+- **Evidence:** CUDA 13.3 `cuda.lib` embeds `/DEFAULTLIB:LIBCMT`; `cuda-oxide` 0.4.0 links it, producing LNK4098 in Apollo's dynamic-CRT test binaries. Hephaestus already records the toolkit-loading mismatch in its risk artifact.
+- **Acceptance:** the provider follows its dynamic-driver-loading contract and Apollo links without LNK4098; no `/NODEFAULTLIB` suppression.
+- **Verification:** provider driver success/unavailable-device cases, Windows full-feature link and tests; coordinate provider changes upstream. No release/deploy.
 
 <a id="apollo-n16-register-permute"></a>
 

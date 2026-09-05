@@ -719,6 +719,7 @@ mod composite_decomposition {
             let chosen = match &plan.strategy {
                 PlanStrategy::Identity => "Identity".to_owned(),
                 PlanStrategy::ShortWinograd => "ShortWinograd".to_owned(),
+                PlanStrategy::FourStep => "FourStep".to_owned(),
                 PlanStrategy::PowerOfTwo { log2, .. } => format!("PowerOfTwo(log2={log2})"),
                 PlanStrategy::GoodThomas { n1, n2 } => format!("GoodThomas({n1}x{n2})"),
                 PlanStrategy::Composite { radices } => format!("Composite({radices:?})"),

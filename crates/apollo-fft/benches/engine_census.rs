@@ -40,20 +40,26 @@
 //!
 //! Allocations are counted by a wrapping global allocator, so the figure is
 //! calls and bytes actually requested. Apollo's 1-D complex path should report
-//! zero — plan, twiddles, and scratch are all cached — and its real path one,
-//! the returned spectrum. A rise in either is a regression whatever the timings
-//! say.
+//! zero — plan, twiddles, and scratch are all cached. The real half-spectrum
+//! path also writes into caller-owned storage without allocation; the full
+//! spectrum path allocates its returned spectrum once.
 //!
-//! The multidimensional paths also report zero warm allocations after the
-//! Moirai indexed-scope state became stack-borrowed. Any non-zero result is a
-//! regression: plans, twiddles, transpose scratch, and scheduler bookkeeping
-//! are all reused.
+//! Multidimensional calls can reacquire worker scratch after Moirai's idle
+//! hooks release it between submissions. Reuse inside one live task does not
+//! imply zero allocations across separate calls. These rows measure that
+//! lifecycle as well as the transform's own allocation requirements.
+//!
+//! RustFFT likewise retains its planner-sized scratch between calls. Its cold
+//! memory window includes that scratch beside the plan, and its warm memory
+//! and timed paths use `process_with_scratch`. The convenience `process` call
+//! allocates and initializes scratch each time, which would compare different
+//! resource lifecycles rather than retained transform execution.
 //!
 //! ## Why there is a multidimensional section
 //!
 //! The first census contained only 1-D arms, while the batched four-step layout
 //! was initially reachable only from 2-D and 3-D lane transforms. Standalone
-//! 1-D plans now enter the generic four-step route at 65536, but they still do
+//! 1-D plans now enter the generic four-step route above 1024, but they still do
 //! not exercise the lower-size batched layout or multidimensional transpose
 //! passes. The 2-D shapes therefore remain necessary to measure those paths,
 //! and the 3-D row pins the corresponding multi-plane Leto assignment and
@@ -259,16 +265,21 @@ fn peak_working_set_census() {
         );
 
         let mut rust_work = rust_src.clone();
-        let (peak, retained, rust) = peak_live_bytes(|| {
+        let (peak, retained, (rust, mut rust_scratch)) = peak_live_bytes(|| {
             let plan = FftPlanner::<f64>::new().plan_fft_forward(n);
-            plan.process(black_box(&mut rust_work));
-            plan
+            let mut scratch = vec![RustComplex::new(0.0, 0.0); plan.get_inplace_scratch_len()];
+            plan.process_with_scratch(black_box(&mut rust_work), &mut scratch);
+            (plan, scratch)
         });
         let (warm_peak, _, ()) = peak_live_bytes(|| {
             rust_work.copy_from_slice(&rust_src);
-            rust.process(black_box(&mut rust_work));
+            rust.process_with_scratch(black_box(&mut rust_work), &mut rust_scratch);
         });
-        drop(rust);
+        assert_eq!(
+            warm_peak, 0,
+            "warmed RustFFT execution must reuse retained scratch at length {n}"
+        );
+        drop((rust, rust_scratch));
         println!(
             "{n:>8}  {peak:>10} {retained:>12} {warm_peak:>12} {:>10}   rustfft",
             n * 16
@@ -722,10 +733,11 @@ fn main() -> Result<(), apollo_bench::BenchmarkError> {
         });
 
         let mut rust_work = rust_src.clone();
+        let mut rust_scratch = vec![RustComplex::new(0.0, 0.0); rust.get_inplace_scratch_len()];
         flush_cache(&mut flush);
         suite.run_with_config(config, BenchmarkCase::new(COMPLEX, "rustfft", n), || {
             rust_work.copy_from_slice(&rust_src);
-            rust.process(black_box(&mut rust_work));
+            rust.process_with_scratch(black_box(&mut rust_work), &mut rust_scratch);
             black_box(&rust_work);
         });
 
@@ -778,6 +790,15 @@ fn main() -> Result<(), apollo_bench::BenchmarkError> {
             work.copy_from_slice(&src);
             apollo.forward_complex_slice_inplace(&mut work);
         });
+        let rust_allocations = count_allocations(|| {
+            rust_work.copy_from_slice(&rust_src);
+            rust.process_with_scratch(&mut rust_work, &mut rust_scratch);
+        });
+        assert_eq!(
+            rust_allocations,
+            (0, 0),
+            "warmed RustFFT execution must allocate no scratch at length {n}"
+        );
         let (real_allocs, real_bytes) =
             count_allocations(|| drop(apollo_fft::fft_1d_slice::<f64>(&real_src)));
         let (half_allocs, half_bytes) = count_allocations(|| {
