@@ -7,7 +7,7 @@
 <a id="apollo-worker-workspace-lifetime"></a>
 ## APOLLO-WORKER-WORKSPACE-LIFETIME — Bound scratch across transform submissions [patch] [arch] — in-progress
 
-- **Integrator:** codex/root; **branch:** `codex/fft-workspace-lifetime`; **last-update:** 2026-09-05. ADR 0048 reserved for scratch ownership across submissions.
+- **Integrator:** codex/root; **branch:** `codex/fft-workspace-lifetime`; **last-update:** 2026-09-05. [ADR 0048](docs/adr/0048-worker-scratch-lifetime.md) proposes scratch ownership across submissions.
 - **Scope:** Apollo multidimensional workspace lifetime across Moirai submissions; Mnemosyne owns storage. Preserve zero idle TLS retention; do not extend scheduler spins or introduce permanent worker caches.
 - **Evidence:** the census baseline reallocates 73,728 bytes per 4096-point worker lane, matching padded planar scratch. Apollo's idle hook releases unprovisioned scratch before Moirai parks. Existing live-task reuse tests do not cover separate calls.
 - **Acceptance:** two transform submissions separated by event-confirmed worker quiescence preserve analytical values and bounded memory; caller-owned workspace reuses scratch across submissions without leaving idle worker allocations.
