@@ -1,5 +1,257 @@
 # Apollo Backlog
 
+<a id="apollo-four-step-twiddle-retention"></a>
+## APOLLO-FOUR-STEP-TWIDDLE-RETENTION — Acquire only route-consumed stage tables [patch] — in-progress
+
+- **Integrator:** codex/root; **branch:** `perf/apollo-n32-f64-liveness`; **last-update:** 2026-09-05.
+- **Scope:** generic static/dynamic four-step plan acquisition, direction executors, analytical regression tests, and the reference census scratch contract. Sized and base routes remain outside this change.
+- **Acceptance:** both scalar widths preserve forward, normalized inverse and unnormalized inverse values across even/odd powers; even-power plans stop retaining unused full-length stage tables; warm execution remains allocation-free.
+- **Model:** the unused table payload is `(N - 1) * size_of::<Complex<T>>()` per direction. Odd-power combine operations retain their own required table; no saving is claimed for them.
+- **Verification:** merged-source release baseline, cold/warm allocation census, analytical sparse spectra, complete affected-package Nextest, warning-denied Clippy, format, doctests and rustdoc; timings remain empirical and require stable controls.
+- **Dependencies:** integrate current main's N=16 and provider-source corrections before changing plan routing; no new provider dependency or public API.
+- **Lease:** codex/memory_audit `crates/apollo-fft/src/application/execution/plan/fft/dimension_1d*` 2026-09-05; codex/measurement_audit `crates/apollo-fft/benches/engine_census.rs` 2026-09-05.
+
+<a id="apollo-n16-register-permute"></a>
+
+## APOLLO-N16-REGISTER-PERMUTE-2026-09-04 — The N=16 codelet's promotion gate was never the permutation [minor] [perf] — done 2026-09-04
+
+- **Integrator:** claude-opus-5; **branch:** `perf/apollo-n16-register-permute`;
+  **lease:** `components/codelet/` 2026-09-04T17:00Z.
+- **Last-update:** 2026-09-04.
+- **Finding.** `components/codelet`'s module docs state that promotion is
+  gated on "hermes gaining a two-register sample-granularity shuffle". That
+  primitive exists and has for some time: `SimdPermute::deinterleave_pairs`.
+  With `ComplexReg` at four lanes a pair *is* a complex sample, and the N = 16
+  bit reversal is exactly four of these calls over the naturally ordered
+  registers, verified against `BIT_REVERSED_16` term by term:
+  `(w0, w4) = deinterleave_pairs(r0, r4)`,
+  `(w1, w5) = deinterleave_pairs(r2, r6)`,
+  `(w2, w6) = deinterleave_pairs(r1, r5)`,
+  `(w3, w7) = deinterleave_pairs(r3, r7)`.
+- **Outcome.** Replace the 32-scalar-store stack buffer with those four calls
+  and eight contiguous vector loads, then re-run the pinned probe that
+  declined the codelet.
+- **Prior measurement — read before implementing.** The codelet lost 1.8x on
+  an efficiency core, attributed to the scalar stores stalling the following
+  vector loads. On AVX2 f64 each `deinterleave_pairs` is two
+  `vperm2f128`, so the replacement is eight port-5 cross-lane operations; the
+  HS-DEINTERLEAVE-PAIRS-AVX2-F32 rejection measured that port's latency
+  dominating in a comparable shape. The permutation getting cheaper does not
+  imply the codelet wins.
+- **Result, corrected.** The permutation is built, passes every oracle
+  including an index-level check that reproduces `BIT_REVERSED_16` term by
+  term, and is **faster**: 13.8 ns against 14.3 ns on the P-core and 31.6 ns
+  against 34.9 ns on the E-core, three runs each in release. That is 3.5% and
+  9.5%. It does not promote the codelet, which still loses 1.3x to the
+  incumbent's 10.6 ns.
+- **First result was wrong, and why.** This item was closed on 2026-09-04 as
+  falsified, reporting the register form 7% slower and the codelet 13x off the
+  incumbent. Those runs were taken without `--release`. Debug reads the
+  incumbent at 242 ns and the codelet at 3000 ns; the distortion is not a
+  constant factor — debug inflates N = 16 by 23x and N = 64 by 300x — so it
+  reversed the verdict rather than scaling it. The recorded 1.8x that the
+  header originally carried was approximately right all along.
+- **Durable fix.** `measurement_cores::selected()` now returns `None` in an
+  unoptimized build, so every pinned probe in the crate declines to produce a
+  table it cannot stand behind. Twelve probe files reach their host through
+  that one function.
+- **Risk / change class:** [minor] [perf]; documentation only as delivered.
+
+<a id="apollo-stranded-branches"></a>
+
+## APOLLO-STRANDED-BRANCHES-2026-09-04 — Two abandoned branches hold deltas main does not [patch] — todo
+
+- **Integrator:** unclaimed; **branch:** none; **lease:** none.
+- **Last-update:** 2026-09-04.
+- **Context.** A branch-inventory sweep found eight local branches. Three were
+  fully merged and three superseded; both were deleted. Two carry a delta main
+  does not have, and neither is small enough to absorb without a decision.
+- **`origin/test/apollo-stft-leto-sidecar`** (last commit 2026-09-02). Its
+  `leto_reference.rs` parity tests landed on main, but its second commit —
+  migrating the STFT GPU staging buffers in
+  `crates/apollo-stft/src/infrastructure/transport/gpu/infrastructure/buffers.rs`
+  to Mnemosyne `AlignedVec` — did not: main has no `AlignedVec` in that file.
+  Decide whether the migration is wanted; if so, rebase that commit alone onto
+  current main and deliver it, otherwise delete the branch.
+- **`chore/apollo-mnemosyne-rev-and-f16-gate`** (local only, never pushed, last
+  commit 2026-09-02). Mixes a superseded mnemosyne rev bump with two changes
+  main lacks: an explicit `half` dependency on `apollo-fft`, and wiring
+  Mnemosyne as the global allocator in the validation binary. The rev bump is
+  dead; the other two need separate adjudication. Push it before any cleanup
+  touches this clone — it exists in exactly one place.
+- **Acceptance oracle.** Each branch either delivered as a rebased increment
+  or deleted with the reason recorded here; apollo's local branch list holds
+  only branches mapped to an open item or an enqueued PR.
+- **Risk / change class:** [patch].
+
+<a id="apollo-hephaestus-default"></a>
+
+## APOLLO-HEPHAESTUS-DEFAULT-2026-09-04 — Retire the merged Hephaestus co-evolution pin [patch] — done
+
+- **Result:** Hephaestus resolves once at merged default `f6c9bfdb`; the
+  `dec3d72` query pin is absent while Mnemosyne and Moirai pins remain unchanged.
+- **Evidence:** format, all-target/all-feature check and Clippy, 1,417 Nextest
+  cases, seven doctests, provider audit, and lockfile validation pass.
+
+<a id="apollo-n16-f64-gap"></a>
+
+## APOLLO-N16-F64-GAP-2026-09-04 — RustFFT is 18% faster at N=16 f64 [minor] [perf] — done 2026-09-04
+
+- **Integrator:** claude-opus-5; **branch:** `perf/apollo-n16-f64-gap`;
+  **lease:** the N = 16 f64 route and its codelets 2026-09-04T19:30Z.
+- **Last-update:** 2026-09-04.
+- **Measured (release, pinned, three runs).** Apollo's plan route reads
+  10.6 ns on the P-core and 16.7 ns on the E-core; RustFFT reads 9.0 ns and
+  20.0 ns. Apollo loses 18% on the P-core and wins 17% on the E-core, so the
+  gap is specific to the wide core.
+- **Known non-causes.** The register-resident codelet is 13.8 ns, slower than
+  the incumbent route it would replace, so the gap is not the incumbent
+  choosing the wrong kernel
+  ([`#apollo-n16-register-permute`](#apollo-n16-register-permute)). Dispatch is
+  0.3 ns per call.
+- **Attributed: the gap is entirely in the kernel.** A `bare` control arm times
+  `winograd::dft16_impl` with no plan, no dispatch and no length check. It
+  reads 10.6 ns on the P-core against the full route's 10.6 ns, so the route
+  adds nothing measurable and every nanosecond of the 2.2 ns difference to
+  RustFFT's 8.4 ns is in the transform itself.
+- **The route is scalar, and alone in being so.** `small_pot_inplace_sized_precise`
+  carries AVX arms at N = 32 and N = 64; N = 16 calls the scalar Winograd
+  codelet under the note "vector arm measured +8% (call plus probe outweigh
+  the body)". Dispatch measures 0.3 ns in release, so a call-overhead argument
+  cannot account for 8% of a 10.6 ns body, and that measurement predates the
+  profile guard.
+- **Delivered: a four-by-four four-step in registers.** Sixteen complex f64 is
+  eight YMM registers, half the file, so the shape has room for its own
+  temporaries and needs no designed spill. With two samples per register the
+  four samples a first-stage radix-4 needs — `n1`, `n1+4`, `n1+8`, `n1+12` —
+  sit in the same slot of four registers four apart, so
+  `avx_fft4_parallel_precise` runs the first stage on the natural load order
+  with no shuffle at all.
+- **Structure decided by measurement, not by instruction count.** The direct
+  second stage (`avx_fft4_precise` across slots) costs five `vperm2f128` per
+  call plus eight to place the output — twenty-eight cross-lane operations. It
+  measured 7.2 ns on the P-core but **18.8 ns on the E-core, against the
+  scalar codelet's 16.5 ns**. Transposing first costs eight `vperm2f128` and
+  leaves both stages lanewise; that recovers most of the E-core loss and is
+  faster on the P-core as well. Cross-lane movement is what the efficiency
+  cores charge for.
+
+  | arm | P-core | E-core |
+  | --- | --- | --- |
+  | scalar Winograd (incumbent) | 10.4-10.7 ns | 16.5-16.7 ns |
+  | AVX, direct second stage | 7.1-7.4 ns | 18.7-18.8 ns |
+  | **AVX, transpose then lanewise** | **6.6-6.9 ns** | **17.3-17.6 ns** |
+  | RustFFT | 7.6-8.2 ns | 20.0-20.3 ns |
+
+- **Result.** 36% faster on the P-core, and apollo now leads RustFFT there
+  (6.7 ns against 8.0 ns) where it trailed by 18%. The E-core pays 5%
+  (16.6 to 17.4 ns) and still leads RustFFT by 13%. The trade is recorded
+  rather than hidden: there is no per-core dispatch, and the transpose form is
+  the best measured shape for both.
+- **Correctness.** Forward, inverse and normalized-inverse against the direct
+  Winograd oracle; an impulse at every one of the sixteen positions, which is
+  what caught the first output-offset error; and the twiddle table checked
+  entry by entry against `exp(-2 pi i m / 16)` rather than against another
+  table.
+- **Acceptance oracle.** Apollo at or below RustFFT's P-core figure at N = 16
+  f64 with the E-core lead retained, or a recorded attribution of why the
+  remaining difference is structural.
+- **Risk / change class:** [minor] [perf].
+- **Parent:** [`#atlas-apollo-beat-the-references`](#atlas-apollo-beat-the-references).
+
+<a id="apollo-sweep-exceeds-budget"></a>
+
+## APOLLO-SWEEP-EXCEEDS-BUDGET-2026-09-04 — The reference sweep is terminated at the test budget [patch] [perf] — done 2026-09-04
+
+- **Delivered.** The sweep completes in 23.8 s, inside both the 30 s slow mark
+  and the 60 s termination bound; it was terminated at 60 s before.
+- **The lever was the per-case budget, not the coverage.**
+  `BenchmarkConfig::regression()` spends 100 ms of warm-up and 400 ms of
+  measurement, which is right for one case and wrong for ninety: with the
+  discarded pass repeating the set and both core types running it, half a
+  second per case is 184 s. The reported pass now takes 20 ms plus 80 ms and
+  the discarded pass half of that, since its job is to warm the freshly linked
+  binary rather than to produce numbers. Coverage is unchanged — all
+  seventeen lengths, three engines, two scalars, two core types.
+- **The discarded pass earns its budget.** At a fifth rather than a half, the
+  first sweep after a build read N = 32 at 32.4 ns where the two runs after it
+  read 21.4 and 21.2. Halving is the setting that keeps the cold first run
+  from differing.
+- **Not fixed here, and not this item.** Run-to-run variance at N >= 32
+  remains large enough to flip the apollo-versus-RustFFT verdict — three runs
+  of the delivered configuration give apollo 31.5, 30.7, 21.7 ns at N = 32.
+  That is the same effect
+  [`ATLAS-APOLLO-N32-F64-LIVENESS`](#atlas-apollo-n32-f64-liveness) records
+  from four runs of one unchanged executable, and its investigation owns it.
+  N = 16 is stable to about 4% across the same runs, so the instrument is not
+  uniformly noisy.
+- **Risk / change class:** [patch] [perf]; instrument only.
+
+<a id="apollo-probe-scale-disagreement"></a>
+
+## APOLLO-PROBE-SCALE-DISAGREEMENT-2026-09-04 — Two pinned probes disagree by 25x on one transform and reverse its verdict [patch] [perf] — done 2026-09-04 (retracted)
+
+- **Retracted: there was no disagreement.** The two readings came from
+  different build profiles. The codelet probe was run without `--release` and
+  the small-sizes sweep with it; debug reads apollo's N = 16 route at 242 ns
+  and RustFFT at 610 ns, release reads 10.6 ns and 9.0 ns. Nothing about the
+  instruments differed.
+- **Why the controls did not catch it.** The probe's clock calibration is a
+  dependent multiply-add chain, which is latency-bound and therefore reads
+  almost the same in both profiles (626 ns debug, 226 ns release against ~553
+  predicted). A latency-bound control cannot detect an unoptimized build; only
+  a throughput-bound one could, and the honest fix is not a better control but
+  refusing to measure the profile at all.
+- **Delivered instead.** `measurement_cores::selected()` returns `None` under
+  `debug_assertions`, so every pinned probe declines. Verified both ways: a
+  debug run of the codelet probe now emits no measurement lines, and a release
+  run is unchanged.
+- **Standing.** The sweep's separate breach of the 60 s nextest budget is real
+  and is not covered by this retraction; it stays open as
+  `APOLLO-SWEEP-EXCEEDS-BUDGET-2026-09-04`.
+- **Risk / change class:** [patch] [perf]; instruments only, no kernel change.
+
+<a id="apollo-provider-identity"></a>
+
+## APOLLO-PROVIDER-IDENTITY-2026-09-04 — Four providers resolve through two sources, and the merged pins cannot be dropped alone [patch] [arch] — in-progress
+
+- **Integrator:** claude-opus-5; **branch:** `build/apollo-provider-identity`;
+  **lease:** `.provider-identity-baseline`, `docs/adr/0047-*.md`
+  2026-09-04T16:40Z.
+- **Contributor:** Codex on `build/apollo-provider-default`; **lease:** none;
+  registration-driver increment complete 2026-09-04.
+- **Last-update:** 2026-09-04.
+- **Measured.** Apollo's committed lock resolves `eunomia` through two
+  sources, `mnemosyne` through three, and `moirai` through two: four sources
+  in excess of one per repository. Each extra source is a second copy of that
+  provider, so its public types stop matching across the boundary between the
+  consumers that reached it by different routes. ADR 0047's verification
+  section claimed one revision per provider; that claim is false as measured
+  and is corrected in this increment.
+- **Falsified premise.** The obvious remedy — dropping the `rev` pins whose
+  upstream PRs merged (eunomia #87, hermes #155, leto #164, hephaestus #270,
+  all confirmed MERGED against the hosting API) — makes it worse, not better.
+  Removing those four raised the excess from four to eight, because
+  `leto-ops` still pins hermes at `5a399ee` and the unpinned direct edge
+  resolves to hermes main. Moirai's pin is separately still live: its
+  `83aa411` is not an ancestor of Moirai main, so that pin names pending work
+  rather than a merged change.
+- **Outcome.** A dependency-ordered unpin sweep: each provider's own
+  first-party consumers advance before apollo drops its pin, so the excess
+  falls monotonically. `.provider-identity-baseline` holds the current bound,
+  enforced by atlas's canonical lock guard, and is lowered as each fork closes.
+- **Acceptance oracle.** `.provider-identity-baseline` reaches 0 with the
+  canonical guard green, and the workspace passes its full gate on the
+  resulting graph.
+- **Registration-driver increment.** Remove merged Eunomia, Hermes, and Leto
+  pins, and follow Hephaestus PR #273 while hosted verification runs. The
+  immediate oracle is one Eunomia source and a compiling RITK FFT consumer;
+  Mnemosyne #128 and Moirai worker-idle pins remain owned by their live items.
+  Evidence: Eunomia/eunomia-derive resolve only at `02397fa`; all-target
+  workspace check and Clippy pass; `apollo-fft` Nextest passes 553/553 with 29
+  configured skips; format and diff checks pass.
+- **Risk / change class:** [patch] [arch]; dependency resolution only.
+
 <a id="atlas-apollo-n32-f64-liveness"></a>
 ## ATLAS-APOLLO-N32-F64-LIVENESS-2026-09-04 — Bound the n=32 codelet and reduce register pressure [patch] [perf] — in-progress
 
