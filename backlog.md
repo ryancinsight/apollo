@@ -299,7 +299,7 @@
 <a id="atlas-apollo-n32-f64-liveness"></a>
 ## ATLAS-APOLLO-N32-F64-LIVENESS-2026-09-04 — Bound the n=32 codelet and reduce register pressure [patch] [perf] — in-progress
 
-- **Integrator:** codex; **branch:** `perf/apollo-n32-f64-liveness`; **last-update:** 2026-09-04.
+- **Integrator:** codex/n32; **branch:** `codex/four-step-square-movement` (shared tree); **last-update:** 2026-09-06. Resume landed safety work with a read-only dispatch/codegen investigation; FourStep peer regions remain untouched.
 - **Scope:** n=32 AVX2 codelet, its caller and regression tests; shared radix-8 changes require n=64 controls. No provider migration or public API change.
 - **Acceptance:** fixed-size safe entry; all direction/normalization and guarded-span tests pass; retain a schedule change only with counterbalanced same-host improvement and unchanged n=16/64 controls.
 - **Safety increment verified:** array borrow establishes 32 initialized values; guarded tests cover both AVX alignment residues, assert host dispatch and reject NaN output. Release run `75c7d45c-4e69-4023-bbf7-30840d0020d6` passes 526/526 enabled tests (29 ignored instruments); format, all-target Clippy, doctest, rustdoc and safety ratchet pass. All three emitted AVX bodies match the entry baseline after label normalization.
