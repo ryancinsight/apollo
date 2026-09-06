@@ -281,9 +281,8 @@
   efficiency core it does not, so the vector arm loses in *both* regimes there
   (1.06x at latency, 1.11x at throughput). There is no per-core dispatch — the
   N = 16 arm records the same constraint — so shipping the register form at
-  N = 8 would buy 87% on performance cores and pay 11% on efficiency ones, with
-  `moirai` distributing lane work across both. That is a real trade to size,
-  not a win to take.
+  N = 8 would buy 87% on performance cores and pay 11% on efficiency ones. That
+  is a real trade to size, not a win to take.
 - **Why it inverts, and why that is credible rather than an artifact.** The
   register form's cost is four cross-lane permutes and a transpose whose
   results feed each other — a dependency chain, which is what a latency
@@ -300,14 +299,24 @@
   question, not a constant to flip. It also needs the efficiency core, which
   three attempts could not measure on a contended host, and the throughput
   reading at N = 32 and for `f32`.
-- **DoR to settle before implementing.** (1) The lane mix — how `moirai`
-  distributes an axis pass across core types, since the trade above is decided
-  by that ratio and by nothing else; (2) which regime dominates apollo's own
+- **DoR (1) is answered: there is no mix — the pass is sequential.** `lanes::`
+  dispatches through `moirai::AdaptiveWithThreshold<32_768>`, whose
+  `parallelize(len)` is `len >= N` over *total complex elements*. A small-POT
+  codelet is the lane kernel only when the axis is at most 64 long, so every
+  ordinary shape — 8 x 8, 16 x 16, 64 x 64, even 128 x 128 at 16,384 — is below
+  the threshold and runs the whole lane loop on the calling thread. An 8-length
+  axis would need its partner axis above 4,096 to parallelise at all.
+  So the trade is not a ratio across core types: it is decided by which single
+  core the caller is scheduled on, and a compute-bound foreground thread on this
+  host class normally lands on a performance core. An earlier revision of this
+  entry asserted `moirai` spreads the lanes across both; that was wrong, and it
+  moves the expected value of the change substantially toward taking it.
+- **Remaining DoR.** (2) which regime dominates apollo's own
   usage — `dimension_2d`/`dimension_3d` lane counts against standalone
   small-transform calls in the plan cache; (3) whether the axis passes can take
   a lane-pass entry without duplicating the dispatch, since a second entry per
   size is the cloned-variant defect; (4) the same throughput reading for `f32`,
-  whose arms are a separate lane-density family.
+  whose arms are a separate lane-density family (`reduced.rs`).
   The efficiency-core reading is done (2026-09-06).
 - **Acceptance.** The multi-lane paths run the arm that measures faster in
   their own regime on both core types, through one dispatch rather than two
