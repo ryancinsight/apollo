@@ -58,6 +58,18 @@ Change-class tags: [patch] backward-compatible fix, [minor] additive non-breakin
   windowing, and weighted overlap-add. See ADR 0008 and
   `docs/MIGRATION_GPU_FFT.md`.
 
+### Added
+
+- [patch] `apollo-fft` gains a pinned prime-dispatch probe
+  (`prime_dispatch_gap_by_core_type`): per prime and scalar it times the
+  production plan against the isolated Rader entry in one pinned run, so the
+  per-scalar `full − entry` gap isolates the dispatch/inline-boundary cost
+  from the transform itself. Instrument-only; no kernel or public API change.
+  It exonerates the dispatch boundary in the `ATLAS-APOLLO-F32-NONPOT-WIDTH`
+  n = 101 anomaly and pins that inversion to the `f32` short-Winograd codelet
+  reached through the half-cyclic Rader convolution's inner length-50
+  transforms.
+
 ### Changed
 
 - [patch] `apollo-fft` routes f32 lengths to the generated short-Winograd
