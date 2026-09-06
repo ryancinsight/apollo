@@ -1,27 +1,21 @@
 # Apollo Backlog
 
 <a id="apollo-transpose-isa-contract"></a>
-## APOLLO-TRANSPOSE-ISA-CONTRACT — Preserve AVX transpose preconditions [patch] — review
-
-- **Integrator:** codex/root; **contributor:** workspace_tests; **last-update:** 2026-09-06; branch `codex/cuda-provider-boundary`.
-- **Scope:** `mixed_radix/scalar/transpose.rs` and direct tests; no public API, FFT arithmetic, route, dependency or benchmark change.
-- **Evidence:** the old AVX-dispatched reduced transpose calls three AVX2-contract intrinsics. This is a feature-contract defect, not an observed illegal instruction.
-- **Outcome:** AVX bit-preserving shuffles and checked borrowed matrix slices preserve empty matrices and suffixes. Rust's existing CPU/OS detection cache replaces two local caches.
-- **Acceptance:** generic bitwise oracles cover both precisions, tiles/tails, offsets, special payloads and invalid extents with no writes on rejection. Final codegen requires only AVX; independent source reviews pass.
-- **Verification:** source `F6A0A42F`, census `FB06C558`; Clippy, 1442 all-feature workspace tests, 552 all-feature release FFT tests, doctests, warning-denied rustdoc, safety ratchet and six bounded FFT benchmark smokes pass.
-- **Measurement:** executable -512 bytes / sections -952 bytes; all 20 matched first/warm allocation windows equal baseline, every measured warm window zero. Unchanged 16-run census supports no gain or regression in either core class, not equivalence or f32 performance.
-- **Artifacts:** `../../output/apollo-transpose-isa/` retains source/binary hashes, native samples, counterbalanced comparisons, codegen and allocation evidence under Atlas retention. Baseline is restored production from `1de31e26`.
-- **Limits:** no AVX-only physical host or instrumented unsafe execution; [coverage blocker](#apollo-workspace-instrumented-verification) remains. Endpoint load cannot observe transient processes or inaccessible CPU totals; caller affinity does not pin Moirai workers.
+## APOLLO-TRANSPOSE-ISA-CONTRACT — Preserve AVX transpose preconditions [patch] — done
+- [PR 337](https://github.com/ryancinsight/apollo/pull/337), `9da1f9f7`; AVX-contract correction passes native/analytical/allocation/size gates and [landed CI](https://github.com/ryancinsight/apollo/actions/runs/34015129487). Census binary -512 bytes; unchanged comparison supports neither gain nor regression.
+<a id="apollo-required-merge-checks"></a>
+## APOLLO-REQUIRED-MERGE-CHECKS — Enforce core verification before automatic merge [patch] — done
+- Installed and read back on 2026-09-06: strict `rust workspace` and `Lockfile integrity / Lockfile integrity` requirements on `main`, with automatic merge enabled. The prior unprotected branch let `--auto` merge before hosted checks completed; [landed CI](https://github.com/ryancinsight/apollo/actions/runs/34015129487) subsequently passes.
 <a id="apollo-four-step-square-movement"></a>
 ## APOLLO-FOUR-STEP-SQUARE-MOVEMENT — Specify provider-owned in-place square movement [patch] — in-progress
 
-- **Integrator:** codex/root; **last-update:** 2026-09-06; investigation proceeds while the ISA item awaits final gates.
+- **Integrator:** codex/root; **last-update:** 2026-09-06; branch `codex/four-step-square-movement`; existing provider/consumer contracts inspected.
 - **Scope:** final square transpose in `components/four_step/transpose.rs`, Leto layout operations and locked Hermes register movement; no fused multiplication, decomposition, route, normalization or workspace change.
 - **Evidence:** prior N=262144 diagnostic attributes about 460 microseconds to final transpose (about 18% of instrumented execution); this is historical attribution, not a fresh baseline or cache-miss measurement. The current scalar pair-swap loop does not stage tile pairs as its comment claims.
 - **Hypothesis:** load symmetric off-diagonal tiles, transpose complete complex representations through Hermes and exchange contiguous register rows in Leto without allocating or adding a full-volume pass.
 - **Acceptance:** resolve exact register/borrow contracts, update [ADR 0040](docs/adr/0040-leto-fft-layout-ownership.md) with the bounded design and dependency closure, then instantiate provider/consumer verification. Retain production only with unchanged allocation bounds, no executable growth and supported complete-engine improvement without supported regression.
 - **Verification:** independent bitwise tile/tail/offset/sentinel/special-value oracles for both precisions; FFT analytical and workspace suites; unchanged replicated census and matched footprint probe. Reject an unsupported candidate.
-- **Dependencies:** [ISA correction](#apollo-transpose-isa-contract); Leto's canonical checkout is behind fetched origin and must reconcile before provider edits. Hermes `ComplexReg::transpose_square` is verified at locked `e6e08211`; Leto currently exposes out-of-place batched movement only.
+- **Dependencies/closure:** [ISA correction](#apollo-transpose-isa-contract) is merged. FourStep already binds `Complex = eunomia::Complex<F>`, so direct Leto delegation needs no trait change or cast. Hermes `ComplexReg::transpose_square` is verified at `e6e08211`; reconcile Leto with fetched origin before provider edits.
 <a id="apollo-four-step-cache-tile"></a>
 ## APOLLO-FOUR-STEP-CACHE-TILE — Evaluate cache-line fused traversal [patch] — done
 - [PR 336](https://github.com/ryancinsight/apollo/pull/336), `7976ab49`; [Rejected ADR 0050](docs/adr/0050-cache-line-fused-traversal.md) records no supported performance gain, executable/cold-allocation growth and restored production.
