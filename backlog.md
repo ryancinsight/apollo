@@ -133,28 +133,92 @@
 
 <a id="apollo-n8-f64-gap"></a>
 
-## APOLLO-N8-F64-GAP-2026-09-04 — N=8 carries the same unexamined "scalar by measurement" note [minor] [perf] — in-progress
+## APOLLO-N8-F64-GAP-2026-09-04 — N=8 carries the same unexamined "scalar by measurement" note [minor] [perf] — done 2026-09-06 (note confirmed)
 
-- **Integrator:** claude-opus-5; **branch:** `perf/apollo-n8-f64`;
-  **lease:** the N = 8 arm of `small_pot_inplace_sized_precise` and its codelet
-  2026-09-04T21:30Z.
-- **Last-update:** 2026-09-04.
-- **Context.** The N = 8 arm reads "Scalar by measurement: n = 8: vector arm
-  measured +12% (call plus probe outweigh the body); kept scalar" — the same
-  form as the N = 16 note that
-  [`#apollo-n16-f64-gap`](#apollo-n16-f64-gap) disproved by 36%. Dispatch
-  measures 0.3 ns in release, so "call plus probe" cannot account for 12% of a
-  4 ns body, and both notes predate the probe's profile guard.
-- **Shape.** Eight complex f64 is four YMM registers, a quarter of the file.
-  Factored 4 x 2 the first stage is a lanewise radix-2 on `(r0, r2)` and
-  `(r1, r3)` with no shuffle, the transpose is four `vperm2f128`, and the
-  second stage is one lanewise `avx_fft4_parallel_precise` whose four outputs
-  are the four output registers in order — no output permutation at all.
-- **Acceptance oracle.** The direct-DFT oracle in both directions and an
-  impulse at every position, then a release measurement on both core types
-  against the scalar arm it would replace. A loss on either core closes this
-  as falsified with the numbers, as the N = 16 direct form nearly was.
-- **Risk / change class:** [minor] [perf].
+- **Result: the note was right, its reasoning was not.** The AVX arm is built,
+  passes the direct-DFT oracle in both directions and an impulse at every one
+  of the eight positions, and loses. Two vector forms were measured; the arm is
+  not wired, and stays test-gated as the subject of the instrument that
+  declined it.
+
+  | arm | P-core | E-core |
+  | --- | --- | --- |
+  | scalar Winograd (shipped) | **11.33 ns** | **15.81 ns** |
+  | AVX, generic `avx_cmul_precise` twiddles | 17.24 ns | 24.44 ns |
+  | AVX, folded `(direct, swapped)` coefficients | 15.08 ns | 21.58 ns |
+
+  Forward plus normalized inverse, one round trip, intervals disjoint over
+  three runs. Folding the twiddles bought 13% and 15% and did not change the
+  verdict, which is the useful part: the better form still loses by a third.
+- **What the note got wrong.** It blamed "call plus probe". The probe's
+  `vector-direct` arm enters the body past the `OnceLock` capability check and
+  reads the same as the dispatched arm, so that check is not the cost. Note the
+  limit precisely: neither entry carries `#[target_feature]`, so both still pay
+  the call boundary into one that does — what this bounds is the capability
+  check alone, not the boundary.
+- **Attributed instead to the twiddles being free in scalar form.** N = 8 is
+  the length at which every twiddle is a trivial rotation — `1`, `-i`,
+  `(±1 - i)/√2` — which the scalar codelet spends as sign flips, part swaps and
+  one real multiply. Any register form still pays four cross-lane `vperm2f128`
+  to make its second stage lanewise, and eight points is not enough arithmetic
+  to amortise them.
+- **The other factorisation is worse, not better.** Taking `n = n1 + 2 n2`
+  makes the first stage a lanewise radix-4 and the second a radix-2, but the
+  outputs then need the same four permutes *and* a third twiddled register. The
+  shape the item proposed was the better of the two.
+- **Where the construction starts paying.** Same shape, same probe, same run:
+  N = 16 reads 22.32 against 28.11 on a P-core, N = 32 reads 37.15 against
+  89.15. The transpose is a fixed four permutes at every length, so it
+  amortises over twice the arithmetic per doubling — N = 8 sits one size below
+  the crossover.
+- **Instrument, and the durable half of this item.** `small_pot_arms`
+  (`components/base128/pinned_probe`) times a forward plus normalized inverse
+  so the buffer returns to its input and needs no per-iteration reseed. Both
+  obvious alternatives are unsound at these sizes and one of them was written
+  and discarded here: a `copy_from_slice` inside the timed closure charges 128
+  bytes to a body of a few nanoseconds and compresses the ratio the decision is
+  drawn on, while `run_batched` moves the reseed out by pre-building one input
+  per iteration — tens of thousands of them, 8-26 MB, every operand from DRAM.
+  The first revision of this probe did exactly that and read N = 16 at 42 ns
+  against the 6.7 ns the same arm measures resident. It was validated by
+  reproducing two results it did not produce: N = 16 wins on the P-core and
+  ties on the E-core, N = 32 wins on both, matching
+  [`#apollo-n16-f64-gap`](#apollo-n16-f64-gap).
+- **Follow-up filed, not closed here:**
+  [`#apollo-target-feature-boundary`](#apollo-target-feature-boundary) — every
+  vector arm crosses a `#[target_feature]` call that cannot inline into its
+  scalar caller, which this item bounded only from one side.
+- **Parent:** [`#atlas-apollo-beat-the-references`](#atlas-apollo-beat-the-references).
+
+<a id="apollo-target-feature-boundary"></a>
+
+## APOLLO-TARGET-FEATURE-BOUNDARY-2026-09-06 — Vector codelets cannot inline into their dispatcher [patch] [perf] — todo
+
+- **Finding.** `n8`/`n16`/`n32`'s `vector_arm` carries
+  `#[target_feature(enable = "avx,fma")]`; `try_inplace` and everything above it
+  do not. A `#[target_feature]` function cannot be inlined into a caller that
+  lacks the feature, so every small-power-of-two transform crosses a real call
+  with its operands going through memory, where the scalar codelet it competes
+  with inlines into the dispatcher and keeps them in registers.
+- **Why this item exists separately.**
+  [`#apollo-n8-f64-gap`](#apollo-n8-f64-gap) measured the capability *check* at
+  approximately zero, but its `vector-direct` control does not carry the
+  attribute either, so it never removed the boundary — the boundary's cost is
+  unmeasured, not measured-small.
+- **First increment is a measurement, not a change.** Add an arm to
+  `small_pot_arms` that runs the whole round trip inside one
+  `#[target_feature]` frame, so the two transforms inline together and one
+  crossing is paid instead of two. The difference against the dispatched arm is
+  the per-crossing cost.
+- **If it is material,** the change is to hoist the frame: establish the
+  capability once at the plan or route boundary and call a target-feature entry
+  that covers the loop, rather than per transform. That would move N = 16 and
+  N = 32 as well as re-opening N = 8, which is why it is worth measuring before
+  designing.
+- **Acceptance.** The per-crossing cost is measured and recorded; either a
+  hoisted frame lands with a measured win at N = 16 and 32, or the cost is
+  recorded as immaterial and the arms stand as they are.
+- **Risk / change class:** [patch] [perf]; **dependencies:** none.
 - **Parent:** [`#atlas-apollo-beat-the-references`](#atlas-apollo-beat-the-references).
 
 <a id="apollo-n16-f64-gap"></a>

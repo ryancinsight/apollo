@@ -94,4 +94,5 @@ mod lane_routes;
 mod prime_dispatch;
 mod rader_width;
 mod radix_order;
+mod small_pot_arms;
 mod small_sizes;

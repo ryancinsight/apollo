@@ -176,7 +176,29 @@ pub(in crate::application::execution::kernel::mixed_radix::scalar) unsafe fn sma
             }
         }
         8 => {
-            // Scalar by measurement: n = 8: vector arm measured +12% (call plus probe outweigh the body); kept scalar.
+            // Scalar by measurement, re-decided 2026-09-06 on the
+            // `small_pot_arms` probe. A four-by-two register four-step was
+            // built here, passed the direct-DFT oracle in both directions and
+            // an impulse at every position, and still lost: 15.08 ns against
+            // this codelet's 11.33 on a performance core and 21.58 against
+            // 15.81 on an efficiency core, forward-plus-inverse round trip,
+            // intervals disjoint over three runs.
+            //
+            // Those are the figures for the *better* of two vector forms. The
+            // first spent a generic `avx_cmul_precise` per twiddle and read
+            // 17.24 and 24.44; folding the twiddles into `(direct, swapped)`
+            // coefficient pairs — three instructions instead of five — bought
+            // 13% and 15% and did not change the verdict.
+            //
+            // The earlier note blamed "call plus probe". It is not that: the
+            // probe's vector-direct arm removes the capability check and reads
+            // the same. The loss is the body, and the reason is that N = 8 is
+            // the length where every twiddle is a trivial rotation — `1`,
+            // `-i`, `(+-1 - i)/sqrt(2)` — which this codelet spends as sign
+            // flips, part swaps and one real multiply, while any register form
+            // still pays four cross-lane `vperm2f128` to make its second stage
+            // lanewise. Eight points is not enough arithmetic to amortise the
+            // shuffle. `backlog.md#apollo-n8-f64-gap` carries the construction.
             let data_ref = &mut *data.as_mut_ptr().cast::<[Complex64; 8]>();
             crate::application::execution::kernel::components::winograd::dft8_array_impl::<
                 f64,

@@ -171,6 +171,26 @@ unsafe fn vector_arm<const INVERSE: bool, const NORMALIZE: bool>(data: &mut [Com
     }
 }
 
+/// Direct entry to the vector arm, bypassing the per-call capability check.
+///
+/// The `small_pot_arms` probe uses this to separate the body's cost from the
+/// cost of the `OnceLock` check [`try_inplace`] reads first. It does *not*
+/// remove the `#[target_feature]` call boundary — this entry does not carry
+/// the attribute either, so [`vector_arm`] cannot inline into it — which is
+/// why the two arms read the same and the check is what the difference bounds.
+///
+/// # Safety
+///
+/// Carries [`vector_arm`]'s contract, and additionally requires the caller to
+/// have established AVX and FMA support itself.
+#[cfg(all(test, target_arch = "x86_64"))]
+pub(crate) unsafe fn vector_arm_unchecked<const INVERSE: bool, const NORMALIZE: bool>(
+    data: &mut [Complex64],
+) {
+    // SAFETY: the caller carries both the capability and the length contract.
+    unsafe { vector_arm::<INVERSE, NORMALIZE>(data) }
+}
+
 #[cfg(test)]
 mod tests {
     use super::Complex64;
