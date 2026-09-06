@@ -1,5 +1,15 @@
 # Apollo Backlog
 
+<a id="apollo-four-step-cache-tile"></a>
+## APOLLO-FOUR-STEP-CACHE-TILE — Evaluate cache-line fused traversal [patch] — in-progress
+
+- **Integrator:** codex/root; **contributor:** workspace_tests; **last-update:** 2026-09-06; branch `codex/cuda-provider-boundary`.
+- **Outcome/scope:** evaluate `clamp(cache_line_bytes / size_of::<Complex<F>>(), 1, 16)` for the existing scalar fused multiply-transpose only; preserve arithmetic, fusion, routes, row scheduling and workspace.
+- **Basis:** locked Leto `a2006ad` exposes `cached_cache_geometry().cache_line_bytes()`; topology is enabled by default and aggregates heterogeneous cache reports. Cache-conflict reduction remains a hypothesis without counters.
+- **Acceptance:** supported complete-transform improvement with no supported regression in unchanged replicated census; native analytical suites and warm allocation bounds pass; no artifact-size growth. [ADR 0050](docs/adr/0050-cache-line-fused-traversal.md) owns the experiment and stop criterion.
+- **Prerequisites:** parent provider integration commit/lock freezes before a fresh matched baseline; actual Themis selected-core caches now report 64-byte lines, deriving tile sides 4/8 for complex f64/f32. Production edits and baseline remain held.
+- **Verification:** topology metadata Clippy and bounded diagnostic pass (3.944s); production acceptance still requires generic analytical/workspace tests, release Nextest, unchanged 60-second census/comparator, allocation and size/codegen gates. `output/apollo-cache-tile` records the metadata run only.
+- **Dependencies:** [profiling](#apollo-four-step-profile), [provider integration](#apollo-cuda-crt-linkage), [ADR 0039](docs/adr/0039-one-dimensional-power-of-two-routing.md), [ADR 0048](docs/adr/0048-worker-scratch-lifetime.md). No public seam or dependency change.
 <a id="apollo-four-step-profile"></a>
 ## APOLLO-FOUR-STEP-PROFILE — Attribute generic FourStep layout cost [patch] — review
 
@@ -8,7 +18,6 @@
 - **Evidence:** `output/apollo-four-step-profile` records layout at 80–92% of N=262144 latency. The register-tile experiment establishes no supported performance-core complete-transform gain and grows the executable by 16,384 bytes; efficiency runs are invalidated by active Cargo overlap.
 - **Acceptance:** retain allocation-free diagnostics with production exclusion, analytical FFT suites passing and baseline production artifact size and payload restored (link timestamps/PDBAge excepted). [Rejected ADR 0049](docs/adr/0049-fused-twiddle-transpose.md) records the removed candidate and validity limits.
 - **Verification:** profiling-only Clippy passes; 545 release tests and the ignored phase contract pass. Census size returns to 6,862,336 bytes; only linker timestamp/PDBAge bytes differ from baseline. Raw samples, source hashes and rejected binaries remain in ignored evidence.
-- **Lease:** workspace_tests `four_step/{execution.rs,mod.rs,profile.rs,profile/tests.rs}`, `docs/adr/0049-fused-twiddle-transpose.md`, 2026-09-05T23:48:00-04:00; no production optimization retained.
 - **Dependencies:** [ADR 0048](docs/adr/0048-worker-scratch-lifetime.md) owns workspace lifetime; [ADR 0043](docs/adr/0043-measurement-core-class-is-queried.md) owns processor identification.
 <a id="apollo-four-step-twiddle-retention"></a>
 ## APOLLO-FOUR-STEP-TWIDDLE-RETENTION — Acquire only route-consumed stage tables [patch] — done
@@ -31,6 +40,7 @@
 ## APOLLO-CUDA-CRT-LINKAGE — Correct the native CUDA driver boundary [patch] [arch] — in-progress
 
 - **Integrator:** codex/root; **branch:** `codex/cuda-provider-boundary`; **last-update:** 2026-09-05.
+- **Lease:** codex/root `Cargo.lock`, `.github/workflows/ci.yml`, `.github/actions/cuda-headers/action.yml`, `docs/adr/0048-worker-scratch-lifetime.md`; provider PR 277 is merged, 2026-09-06T00:00:00-04:00.
 - **Scope:** Hephaestus CUDA driver loading consumed by Apollo's all-feature Windows build; preserve driver errors and the existing GPU API. Governing Hephaestus and Atlas ADR 0001 require revision before implementation.
 - **Evidence:** CUDA 13.3 `cuda.lib` embeds `/DEFAULTLIB:LIBCMT`; `cuda-oxide` 0.4.0 links it, producing LNK4098 in Apollo's dynamic-CRT test binaries. Its GPL-3.0-or-later license also fails Apollo's unchanged all-feature deny policy. Hephaestus records the toolkit-loading mismatch in its risk artifact.
 - **Safety:** provider `current_memory_info` passes `cuda_oxide::sys::size_t` output locals, defined as `c_ulong` (32 bits on Windows x64), to `cuMemGetInfo_v2`, whose installed CUDA 13.3 header requires pointer-sized `size_t` outputs. The resulting undersized storage takes priority over linkage cleanup.

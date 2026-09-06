@@ -7,6 +7,7 @@ use apollo_bench::{BenchmarkCase, BenchmarkConfig, BenchmarkSuite};
 use eunomia::{Complex, Complex64};
 use hermes_simd::{ProcessorBinding, ProcessorIndex};
 use std::time::Duration;
+use themis::CpuTopology;
 
 const SIZES: [usize; 2] = [65_536, 262_144];
 // Three complete observations reveal between-block spread. Sixty-four calls
@@ -21,8 +22,38 @@ const CALLS: u32 = 64;
 fn generic_four_step_phase_attribution() {
     let selection = measurement_cores::selected()
         .expect("phase attribution requires queried processor classes");
+    // Topology discovery and formatting stay outside every timed region.
+    // Leto reports process-wide policy; the sharing sets below preserve the
+    // distinct physical caches behind each selected processor class.
+    let topology = CpuTopology::detect().expect("cache attribution requires CPU topology");
+    let caches = topology
+        .cache_levels()
+        .expect("cache attribution requires reported cache levels");
+    let geometry = leto_ops::cached_cache_geometry();
     print!("{}", selection.describe());
+    println!(
+        "FCACHE policy=process-wide l1_bytes={} l2_bytes={} l3_bytes={} line_bytes={} reported_caches={}",
+        geometry.l1_bytes(),
+        geometry.l2_bytes(),
+        geometry.l3_bytes(),
+        geometry.cache_line_bytes(),
+        caches.len(),
+    );
     for core in selection.cores() {
+        for cache in caches
+            .iter()
+            .filter(|cache| cache.shared_processors.contains(&core.processor().get()))
+        {
+            println!(
+                "FCACHE cpu={} class={} level={} size_bytes={} line_bytes={:?} shared_processors={:?}",
+                core.processor().get(),
+                core.label(),
+                cache.level,
+                cache.size_bytes,
+                cache.line_bytes,
+                cache.shared_processors,
+            );
+        }
         let _binding = ProcessorBinding::bind(core.processor())
             .expect("measurement processor must be available");
         let landed = ProcessorIndex::current().expect("Windows supports processor queries");
