@@ -111,6 +111,9 @@ fn decompose<F: MixedRadixScalar<Complex = eunomia::Complex<F>>, const INVERSE: 
     let n1 = 1usize << k1; // number of columns / length of second set of FFTs
     let n2 = 1usize << k2; // number of rows / length of first set of FFTs
 
+    #[cfg(test)]
+    super::profile::observe_buffers(data, scratch, n1, n2);
+
     let tw1 = if INVERSE {
         F::cached_twiddle_inv(n1)
     } else {

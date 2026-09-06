@@ -38,7 +38,7 @@ impl Phase {
     pub(super) fn start(self) -> Span {
         Span {
             phase: self,
-            started: ACTIVE.with(Cell::get).then(Instant::now),
+            started: (ACTIVE.get() == Some(Mode::Timing)).then(Instant::now),
         }
     }
 }
@@ -49,8 +49,27 @@ struct Total {
     calls: u64,
 }
 
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum Mode {
+    Timing,
+    Buffers,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+struct Buffers {
+    data_address: usize,
+    scratch_address: usize,
+    data_bytes: usize,
+    scratch_bytes: usize,
+    rows: usize,
+    columns: usize,
+    data_row_bytes: usize,
+    scratch_row_bytes: usize,
+}
+
 thread_local! {
-    static ACTIVE: Cell<bool> = const { Cell::new(false) };
+    static ACTIVE: Cell<Option<Mode>> = const { Cell::new(None) };
+    static BUFFERS: Cell<Option<Buffers>> = const { Cell::new(None) };
     static TOTALS: RefCell<[Total; Phase::ALL.len()]> = const {
         RefCell::new([Total { elapsed: Duration::ZERO, calls: 0 }; Phase::ALL.len()])
     };
@@ -76,18 +95,22 @@ impl Drop for Span {
 
 struct Capture;
 
+impl Capture {
+    fn start(mode: Mode) -> Self {
+        assert!(ACTIVE.get().is_none(), "captures cannot nest on one thread");
+        ACTIVE.set(Some(mode));
+        Self
+    }
+}
+
 impl Drop for Capture {
     fn drop(&mut self) {
-        ACTIVE.set(false);
+        ACTIVE.set(None);
     }
 }
 
 fn capture<R>(operation: impl FnOnce() -> R) -> (R, [Total; Phase::ALL.len()], Duration) {
-    assert!(
-        !ACTIVE.replace(true),
-        "phase captures cannot nest on one thread"
-    );
-    let capture = Capture;
+    let capture = Capture::start(Mode::Timing);
     TOTALS.with_borrow_mut(|totals| *totals = [Total::default(); Phase::ALL.len()]);
     let start = Instant::now();
     let result = operation();
@@ -95,6 +118,45 @@ fn capture<R>(operation: impl FnOnce() -> R) -> (R, [Total; Phase::ALL.len()], D
     drop(capture);
     let totals = TOTALS.with_borrow(|totals| *totals);
     (result, totals, elapsed)
+}
+
+// Geometry is captured only during the unmeasured prewarm. Addresses describe
+// these borrowed slices; they carry no ownership or physical-cache mapping.
+pub(super) fn observe_buffers<T>(data: &[T], scratch: &[T], rows: usize, columns: usize) {
+    if ACTIVE.get() != Some(Mode::Buffers) {
+        return;
+    }
+    let observed = Buffers {
+        data_address: data.as_ptr().addr(),
+        scratch_address: scratch.as_ptr().addr(),
+        data_bytes: size_of_val(data),
+        scratch_bytes: size_of_val(scratch),
+        rows,
+        columns,
+        data_row_bytes: columns
+            .checked_mul(size_of::<T>())
+            .expect("row byte extent fits storage"),
+        scratch_row_bytes: rows
+            .checked_mul(size_of::<T>())
+            .expect("row byte extent fits storage"),
+    };
+    assert!(
+        BUFFERS.replace(Some(observed)).is_none(),
+        "one decomposition must supply buffer geometry"
+    );
+}
+
+fn capture_buffers<R>(operation: impl FnOnce() -> R) -> (R, Buffers) {
+    let capture = Capture::start(Mode::Buffers);
+    BUFFERS.set(None);
+    let result = operation();
+    drop(capture);
+    (
+        result,
+        BUFFERS
+            .take()
+            .expect("one decomposition must supply buffer geometry"),
+    )
 }
 
 mod tests;

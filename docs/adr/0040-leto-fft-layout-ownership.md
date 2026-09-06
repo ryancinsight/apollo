@@ -214,6 +214,17 @@ cache-miss measurement. Worker placement, inaccessible processes and transient
 load remain uncontrolled, as recorded with the
 [probe](../../../../output/apollo-square-transpose/tile-diagnostics/restoration/phase-profile/result.json).
 
+The existing probe now observes actual borrowed data/scratch addresses, byte
+extents and row strides during its first unmeasured prewarm call. Timing and
+geometry capture are mutually exclusive and share the same RAII reset; the
+hook and capture types exist only under `cfg(test)`. The offset-slice oracle
+and unchanged two-size/two-scalar/two-core probe pass in release (two tests,
+eight geometry records), with format and Clippy passing. The
+[observation record](../../../../output/apollo-square-transpose/tile-diagnostics/restoration/buffer-observation/rationale.md)
+states the source/lock identity and transient peer overlay reconciliation.
+Virtual addresses establish borrowed-buffer geometry, not physical cache
+mapping or a speedup. No timing workload or production algorithm changes.
+
 [Direct competitor envelopes](../../../../output/apollo-square-transpose/preflight-inline/competitor-envelope.csv)
 reuse the same complete-family rank intervals across four candidate runs per
 core. Apollo trails RustFFT at all five P-core sizes and all E-core sizes except
