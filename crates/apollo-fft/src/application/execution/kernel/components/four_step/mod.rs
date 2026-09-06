@@ -22,6 +22,9 @@ mod selection;
 mod transpose;
 mod workspace;
 
+#[cfg(test)]
+mod profile;
+
 pub(crate) use execution::four_step_fft;
 pub(crate) use selection::try_four_step;
 pub(crate) use workspace::{scratch_len, PARALLEL_ROW_THRESHOLD};

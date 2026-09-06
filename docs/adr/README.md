@@ -54,3 +54,4 @@
 | [0046](0046-compact-storage-plan-routing.md) | Route compact storage through cached plans | Accepted |
 | [0047](0047-first-party-source-identity-during-coevolution.md) | First-Party Source Identity During Co-evolution | Accepted |
 | [0048](0048-worker-scratch-lifetime.md) | Worker scratch lifetime across submissions | Accepted |
+| [0049](0049-fused-twiddle-transpose.md) | Fused twiddle multiplication and register transpose | Rejected |

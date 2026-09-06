@@ -1,16 +1,15 @@
 # Apollo Backlog
 
 <a id="apollo-four-step-profile"></a>
-## APOLLO-FOUR-STEP-PROFILE — Attribute large-transform throughput deficits [patch] — in-progress
+## APOLLO-FOUR-STEP-PROFILE — Attribute generic FourStep layout cost [patch] — review
 
 - **Integrator:** codex/root; **contributor:** workspace_tests; **last-update:** 2026-09-05; branch `codex/cuda-provider-boundary`.
-- **Scope:** existing generic FourStep phase boundaries and a bounded diagnostic probe; preserve `engine_census`, dispatch policy and production computation.
-- **Evidence:** four candidate census runs place complex 65536 at 2.68–4.22× RustFFT latency and 262144 at 2.02–2.38×; phase attribution is missing, so these ratios are triage evidence only.
-- **Acceptance:** attribute transpose, row submissions including join, multiply-transpose and final transpose; compare independent row arithmetic on a queried core; record uncertainty without claiming isolated scheduler time or speedup.
-- **Verification:** committed 60-second release probe budget, fixed inputs/sizes, allocation-free instrumentation, existing numerical tests, source/codegen review confirming instrumentation is absent from production.
-- **Lease:** workspace_tests `four_step/execution.rs`, `four_step/mod.rs`, `four_step/profile.rs`, `four_step/tests/profile.rs`, 2026-09-05T22:30:00-04:00.
-- **Dependencies:** [ADR 0048](docs/adr/0048-worker-scratch-lifetime.md) owns workspace lifetime; [ADR 0043](docs/adr/0043-measurement-core-class-is-queried.md) owns core-class identification. This read/profiling increment runs independently of the CUDA provider correction.
-
+- **Scope:** test-only generic FourStep phase recorder and diagnostic; preserve production computation, `engine_census`, routing, scheduling and workspace ownership.
+- **Evidence:** `output/apollo-four-step-profile` records layout at 80–92% of N=262144 latency. The register-tile experiment establishes no supported performance-core complete-transform gain and grows the executable by 16,384 bytes; efficiency runs are invalidated by active Cargo overlap.
+- **Acceptance:** retain allocation-free diagnostics with production exclusion, analytical FFT suites passing and baseline production artifact size and payload restored (link timestamps/PDBAge excepted). [Rejected ADR 0049](docs/adr/0049-fused-twiddle-transpose.md) records the removed candidate and validity limits.
+- **Verification:** profiling-only Clippy passes; 545 release tests and the ignored phase contract pass. Census size returns to 6,862,336 bytes; only linker timestamp/PDBAge bytes differ from baseline. Raw samples, source hashes and rejected binaries remain in ignored evidence.
+- **Lease:** workspace_tests `four_step/{execution.rs,mod.rs,profile.rs,profile/tests.rs}`, `docs/adr/0049-fused-twiddle-transpose.md`, 2026-09-05T23:48:00-04:00; no production optimization retained.
+- **Dependencies:** [ADR 0048](docs/adr/0048-worker-scratch-lifetime.md) owns workspace lifetime; [ADR 0043](docs/adr/0043-measurement-core-class-is-queried.md) owns processor identification.
 <a id="apollo-four-step-twiddle-retention"></a>
 ## APOLLO-FOUR-STEP-TWIDDLE-RETENTION — Acquire only route-consumed stage tables [patch] — done
 - Merged [PR 332](https://github.com/ryancinsight/apollo/pull/332), `f69f9c08`; measured retained bytes fall 25–36% at generic even powers with zero warm 1-D allocations. [ADR 0039](docs/adr/0039-one-dimensional-power-of-two-routing.md) records evidence and limits.
