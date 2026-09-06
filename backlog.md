@@ -190,6 +190,26 @@
   scalar caller, which this item bounded only from one side.
 - **Parent:** [`#atlas-apollo-beat-the-references`](#atlas-apollo-beat-the-references).
 
+<a id="apollo-python-release-crlf"></a>
+
+## APOLLO-PYTHON-RELEASE-CRLF-2026-09-06 — `python-release.yml` landed as a CRLF blob [patch] — todo
+
+- **Finding.** `.gitattributes` declares `*.yml text eol=lf`, and every other
+  workflow stores LF. `python-release.yml` on `main` stores CRLF as of
+  [PR 339](https://github.com/ryancinsight/apollo/pull/339) (`0917cacd`), so
+  every Windows checkout reports the file dirty the moment git touches it and
+  every writer is offered a 58-line whole-file diff they did not make.
+- **Not fixed in passing.** The repair is one `git add --renormalize`, but it
+  is a whole-file diff in a workflow a peer landed minutes ago; it belongs in
+  its own [patch] rather than inside an unrelated change, which is how it was
+  found ([`#apollo-n8-f64-gap`](#apollo-n8-f64-gap)'s merge surfaced it).
+- **Acceptance.** `git ls-files --eol .github/workflows` reports `w/lf i/lf`
+  for every entry, and a fresh Windows clone has a clean tree. Worth checking
+  the same command across all workflows in the same change — one CRLF blob
+  landing after a fleet-wide normalization suggests the writer's client, not a
+  one-off.
+- **Risk / change class:** [patch]; **dependencies:** none.
+
 <a id="apollo-target-feature-boundary"></a>
 
 ## APOLLO-TARGET-FEATURE-BOUNDARY-2026-09-06 — Vector codelets cannot inline into their dispatcher [patch] [perf] — todo
