@@ -167,3 +167,11 @@ gate passes. An additional all-feature audit rejects the pre-existing
 **2026-09-05 revision:** accept operation-owned companion storage after the
 allocation, analytical and independent-review oracles pass; retain the stated
 limits on timing, mixed-length throughput and instrumented unsafe coverage.
+
+**2026-09-06 revision:** Hephaestus PR 277, merged as `242520e`, replaces the
+unsafe Windows CUDA binding and static import-library dependency. Apollo's
+updated lock removes cuda-oxide; its unchanged all-feature dependency policy
+now passes. All-feature workspace run `df94d072` passes 1,441 tests (32
+ignored diagnostics), and all seven configured benchmark smokes pass. This
+closes the dependency-policy limitation above without changing workspace
+lifetime, numerical tolerances or the remaining instrumented-coverage limits.

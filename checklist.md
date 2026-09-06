@@ -1,9 +1,8 @@
 ## codex/root — current execution
 
-- [x] [Workspace lifetime](backlog.md#apollo-worker-workspace-lifetime): implement borrowed FourStep scratch and disjoint multidimensional companion groups.
-- [x] [Workspace lifetime](backlog.md#apollo-worker-workspace-lifetime): diagnose cold-worker table and instrumentation allocations; preserve zero-allocation assertions.
-- [x] [Workspace lifetime](backlog.md#apollo-worker-workspace-lifetime): collect full tests, memory census, replicated timings and independent review.
-- [ ] [Workspace lifetime](backlog.md#apollo-worker-workspace-lifetime): synchronize evidence, commit and integrate the verified change.
+- [x] [CUDA driver boundary](backlog.md#apollo-cuda-crt-linkage): verify the Windows output-size mismatch against the caller, binding and installed NVIDIA header; enumerate the dependency closure.
+- [ ] [CUDA driver boundary](backlog.md#apollo-cuda-crt-linkage): revise governing ADRs and implement provider-owned ABI/loading in Hephaestus.
+- [ ] [CUDA driver boundary](backlog.md#apollo-cuda-crt-linkage): verify provider contracts, integrate upstream, update Apollo's lock and run consumer gates.
 
 # Apollo Checklist
 

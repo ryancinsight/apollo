@@ -129,10 +129,16 @@ fn decompose<F: MixedRadixScalar<Complex = eunomia::Complex<F>>, const INVERSE: 
     let parallel = n >= PARALLEL_ROW_THRESHOLD;
 
     // Step 1: transpose data (N1 × N2 logical) → scratch (N2 × N1 layout).
+    #[cfg(test)]
+    let phase = super::profile::Phase::FirstTranspose.start();
     F::transpose_matrix(data, scratch, n1, n2);
+    #[cfg(test)]
+    drop(phase);
 
     // Step 2: N2 independent FFTs of length N1 on contiguous rows of scratch.
     // The corresponding rows in data are inactive and provide Stockham scratch.
+    #[cfg(test)]
+    let phase = super::profile::Phase::FirstRows.start();
     if parallel {
         moirai::for_each_chunk_pair_mut_enumerated_with::<moirai::Parallel, _, _, _>(
             scratch,
@@ -149,10 +155,15 @@ fn decompose<F: MixedRadixScalar<Complex = eunomia::Complex<F>>, const INVERSE: 
         }
     }
 
+    #[cfg(test)]
+    drop(phase);
+
     // Step 3: multiply by W_N^{j·k} (cached) and transpose scratch → data.
     // Source layout: scratch[j * n1 + k] for j in 0..n2, k in 0..n1.
     // tw_matrix[j * n1 + k] = W_N^{j·k}.
     // Destination: data[k * n2 + j] giving N1 rows of N2 elements for step 4.
+    #[cfg(test)]
+    let phase = super::profile::Phase::MultiplyTranspose.start();
     const TILE: usize = 16;
     for j in (0..n2).step_by(TILE) {
         for kk in (0..n1).step_by(TILE) {
@@ -173,9 +184,13 @@ fn decompose<F: MixedRadixScalar<Complex = eunomia::Complex<F>>, const INVERSE: 
             }
         }
     }
+    #[cfg(test)]
+    drop(phase);
 
     // Step 4: N1 independent FFTs of length N2 on contiguous rows of data.
     // The corresponding rows in scratch are inactive and provide Stockham scratch.
+    #[cfg(test)]
+    let phase = super::profile::Phase::SecondRows.start();
     if parallel {
         moirai::for_each_chunk_pair_mut_enumerated_with::<moirai::Parallel, _, _, _>(
             data,
@@ -191,15 +206,21 @@ fn decompose<F: MixedRadixScalar<Complex = eunomia::Complex<F>>, const INVERSE: 
             F::stockham_forward(row, row_scratch, tw2.as_ref());
         }
     }
+    #[cfg(test)]
+    drop(phase);
 
     // Step 5: restore natural-order N1×N2 row-major output.
     // After step 4, data[k1*n2 + k2] = X[k2*n1 + k1] (bit-reversal permuted).
     // A final transpose maps this to data[k2*n1 + k1] = X[k2*n1 + k1].
     // When N1 == N2 (k even) use in-place square transpose.
+    #[cfg(test)]
+    let phase = super::profile::Phase::FinalTranspose.start();
     if n1 == n2 {
         transpose_square_inplace(data, n1);
     } else {
         F::transpose_matrix(data, scratch, n1, n2);
         data.copy_from_slice(scratch);
     }
+    #[cfg(test)]
+    drop(phase);
 }
