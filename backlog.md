@@ -37,16 +37,15 @@
 - **Verification:** attribute interpreter cost before modifying production code or its instrument; run targeted FourStep, lane and worker-idle tests with ASan once linking is available.
 
 <a id="apollo-cuda-crt-linkage"></a>
-## APOLLO-CUDA-CRT-LINKAGE — Correct the native CUDA driver boundary [patch] [arch] — in-progress
+## APOLLO-CUDA-CRT-LINKAGE — Correct the native CUDA driver boundary [patch] [arch] — review
 
 - **Integrator:** codex/root; **branch:** `codex/cuda-provider-boundary`; **last-update:** 2026-09-05.
-- **Lease:** codex/root `Cargo.lock`, `.github/workflows/ci.yml`, `.github/actions/cuda-headers/action.yml`, `docs/adr/0048-worker-scratch-lifetime.md`; provider PR 277 is merged, 2026-09-06T00:00:00-04:00.
 - **Scope:** Hephaestus CUDA driver loading consumed by Apollo's all-feature Windows build; preserve driver errors and the existing GPU API. Governing Hephaestus and Atlas ADR 0001 require revision before implementation.
 - **Evidence:** CUDA 13.3 `cuda.lib` embeds `/DEFAULTLIB:LIBCMT`; `cuda-oxide` 0.4.0 links it, producing LNK4098 in Apollo's dynamic-CRT test binaries. Its GPL-3.0-or-later license also fails Apollo's unchanged all-feature deny policy. Hephaestus records the toolkit-loading mismatch in its risk artifact.
 - **Safety:** provider `current_memory_info` passes `cuda_oxide::sys::size_t` output locals, defined as `c_ulong` (32 bits on Windows x64), to `cuMemGetInfo_v2`, whose installed CUDA 13.3 header requires pointer-sized `size_t` outputs. The resulting undersized storage takes priority over linkage cleanup.
 - **Acceptance:** provider-owned header-grounded ABI and dynamic loading replace the sole direct dependency; Apollo links without LNK4098 and passes all-feature deny. No warning suppression, license-policy relaxation or adapter shim.
-- **Verification:** ABI layout assertions; physical-device memory, transfer, context and kernel contracts; distinct loader errors; provider merge then Apollo lock update and all-feature gates. No release/deploy.
-- **Begun:** confirmed caller, binding and NVIDIA header; enumerated eleven provider call-site files and existing `libloading` infrastructure. [Provider ownership](../hephaestus/backlog.md#heph-cuda-driver-boundary).
+- **Verification:** merged provider `242520e`; all-feature workspace Clippy, 1,441 Nextest cases (32 skips), doctests/rustdoc, provider audit, RustSec and unchanged deny policy pass. Seven configured smokes pass with `APOLLO_BENCH_MODE=smoke`; Windows test links report no LNK4098. Evidence: Atlas `output/cuda-driver-boundary`.
+- **Delivery:** lock removes cuda-oxide and seven obsolete transitive packages; both CI header-install calls and their unused action are removed. [Provider ownership](../hephaestus/backlog.md#heph-cuda-driver-boundary); its adapterless CI correction is tracked independently as HEPH-CUDA-ADAPTERLESS-DRIVER.
 
 <a id="apollo-n16-register-permute"></a>
 
