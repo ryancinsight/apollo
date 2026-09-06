@@ -5,14 +5,8 @@
 - Merged [PR 332](https://github.com/ryancinsight/apollo/pull/332), `f69f9c08`; measured retained bytes fall 25–36% at generic even powers with zero warm 1-D allocations. [ADR 0039](docs/adr/0039-one-dimensional-power-of-two-routing.md) records evidence and limits.
 
 <a id="apollo-worker-workspace-lifetime"></a>
-## APOLLO-WORKER-WORKSPACE-LIFETIME — Bound scratch across transform submissions [patch] [arch] — review
-
-- **Integrator:** codex/root; **branch:** `codex/fft-workspace-lifetime`; **last-update:** 2026-09-05. [ADR 0048](docs/adr/0048-worker-scratch-lifetime.md) records the accepted ownership contract and evidence.
-- **Scope:** Apollo multidimensional workspace lifetime across Moirai submissions; Mnemosyne owns storage. Preserve zero idle TLS retention; do not extend scheduler spins or introduce permanent worker caches.
-- **Evidence:** the census baseline reallocates 73,728 bytes per 4096-point worker lane, matching padded planar scratch. Apollo's idle hook releases unprovisioned scratch before Moirai parks. Existing live-task reuse tests do not cover separate calls.
-- **Acceptance:** two transform submissions separated by event-confirmed worker quiescence preserve analytical values and bounded memory; caller-owned workspace reuses scratch across submissions without leaving idle worker allocations.
-- **Verification:** extend the existing retained-footprint observer with distinct submission phases; cover 4096×16 and 4096×4×4; compare allocation bytes and retained capacity without sleeps or timing assertions.
-- **Delivery:** borrowed companion workspace and bounded worker handles pass analytical, allocation and independent-review oracles; 1,441 workspace and 545 release tests pass. Five warm multidimensional census cases allocate zero bytes. Instrumentation coverage and existing CUDA policy debt have separate items below; no release authority required.
+## APOLLO-WORKER-WORKSPACE-LIFETIME — Bound scratch across transform submissions [patch] [arch] — done
+- Merged [PR 333](https://github.com/ryancinsight/apollo/pull/333), `b5ea7394`; five warm multidimensional cases allocate zero bytes. [ADR 0048](docs/adr/0048-worker-scratch-lifetime.md) records ownership, numerical and memory evidence, and instrumentation limits.
 
 <a id="apollo-workspace-instrumented-verification"></a>
 ## APOLLO-WORKSPACE-INSTRUMENTED-VERIFICATION — Close instrumented workspace coverage [patch] — blocked
@@ -24,12 +18,15 @@
 - **Verification:** attribute interpreter cost before modifying production code or its instrument; run targeted FourStep, lane and worker-idle tests with ASan once linking is available.
 
 <a id="apollo-cuda-crt-linkage"></a>
-## APOLLO-CUDA-CRT-LINKAGE — Remove toolkit static CRT dependency [patch] — todo
+## APOLLO-CUDA-CRT-LINKAGE — Correct the native CUDA driver boundary [patch] [arch] — in-progress
 
-- **Scope:** Hephaestus CUDA driver loading consumed by Apollo's all-feature Windows build; preserve driver errors and the existing GPU API.
+- **Integrator:** codex/root; **branch:** `codex/cuda-provider-boundary`; **last-update:** 2026-09-05.
+- **Scope:** Hephaestus CUDA driver loading consumed by Apollo's all-feature Windows build; preserve driver errors and the existing GPU API. Governing Hephaestus and Atlas ADR 0001 require revision before implementation.
 - **Evidence:** CUDA 13.3 `cuda.lib` embeds `/DEFAULTLIB:LIBCMT`; `cuda-oxide` 0.4.0 links it, producing LNK4098 in Apollo's dynamic-CRT test binaries. Its GPL-3.0-or-later license also fails Apollo's unchanged all-feature deny policy. Hephaestus records the toolkit-loading mismatch in its risk artifact.
-- **Acceptance:** the provider follows its dynamic-driver-loading contract and Apollo links without LNK4098; remove the rejected dependency without `/NODEFAULTLIB` suppression or license-policy relaxation.
-- **Verification:** provider driver success/unavailable-device cases, Windows full-feature link and tests; coordinate provider changes upstream. No release/deploy.
+- **Safety:** provider `current_memory_info` passes `cuda_oxide::sys::size_t` output locals, defined as `c_ulong` (32 bits on Windows x64), to `cuMemGetInfo_v2`, whose installed CUDA 13.3 header requires pointer-sized `size_t` outputs. The resulting undersized storage takes priority over linkage cleanup.
+- **Acceptance:** provider-owned header-grounded ABI and dynamic loading replace the sole direct dependency; Apollo links without LNK4098 and passes all-feature deny. No warning suppression, license-policy relaxation or adapter shim.
+- **Verification:** ABI layout assertions; physical-device memory, transfer, context and kernel contracts; distinct loader errors; provider merge then Apollo lock update and all-feature gates. No release/deploy.
+- **Begun:** confirmed caller, binding and NVIDIA header; enumerated eleven provider call-site files and existing `libloading` infrastructure. [Provider ownership](../hephaestus/backlog.md#heph-cuda-driver-boundary).
 
 <a id="apollo-n16-register-permute"></a>
 
