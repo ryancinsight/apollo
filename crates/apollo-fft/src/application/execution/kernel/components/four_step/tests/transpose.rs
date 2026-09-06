@@ -3,7 +3,6 @@
 use crate::application::execution::kernel::mixed_radix::MixedRadixScalar;
 use eunomia::{layout::cast_slice, Complex};
 use leto::LetoError;
-use leto_ops::transpose_complex_matrices;
 
 trait Payloads: MixedRadixScalar<Complex = Complex<Self>> + From<u16> {
     const VALUES: [Self; 12];
@@ -81,7 +80,7 @@ fn check_permutation<F: Payloads>() {
                         *value = source[source_offset + (index % rows) * columns + index / rows];
                     }
                     let mut actual = before;
-                    transpose_complex_matrices(
+                    F::transpose_complex_matrices(
                         &source[source_offset..source_offset + len],
                         &mut actual[destination_offset..destination_offset + len],
                         1,
@@ -129,7 +128,7 @@ fn check_rejection<F: Payloads>() {
                 }
             }
         };
-        let outcome = transpose_complex_matrices(&source, &mut destination, 1, rows, columns);
+        let outcome = F::transpose_complex_matrices(&source, &mut destination, 1, rows, columns);
         assert_eq!(
             outcome,
             Err(expected_error),
@@ -144,14 +143,14 @@ fn check_rejection<F: Payloads>() {
     for (rows, columns) in [(0, usize::MAX), (usize::MAX, 0)] {
         let before = signal::<F>(5);
         let mut destination = before.clone();
-        transpose_complex_matrices::<F>(&[], &mut destination[..0], 1, rows, columns)
+        F::transpose_complex_matrices(&[], &mut destination[..0], 1, rows, columns)
             .expect("zero extent accepts empty matrix slices");
         assert_eq!(
             cast_slice::<_, u8>(&destination),
             cast_slice::<_, u8>(&before),
             "zero extent is a no-op for {rows} x {columns}"
         );
-        transpose_complex_matrices::<F>(&[], &mut [], 1, rows, columns)
+        F::transpose_complex_matrices(&[], &mut [], 1, rows, columns)
             .expect("zero extent accepts empty matrix slices");
     }
 }

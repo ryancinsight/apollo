@@ -21,12 +21,13 @@ Leto owns in-place complex square movement and the existing
 `transpose_complex_matrices` operation. Apollo's experimental FourStep calls
 use the latter with matrix count one at both out-of-place sites and the square
 operation at the in-place site. `MixedRadixScalar<Complex = eunomia::Complex<F>>`
-already implies `LaneScalar + Pod`. Exact factor-sized slices and caller
+requires `ComplexLayout`, which implies `LaneScalar + Pod`. Exact factor-sized slices and caller
 workspace clipping require no conversion or additional scratch role. The
 private scalar transpose hook, two scalar overrides and scalar/AVX copy
 modules are removed without a forwarding layer. FFT arithmetic, fused twiddle
 multiplication, decomposition, routes, sign and normalization remain unchanged;
-Apollo's public API and implementor set do not change.
+The sealed scalar implementor set remains unchanged; current-source SemVer
+verification checks the public surface before delivery.
 
 The moved provider-contract tests preserve the original Cartesian product of
 shapes, offsets, special-value payloads and whole-buffer canaries for both
@@ -233,13 +234,87 @@ trails both competitors on both cores. P-core PhastFT comparisons at 4,096,
 16,384 and 65,536 overlap. These results describe this retained candidate and
 machine, not a stack-wide performance claim.
 
-The current experimental lock selects Leto `00665a4` through two entries and
+The next bounded provider experiment uses Leto's `ComplexLayout` scalar role
+for both complex movement operations. Four concrete provider implementations
+call the existing private generic checked algorithms. Their non-generic entry
+methods preserve one instantiation root per scalar under ThinLTO; whether
+this eliminates the measured duplicate code is verified by the linked map.
+Apollo calls `F::transpose_complex_matrices` and
+`F::transpose_square_inplace` through its existing scalar bound. The batch
+axis path and bitwise tests migrate with the FourStep calls; no compatibility
+free functions remain. Fused math, dimensions, dispatch and storage stay fixed.
+
+This is a source-breaking Leto API migration, defined in
+[ADR 0027](../../../leto/docs/adr/0027-hermes-complex-batch-transpose.md), without
+a release or manifest version bump. A generic/default role implementation
+would retain consumer instantiation roots; a broad arithmetic trait would
+misstate the movement contract. Loss of count-one specialization is a risk.
+Keep the candidate only if unchanged behavioral/allocation gates pass, the
+linked code has no new payload spills or divisions, executable size meets
+the original baseline bound, and the complete-engine census supports a gain
+without a regression. The role is a tested ownership hypothesis, not a
+zero-cost claim before codegen and timing evidence.
+
+With Leto `843febc`, the normal unchanged census executable is 6,866,432
+bytes, 4,608 above baseline and 6,144 below the restored candidate. Its SHA256
+is `ACEC93405684CE193A7982DBCFAB88512A8FFE57DBD0E7BC337C2953C605A52A`.
+The focused consumer format, all-target Clippy and 13 FourStep/layout/workspace
+tests pass. This candidate fails the existing no-growth condition; no timing
+run or performance acceptance is claimed. The map-only relink has identical
+normal-executable `.text` bytes (4,796,561 bytes). It shows one provider-owned
+square entry and one kernel per ISA, satisfying the instantiation hypothesis.
+Two consumer-owned `SquareTransposeError::Debug` addresses remain. The saved
+map spans include padding and cannot account additively for whole-file size.
+
+The batch-inline correction `633acb7` passes the same focused gates but grows
+the executable to 6,867,456 bytes (+5,632 baseline), SHA256
+`C44D1F2EF2E77BCFE6162C0D14AB0B93C1487DDF2206FA48E0966B050D439B77`.
+It also fails size acceptance; no timing result is collected. The map confirms
+the prior library-specialized/census-general count-one relationship: the latter
+already retained the general batch in `preflight-inline`. This corrects the
+earlier all-callers specialization premise; no new general call or timing
+regression follows from that residue. One provider square kernel per ISA remains.
+
+Independent caller/vtable analysis identifies the remaining failure roots:
+library and census FourStep `expect` calls pass different Leto error Debug/drop
+and square-error Debug vtables to the same `unwrap_failed` function. A bounded
+next correction moves only failure branches into concrete owned-error cold
+functions shared by execution kernels and plans. It preserves each original
+message, Debug representation and tracked caller location; it adds no public
+wrapper or generic error adapter. Exact panic-payload tests, unchanged valid
+FFT/layout/allocation oracles and linked valid-path inspection guard the change.
+Other Leto error consumers can retain duplicates, so no recovered-byte count is
+assumed. All prior codegen, whole-file size and performance gates remain binding.
+
+The concrete cold failure boundary reduces the unchanged census executable to
+6,861,312 bytes, 512 below baseline and 6,144 below the batch-inline candidate.
+Its SHA256 is `C1019AD5BD24E3DCB6EB782675E4A2C7595F0B640B55A6929CAAB5577DDEB9EC`.
+The [focused gates](../../../../output/apollo-square-transpose/cold-failures/apollo-final-checks.json)
+pass 15 tests in debug and release, format and all-target/all-feature Clippy.
+The normal and map-only builds have identical `.text`. Independent
+[linked-code comparison](../../../../output/apollo-square-transpose/cold-failures/map/normalized-comparison.json)
+finds unchanged square kernels and batch bodies; square Debug roots decrease
+from two to one and standalone Leto error drop roots from three to two.
+Two Leto error Debug roots remain. [Caller-location decoding](../../../../output/apollo-square-transpose/cold-failures/map/caller-locations.json)
+confirms tracked source locations reach the cold panic handlers.
+These are size, behavioral and structural results, not latency evidence.
+Full consumer verification passes 1,445 native tests, 555 release FFT tests,
+seven doctests (one existing ignored), format, the safety ratchet, all-target
+workspace Clippy and warning-denied rustdoc. Seven benchmark smokes complete
+within their unchanged 60-second bounds. The [default-feature footprint](../../../../output/apollo-square-transpose/cold-failures/apollo-gates/footprint-summary.json)
+matches all 20 baseline allocation-count and byte windows. Its warmed global
+pool does not establish cold-process memory behavior.
+The first census attempt stops before measurement because two Cargo processes
+are present. Current-source SemVer and an uncontended census remain required
+before performance acceptance.
+
+The current experimental lock selects Leto `633acb7` through two entries and
 Hermes `07c5e5f` through five, without changing manifest requirements or
 registry selections. [Leto](../../../leto/backlog.md#leto-square-transpose) and
 [Hermes](../../../hermes/backlog.md#hermes-complex-permutation-inlining) remain
 review-branch dependencies: provider merges precede accepted consumer delivery;
 rejection removes the unaccepted candidate and temporary lock selections.
-The restored candidate 9 implementation is in this lock. Retained output links follow Atlas's
+The scalar movement role and batch-inline correction are in this lock. Retained output links follow Atlas's
 14-day/10-GiB policy and contain experiment manifests, not release artifacts.
 
 **Revision 2026-09-01:** Leto Ops PR #135, merged as `060eb7eb`, added one

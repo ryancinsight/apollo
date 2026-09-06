@@ -1101,7 +1101,7 @@ checksum = "bbd2bcb4c963f2ddae06a2efc7e9f3591312473c50c6685e1f298068316e66fe"
 [[package]]
 name = "leto"
 version = "0.43.0"
-source = "git+https://github.com/ryancinsight/leto.git#00665a4b99e8bc76648c3c59462b7ccef8008a8c"
+source = "git+https://github.com/ryancinsight/leto.git#633acb71e9887f39ad5bddf1685df351f15bc16c"
 dependencies = [
  "aequitas",
  "eunomia",
@@ -1113,7 +1113,7 @@ dependencies = [
 [[package]]
 name = "leto-ops"
 version = "0.43.0"
-source = "git+https://github.com/ryancinsight/leto.git#00665a4b99e8bc76648c3c59462b7ccef8008a8c"
+source = "git+https://github.com/ryancinsight/leto.git#633acb71e9887f39ad5bddf1685df351f15bc16c"
 dependencies = [
  "eunomia",
  "hermes-simd",

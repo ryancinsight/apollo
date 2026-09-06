@@ -27,9 +27,7 @@ pub trait MixedRadixScalar:
     + Sized
     + Copy
     + 'static
-    + hermes_simd::LaneScalar
-    + eunomia::layout::Pod
-    + eunomia::Pod
+    + leto_ops::ComplexLayout
     + ShortWinogradScalar
     + CompositeCache
     + BluesteinStore<Cpx = Self::Complex>
