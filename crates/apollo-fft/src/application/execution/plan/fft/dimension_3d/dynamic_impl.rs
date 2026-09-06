@@ -1,5 +1,5 @@
-use super::twiddles::cached_power_of_two_twiddle;
-use super::MOIRAI_PARALLEL_THRESHOLD;
+use super::super::lanes;
+use super::super::twiddles::cached_power_of_two_twiddle;
 use crate::application::execution::kernel::mixed_radix::scalar::plan_scratch::{
     with_3d_x_scratch, with_3d_y_scratch, PlanScratch,
 };
@@ -221,11 +221,7 @@ where
                     }
                 }
             };
-            moirai::for_each_chunk_mut_with::<
-                moirai::AdaptiveWithThreshold<MOIRAI_PARALLEL_THRESHOLD>,
-                _,
-                _,
-            >(&mut scratch[..], self.ny, lane_fn);
+            lanes::execute::<F, FORWARD>(scratch, data_slice, self.ny, lane_fn);
             transpose_matrices(scratch, data_slice, self.nx, self.nz, self.ny);
         });
     }
@@ -255,11 +251,7 @@ where
                     }
                 }
             };
-            moirai::for_each_chunk_mut_with::<
-                moirai::AdaptiveWithThreshold<MOIRAI_PARALLEL_THRESHOLD>,
-                _,
-                _,
-            >(&mut scratch[..], self.nx, lane_fn);
+            lanes::execute::<F, FORWARD>(scratch, data_slice, self.nx, lane_fn);
             transpose_matrices(scratch, data_slice, 1, self.ny * self.nz, self.nx);
         });
     }
@@ -287,10 +279,6 @@ where
                     }
                 }
             };
-        moirai::for_each_chunk_mut_with::<
-            moirai::AdaptiveWithThreshold<MOIRAI_PARALLEL_THRESHOLD>,
-            _,
-            _,
-        >(data_slice, self.nz, lane_fn);
+        lanes::contiguous::<F, FORWARD, 3>(data_slice, self.nz, lane_fn);
     }
 }

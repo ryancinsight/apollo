@@ -1,3 +1,10 @@
+## codex/root — current execution
+
+- [x] [Workspace lifetime](backlog.md#apollo-worker-workspace-lifetime): implement borrowed FourStep scratch and disjoint multidimensional companion groups.
+- [x] [Workspace lifetime](backlog.md#apollo-worker-workspace-lifetime): diagnose cold-worker table and instrumentation allocations; preserve zero-allocation assertions.
+- [x] [Workspace lifetime](backlog.md#apollo-worker-workspace-lifetime): collect full tests, memory census, replicated timings and independent review.
+- [ ] [Workspace lifetime](backlog.md#apollo-worker-workspace-lifetime): synchronize evidence, commit and integrate the verified change.
+
 # Apollo Checklist
 
 ## ATLAS-APOLLO-REAL-HALF-THROUGHPUT-2026-09-01 [perf] — Codex
@@ -6583,4 +6590,3 @@ Sprint target version: 0.3.0 (first unreleased minor after 0.2.0)
 - [x] Add typed SFT sparse forward/inverse caller-owned coverage for `Complex64`, `Complex32`, mixed `[f16; 2]`, represented-input parity, inverse roundtrip, sparse shape rejection, and profile mismatch rejection.
 - [x] Add typed SHT real/complex caller-owned coverage for `f64`/`Complex64`, `f32`/`Complex32`, mixed `f16`/`[f16; 2]`, represented-input parity, inverse roundtrip, shape rejection, and profile mismatch rejection.
 - [x] Add typed NUFFT 1D/3D Type-1/Type-2 caller-owned coverage for `Complex64`, `Complex32`, mixed `[f16; 2]`, represented-input parity, Type-2 parity, shape rejection, and profile mismatch rejection.
-

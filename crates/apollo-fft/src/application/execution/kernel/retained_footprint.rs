@@ -30,6 +30,8 @@ use super::worker_quiescence;
 use crate::application::execution::kernel::mixed_radix::MixedRadixScalar;
 use eunomia::Complex64;
 
+mod submissions;
+
 /// Even values are closed; odd values identify one open measurement window.
 static WINDOW_EPOCH: AtomicUsize = AtomicUsize::new(0);
 /// Global-allocator calls admitted before a window closes.
