@@ -129,36 +129,29 @@ pub(crate) fn dft_pair_impl<
     }
 }
 
-/// Split-array (structure-of-arrays) form of [`dft_pair_impl`].
+/// Wide form of [`dft_pair_impl`]: two output bins per k-iteration.
 ///
-/// Arithmetically identical to [`dft_pair_impl`] — same operations in the same
-/// order, so both carry the same error bound. The sole difference is layout:
-/// the sum and i-difference staging arrays are split into separate real and
-/// imaginary arrays instead of one interleaved `[Complex<F>; H]`, which changes
-/// what the vectorizer can do with the two accumulation loops.
+/// Arithmetically identical to [`dft_pair_impl`] — same inputs, same outputs,
+/// and the same per-output summation order (m ascending, base pass then delta
+/// pass). The only difference is scheduling: where [`dft_pair_impl`] carries
+/// four accumulators per iteration (base re/im, delta re/im — two sequential
+/// FMA chains per lane), this form carries eight, covering the bin pair
+/// `k` and `k + 1` side by side. At f32 the leaf probe measured the narrow
+/// form losing 1.37x to 1.44x against f64 on the odd half-sizes (H = 5, 9,
+/// 11, 14, 15) while winning 0.57x at H = 8 — a latency-bound reduction
+/// signature, not a lane-width one, and this form shortens that critical
+/// path instead of relying on the vectorizer to repair it.
 ///
-/// ## Why only `f32` at N=31 uses this
+/// ## Why only `f32` routes here
 ///
-/// Layout choice here is empirical, not analytical, so it is narrowed to the
-/// one instantiation where it measured as a win. A broader SoA route covering
-/// `f32` N=29/37/41/53 was measured and rejected: it gave no stable
-/// improvement and regressed the larger short-prime rows. At N=31 the SoA form
-/// measured 87.31 ns against 107.39 ns for the interleaved probe, so
-/// `ShortWinogradScalar for f32` routes `dft31` here and every other `f32`
-/// odd prime — and every `f64` odd prime — stays on [`dft_pair_impl`].
-///
-/// Two consequences worth knowing before touching this:
-///
-/// - The `_reduced` suffix names the *reduced-precision scalar* this route was
-///   introduced for, not a reduced error bound and not reduced register
-///   pressure.
-/// - `benchmark_kernels::winograd_pair_prime_forward` calls [`dft_pair_impl`]
-///   for whatever `F` it is handed, so it does **not** exercise this route.
-///   Benchmarking `f32` at N=31 through that entry point measures the
-///   interleaved path this special case exists to avoid; a comparison meant to
-///   re-evaluate the narrowing has to call both kernels explicitly.
+/// The narrow form's f64 codegen schedules the same reductions fine (the
+/// probe's f64 numbers are healthy at every H), and re-plumbing f64 would
+/// churn twelve monomorphizations for no measured gain. The route lives in
+/// `ShortWinogradScalar for f32`, which selects the sizes; this function
+/// stays scalar-generic so the in-file equivalence tests can compare both
+/// forms at either width.
 #[inline]
-pub(crate) fn dft_pair_impl_reduced<
+pub(crate) fn dft_pair_impl_wide<
     F: WinogradScalar,
     const N: usize,
     const H: usize,
@@ -171,18 +164,16 @@ pub(crate) fn dft_pair_impl_reduced<
     debug_assert_eq!(N, 2 * H + 1);
     let zero = <F as eunomia::NumericElement>::ZERO;
     let x0 = data[0];
-    let mut sums_re = [zero; H];
-    let mut sums_im = [zero; H];
-    let mut idiffs_re = [zero; H];
-    let mut idiffs_im = [zero; H];
+    let mut sums = [eunomia::Complex::new(zero, zero); H];
+    let mut idiffs = [eunomia::Complex::new(zero, zero); H];
+    let mut y0_re = x0.re;
+    let mut y0_im = x0.im;
 
     let sign = if INVERSE {
         <F as eunomia::NumericElement>::ONE
     } else {
         -<F as eunomia::NumericElement>::ONE
     };
-    let mut y0_re = x0.re;
-    let mut y0_im = x0.im;
 
     for m in 0..H {
         let a = data[m + 1];
@@ -191,43 +182,70 @@ pub(crate) fn dft_pair_impl_reduced<
         let sum_im = a.im + b.im;
         y0_re += sum_re;
         y0_im += sum_im;
-        sums_re[m] = sum_re;
-        sums_im[m] = sum_im;
+        sums[m] = eunomia::Complex::new(sum_re, sum_im);
         let diff_re = a.re - b.re;
         let diff_im = a.im - b.im;
-        idiffs_re[m] = -diff_im * sign;
-        idiffs_im[m] = diff_re * sign;
+        idiffs[m] = eunomia::Complex::new(-diff_im * sign, diff_re * sign);
     }
 
     data[0] = eunomia::Complex::new(y0_re, y0_im);
 
-    for k in 0..H {
+    let mut k = 0usize;
+    while k + 2 <= H {
+        let cos_k = &cos[k];
+        let sin_k = &sin[k];
+        let cos_k1 = &cos[k + 1];
+        let sin_k1 = &sin[k + 1];
+
+        let mut base0_re = x0.re;
+        let mut base0_im = x0.im;
+        let mut delta0_re = zero;
+        let mut delta0_im = zero;
+        let mut base1_re = x0.re;
+        let mut base1_im = x0.im;
+        let mut delta1_re = zero;
+        let mut delta1_im = zero;
+
+        for m in 0..H {
+            let s = sums[m];
+            let id = idiffs[m];
+            let c0 = cos_k[m];
+            let sn0 = sin_k[m];
+            let c1 = cos_k1[m];
+            let sn1 = sin_k1[m];
+            base0_re += s.re * c0;
+            base0_im += s.im * c0;
+            delta0_re += id.re * sn0;
+            delta0_im += id.im * sn0;
+            base1_re += s.re * c1;
+            base1_im += s.im * c1;
+            delta1_re += id.re * sn1;
+            delta1_im += id.im * sn1;
+        }
+
+        data[k + 1] = eunomia::Complex::new(base0_re + delta0_re, base0_im + delta0_im);
+        data[N - 1 - k] = eunomia::Complex::new(base0_re - delta0_re, base0_im - delta0_im);
+        data[k + 2] = eunomia::Complex::new(base1_re + delta1_re, base1_im + delta1_im);
+        data[N - 2 - k] = eunomia::Complex::new(base1_re - delta1_re, base1_im - delta1_im);
+        k += 2;
+    }
+    if k < H {
+        let cos_row = &cos[k];
+        let sin_row = &sin[k];
         let mut base_re = x0.re;
         let mut base_im = x0.im;
         let mut delta_re = zero;
         let mut delta_im = zero;
-
-        let cos_row = &cos[k];
-        let sin_row = &sin[k];
-
-        // Two-pass accumulation: compute base and delta contributions separately.
-        // This improves instruction-level parallelism and CPU pipelining,
-        // enabling better utilization of dual FMA units on modern out-of-order CPUs.
         for m in 0..H {
-            let sr = sums_re[m];
-            let si = sums_im[m];
+            let s_m = sums[m];
+            let id_m = idiffs[m];
             let c = cos_row[m];
-            base_re += sr * c;
-            base_im += si * c;
-        }
-        for m in 0..H {
-            let ir = idiffs_re[m];
-            let ii = idiffs_im[m];
             let s = sin_row[m];
-            delta_re += ir * s;
-            delta_im += ii * s;
+            base_re += s_m.re * c;
+            base_im += s_m.im * c;
+            delta_re += id_m.re * s;
+            delta_im += id_m.im * s;
         }
-
         data[k + 1] = eunomia::Complex::new(base_re + delta_re, base_im + delta_im);
         data[N - 1 - k] = eunomia::Complex::new(base_re - delta_re, base_im - delta_im);
     }
@@ -332,6 +350,88 @@ apollo_fft_macros::generate_prime_pair_tables![
 #[cfg(test)]
 mod tests {
     use super::ODD_PRIME_PAIR_SIZES;
+    use super::{dft_pair_impl, dft_pair_impl_wide, PrimePairTable};
+    use crate::application::execution::kernel::components::winograd::radix::odd_prime_pair::PrimePairTables;
+    use crate::application::execution::kernel::components::winograd::traits::WinogradScalar;
+
+    /// Bit-exact equivalence between the narrow and wide pair kernels at a
+    /// given (n, h): same outputs, not merely close ones.
+    fn check_wide_equivalence<F>(n: usize, h: usize)
+    where
+        F: WinogradScalar + PrimePairTables + eunomia::NumericElement,
+    {
+        let build = |phase: f64| -> Vec<eunomia::Complex<F>> {
+            (0..n)
+                .map(|i| {
+                    let x = (i as f64 + phase) * 0.173;
+                    eunomia::Complex::new(
+                        <F as WinogradScalar>::from_precise(x.sin() * 3.0 - 0.5),
+                        <F as WinogradScalar>::from_precise(x.cos() * 1.5),
+                    )
+                })
+                .collect()
+        };
+        macro_rules! run_form {
+            ($func:ident, $n:literal, $h:literal, $buf:ident, $inverse:literal) => {{
+                let arr: &mut [eunomia::Complex<F>; $n] = $buf.as_mut_slice().try_into().unwrap();
+                if $inverse {
+                    $func::<F, $n, $h, true>(
+                        arr,
+                        <F as PrimePairTable<$n, $h>>::cos_table(),
+                        <F as PrimePairTable<$n, $h>>::sin_table(),
+                    );
+                } else {
+                    $func::<F, $n, $h, false>(
+                        arr,
+                        <F as PrimePairTable<$n, $h>>::cos_table(),
+                        <F as PrimePairTable<$n, $h>>::sin_table(),
+                    );
+                }
+            }};
+        }
+        let (n_lit, h_lit): (usize, usize) = (n, h);
+        let _ = (n_lit, h_lit);
+        for inverse in [false, true] {
+            let mut narrow = build(0.0);
+            let mut wide = build(0.0);
+            match (n, h) {
+                (11, 5) => {
+                    if inverse {
+                        run_form!(dft_pair_impl, 11, 5, narrow, true);
+                        run_form!(dft_pair_impl_wide, 11, 5, wide, true);
+                    } else {
+                        run_form!(dft_pair_impl, 11, 5, narrow, false);
+                        run_form!(dft_pair_impl_wide, 11, 5, wide, false);
+                    }
+                }
+                (19, 9) => {
+                    if inverse {
+                        run_form!(dft_pair_impl, 19, 9, narrow, true);
+                        run_form!(dft_pair_impl_wide, 19, 9, wide, true);
+                    } else {
+                        run_form!(dft_pair_impl, 19, 9, narrow, false);
+                        run_form!(dft_pair_impl_wide, 19, 9, wide, false);
+                    }
+                }
+                _ => unreachable!("test sizes are fixed"),
+            }
+            assert_eq!(
+                narrow, wide,
+                "wide pair form diverged from narrow at n={n}, inverse={inverse}"
+            );
+        }
+    }
+
+    #[test]
+    fn wide_pair_form_matches_narrow_exactly() {
+        // The wide form is a scheduling change only: per output bin the
+        // summation order (m ascending, base then delta) is the narrow
+        // form's, so the results must be bit-identical, not merely close.
+        check_wide_equivalence::<f32>(11, 5);
+        check_wide_equivalence::<f64>(11, 5);
+        check_wide_equivalence::<f32>(19, 9);
+        check_wide_equivalence::<f64>(19, 9);
+    }
 
     #[test]
     fn odd_prime_pair_sizes_satisfy_n_equals_2h_plus_1() {
