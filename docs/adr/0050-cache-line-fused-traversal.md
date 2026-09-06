@@ -1,6 +1,6 @@
 # ADR 0050: Cache-line traversal for fused twiddle multiplication
 
-- **Status:** Proposed
+- **Status:** Rejected
 - **Date:** 2026-09-06
 - **Class:** [patch]
 - **Item:** [APOLLO-FOUR-STEP-CACHE-TILE](../../backlog.md#apollo-four-step-cache-tile)
@@ -52,9 +52,9 @@ release diagnostic passes in 3.944 seconds under the unchanged Nextest bound.
 These are topology observations only: phase timings from this run are not a
 performance baseline. WMI aggregate block sizes do not supply these facts.
 
-## Bounded experiment
+## Evaluated candidate
 
-Select the scalar tile side once before the fused traversal:
+The candidate selects the scalar tile side once before the fused traversal:
 `(cached_cache_geometry().cache_line_bytes() / size_of::<Complex<F>>()).clamp(1, 16)`.
 The lower bound makes iterator steps nonzero; the upper bound preserves the
 existing maximum tile dimensions. The scalar contract admits nonzero-sized
@@ -81,8 +81,8 @@ apart from recording the prerequisite topology outside measured regions.
 
 ## Measurements and stop criterion
 
-Freeze the parent's provider-integration commit and updated lockfile first;
-retain a fresh baseline executable from that exact production revision.
+The baseline binds provider-integration commit `1de31e26` and lock SHA256
+`0CE26A23EB9A909220515BF76539FFB6930C05B7AD0B33CA5BB40E728F8DC6E1`.
 The old ADR 0049 binaries do not establish the new dependency baseline.
 
 Run the unchanged engine census with its committed 60-second supervisor on
@@ -107,3 +107,63 @@ replicated measurements establish no benefit. Preserve the diagnostic and
 rejected evidence; remove an unproven production candidate. A later change
 to fusion, routing, provider APIs or scratch ownership requires a separate
 scope and decision.
+## Result and decision
+
+Reject the candidate and retain the original 16-by-16 scalar traversal.
+All-target Clippy and 545 release library tests pass. Sixteen unchanged census
+runs finish within the 60-second bound, but the valid performance-core
+replicated comparison establishes neither supported improvement nor regression
+across 39 cases. Between-run spread leaves one RustFFT composed case and one
+unchanged Apollo 1024 case undecidable. No supported effect justifies a further
+size-correction experiment.
+
+The efficiency-core set is invalid for performance conclusions: the last
+run's endpoint interval contains active `cargo-clippy` PID 25004 (0.046875 CPU
+seconds), plus two idle Cargo processes. Process ownership is not established.
+The timing lease therefore does not establish actual isolation. No replacement
+run is needed to decide this candidate. The earlier baseline-phase output is
+also excluded because hook activity had not been explicitly released; the
+candidate phase measurement provides attribution only, without a paired phase
+speedup claim. Endpoint process snapshots miss short-lived processes.
+
+The executable grows from 6,862,336 to 6,865,408 bytes (+3,072). PE sections
+attribute 2,688 bytes to code, 160 to read-only data, 24 to unwind records and
+4 to relocations; file alignment accounts for the remainder. Inspected f64
+assembly calls the cached geometry getter at fused-loop entry and emits
+runtime division for variable-step loop trip counts. These observations do
+not assign the entire size delta to individual symbols or establish zero
+abstraction overhead.
+
+Cold memory differs from warm memory. The unchanged retained-footprint probe
+warms the pool, then records table/plan/first-forward/warm-forward windows over
+the same length ladder. At the first generic N=65536 forward, the candidate
+performs 83 global allocations versus 6 after restoration. Peak window bytes
+are 2,108,904 versus 2,101,692: 77 extra allocations and 7,212 transient bytes.
+Retained bytes match at 2,101,692. Other ladder cases match, every warm window
+allocates zero bytes, and direct Mnemosyne allocation counts remain zero.
+This is workload evidence for first-use topology initialization, with arbitrary
+worker placement still uncontrolled; cached lookup syntax alone never implies
+allocation-free first use. The census independently shows cold peak growth,
+while its warm allocation results remain unchanged.
+
+After restoration, the independent impulse and static/dynamic, strided and
+recursive lane tests pass (four tests, 0.213 seconds). The rebuilt census
+returns to 6,862,336 bytes; every byte outside COFF/debug timestamps and
+CodeView PDBAge matches the retained baseline. No production change remains.
+A standard Nextest archive preserves the restored phase-test binary for later
+experiments without source or build-cache swapping.
+
+Evidence is under `output/apollo-cache-tile`: `census-manifest.json` records
+source/lock identity, runner, comparison mapping and validity; `binary-sizes.json`
+and `binary-sections.txt` attribute size; `candidate-footprint.txt` and
+`restored-footprint.txt` preserve cold/warm windows; `candidate-execution.rs`
+identifies the rejected source; `restored-production-identity.json` and
+`restored-tests.tar.zst` preserve restoration evidence. Raw CSV rows retain all
+39 cases and 100 ordered samples; the benchmark workload is unchanged.
+
+## Revision
+
+2026-09-06: changed Proposed to Rejected after replicated measurements,
+independent contention review, cold-allocation attribution and restored
+production verification. Cache-line arithmetic alone does not establish
+profitable traversal or eliminate the first-use topology cost.
