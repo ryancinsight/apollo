@@ -1,5 +1,16 @@
 # Apollo Backlog
 
+<a id="apollo-transpose-isa-contract"></a>
+## APOLLO-TRANSPOSE-ISA-CONTRACT — Preserve AVX transpose preconditions [patch] — in-progress
+
+- **Integrator:** codex/root; **contributor:** workspace_tests; **last-update:** 2026-09-06; branch `codex/cuda-provider-boundary`.
+- **Scope:** `mixed_radix/scalar/transpose.rs` and its direct tests; no public API, FFT arithmetic, route, dependency or benchmark change.
+- **Evidence:** the AVX-dispatched reduced transpose calls three intrinsics requiring AVX2 in installed Rust 1.97 stdarch. Current emitted instructions may still be AVX; this is a feature-contract defect, not an observed illegal instruction.
+- **Outcome:** use AVX bitwise lane shuffles, validate matrix extents before unchecked access and preserve empty-matrix/suffix behavior. Reject requiring AVX2 because it removes valid AVX-only acceleration.
+- **Acceptance:** generic bitwise transpose oracles cover both scalar widths, tiles/tails, offsets, NaN payloads and invalid extents; no destination mutation on rejection; emitted kernel requires only AVX. Existing analytical and allocation contracts pass.
+- **Verification:** warning-denied Clippy, debug/release Nextest, AVX-only codegen inspection and unchanged retained census/size comparison; no speedup claim without supported measurements. Baseline production is `1de31e26`, restored and byte-verified by ADR 0050.
+- **Dependencies:** [profiling](#apollo-four-step-profile); [rejected tile experiment](#apollo-four-step-cache-tile). Canonical scalar seam and first-party providers remain unchanged.
+
 <a id="apollo-four-step-cache-tile"></a>
 ## APOLLO-FOUR-STEP-CACHE-TILE — Evaluate cache-line fused traversal [patch] — review
 

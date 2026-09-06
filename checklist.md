@@ -1,5 +1,10 @@
 # Apollo Checklist
 
+## codex/root — current execution
+
+- [ ] [Transpose ISA contract](backlog.md#apollo-transpose-isa-contract): preserve AVX support with bitwise lane movement and checked matrix extents; test both scalar implementations against the direct transpose oracle.
+- [ ] [Transpose ISA contract](backlog.md#apollo-transpose-isa-contract): verify debug/release behavior, emitted ISA, allocation and unchanged complete-transform measurements; integrate the independently reviewed correction.
+
 ## ATLAS-APOLLO-REAL-HALF-THROUGHPUT-2026-09-01 [perf] — Codex
 
 - [x] Attribute cached-plan acquisition, pair packing, half-length FFT, and
