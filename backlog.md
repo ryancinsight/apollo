@@ -1093,6 +1093,23 @@
     dft99, dft144) exceed the sum of their leaves — the f32 codegen asymmetry
     static_rader documents, living in the generated-body inlining, not in
     any leaf. That is the remaining locus and the next round.
+  - **Generated-body round (follow-up, 2026-09-06): mechanism falsified,
+    locus re-pinned.** The generators now emit split variants (transform
+    phases in `#[inline(never)]` helpers through scratch) for CT and GT,
+    proven bit-identical to the fused bodies for dft50/dft144 both scalars,
+    and `composite_split_ab_by_core_type` times fused-vs-split for both
+    scalars in one pinned run (cross-run f64 drift previously drew a false
+    "split wins 0.61x vs 0.79x" conclusion). Result: the fused f32/f64
+    ratio at n = 50 is 0.68 — f32 is *faster* than f64 at codelet
+    granularity — and the split loses ~3% for f32 there (disjoint medians),
+    so fused-body register pressure is **not** the f32 defect; both scalars'
+    `prefers_split_codelet` gates stay off. Every constituent is now
+    exonerated at leaf *and* codelet granularity: the n = 101 excess lives
+    in the composition machinery around the codelets (prime-path dispatch,
+    twiddle application, or memory traffic between phases), which is the
+    next round's target. One genuine lead recorded: f64 dft144 on the perf
+    core runs split 10% faster (disjoint medians) but loses 5.5% on
+    efficiency cores — a core-split candidate, not an f32 item.
 
 ## ATLAS-APOLLO-EIGHT-BLOCK-SPLIT-2026-09-03 — Extend the tuned split to 1024 [minor] [perf] — done 2026-09-03 <a id="atlas-apollo-eight-block-split"></a>
 
