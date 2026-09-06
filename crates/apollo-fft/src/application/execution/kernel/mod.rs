@@ -48,7 +48,7 @@ mod retained_footprint;
 pub(crate) mod test_utils;
 #[cfg(test)]
 #[cfg(not(miri))]
-mod worker_quiescence;
+pub(super) mod worker_quiescence;
 
 // ── Re-exports (public API) ──────────────────────────────────────────────────
 

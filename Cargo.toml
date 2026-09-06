@@ -61,9 +61,8 @@ anyhow = "1.0.103"
 csv = "1.4.0"
 # Eunomia PR #87 is merged; Cargo.lock records the reviewed default source.
 eunomia = { version = "0.8.0", git = "https://github.com/ryancinsight/eunomia", default-features = false, features = ["std"] }
-# Temporary co-evolution pin for Mnemosyne PR #128; remove `rev` after the
-# pooled-scratch release surface merges to main and regenerate Cargo.lock.
-mnemosyne = { package = "mnemosyne-memory", version = "0.7.0", git = "https://github.com/ryancinsight/Mnemosyne.git", rev = "af7a23a", features = ["eunomia"] }
+# Mnemosyne PR #128 is merged; Cargo.lock records the reviewed default source.
+mnemosyne = { package = "mnemosyne-memory", version = "0.7.0", git = "https://github.com/ryancinsight/Mnemosyne.git", features = ["eunomia"] }
 melinoe = { version = "0.9.0", git = "https://github.com/ryancinsight/melinoe.git", default-features = false, features = ["alloc"] }
 # Hermes PR #156 and Leto PR #168 are merged; Cargo.lock records their reviewed
 # default sources.

@@ -6,6 +6,8 @@ use crate::application::execution::kernel::tuning::{
 };
 use eunomia::Complex64;
 
+mod workspace;
+
 fn signal(n: usize) -> Vec<Complex64> {
     (0..n)
         .map(|i| {

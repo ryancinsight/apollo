@@ -1,5 +1,10 @@
 # Apollo Checklist
 
+## codex/root — current execution
+
+- [ ] [Transpose ISA contract](backlog.md#apollo-transpose-isa-contract): preserve AVX support with bitwise lane movement and checked matrix extents; test both scalar implementations against the direct transpose oracle.
+- [ ] [Transpose ISA contract](backlog.md#apollo-transpose-isa-contract): verify debug/release behavior, emitted ISA, allocation and unchanged complete-transform measurements; integrate the independently reviewed correction.
+
 ## ATLAS-APOLLO-REAL-HALF-THROUGHPUT-2026-09-01 [perf] — Codex
 
 - [x] Attribute cached-plan acquisition, pair packing, half-length FFT, and
@@ -6583,4 +6588,3 @@ Sprint target version: 0.3.0 (first unreleased minor after 0.2.0)
 - [x] Add typed SFT sparse forward/inverse caller-owned coverage for `Complex64`, `Complex32`, mixed `[f16; 2]`, represented-input parity, inverse roundtrip, sparse shape rejection, and profile mismatch rejection.
 - [x] Add typed SHT real/complex caller-owned coverage for `f64`/`Complex64`, `f32`/`Complex32`, mixed `f16`/`[f16; 2]`, represented-input parity, inverse roundtrip, shape rejection, and profile mismatch rejection.
 - [x] Add typed NUFFT 1D/3D Type-1/Type-2 caller-owned coverage for `Complex64`, `Complex32`, mixed `[f16; 2]`, represented-input parity, Type-2 parity, shape rejection, and profile mismatch rejection.
-

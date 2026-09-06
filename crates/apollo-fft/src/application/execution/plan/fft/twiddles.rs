@@ -1,8 +1,11 @@
+//! Shared axis-plan ownership of direction-specific power-of-two twiddles.
+
 use crate::application::execution::kernel::mixed_radix::MixedRadixScalar;
 use std::sync::Arc;
 
+/// Retains the selected direction's table only for nontrivial power-of-two axes.
 #[inline]
-pub(crate) fn cached_power_of_two_twiddle<F, const FORWARD: bool>(
+pub(super) fn cached_power_of_two_twiddle<F, const FORWARD: bool>(
     n: usize,
 ) -> Option<Arc<[F::Complex]>>
 where

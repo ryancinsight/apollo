@@ -3,346 +3,112 @@
 - **Status:** Accepted
 - **Date:** 2026-08-26
 - **Class:** [patch] [arch]
-- **Item:** `ATLAS-APOLLO-BATCHED-1D-UNREACHABLE-2026-08-26`
-- **Revision 2026-09-01:** every `P-core` / `E-core` label below is inverted.
-  The instruments that produced them pinned to cpu 2 and cpu 12 and labelled
-  by `landed < 8`; Windows reports this host's performance set as
-  `{0, 1, 10, 11, 12, 13, 22, 23}`, so the column headed `P-core` was measured
-  on an efficiency core and vice versa (ADR
-  [0043](0043-measurement-core-class-is-queried.md)). **The routing decision
-  stands**: it rests on four-step winning on *both* core types, which is
-  label-independent, and the tell was visible in the table itself — the
-  "E-core" four-step (13.2 us) beating the "P-core" one (16.6 us). What does
-  not survive is the EcoQoS root-cause narrative in Context: "executing
-  exclusively on E-cores (CPUs 8 through 21)" describes a range that contains
-  four performance cores, so that observation does not establish
-  efficiency-core placement. Swap the two column headers and the two rows of
-  every pinned table below; single-core "P-core" attributions were measured on
-  an efficiency core. Tracked as
-  `ATLAS-APOLLO-INVERTED-CORE-CLAIMS-2026-09-01`.
-- **Revision 2026-09-01 (EcoQoS premise measured, withdrawn):** the Context
-  paragraph dated 2026-08-26 (fourth) attributes the process-dependent
-  slowdown to Windows handing benchmark children EcoQoS. The census now
-  carries the instrument that narrative never had
-  (`APOLLO_QOS_PLACEMENT_PROBE=1`, `benches/engine_census.rs`), and one run on
-  this host — 24 logical processors, High performance plan, desktop on AC,
-  2000 unpinned calls of the 4096x16 batched shape per phase — measured:
-  explicit throttling state `control=0x0 state=0x0` before the opt-out (no
-  override; the scheduler decides) and `control=0x1 state=0x0` after;
-  landings on **all 24 processors** in both phases, 45% on the eight
-  performance cores before and 50% after (their share is 33%); median latency
-  154.0 us before and 155.2 us after, p90 372 and 407 us. Three consequences.
-  The observation "executing exclusively on E-cores" is false as measured —
-  placement is a wandering blend with a performance-core bias. The mechanism
-  is unobservable through `GetProcessInformation`, which reports only an
-  explicit override, so "Windows hands children EcoQoS" was never
-  API-established. The remedy has no measured effect on this kernel's latency
-  or placement under this power plan. **The root-cause narrative is
-  withdrawn.** What the same data does show is the likelier cause of the
-  original 12 us versus 99 us discrepancy: an unpinned process samples two
-  core classes at a scheduler-chosen ratio, so its median moves run to run
-  by up to the inter-class latency ratio without any code change
-  (`ATLAS-APOLLO-CENSUS-UNPINNED-BLEND-2026-09-01`). Limits: one run, one
-  host, one power plan; EcoQoS heuristics are strongest under Balanced or
-  on battery, which this host cannot exercise, so the opt-out call is
-  retained as a measured no-op rather than deleted, and re-running the probe
-  under Balanced is the recorded next check. Tracked as
-  `ATLAS-APOLLO-ECOQOS-PREMISE-2026-09-01`.
+- **Item:** [APOLLO-FOUR-STEP-TWIDDLE-RETENTION](../../backlog.md#apollo-four-step-twiddle-retention)
+- **Revision:** 2026-09-05, reconcile the current routes and their table ownership.
 
 ## Context
 
-At the entry revision, Apollo's one-dimensional power-of-two plans called
-`MixedRadixScalar::pot_inplace` without entering the generic mixed-radix
-dispatcher that owned the four-step threshold. Consequently every 1-D length
-above the small codelets remained on Stockham, while the batched four-step
-kernel was reachable only from 2-D and 3-D lane transforms. The decision below
-removes that discrepancy.
+The one-dimensional planner selects small codelets, register/base transforms,
+Stockham, or four-step decomposition. The scalar and layout determine which
+kernel implements a route. Atlas owns the substrate: Hermes supplies CPU lanes,
+Leto supplies host views and transpose operations, Moirai supplies parallel row
+execution, and Mnemosyne supplies reusable scratch storage.
 
-Runtime instrumentation established that boundary: no 1-D transform from 8
-through 262144 entered `four_step_fft`, while a 2-D transform with a 4096-long
-axis entered it immediately. The four-engine census therefore measured the
-Stockham route, not the new batched route. At the same revision, warm complex
-execution allocated zero bytes per call, so allocation is not the cause of the
-1-D complex throughput gap.
+Earlier versions of this record mixed successive crossover decisions with
+contradicted explanations for timing variation. The current code is the source
+of the route description below. Historical experiments remain in Git; their
+absolute timings are not current performance guarantees.
 
-The existing Stockham audit also excludes dispatch, twiddle lookup, and scratch
-acquisition as material costs. Its hand-written AVX backend ranges from slower
-than the generic loop to only marginally faster, and changing one per-size
-instantiation perturbs neighbouring code generation. Continuing to add
-size-specific Stockham schedules is therefore not an independently selectable
-routing policy.
+At the September 5 entry baseline, generic four-step plans eagerly acquired a
+full-length forward stage table. Their inverse executors acquired the matching
+inverse table. `FourStep::run` ignored both arguments: the decomposition acquired
+its own row, matrix, or odd-power combine tables. For a square split this retained
+an unused `(N - 1)`-element complex table per direction in the process cache.
 
 ## Decision
 
-Use one shared four-step selection function for every power-of-two caller, with
-the measured crossover supplied by the workload that invokes it.
+1. `one_dimensional_uses_four_step` remains the shared route predicate. Its
+   current threshold is 256, and four-step admits both even and odd powers of
+   two. This change does not retune that threshold.
+2. Existing direct, sized and supported base routes through 1024 retain their
+   selection and required tables. In particular, sized f32 execution retains
+   its Stockham behavior; the generic plan change does not reroute it.
+3. Generic static and dynamic plans select four-step before acquiring stage
+   tables. The dynamic plan records that route explicitly. Its executor invokes
+   the existing four-step operation with the selected direction and normalization.
+4. Four-step owns every table it consumes. Even powers use square decomposition
+   with row/matrix or planar tables. Odd powers use two even-power halves and a
+   radix-2 combine; that combine still acquires its required full-length table.
+5. Normalized inverse execution applies the existing full-length normalization.
+   No arithmetic, transform sign, scalar precision, row scheduling or scratch
+   policy changes.
 
-1. The general mixed-radix dispatcher retains `FOUR_STEP_THRESHOLD = 4096`.
-   One-dimensional `pot_inplace` selects four-step at 65536, the point where
-   its row transforms also enter the parallel Moirai route. Both callers share
-   the even-exponent condition, split, execution, and normalization code.
-2. The batched four-step driver reuses the authoritative cached
-   `W_N^(j*k)` matrix. It does not evaluate `N` trigonometric functions on each
-   transform call.
-3. One-dimensional lengths below 65536 and asymmetric power-of-two splits
-   retain Stockham. Normalized inverse execution applies normalization after
-   four-step, matching the existing dispatcher contract.
-4. Apollo pins Moirai merge `10082209`, whose indexed scopes borrow stack state
-   instead of allocating `Arc` state per call. The parallel four-step therefore
-   preserves the warm complex zero-allocation contract.
+The public API and provider roles remain unchanged. Mnemosyne's merged
+scratch-release APIs allow removal of the expired PR 128 revision quarantine;
+Cargo.lock remains the standalone source pin. The resource saving
+is the unused table payload, `(N - 1) * size_of::<Complex<T>>()`, per executed
+direction for even generic powers. At N=65536 that is 1,048,560 bytes for f64 or
+524,280 bytes for f32, excluding allocation and map overhead. Odd powers have
+no claimed table-payload saving.
 
-This decision changes internal routing only. The public transform API,
-normalization convention, scratch ownership, and scalar support remain
-unchanged.
+## Alternatives
 
-## Rejected alternatives
+- **Keep eager tables and ignore them:** retains process-lifetime memory and
+  performs cold construction for data the selected operation never reads.
+- **Delete tables by exponent parity in the planner:** duplicates decomposition
+  knowledge. Table acquisition belongs to the operation that consumes it;
+  the odd-power combine already provides that ownership boundary.
+- **Change sized or base routes at the same time:** would combine resource
+  ownership with a separate performance decision and enlarge the regression
+  surface. Their existing selection remains intact.
+- **Replace the provider stack:** does not address unused Apollo plan data.
 
-### Continue specializing the hand-written AVX Stockham backend
+## Verification contract
 
-Rejected because the measured backend loses to the generic loop at three of
-four audited sizes, and prior per-size routing changed code generation outside
-the selected size. Another isolated schedule would repeat a mechanism already
-falsified without addressing the existing four-step reach discrepancy.
+Sparse complex inputs at indices zero and N/4 have an analytical spectrum whose
+phase cycles through the fourth roots of unity. Generic tests apply that oracle
+to both native scalar widths, static and dynamic plans, and forward, normalized
+inverse and unnormalized inverse execution. Lengths cover the base boundary,
+even and odd powers, and the parallel-row boundary. Their floating-point bounds
+derive from unit roundoff, radix depth and input magnitude.
 
-### Clone PhastFT's planar in-place kernel family
+The reference census records cold peak, retained bytes and warmed allocation
+for Apollo, RustFFT and PhastFT using unchanged signal sizes. RustFFT keeps its
+planner-sized scratch with the plan, matching reusable execution; its convenience
+`process` method would otherwise allocate scratch on each measured call.
 
-Rejected because Apollo's measured planar prototypes were slower than the
-interleaved incumbent, including an explicit-SIMD variant. A separate kernel
-family would duplicate the algorithm and enlarge the verification surface
-without evidence that layout is the binding constraint.
+Allocation measurements establish memory behavior, not throughput. A speed
+claim additionally requires matched executable evidence and stable reference
+controls. The N=32 unchanged-executable experiments exhibit between-run drift
+larger than their within-run confidence intervals; neither a planner-state nor
+an EcoQoS explanation is established by those observations.
 
-### Keep four-step scoped to multidimensional axes
+The September 5 Windows x64 census uses Rust 1.97.0 and the Atlas development
+overlay. Four fresh runs per executable reproduce these retained-byte counts
+for forward complex f64 execution, excluding caller signal storage:
 
-Rejected because the batched driver was introduced to close the power-of-two
-throughput band and its mathematical decomposition applies to the same 1-D
-transform. Leaving it unreachable would retain two routing policies for one
-operation and leave the measured census on the known slower route.
+| N | Before | After | RustFFT with scratch | PhastFT |
+|---:|---:|---:|---:|---:|
+| 1024 | 37,228 | 37,228 | 32,832 | 15,552 |
+| 4096 | 206,368 | 140,832 | 131,072 | 64,896 |
+| 16384 | 731,216 | 469,072 | 524,384 | 261,504 |
+| 65536 | 4,140,288 | 3,091,612 | 2,097,536 | 1,048,320 |
+| 262144 | 11,542,544 | 7,348,240 | 8,388,928 | 4,194,048 |
 
-### Use the general dispatcher's 4096 crossover for 1-D
+Each engine's warm 1-D peak increment is zero. Both census executables occupy
+6,779,904 bytes. These are allocation-accounting results for this workload,
+not process RSS bounds. The replicated 39-case timing comparison finds no
+supported regression; two unchanged small cases remain inconclusive because
+between-run spread exceeds the effect. No speedup is established.
 
-Rejected by direct measurement in `benches/engine_census` (named here because
-the original record did not name it, which is what made the figure
-unfalsifiable; see the third revision note). Relative to the retained Stockham
-entry run, selecting four-step at 4096 moved the 4096 median from 57.477 us to
-338.85 us
-and the 16384 median from 149.512 us to 1.6165 ms. The same route became
-profitable at 65536 (920.95 us to 579.45 us) and 262144 (6.51215 ms to
-2.4801 ms). One selector remains authoritative, but the caller supplies the
-measured workload crossover rather than conflating axis and standalone costs.
+## Revision history
 
-### Extend the single-threaded batched driver above its current domain
-
-Rejected because routing the high-size 1-D cases through that implementation
-measured 7.314 ms at 65536 and 25.979 ms at 262144. The retained generic
-four-step distributes independent rows through Moirai instead.
-
-### Disable parallel rows to avoid scheduler allocation
-
-Rejected because a serial generic four-step measured 7.663 ms at 65536 and
-27.554 ms at 262144. The allocation belonged to Moirai's indexed scope state,
-not to the FFT algorithm; fixing that provider removed the allocation without
-discarding parallelism.
-
-## Correctness and performance contract
-
-For `N = m^2`, the driver computes the Cooley-Tukey factorization as `m`
-length-`m` transforms, multiplication by `W_N^(j*k)`, a square transpose, and
-the second `m` length-`m` transforms. Reusing the cached matrix changes only
-where the same twiddle values come from; the analytical accuracy-growth gate
-proves that the cache uses direct evaluation rather than recurrence.
-
-Warm complex execution must remain allocation-free. The two real planes reuse
-the existing `N`-complex scratch allocation, and cache hits clone `Arc`
-handles without allocating. The decision-run census pinned to Moirai `10082209`
-reports zero complex allocations at all five sizes and exactly one real-output
-allocation of `16N` bytes.
-
-Paired decision-run medians in nanoseconds, with the benchmark's median
-confidence interval:
-
-| N | Apollo | RustFFT | PhastFT |
-| ---: | ---: | ---: | ---: |
-| 1024 | 15309 [15266, 15348] | 1473 [1468, 1475] | 1673 [1670, 1676] |
-| 4096 | 64835 [64730, 64990] | 8311 [8294, 8325] | 8790 [8775, 8824] |
-| 16384 | 288950 [288350, 290250] | 38641 [38450, 38900] | 51312 [51116, 51558] |
-| 65536 | 512950 [482300, 559600] | 466325 [463500, 471400] | 259283 [257500, 261366] |
-| 262144 | 2870250 [2783000, 2942300] | 2492000 [2460800, 2545200] | 1306550 [1292600, 1333200] |
-
-Apollo remains 10.0% slower than RustFFT at 65536 and 15.2% slower at 262144;
-PhastFT remains 1.98x and 2.20x faster. At 1024 through 16384 the unchanged
-Stockham route remains 7.5x to 10.4x behind the faster reference and is the
-next CPU kernel target. The benchmark body completed in 3.10 seconds against
-its 60-second bound.
-
-The implementation is immutable at `5ca9deb4`. From a standalone checkout at
-that revision, outside the Atlas development overlay, the confirmation command
-is:
-
-```text
-cargo bench --locked --offline -p apollo-fft --bench engine_census
-```
-
-Two exact-commit repeats completed their benchmark bodies in 3.14 and 3.12
-seconds. Both retained zero warm complex allocations and one `16N`-byte real
-allocation. Their 65536 medians were 718.100 us [680.100, 756.400] and
-615.550 us [572.900, 636.900]; their 262144 medians were 2.57070 ms
-[2.51710, 2.66550] and 2.58700 ms [2.44420, 2.70240]. The cross-run
-wall-clock intervals do not all overlap, so uncontrolled-host wall time remains
-diagnostic rather than a deterministic regression gate. The route decision
-rests on the paired entry/candidate experiment; the allocation contract is
-stable across all three runs.
-
-## Failure modes and verification
-
-- A stale route that bypasses four-step fails a path-selection test at the
-  threshold.
-- Incorrect twiddle provenance fails the two-dimensional error-growth gate.
-- Index, transpose, sign, or normalization defects fail direct-DFT, round-trip,
-  and PhastFT differential tests for forward and inverse transforms.
-- A cold-cache allocation mistaken for steady-state cost is excluded by one
-  warm-up call before the allocation counter is enabled.
-- A throughput regression blocks the route at the losing size; benchmark
-  workload, sample count, and confidence rule remain unchanged.
-
-## Revision note
-
-2026-08-26: recorded after PR 121 proved that the batched path was unreachable
-from 1-D and added executable coverage for both four-step implementations.
-
-2026-08-26: revised after crossover experiments rejected a universal 4096
-threshold, selected the parallel 65536 route for 1-D, and the Moirai provider
-fix restored zero-allocation parallel execution.
-
-2026-08-26 (third): the decision is unchanged and the reasoning behind it is
-now recorded. The defect this revision fixes is that the crossover was stated
-without naming the instrument that produced it, which made the figure
-unfalsifiable and cost a full re-derivation to recover.
-
-**The record now names its instrument.** `benches/engine_census`, which flushes
-64 MiB between arms and measures Apollo against RustFFT, PhastFT and RealFFT in
-one process, produced the rejected-alternative figures above. Re-run against
-this revision's code they reproduce closely: selecting four-step at 4096 gives
-348 us at N = 4096 against the recorded 338.85 us, and 1.64 ms at N = 16384
-against the recorded 1.6165 ms.
-
-**A second instrument disagreed, and both are right.** `pot::crossover` runs
-both routes at one length in one process, with the cache flushed before each arm
-and the arm order alternating so neither route is charged for reloading its own
-input. It puts four-step ahead of Stockham from N = 256 upward and by 2 to 3x
-through the whole ladder:
-
-| N | stockham | four-step | ratio |
-| --- | --- | --- | --- |
-| 16 | 300 ns | 1800 ns | 6.00 |
-| 64 | 1300 ns | 2100 ns | 1.62 |
-| 256 | 5700 ns | 3300 ns | 0.58 |
-| 4096 | 68500 ns | 23100 ns | 0.34 |
-| 16384 | 296300 ns | 94400 ns | 0.32 |
-| 262144 | 5324000 ns | 2669300 ns | 0.50 |
-
-Reaching the same route through `FftPlan1D` rather than calling it directly
-costs nothing measurable (23200 ns against 23500 at N = 4096), so the gap is not
-plan overhead.
-
-**The difference is the process, not the harness.** Timing `four_step_fft` from
-inside the census binary shows it genuinely taking 99 us per call at N = 4096 —
-a minimum over thousands of calls — where the same binary's test process takes
-12. The twiddle matrix is built once in both (verified by counting builds: four,
-one per size), and neither allocates per call. The route is not mismeasured
-there; it is slower there.
-
-The available explanation is layout: four-step holds three `N`-sized arrays live
-at once — the data, the scratch, and the `W_N^(j*k)` matrix — against Stockham's
-two, and how those three land relative to one another depends on allocation
-history, which differs between a process holding four engines' plans and a
-64 MiB flush buffer and a process holding one plan. That is a hypothesis with a
-mechanism, not a measurement, and it is filed as
-`ATLAS-APOLLO-FOUR-STEP-LAYOUT-SENSITIVITY-2026-08-26`.
-
-**Why the threshold stays at 65536.** Between an isolated figure and one taken in
-a process that resembles a caller, the second decides. Lowering the threshold on
-the isolated measurement would ship a 12x regression at N = 4096 in exactly the
-benchmark that represents real use. The isolated figure is not discarded — it
-says the route itself is faster and that something around it is not, which is a
-more useful statement than either number alone.
-
-**What this host cannot settle.** Apollo's own N = 4096 Stockham figure moved
-between 29 us and 65 us across runs in one session with its code untouched, so
-the absolute values here bound nothing. What survives is reproducible within a
-run: the ordering between routes, the ratio between them, and the 15x gap
-between processes. Confirming the crossover on a quiet host remains open under
-`ATLAS-APOLLO-CROSSOVER-REDERIVE-2026-08-26`.
-
-**Structural change that came with this.** Routes are now zero-sized types
-implementing `PotRoute` (`kernel/pot/route.rs`) rather than a bare `if` against
-a constant. That is what let both routes run at one length in one process, which
-is what made the two instruments comparable at all; admission is defined once on
-`FourStep::admits`, so the general dispatcher and one-dimensional plans cannot
-drift apart on which lengths the split is valid for. Selection remains one
-branch per transform and the types carry no data.
-
-2026-08-26 (fourth): the threshold moves to 4096, and the third revision's
-open question — why the same call cost 12 us in one process and 99 us in
-another — is answered: **the hybrid scheduler, not the code and not memory
-layout.** The host is a Core Ultra 9 285K (8 P-cores, 16 E-cores). Windows
-hands benchmark child processes EcoQoS — efficiency cores at efficiency
-frequency — and instrumenting the census process showed the batched kernel
-executing exclusively on E-cores (CPUs 8 through 21, wandering), every call
-slow, while the identical binary elsewhere ran unthrottled.
-*(Withdrawn 2026-09-01: see the EcoQoS revision note above. The placement
-claim is false as measured, the mechanism is not API-observable, and the
-opt-out changes neither latency nor placement under High performance. The
-scheduler is still implicated — as an unpinned two-class blend, not as
-EcoQoS.)*
-
-`pot::core_matrix`, which pins the thread and so removes the scheduler from
-the question, gives at N = 4096:
-
-| route | P-core | E-core |
-| --- | --- | --- |
-| Stockham | 28.1 us | 62.6 us |
-| four-step | **16.6 us** | **13.2 us** |
-
-Four-step wins on both core types, consistent with `pot::crossover`'s
-in-process ladder (ahead from N = 256 through 2^20). The third revision kept
-65536 on the census's evidence; that evidence is now known to have measured
-scheduling, so the constant follows the controlled instruments instead.
-
-Plane-stride padding (`ROW_PAD`) was implemented while testing the layout
-hypothesis and is kept on its own merits — +10% pinned on a P-core at 4096,
-and it removes a real power-of-two aliasing hazard the fused transpose had to
-tile around — but it did not and could not cure the anomaly, because the
-anomaly was never layout.
-
-The census now opts itself out of power throttling
-(`PROCESS_POWER_THROTTLING_EXECUTION_SPEED`), which is necessary but not
-sufficient on a contended host: absolute census figures from this machine
-remain unusable while other work runs, and the quiet-host item stands. The
-instruments to run there are `pot::crossover` and `pot::core_matrix`, both
-named here so this figure is falsifiable in a way the original was not.
-
-2026-08-27 (fifth): the crossover moves to 256, now with pinned evidence at the
-sizes themselves rather than extrapolation from 4096. The N = 16 interleaved
-codelet work produced `codelet::pinned_probe`, which measured the batched
-four-step against the sized Stockham route directly:
-
-| pinned | N | sized route | batched four-step |
-| --- | --- | --- | --- |
-| P-core | 256 | 1418 ns | 937 ns (1.5x) |
-| P-core | 1024 | 6303 ns | 4190 ns (1.5x) |
-| E-core | 256 | 3719 ns | 604 ns (6.2x) |
-| E-core | 1024 | 15378 ns | 3065 ns (5.0x) |
-
-This agrees with `pot::crossover`'s in-process ladder, which has had the
-crossover at 256 since it first ran. The f64 sized codelet arms now consult
-`one_dimensional_uses_four_step` before their Stockham path; odd `log2` sizes
-(128, 512, 2048) are not admissible splits and keep the sized route, as does
-f32, which has not been measured on its own and does not inherit f64's
-verdict. The accuracy gate's ladder is flat across the rerouted sizes.
-
-The same probe declined the other candidate: a register-resident N = 16
-codelet on the interleaved vocabulary is correct against a direct-DFT oracle
-but loses to the incumbent sized kernel by 1.8x on a P-core — the incumbent
-small codelets are already near roofline, and the codelet's stack-buffer bit
-reversal pays store-forward stalls the incumbent does not. It ships unwired;
-the in-register permutation it needs is a recorded hermes follow-up.
+- **2026-08-26–27:** establish shared routing, then revise the one-dimensional
+  crossover to 256 using the route instruments. Subsequent code adds odd-power
+  decomposition and supported base routes.
+- **2026-09-01:** correct inverted core-class labels and withdraw the unmeasured
+  EcoQoS causal claim. Those corrections remain binding on historical evidence.
+- **2026-09-05:** replace contradictory accumulated route descriptions with the
+  current selection and table-ownership contract; remove eager unused generic
+  stage tables under the linked backlog item. Exact commands and measurements
+  belong to that item's delivery evidence.

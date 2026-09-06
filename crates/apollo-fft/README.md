@@ -35,7 +35,10 @@ views, including offset views, operate on their backing block. Fortran-dense
 and general strided views assign once into reusable logical C-order staging,
 transform, and assign back; warmed staging allocates nothing. Row and
 depth-axis passes operate on chunks through Moirai, while non-contiguous axes
-transpose through Leto Ops into plan-owned scratch. Leto selects exact Hermes
+transpose through Leto Ops into reusable caller-thread scratch. Generic
+FourStep lanes beyond 1024 borrow the inactive transpose buffer as workspace;
+workers release their borrows at the join and retain no FFT scratch when idle.
+Leto selects exact Hermes
 register tiles for supported high-count small-matrix batches and retains its
 generic allocation-free assignment elsewhere.
 

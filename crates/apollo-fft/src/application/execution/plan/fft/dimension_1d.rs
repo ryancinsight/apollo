@@ -10,5 +10,8 @@ pub(crate) mod strategy;
 #[cfg(test)]
 pub(crate) mod plan_tests;
 
+#[cfg(test)]
+mod four_step_tests;
+
 pub use dynamic_impl::FftPlan1D;
 pub use static_impl::StaticFftPlan1D;

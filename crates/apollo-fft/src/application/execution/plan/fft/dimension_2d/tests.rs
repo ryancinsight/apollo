@@ -1,6 +1,7 @@
-use super::*;
+use super::{FftPlan2D, StaticFftPlan2D};
+use crate::domain::metadata::shape::Shape2D;
 use eunomia::Complex64;
-use leto::{ArrayView2, Layout};
+use leto::{Array2, ArrayView2, ArrayViewMut2, Layout};
 use std::f64::consts::PI;
 
 fn signal<const NX: usize, const NY: usize>() -> Array2<Complex64> {
