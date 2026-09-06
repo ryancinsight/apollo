@@ -212,6 +212,75 @@
 
 <a id="apollo-target-feature-boundary"></a>
 
+## APOLLO-TARGET-FEATURE-BOUNDARY-2026-09-06 — Vector codelets cannot inline into their dispatcher [patch] [perf] — measured 2026-09-06; hoist not yet designed
+
+- **Finding.** `n8`/`n16`/`n32`'s `vector_arm` carries
+  `#[target_feature(enable = "avx,fma")]`; `try_inplace` and everything above it
+  do not. A `#[target_feature]` function cannot be inlined into a caller that
+  lacks the feature, so every small-power-of-two transform crosses a real call
+  with its operands going through memory, where the scalar codelet it competes
+  with inlines into the dispatcher and keeps them in registers.
+- **Measured, and it is not small.** `small_pot_arms` gained a `vector-fused`
+  arm that runs the round trip's two transforms inside one target-feature frame
+  instead of two, so it pays one crossing where `vector-direct` pays two.
+  Performance core, round trip, intervals disjoint and under 0.5% wide:
+
+  | N | scalar | vector-direct (2 crossings) | vector-fused (1 crossing) | one crossing |
+  | --- | --- | --- | --- | --- |
+  | 8 | 11.84 ns | 15.31 | 12.82 | **2.49 ns** |
+  | 16 | 27.84 ns | 22.51 | 21.33 | **1.18 ns** |
+
+- **What that implies, stated as the bound it is.** At N = 8 the vector arm
+  trails the scalar codelet by 3.47 ns and one crossing accounts for 2.49 of
+  it, so a fully hoisted frame would bring the two within about 8% and could
+  reverse [`#apollo-n8-f64-gap`](#apollo-n8-f64-gap) — which is why that item
+  closed on the note being *confirmed*, not on the construction being wrong.
+  N = 16 is already shipped and would gain about 4% on top of its existing win.
+- **The number is an upper bound, deliberately.** The fused arm's two
+  transforms share one buffer, so once inlined the compiler may hold it in
+  registers between them and skip a store-reload that production — consecutive
+  codelet calls on different data — would still pay. Separating that from the
+  crossing itself needs the hoist, not a better probe, so the next increment is
+  the change rather than another measurement.
+- **Efficiency core not measured.** Three attempts ran under a peer's
+  concurrent build; the readings varied by 5x run to run (one interval spanned
+  175-532 ns), which is beyond any derived noise bound and is discarded rather
+  than reported with a caveat. The performance-core figures above were taken in
+  the quiet window of the same runs and are 0.3% wide.
+- **Next increment: hoist the frame.** Establish the capability once at the
+  plan or route boundary and call a target-feature entry that covers the loop,
+  rather than per transform. Design question to settle first — where the frame
+  can live without making the dispatcher itself target-feature-gated, since
+  `small_pot_inplace_sized` is reached from generic scalar code that must stay
+  callable on hosts without AVX.
+- **Acceptance.** A hoisted frame lands with a measured win at N = 16 and 32 on
+  both core types, and N = 8 is re-decided on the same instrument; or the
+  design is shown to be unreachable and that is recorded with the reason.
+- **Risk / change class:** [patch] [perf]; **dependencies:** none.
+- **Parent:** [`#atlas-apollo-beat-the-references`](#atlas-apollo-beat-the-references).
+
+<a id="apollo-python-release-crlf"></a>
+
+## APOLLO-PYTHON-RELEASE-CRLF-2026-09-06 — `python-release.yml` landed as a CRLF blob [patch] — todo
+
+- **Finding.** `.gitattributes` declares `*.yml text eol=lf`, and every other
+  workflow stores LF. `python-release.yml` on `main` stores CRLF as of
+  [PR 339](https://github.com/ryancinsight/apollo/pull/339) (`0917cacd`), so
+  every Windows checkout reports the file dirty the moment git touches it and
+  every writer is offered a 58-line whole-file diff they did not make.
+- **Not fixed in passing.** The repair is one `git add --renormalize`, but it
+  is a whole-file diff in a workflow a peer landed minutes ago; it belongs in
+  its own [patch] rather than inside an unrelated change, which is how it was
+  found ([`#apollo-n8-f64-gap`](#apollo-n8-f64-gap)'s merge surfaced it).
+- **Acceptance.** `git ls-files --eol .github/workflows` reports `w/lf i/lf`
+  for every entry, and a fresh Windows clone has a clean tree. Worth checking
+  the same command across all workflows in the same change — one CRLF blob
+  landing after a fleet-wide normalization suggests the writer's client, not a
+  one-off.
+- **Risk / change class:** [patch]; **dependencies:** none.
+
+<a id="apollo-target-feature-boundary"></a>
+
 ## APOLLO-TARGET-FEATURE-BOUNDARY-2026-09-06 — Vector codelets cannot inline into their dispatcher [patch] [perf] — todo
 
 - **Finding.** `n8`/`n16`/`n32`'s `vector_arm` carries

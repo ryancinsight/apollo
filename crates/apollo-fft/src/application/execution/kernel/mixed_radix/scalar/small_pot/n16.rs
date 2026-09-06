@@ -191,6 +191,36 @@ pub(crate) unsafe fn vector_arm_unchecked<const INVERSE: bool, const NORMALIZE: 
     unsafe { vector_arm::<INVERSE, NORMALIZE>(data) }
 }
 
+/// Two transforms inside one `#[target_feature]` frame.
+///
+/// The `small_pot_arms` probe pairs this against [`vector_arm_unchecked`] to
+/// price the boundary itself. Both entries run the same two transforms; this
+/// one crosses into a target-feature frame once instead of twice, and
+/// [`vector_arm`] can inline into it because the feature sets match.
+///
+/// The difference between the two is an **upper bound** on what hoisting the
+/// frame would buy, not an exact per-crossing cost, and for two reasons worth
+/// keeping separate. It includes the inlining the crossing prevents, which is
+/// genuinely part of the prize. It also includes something that is not: the
+/// two transforms here share one buffer, so once inlined the compiler may keep
+/// it in registers between them and skip a store-reload that production, whose
+/// consecutive codelet calls carry different data, would still pay.
+///
+/// # Safety
+///
+/// Carries [`vector_arm`]'s contract, and requires the caller to have
+/// established AVX and FMA support itself.
+#[cfg(all(test, target_arch = "x86_64"))]
+#[target_feature(enable = "avx,fma")]
+pub(crate) unsafe fn fused_round_trip_unchecked(data: &mut [Complex64]) {
+    // SAFETY: the caller carries both the capability and the length contract,
+    // and this frame supplies the target features both calls need.
+    unsafe {
+        vector_arm::<false, false>(data);
+        vector_arm::<true, true>(data);
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::Complex64;

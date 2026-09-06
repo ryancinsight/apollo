@@ -18,6 +18,10 @@ pub(super) use reduced::{small_pot_inplace_reduced, small_pot_inplace_sized_redu
 // The probe entries the `small_pot_arms` instrument reaches; they exist only
 // under `cfg(test)` and carry no production call site.
 #[cfg(all(test, target_arch = "x86_64"))]
+pub(crate) use n16::fused_round_trip_unchecked as n16_fused_round_trip;
+#[cfg(all(test, target_arch = "x86_64"))]
 pub(crate) use n16::vector_arm_unchecked as n16_vector_arm_unchecked;
+#[cfg(all(test, target_arch = "x86_64"))]
+pub(crate) use n8::fused_round_trip_unchecked as n8_fused_round_trip;
 #[cfg(all(test, target_arch = "x86_64"))]
 pub(crate) use n8::vector_arm_unchecked as n8_vector_arm_unchecked;

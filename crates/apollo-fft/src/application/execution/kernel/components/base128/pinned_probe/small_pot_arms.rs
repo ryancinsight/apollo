@@ -60,7 +60,7 @@ use crate::application::execution::kernel::components::winograd::{
 };
 use crate::application::execution::kernel::measurement_cores;
 use crate::application::execution::kernel::mixed_radix::scalar::{
-    n16_vector_arm_unchecked, n8_vector_arm_unchecked,
+    n16_fused_round_trip, n16_vector_arm_unchecked, n8_fused_round_trip, n8_vector_arm_unchecked,
 };
 use crate::application::execution::kernel::mixed_radix::MixedRadixScalar;
 use apollo_bench::{BenchmarkCase, BenchmarkConfig, BenchmarkSuite};
@@ -151,6 +151,26 @@ fn direct_round_trip<const N: usize>(work: &mut [Complex64]) {
     }
 }
 
+/// The same two transforms, crossing into a target-feature frame once.
+///
+/// Paired against [`direct_round_trip`], which crosses twice, this prices the
+/// `#[target_feature]` boundary that every vector arm pays and the scalar
+/// codelet does not — the scalar codelet inlines into its dispatcher, the
+/// vector arm cannot, because a target-feature function is not inlinable into
+/// a caller without the feature. The gap is an upper bound on what hoisting
+/// the frame would buy; the entries it calls carry the reason.
+fn fused_round_trip<const N: usize>(work: &mut [Complex64]) {
+    // SAFETY: the caller establishes AVX and FMA once before the loop, and
+    // sizes the buffer to `N`.
+    unsafe {
+        match N {
+            8 => n8_fused_round_trip(work),
+            16 => n16_fused_round_trip(work),
+            _ => unreachable!("invariant: the fused arm covers N in 8 or 16"),
+        }
+    }
+}
+
 /// Confirms both arms compute the same transform before either is timed.
 ///
 /// A timing comparison between arms that disagree measures nothing, so this
@@ -162,19 +182,22 @@ fn assert_arms_agree<const N: usize>() {
     dispatched_round_trip::<N>(&mut dispatched);
     scalar_round_trip::<N>(&mut scalar);
 
-    // Both round trips must return the input, which also proves each arm's
-    // inverse is the inverse of its own forward.
-    let mut direct = input.clone();
+    // Every arm's round trip must return its input, which also proves each
+    // arm's inverse is the inverse of its own forward. Only arms that ran are
+    // checked: an untouched buffer would pass this vacuously.
+    let mut arms = vec![("dispatched", dispatched), ("scalar", scalar)];
+    // N = 32's arm has no unchecked entry, so it is measured only through
+    // the dispatch.
     if N == 8 || N == 16 {
+        let mut direct = input.clone();
         direct_round_trip::<N>(&mut direct);
-    } else {
-        direct.copy_from_slice(&input);
+        arms.push(("direct", direct));
+        let mut fused = input.clone();
+        fused_round_trip::<N>(&mut fused);
+        arms.push(("fused", fused));
     }
-    for (label, result) in [
-        ("dispatched", &dispatched),
-        ("scalar", &scalar),
-        ("direct", &direct),
-    ] {
+
+    for (label, result) in &arms {
         let error = result
             .iter()
             .zip(&input)
@@ -185,8 +208,7 @@ fn assert_arms_agree<const N: usize>() {
         let bound = 64.0 * (N as f64) * f64::EPSILON;
         assert!(
             error <= bound,
-            "N={N}: the {label} round trip departs from its input by {error:e} \
-             against a derived bound of {bound:e}"
+            "N={N}: the {label} round trip departs from its input by {error:e}              against a derived bound of {bound:e}"
         );
     }
 }
@@ -205,6 +227,10 @@ fn arms_for_size<const N: usize>(suite: &mut BenchmarkSuite, core: &str) {
         let mut work = input.clone();
         suite.run(BenchmarkCase::new(core, "vector-direct", N), || {
             direct_round_trip::<N>(std::hint::black_box(&mut work));
+        });
+        let mut work = input.clone();
+        suite.run(BenchmarkCase::new(core, "vector-fused", N), || {
+            fused_round_trip::<N>(std::hint::black_box(&mut work));
         });
     }
 }
