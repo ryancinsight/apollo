@@ -3,15 +3,74 @@ pub(crate) mod power;
 mod radix_four_eight;
 mod small;
 
-/// The split variants of the generated composite codelets (column/row phases
-/// in `#[inline(never)]` helpers). The fused bodies delegate to them when the
-/// scalar's `prefers_split_codelet` gate selects the split for that length;
-/// the equivalence test below asserts the split computes the identical
-/// transform before any timing is read.
+/// The split variants of the generated composite codelets (transform phases
+/// in `#[inline(never)]` helpers). The fused bodies delegate to them when
+/// the scalar's `prefers_split_codelet` gate selects the split for that
+/// length. Test-only: with both scalars' gates measured off (the fused body
+/// wins for f32 at n=50 and ties at n=144), production code has no reason
+/// to reach for the split, so the re-exports live behind `cfg(test)` to
+/// keep the lib target warning-free.
+#[cfg(test)]
 pub(crate) mod split {
     pub(crate) use super::medium::{dft144_cols, dft144_rows};
     pub(crate) use super::small::{dft50_cols, dft50_rows};
 }
+
+pub(crate) use medium::{
+    dft108_impl, dft112_impl, dft120_impl, dft121_impl, dft126_impl, dft144_impl, dft154_impl,
+    dft168_impl, dft180_impl, dft189_impl, dft222_impl, dft242_impl, dft246_impl, dft259_impl,
+    dft275_impl, dft280_impl, dft296_impl, dft363_impl, dft400_impl, dft484_impl, dft72_impl,
+    dft96_impl, dft99_impl,
+};
+pub(crate) use power::{dft128_impl, dft16_impl, dft32_impl, dft64_impl};
+pub(crate) use radix_four_eight::{
+    try_dft16_hardware, try_dft32_hardware, try_dft32_rows_hardware,
+};
+pub(crate) use small::{
+    dft10_impl,
+    dft12_impl,
+    dft14_impl,
+    dft18_impl,
+    // Phase 3: coprime composites
+    dft20_impl,
+    dft21_impl,
+    dft22_impl,
+    dft24_impl,
+    dft25_impl,
+    // Phase 2: 2×prime twiddle-free WGT codelets (primes 13–23, N ≤ 46)
+    dft26_impl,
+    dft27_impl,
+    dft28_impl,
+    dft30_impl,
+    dft33_impl,
+    dft34_impl,
+    dft35_impl,
+    dft36_impl,
+    dft38_impl,
+    dft39_impl,
+    dft40_impl,
+    dft42_impl,
+    dft44_impl,
+    dft45_impl,
+    dft46_impl,
+    dft48_impl,
+    // N 49–63: coprime WGT + 49=7² Cooley-Tukey
+    dft49_impl,
+    dft50_impl,
+    dft51_impl,
+    dft52_impl,
+    dft54_impl,
+    dft55_impl,
+    dft56_impl,
+    dft58_impl,
+    dft60_impl,
+    dft62_impl,
+    dft63_impl,
+    // Original composites
+    dft6_impl,
+    dft81_impl,
+    dft9_impl,
+};
 
 #[cfg(test)]
 mod split_equivalence_tests {
@@ -90,59 +149,3 @@ mod split_equivalence_tests {
         );
     }
 }
-
-pub(crate) use medium::{
-    dft108_impl, dft112_impl, dft120_impl, dft121_impl, dft126_impl, dft144_impl, dft154_impl,
-    dft168_impl, dft180_impl, dft189_impl, dft222_impl, dft242_impl, dft246_impl, dft259_impl,
-    dft275_impl, dft280_impl, dft296_impl, dft363_impl, dft400_impl, dft484_impl, dft72_impl,
-    dft96_impl, dft99_impl,
-};
-pub(crate) use power::{dft128_impl, dft16_impl, dft32_impl, dft64_impl};
-pub(crate) use radix_four_eight::{
-    try_dft16_hardware, try_dft32_hardware, try_dft32_rows_hardware,
-};
-pub(crate) use small::{
-    dft10_impl,
-    dft12_impl,
-    dft14_impl,
-    dft18_impl,
-    // Phase 3: coprime composites
-    dft20_impl,
-    dft21_impl,
-    dft22_impl,
-    dft24_impl,
-    dft25_impl,
-    // Phase 2: 2×prime twiddle-free WGT codelets (primes 13–23, N ≤ 46)
-    dft26_impl,
-    dft27_impl,
-    dft28_impl,
-    dft30_impl,
-    dft33_impl,
-    dft34_impl,
-    dft35_impl,
-    dft36_impl,
-    dft38_impl,
-    dft39_impl,
-    dft40_impl,
-    dft42_impl,
-    dft44_impl,
-    dft45_impl,
-    dft46_impl,
-    dft48_impl,
-    // N 49–63: coprime WGT + 49=7² Cooley-Tukey
-    dft49_impl,
-    dft50_impl,
-    dft51_impl,
-    dft52_impl,
-    dft54_impl,
-    dft55_impl,
-    dft56_impl,
-    dft58_impl,
-    dft60_impl,
-    dft62_impl,
-    dft63_impl,
-    // Original composites
-    dft6_impl,
-    dft81_impl,
-    dft9_impl,
-};

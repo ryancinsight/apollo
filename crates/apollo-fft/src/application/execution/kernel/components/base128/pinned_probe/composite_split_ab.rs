@@ -1,5 +1,6 @@
 //! Same-run A/B: fused composite codelet body vs its split variant, per
 //! scalar, per length.
+#![cfg(test)]
 //!
 //! The split variant (transform phases in `#[inline(never)]` helpers) exists
 //! so a scalar whose fused monomorphization explodes into spills — the
@@ -17,11 +18,13 @@
 //! cols → rows. A divergence there would time a different computation than
 //! the one the dispatch would route to.
 
-use crate::application::execution::kernel::measurement_cores;
 use crate::application::execution::kernel::components::winograd::composite::split::{
     dft144_cols, dft144_rows, dft50_cols, dft50_rows,
 };
-use crate::application::execution::kernel::components::winograd::composite::{dft144_impl, dft50_impl};
+use crate::application::execution::kernel::components::winograd::composite::{
+    dft144_impl, dft50_impl,
+};
+use crate::application::execution::kernel::measurement_cores;
 use apollo_bench::{BenchmarkCase, BenchmarkConfig, BenchmarkSuite};
 use eunomia::{Complex, Complex32, Complex64};
 use hermes_simd::{ProcessorBinding, ProcessorIndex};
