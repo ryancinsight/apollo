@@ -1,4 +1,4 @@
-use super::MOIRAI_PARALLEL_THRESHOLD;
+use super::super::lanes;
 use crate::application::execution::kernel::mixed_radix::scalar::plan_scratch::{
     with_3d_x_scratch, with_3d_y_scratch, PlanScratch,
 };
@@ -128,11 +128,7 @@ where
                 lane_plan.inverse_complex_slice_inplace(lane);
             }
         };
-        moirai::for_each_chunk_mut_with::<
-            moirai::AdaptiveWithThreshold<MOIRAI_PARALLEL_THRESHOLD>,
-            _,
-            _,
-        >(data_slice, NZ, lane_fn);
+        lanes::contiguous::<F, FORWARD, 3>(data_slice, NZ, lane_fn);
     }
 
     fn axis1_pass_complex<const FORWARD: bool>(mut data: ArrayViewMut3<'_, F::Complex>) {
@@ -153,11 +149,7 @@ where
                     lane_plan.inverse_complex_slice_inplace(lane);
                 }
             };
-            moirai::for_each_chunk_mut_with::<
-                moirai::AdaptiveWithThreshold<MOIRAI_PARALLEL_THRESHOLD>,
-                _,
-                _,
-            >(scratch, NY, lane_fn);
+            lanes::execute::<F, FORWARD>(scratch, data_slice, NY, lane_fn);
 
             transpose_matrices(scratch, data_slice, NX, NZ, NY);
         });
@@ -181,11 +173,7 @@ where
                     lane_plan.inverse_complex_slice_inplace(lane);
                 }
             };
-            moirai::for_each_chunk_mut_with::<
-                moirai::AdaptiveWithThreshold<MOIRAI_PARALLEL_THRESHOLD>,
-                _,
-                _,
-            >(scratch, NX, lane_fn);
+            lanes::execute::<F, FORWARD>(scratch, data_slice, NX, lane_fn);
 
             transpose_matrices(scratch, data_slice, 1, NY * NZ, NX);
         });

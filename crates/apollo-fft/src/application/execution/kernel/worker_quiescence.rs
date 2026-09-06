@@ -108,6 +108,9 @@ pub(crate) fn record_worker() {
     let mut guard = lock.lock().unwrap_or_else(|poisoned| poisoned.into_inner());
     let index = guard.index_or_insert(id);
     guard.required_phase[index] = guard.phase;
+    // One phase may submit several chunks to the same worker. An idle event
+    // preceding its latest chunk does not establish that chunk's reclamation.
+    guard.seen_phase[index] = guard.phase.saturating_sub(1);
 }
 
 pub(crate) fn begin_phase() {

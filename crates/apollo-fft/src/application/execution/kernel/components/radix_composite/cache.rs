@@ -4,6 +4,8 @@ use eunomia::Complex;
 use std::cell::RefCell;
 use std::sync::Arc;
 
+mod planar;
+
 #[derive(Clone)]
 pub struct CompositeTwiddleEntry<C> {
     pub radices: Arc<[usize]>,
@@ -19,8 +21,12 @@ pub trait CompositeCache: WinogradScalar + ShortWinogradScalar {
     /// The batched kernel needs bounds (`LaneScalar`, `Pod`) that this trait's
     /// generic callers do not carry, so the concrete scalars route to it here.
     /// Returns `false` when the length is outside the path's domain, leaving the
-    /// caller to take its existing route.
-    fn try_four_step_batched<const INVERSE: bool>(data: &mut [Complex<Self>]) -> bool;
+    /// caller to take its existing route. The caller supplies the complete
+    /// padded workspace; this operation never acquires thread-local scratch.
+    fn try_four_step_batched<const INVERSE: bool>(
+        data: &mut [Complex<Self>],
+        scratch: &mut [Complex<Self>],
+    ) -> bool;
     fn cached_twiddles<const INVERSE: bool>(
         radices: &[usize],
     ) -> (Arc<[Complex<Self>]>, Arc<[usize]>);
@@ -375,27 +381,11 @@ impl CompositeCache for f64 {
     }
 
     #[inline]
-    fn try_four_step_batched<const INVERSE: bool>(data: &mut [Complex<Self>]) -> bool {
-        use crate::application::execution::kernel::components::batched as planar;
-        let n = data.len();
-        // The driver pads each plane row by a cache line to break power-of-two
-        // stride aliasing, so its scratch requirement exceeds n; the driver's
-        // own helpers are the single definition of both requirements.
-        if planar::planar_applies(n) {
-            Self::with_scratch(planar::scratch_len(n), |scratch| {
-                planar::four_step_batched::<Self, INVERSE>(data, scratch);
-            });
-            return true;
-        }
-        // An odd power decimates once and takes the planar route twice, both
-        // halves read straight out of `data` at stride two.
-        if planar::planar_split_applies(n) {
-            Self::with_scratch(planar::split_scratch_len(n), |scratch| {
-                planar::four_step_split_batched::<Self, INVERSE>(data, scratch);
-            });
-            return true;
-        }
-        false
+    fn try_four_step_batched<const INVERSE: bool>(
+        data: &mut [Complex<Self>],
+        scratch: &mut [Complex<Self>],
+    ) -> bool {
+        planar::try_four_step::<Self, INVERSE>(data, scratch)
     }
 
     #[inline]
@@ -597,27 +587,11 @@ impl CompositeCache for f32 {
     }
 
     #[inline]
-    fn try_four_step_batched<const INVERSE: bool>(data: &mut [Complex<Self>]) -> bool {
-        use crate::application::execution::kernel::components::batched as planar;
-        let n = data.len();
-        // The driver pads each plane row by a cache line to break power-of-two
-        // stride aliasing, so its scratch requirement exceeds n; the driver's
-        // own helpers are the single definition of both requirements.
-        if planar::planar_applies(n) {
-            Self::with_scratch(planar::scratch_len(n), |scratch| {
-                planar::four_step_batched::<Self, INVERSE>(data, scratch);
-            });
-            return true;
-        }
-        // An odd power decimates once and takes the planar route twice, both
-        // halves read straight out of `data` at stride two.
-        if planar::planar_split_applies(n) {
-            Self::with_scratch(planar::split_scratch_len(n), |scratch| {
-                planar::four_step_split_batched::<Self, INVERSE>(data, scratch);
-            });
-            return true;
-        }
-        false
+    fn try_four_step_batched<const INVERSE: bool>(
+        data: &mut [Complex<Self>],
+        scratch: &mut [Complex<Self>],
+    ) -> bool {
+        planar::try_four_step::<Self, INVERSE>(data, scratch)
     }
 
     #[inline]

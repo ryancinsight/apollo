@@ -105,13 +105,12 @@ impl PotRoute for FourStep {
         F: MixedRadixScalar<Complex = Complex<F>>,
     {
         let n = data.len();
-        debug_assert!(Self::admits(n), "four-step route requires a square split");
-        crate::application::execution::kernel::components::four_step::four_step_fft::<F, INVERSE>(
-            data,
-        );
-        if INVERSE && NORMALIZE {
-            F::normalize(data, n);
-        }
+        use crate::application::execution::kernel::components::four_step;
+        let required = four_step::scratch_len(n)
+            .expect("invariant: four-step length admits a representable workspace");
+        <F as MixedRadixScalar>::with_scratch(required, |scratch| {
+            four_step::four_step_fft::<F, INVERSE, NORMALIZE>(data, scratch);
+        });
     }
 }
 

@@ -10,7 +10,7 @@ use std::sync::Arc;
 /// scalar-specific sized policy and base kernels remain independent of the
 /// generic route's crossover.
 #[inline]
-pub(super) fn generic_four_step_applies(n: usize) -> bool {
+pub(in crate::application::execution::plan::fft) fn generic_four_step_applies(n: usize) -> bool {
     const LARGEST_SIZED_PLAN_LENGTH: usize = 1024;
     n > LARGEST_SIZED_PLAN_LENGTH
         && crate::application::execution::kernel::pot::one_dimensional_uses_four_step(n)
