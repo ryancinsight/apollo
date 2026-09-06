@@ -3,6 +3,11 @@
 - **Status:** Accepted
 - **Date:** 2026-07-20
 - **Class:** [minor] [arch]
+- **Revision 2026-09-06:** The [codelet evidence audit](../../backlog.md#atlas-apollo-n32-f64-liveness)
+  corrects reversed bound names in the comparator's Rustdoc. The classifier
+  and workloads do not change. Same-executable control drift invalidates the
+  associated timing evidence; neither counterbalancing nor interval separation
+  establishes causal attribution under an unstable measurement regime.
 - **Revision 2026-08-27:** Smoke execution now invokes every unchanged case
   exactly once without warm-up or inferential statistics. Full measurement
   retains its budgets, 100 observations, and comparison contract. The change
@@ -93,8 +98,10 @@ candidate must execute on the same hosted runner within each matched pair.
 Different pairs may use different hosts because the classifier first requires
 a slowdown within every pair and then charges the result the complete
 cross-pair spread: the slowest baseline upper bound must remain below the
-fastest candidate lower bound. Host heterogeneity can suppress evidence but
-cannot manufacture this final separation. Hosted run `29757554816`
+fastest candidate lower bound. This rejects overlapping cross-pair envelopes,
+but does not establish host stability or exclude systematic treatment-correlated
+interference. Measurements invalidated by unchanged-control drift are discarded
+as performance evidence, not accepted with a caveat. Hosted run `29757554816`
 falsified a single fixed-order pair: source-identical revisions produced 31
 disjoint candidate slowdowns, including one-nanosecond separations. Reversing
 the order supplies the control for systematic thermal, frequency, and runner
