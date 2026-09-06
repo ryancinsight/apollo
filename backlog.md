@@ -1008,6 +1008,41 @@
   the table, and the `f32` gap against RustFFT is no worse than the `f64` gap.
   The two halves close separately: the prime anomaly is a defect, the composite
   ratio is a tuning gap.
+- **Round 2, 2026-09-06: the pair-kernel defect fixed at the leaf, wide form
+  shipped where measured to win.** The new instrument
+  `pinned_probe/short_winograd_leaves.rs` times every distinct leaf of the
+  family, both scalars, one pinned run, and names the defective leaf: the
+  odd-prime pair kernel `dft_pair_impl` loses 1.37x to 1.44x at H = 5, 9, 11,
+  14, 15 while winning 0.57x at H = 8 — a latency-bound reduction signature
+  (four sequential FMA chains per output bin), not a lane-width one. The fix
+  is `dft_pair_impl_wide`: two output bins per k-iteration, eight independent
+  chains, per-output summation order preserved (in-file test asserts
+  bit-identical outputs at n = 11/19, both directions, both scalars).
+  - **Routed where the probe confirms, reverted where it does not.** H = 9
+    (dft19): 1.43x to 0.94x/0.68x. H = 14 (dft29): 1.37x to 1.08x/0.86x.
+    H = 11 (dft23) and H = 15 (dft31): wins on the efficiency core, no perf
+    loss. H = 5 (dft11) measured *worse* wide (1.41x to 1.47x) — the doubled
+    live table rows cost more than the extra chains buy at that depth — and
+    stays narrow. The superseded f32-only SoA form `dft_pair_impl_reduced`
+    (itself 1.42x under the corrected instrument) is deleted; dft31 routes
+    wide instead.
+  - **Codelet-half effect (the item's second clause).** The four coprime
+    codelets now run f32 faster than f64: 222 at 0.74x, 246 at 0.85x, 259 at
+    0.90x, 296 at 0.79x (was 0.85-0.92). At the acceptance lengths apollo
+    f32 is faster than its own f64 at n = 180 (0.71x) and n = 384 (0.62x).
+    The codelet/composite boundary is re-measured on the fixed tree: f32 now
+    also wins 154 on the efficiency core (0.90x) while losing 154 on the
+    performance core (1.04x) — the boundary moved as the item predicted it
+    would, and `use_generated_codelet_plan` needs a per-core or re-swept
+    decision for 154 in a follow-up.
+  - **Prime half: narrowed, not closed.** n = 101 improves (full-path f32
+    672 to 665 ns; efficiency-core inversion 1.03x cleared to 0.99x) but the
+    performance-core excess remains. The leaf probe exonerates every
+    constituent (dft25 at 0.86x, pair kernels now 0.86-1.08x at the relevant
+    half-sizes) while whole-body generated codelets containing them (dft50,
+    dft99, dft144) exceed the sum of their leaves — the f32 codegen asymmetry
+    static_rader documents, living in the generated-body inlining, not in
+    any leaf. That is the remaining locus and the next round.
 
 ## ATLAS-APOLLO-EIGHT-BLOCK-SPLIT-2026-09-03 — Extend the tuned split to 1024 [minor] [perf] — done 2026-09-03 <a id="atlas-apollo-eight-block-split"></a>
 
