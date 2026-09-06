@@ -60,7 +60,8 @@ use crate::application::execution::kernel::components::winograd::{
 };
 use crate::application::execution::kernel::measurement_cores;
 use crate::application::execution::kernel::mixed_radix::scalar::{
-    n16_fused_round_trip, n16_vector_arm_unchecked, n8_fused_round_trip, n8_vector_arm_unchecked,
+    n16_framed_lane_pass, n16_fused_round_trip, n16_per_lane_pass, n16_vector_arm_unchecked,
+    n8_framed_lane_pass, n8_fused_round_trip, n8_per_lane_pass, n8_vector_arm_unchecked,
 };
 use crate::application::execution::kernel::mixed_radix::MixedRadixScalar;
 use apollo_bench::{BenchmarkCase, BenchmarkConfig, BenchmarkSuite};
@@ -87,8 +88,10 @@ fn dispatched_round_trip<const N: usize>(work: &mut [Complex64]) {
     }
 }
 
-/// One round trip through the scalar Winograd codelet the dispatch replaces.
-fn scalar_round_trip<const N: usize>(work: &mut [Complex64]) {
+/// One scalar Winograd transform in the given direction.
+fn scalar_transform<const N: usize, const INVERSE: bool, const NORMALIZE: bool>(
+    work: &mut [Complex64],
+) {
     debug_assert_eq!(
         work.len(),
         N,
@@ -96,36 +99,39 @@ fn scalar_round_trip<const N: usize>(work: &mut [Complex64]) {
     );
     let ptr = work.as_mut_ptr();
     // SAFETY: the caller passes a slice of exactly `N` samples, and each arm
-    // below casts to the array length its own match guard fixes. The inverse
-    // arms normalize, matching the dispatched round trip.
+    // below casts to the array length its own match guard fixes.
     unsafe {
         match N {
-            8 => {
-                let data = &mut *ptr.cast::<[Complex64; 8]>();
-                dft8_array_impl::<f64, false, false>(data);
-                dft8_array_impl::<f64, true, true>(data);
-            }
+            8 => dft8_array_impl::<f64, INVERSE, NORMALIZE>(&mut *ptr.cast::<[Complex64; 8]>()),
             16 => {
                 let data = &mut *ptr.cast::<[Complex64; 16]>();
-                dft16_impl::<f64, false>(data);
-                dft16_impl::<f64, true>(data);
-                let scale = Complex64::new(1.0 / 16.0, 0.0);
-                for value in data.iter_mut() {
-                    *value *= scale;
+                dft16_impl::<f64, INVERSE>(data);
+                if INVERSE && NORMALIZE {
+                    let scale = Complex64::new(1.0 / 16.0, 0.0);
+                    for value in data.iter_mut() {
+                        *value *= scale;
+                    }
                 }
             }
             32 => {
                 let data = &mut *ptr.cast::<[Complex64; 32]>();
-                dft32_impl::<f64, false>(data);
-                dft32_impl::<f64, true>(data);
-                let scale = Complex64::new(1.0 / 32.0, 0.0);
-                for value in data.iter_mut() {
-                    *value *= scale;
+                dft32_impl::<f64, INVERSE>(data);
+                if INVERSE && NORMALIZE {
+                    let scale = Complex64::new(1.0 / 32.0, 0.0);
+                    for value in data.iter_mut() {
+                        *value *= scale;
+                    }
                 }
             }
             _ => unreachable!("invariant: the probe measures N in 8, 16 or 32"),
         }
     }
+}
+
+/// One round trip through the scalar Winograd codelet the dispatch replaces.
+fn scalar_round_trip<const N: usize>(work: &mut [Complex64]) {
+    scalar_transform::<N, false, false>(work);
+    scalar_transform::<N, true, true>(work);
 }
 
 /// One round trip through the vector body reached without the capability check.
@@ -171,6 +177,73 @@ fn fused_round_trip<const N: usize>(work: &mut [Complex64]) {
     }
 }
 
+/// Lanes per pass in the boundary measurement.
+///
+/// Sized so the whole pass stays L1-resident — 32 lanes is 4 KB at N = 8 and
+/// 8 KB at N = 16 — while giving the crossing count enough weight to resolve:
+/// a round trip over 32 lanes is 64 crossings per-lane against one framed.
+const LANES: usize = 32;
+
+/// A forward pass then a normalized inverse pass over `LANES` lanes, crossing
+/// into the vector frame once per lane — what `dimension_2d` does today.
+fn per_lane_pass<const N: usize>(work: &mut [Complex64]) {
+    match N {
+        8 => {
+            n8_per_lane_pass::<false, false>(work);
+            n8_per_lane_pass::<true, true>(work);
+        }
+        16 => {
+            n16_per_lane_pass::<false, false>(work);
+            n16_per_lane_pass::<true, true>(work);
+        }
+        _ => unreachable!("invariant: the lane arms cover N in 8 or 16"),
+    }
+}
+
+/// The same two passes with the frame hoisted around each lane loop.
+///
+/// Every lane is different data, so unlike [`fused_round_trip`] nothing can be
+/// held in registers across transforms: the only thing this removes is one
+/// crossing per lane, which is the quantity a hoisted axis pass would recover.
+fn framed_lane_pass<const N: usize>(work: &mut [Complex64]) {
+    // SAFETY: the caller establishes AVX and FMA once before the loop, and
+    // sizes the buffer to a multiple of `N`.
+    unsafe {
+        match N {
+            8 => {
+                n8_framed_lane_pass::<false, false>(work);
+                n8_framed_lane_pass::<true, true>(work);
+            }
+            16 => {
+                n16_framed_lane_pass::<false, false>(work);
+                n16_framed_lane_pass::<true, true>(work);
+            }
+            _ => unreachable!("invariant: the lane arms cover N in 8 or 16"),
+        }
+    }
+}
+
+/// The scalar codelet over the same lane pass, in the same two passes.
+///
+/// The round-trip arms above are latency measurements: each inverse waits on
+/// its own forward. A lane pass is throughput — the lanes are independent, so
+/// the machine can overlap them — and that is the regime `dimension_2d`
+/// actually runs in. An arm can lose one regime and win the other, so the
+/// scalar codelet needs its own lane reading rather than being carried over.
+///
+/// The two loops matter: the vector arms run a forward pass over every lane
+/// and then an inverse pass, so this does the same. Interleaving forward and
+/// inverse per lane would put a serial dependency inside the loop body that
+/// the arms it is compared against do not have.
+fn scalar_lane_pass<const N: usize>(work: &mut [Complex64]) {
+    for lane in work.chunks_exact_mut(N) {
+        scalar_transform::<N, false, false>(lane);
+    }
+    for lane in work.chunks_exact_mut(N) {
+        scalar_transform::<N, true, true>(lane);
+    }
+}
+
 /// Confirms both arms compute the same transform before either is timed.
 ///
 /// A timing comparison between arms that disagree measures nothing, so this
@@ -195,6 +268,30 @@ fn assert_arms_agree<const N: usize>() {
         let mut fused = input.clone();
         fused_round_trip::<N>(&mut fused);
         arms.push(("fused", fused));
+    }
+
+    // The lane arms carry their own agreement check: they run over a longer
+    // buffer, so they cannot join the list above.
+    if N == 8 || N == 16 {
+        let lanes = source(N * LANES);
+        for (label, pass) in [
+            ("lanes-per-call", per_lane_pass::<N> as fn(&mut [Complex64])),
+            ("lanes-framed", framed_lane_pass::<N>),
+            ("lanes-scalar", scalar_lane_pass::<N>),
+        ] {
+            let mut result = lanes.clone();
+            pass(&mut result);
+            let error = result
+                .iter()
+                .zip(&lanes)
+                .map(|(actual, start)| (actual.re - start.re).hypot(actual.im - start.im))
+                .fold(0.0_f64, f64::max);
+            let bound = 64.0 * (N as f64) * f64::EPSILON;
+            assert!(
+                error <= bound,
+                "N={N}: the {label} pass departs from its input by {error:e}                  against a derived bound of {bound:e}"
+            );
+        }
     }
 
     for (label, result) in &arms {
@@ -231,6 +328,23 @@ fn arms_for_size<const N: usize>(suite: &mut BenchmarkSuite, core: &str) {
         let mut work = input.clone();
         suite.run(BenchmarkCase::new(core, "vector-fused", N), || {
             fused_round_trip::<N>(std::hint::black_box(&mut work));
+        });
+
+        // The lane arms time a whole pass, so their reading is `LANES` round
+        // trips and is not comparable to the rows above; the quantity is the
+        // difference between the two of them.
+        let lanes = source(N * LANES);
+        let mut work = lanes.clone();
+        suite.run(BenchmarkCase::new(core, "lanes-per-call", N), || {
+            per_lane_pass::<N>(std::hint::black_box(&mut work));
+        });
+        let mut work = lanes.clone();
+        suite.run(BenchmarkCase::new(core, "lanes-framed", N), || {
+            framed_lane_pass::<N>(std::hint::black_box(&mut work));
+        });
+        let mut work = lanes.clone();
+        suite.run(BenchmarkCase::new(core, "lanes-scalar", N), || {
+            scalar_lane_pass::<N>(std::hint::black_box(&mut work));
         });
     }
 }

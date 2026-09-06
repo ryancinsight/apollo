@@ -199,6 +199,15 @@ pub(in crate::application::execution::kernel::mixed_radix::scalar) unsafe fn sma
             // still pays four cross-lane `vperm2f128` to make its second stage
             // lanewise. Eight points is not enough arithmetic to amortise the
             // shuffle. `backlog.md#apollo-n8-f64-gap` carries the construction.
+            //
+            // That verdict is a *latency* one, and it does not hold in every
+            // regime: measured across 32 independent lanes — the shape a
+            // `dimension_2d` axis pass runs — the same register form is 1.87x
+            // faster than this codelet, because the permute chain it pays for
+            // overlaps across lanes. Acting on that needs the lane paths to
+            // select an entry the standalone path does not, which is an
+            // interface question rather than a constant:
+            // `backlog.md#apollo-n8-regime-split`.
             let data_ref = &mut *data.as_mut_ptr().cast::<[Complex64; 8]>();
             crate::application::execution::kernel::components::winograd::dft8_array_impl::<
                 f64,

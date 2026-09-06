@@ -212,6 +212,114 @@
 
 <a id="apollo-target-feature-boundary"></a>
 
+## APOLLO-TARGET-FEATURE-BOUNDARY-2026-09-06 — The vector frame's call boundary costs 0.04 ns [patch] [perf] — declined 2026-09-06 on measurement
+
+- **Premise.** `n8`/`n16`/`n32`'s `vector_arm` carries
+  `#[target_feature(enable = "avx,fma")]` and its callers do not, so it can
+  never inline and every codelet call is a real call through memory —
+  `dimension_2d`'s axis passes re-cross it once per lane. Hoisting the frame
+  around the lane loop would remove all but one crossing per pass.
+- **Declined: the crossing costs about 0.04 ns and there is nothing to
+  recover.** A lane pass of 32 lanes, forward then inverse, is 64 crossings
+  called per lane against 2 framed — 62 removed. Performance core, intervals
+  0.05% wide, reproduced across runs:
+
+  | N | lanes, per call | lanes, framed | per crossing |
+  | --- | --- | --- | --- |
+  | 8 | 122.6 ns | 120.1 ns | **41 ps** |
+  | 16 | 394.8 ns | 388.5 ns | **101 ps** |
+
+  Against a transform of 1.9 ns (N = 8) that is 2%, and it would cost changing
+  the lane loop's chunk granularity through `moirai` to collect it.
+- **The instrument error is the transferable part.** The first measurement here
+  used a `vector-fused` arm — the round trip's *two* transforms in one frame
+  against two crossings — and read 2.49 ns per crossing at N = 8. That is
+  **60x** the real figure. The two transforms shared one buffer, so once
+  inlined the compiler held it in registers between them and skipped a
+  store-reload; almost the whole apparent gain was that reuse, not the
+  crossing. The confound was written into the entry as a caveat when the arm
+  was built, and the caveat turned out to be the entire result. A proxy whose
+  named confound is not itself measured is not evidence: the lane arms, whose
+  transforms each carry different data, are what settled it.
+- **Efficiency core not reported.** Its readings ran under a peer's build and
+  varied 3x within a run; discarded rather than caveated. The declining figure
+  is a performance-core one, and a 2% ceiling there does not become worth
+  collecting on the efficiency core.
+- **Consequence for [`#apollo-n8-f64-gap`](#apollo-n8-f64-gap):** none by this
+  route — but the lane arms built to settle this turned up something else, in
+  [`#apollo-n8-regime-split`](#apollo-n8-regime-split).
+
+<a id="apollo-n8-regime-split"></a>
+
+## APOLLO-N8-REGIME-SPLIT-2026-09-06 — The N=8 arm decision inverts between latency and throughput [minor] [perf] — todo
+
+- **Finding.** [`#apollo-n8-f64-gap`](#apollo-n8-f64-gap) declined the N = 8
+  register codelet on a round-trip measurement, where each inverse waits on its
+  own forward — a *latency* reading. The lane arms measure the same two arms
+  under *throughput*, 32 independent lanes in a forward pass then an inverse
+  pass, which is the shape `dimension_2d` and `dimension_3d` axis passes
+  actually run. The verdict inverts. Performance core, intervals 0.05% wide,
+  reproduced:
+
+  | regime | scalar | vector | verdict |
+  | --- | --- | --- | --- |
+  | latency (one round trip) | 12.56 ns | 14.44 | scalar by 1.15x |
+  | throughput (32-lane pass) | 229.3 ns | 122.6 | **vector by 1.87x** |
+
+  N = 16, already vectorised, moves the same way and further: 757.9 against
+  394.8, a 1.92x throughput win over its scalar codelet against the 1.24x it
+  shows at latency.
+- **Why it inverts, and why that is credible rather than an artifact.** The
+  register form's cost is four cross-lane permutes and a transpose whose
+  results feed each other — a dependency chain, which is what a latency
+  measurement charges for. Across independent lanes the machine overlaps those
+  chains, and what remains is instruction count, where the vector form does
+  eight points in four registers against the scalar form's per-sample work. The
+  two arms were run through matched loop structures — a forward pass over every
+  lane, then an inverse pass — after a first attempt interleaved the scalar
+  arm's directions per lane and gave it a serial dependency the vector arms did
+  not have.
+- **Not acted on yet, and deliberately.** One dispatch serves both regimes and
+  the codelet cannot see which it is in, so exploiting this means the lane paths
+  selecting a different entry from the standalone one — a real interface
+  question, not a constant to flip. It also needs the efficiency core, which
+  three attempts could not measure on a contended host, and the throughput
+  reading at N = 32 and for `f32`.
+- **DoR to settle before implementing.** (1) Which regime dominates apollo's
+  own usage — `dimension_2d`/`dimension_3d` lane counts against standalone
+  small-transform calls in the plan cache; (2) whether the axis passes can take
+  a lane-pass entry without duplicating the dispatch, since a second entry per
+  size is the cloned-variant defect; (3) the efficiency-core reading on a quiet
+  host.
+- **Acceptance.** The multi-lane paths run the arm that measures faster in
+  their own regime on both core types, through one dispatch rather than two
+  copies of it, with the value oracles unchanged; or the regime split is shown
+  not to survive on the efficiency core and that is recorded with the numbers.
+- **Risk / change class:** [minor] [perf]; **dependencies:** none.
+- **Parent:** [`#atlas-apollo-beat-the-references`](#atlas-apollo-beat-the-references).
+
+<a id="apollo-python-release-crlf"></a>
+
+## APOLLO-PYTHON-RELEASE-CRLF-2026-09-06 — `python-release.yml` landed as a CRLF blob [patch] — todo
+
+- **Finding.** `.gitattributes` declares `*.yml text eol=lf`, and every other
+  workflow stores LF. `python-release.yml` on `main` stores CRLF as of
+  [PR 339](https://github.com/ryancinsight/apollo/pull/339) (`0917cacd`), so
+  every Windows checkout reports the file dirty the moment git touches it and
+  every writer is offered a 58-line whole-file diff they did not make.
+- **Not fixed in passing.** The repair is one `git add --renormalize`, but it
+  is a whole-file diff in a workflow a peer landed minutes ago; it belongs in
+  its own [patch] rather than inside an unrelated change, which is how it was
+  found ([`#apollo-n8-f64-gap`](#apollo-n8-f64-gap)'s merge surfaced it).
+- **Acceptance.** `git ls-files --eol .github/workflows` reports `w/lf i/lf`
+  for every entry, and a fresh Windows clone has a clean tree. Worth checking
+  the same command across all workflows in the same change — one CRLF blob
+  landing after a fleet-wide normalization suggests the writer's client, not a
+  one-off.
+- **Risk / change class:** [patch]; **dependencies:** none.
+
+<a id="apollo-target-feature-boundary"></a>
+
 ## APOLLO-TARGET-FEATURE-BOUNDARY-2026-09-06 — Every lane of a multi-dimensional pass re-crosses into the vector frame [patch] [perf] — measured 2026-09-06; hoist not yet built
 
 - **Finding.** `n8`/`n16`/`n32`'s `vector_arm` carries

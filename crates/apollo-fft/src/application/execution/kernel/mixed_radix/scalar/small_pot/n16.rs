@@ -221,6 +221,44 @@ pub(crate) unsafe fn fused_round_trip_unchecked(data: &mut [Complex64]) {
     }
 }
 
+/// A whole lane pass inside one `#[target_feature]` frame.
+///
+/// This is the shape [`super::super::super::components::base128`]'s
+/// `small_pot_arms` probe uses to price the boundary without the confound its
+/// fused entry carries: every lane is different data, so nothing can be held
+/// in registers between them, and the only thing the frame removes is one
+/// crossing per lane. It mirrors what a hoisted `dimension_2d` axis pass would
+/// do — probe once, then run every lane inside the frame.
+///
+/// # Safety
+///
+/// Requires the caller to have established AVX and FMA, and `data.len()` to be
+/// a multiple of 16.
+#[cfg(all(test, target_arch = "x86_64"))]
+#[target_feature(enable = "avx,fma")]
+pub(crate) unsafe fn framed_lane_pass<const INVERSE: bool, const NORMALIZE: bool>(
+    data: &mut [Complex64],
+) {
+    // SAFETY: each chunk is exactly 16 samples, which is `vector_arm`'s
+    // contract, and this frame supplies the target features it needs.
+    unsafe {
+        for lane in data.chunks_exact_mut(16) {
+            vector_arm::<INVERSE, NORMALIZE>(lane);
+        }
+    }
+}
+
+/// The same lane pass, crossing the boundary once per lane.
+///
+/// This is what `dimension_2d` does today: one plan, called per lane, each
+/// call re-entering the vector frame.
+#[cfg(all(test, target_arch = "x86_64"))]
+pub(crate) fn per_lane_pass<const INVERSE: bool, const NORMALIZE: bool>(data: &mut [Complex64]) {
+    for lane in data.chunks_exact_mut(16) {
+        try_inplace::<INVERSE, NORMALIZE>(lane);
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::Complex64;

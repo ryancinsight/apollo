@@ -22,6 +22,12 @@ pub(crate) use n16::fused_round_trip_unchecked as n16_fused_round_trip;
 #[cfg(all(test, target_arch = "x86_64"))]
 pub(crate) use n16::vector_arm_unchecked as n16_vector_arm_unchecked;
 #[cfg(all(test, target_arch = "x86_64"))]
+pub(crate) use n16::{
+    framed_lane_pass as n16_framed_lane_pass, per_lane_pass as n16_per_lane_pass,
+};
+#[cfg(all(test, target_arch = "x86_64"))]
 pub(crate) use n8::fused_round_trip_unchecked as n8_fused_round_trip;
 #[cfg(all(test, target_arch = "x86_64"))]
 pub(crate) use n8::vector_arm_unchecked as n8_vector_arm_unchecked;
+#[cfg(all(test, target_arch = "x86_64"))]
+pub(crate) use n8::{framed_lane_pass as n8_framed_lane_pass, per_lane_pass as n8_per_lane_pass};
