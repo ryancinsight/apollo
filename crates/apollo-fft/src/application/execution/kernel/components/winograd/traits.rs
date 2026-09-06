@@ -23,6 +23,18 @@ pub trait WinogradScalar:
     fn sq2o2() -> Self;
     /// Runs a closure with a thread-local complex scratch buffer.
     fn with_winograd_scratch<R>(n: usize, f: impl FnOnce(&mut [eunomia::Complex<Self>]) -> R) -> R;
+
+    /// Whether the fused generated-codelet body should delegate its column
+    /// phase to the `#[inline(never)]` split variant for this scalar. The
+    /// fused body inlines every leaf copy into one monomorphization; the
+    /// documented f32 LLVM codegen asymmetry (see `static_rader.rs`) shows
+    /// that fusion exploding into spills exactly where f64 schedules it, so
+    /// the split caps the register-pressure envelope. Defaults to `false`:
+    /// each routed length must be measured before it is enabled.
+    fn prefers_split_codelet(n: usize) -> bool {
+        let _ = n;
+        false
+    }
 }
 
 thread_local! {
@@ -55,6 +67,18 @@ impl WinogradScalar for f64 {
     }
 }
 impl WinogradScalar for f32 {
+    #[inline]
+    fn prefers_split_codelet(n: usize) -> bool {
+        // Measured, not assumed: `composite_split_ab_by_core_type` timed the
+        // fused body against the split variant in one pinned run (same-run
+        // A/B, disjoint medians). The split lost for f32 at n=50 (~3%) and
+        // tied at n=144; the fused f32/f64 ratio there is 0.68, so the fused
+        // body is not the f32 defect. Keep the fused body; the split
+        // generators remain for the f64@144 perf-core lead recorded on the
+        // board.
+        let _ = n;
+        false
+    }
     #[inline]
     fn from_precise(v: f64) -> Self {
         v as f32

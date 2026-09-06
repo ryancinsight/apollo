@@ -195,40 +195,99 @@ pub(crate) fn good_thomas_function(
         }
     };
 
+    // The fused body (historical route) and a split variant whose row and
+    // column phases live in `#[inline(never)]` helpers over the caller's
+    // scratch. Same blocks, same order — only the inlining boundary moves.
+    let gather = quote! {
+        // Gather input using incremental index calculation (no runtime modulo)
+        for i1 in 0..#n1 {
+            let mut src_idx = i1 * #n2;
+            let row_start = i1 * #n2;
+            for i2 in 0..#n2 {
+                let dest_idx = row_start + i2;
+                // SAFETY: `dest_idx < N` enumerates every scratch slot
+                // exactly once; the read side waits for this loop.
+                unsafe { scratch_ptr.add(dest_idx).write(data[src_idx]); }
+                src_idx += #n1;
+                if src_idx >= #n {
+                    src_idx -= #n;
+                }
+            }
+        }
+    };
+
+    let fused_body = quote! {
+        // Use MaybeUninit to avoid zero-initialization overhead
+        // SAFETY: All scratch positions are written via .write() before any .read()
+        let mut scratch = std::mem::MaybeUninit::<[eunomia::Complex<F>; #n]>::uninit();
+        let scratch_ptr = scratch.as_mut_ptr() as *mut eunomia::Complex<F>;
+
+        #gather
+
+        #transform_rows
+
+        // Transform columns and scatter output. The measured `(3,32)`
+        // schedule expands constant addresses; every other pair retains
+        // the compact incremental-index loop.
+        #transform_columns_and_scatter
+    };
+
+    let rows_fn_name = format_ident!("dft{}_rows", n);
+    let cols_fn_name = format_ident!("dft{}_cols", n);
+    let split_variant = quote! {
+        /// Split row phase of [`dft#n_impl`]: the gather plus row short DFTs,
+        /// exactly as the fused body emits them.
+        #[allow(unused_variables, unused_mut)]
+        #[inline(never)]
+        pub(crate) fn #rows_fn_name<
+            F: crate::application::execution::kernel::components::winograd::traits::WinogradScalar
+                + crate::application::execution::kernel::mixed_radix::traits::ShortDft<#n1>
+                + crate::application::execution::kernel::mixed_radix::traits::ShortDft<#n2> #scalar_bound,
+            const INVERSE: bool,
+        >(
+            data: &[eunomia::Complex<F>; #n],
+            scratch: &mut [eunomia::Complex<F>; #n],
+        ) {
+            let scratch_ptr = scratch.as_mut_ptr() as *mut eunomia::Complex<F>;
+            #gather
+            #transform_rows
+        }
+
+        /// Split column phase of [`dft#n_impl`]: column short DFTs and the
+        /// scatter permutation, exactly as the fused body emits them.
+        #[allow(unused_variables, unused_mut)]
+        #[inline(never)]
+        pub(crate) fn #cols_fn_name<
+            F: crate::application::execution::kernel::components::winograd::traits::WinogradScalar
+                + crate::application::execution::kernel::mixed_radix::traits::ShortDft<#n1> #scalar_bound,
+            const INVERSE: bool,
+        >(
+            scratch: &mut [eunomia::Complex<F>; #n],
+            data: &mut [eunomia::Complex<F>; #n],
+        ) {
+            let scratch_ptr = scratch.as_mut_ptr() as *mut eunomia::Complex<F>;
+            #transform_columns_and_scatter
+        }
+    };
+
     quote! {
         #inline_attr
         #[allow(unused_variables, unused_mut)]
         pub(crate) fn #fn_name<F: crate::application::execution::kernel::components::winograd::traits::WinogradScalar + crate::application::execution::kernel::mixed_radix::traits::ShortDft<#n1> + crate::application::execution::kernel::mixed_radix::traits::ShortDft<#n2> #scalar_bound, const INVERSE: bool>(
             data: &mut [eunomia::Complex<F>; #n],
         ) {
-            // Use MaybeUninit to avoid zero-initialization overhead
-            // SAFETY: All scratch positions are written via .write() before any .read()
-            let mut scratch = std::mem::MaybeUninit::<[eunomia::Complex<F>; #n]>::uninit();
-            let scratch_ptr = scratch.as_mut_ptr() as *mut eunomia::Complex<F>;
-
-            // Gather input using incremental index calculation (no runtime modulo)
-            for i1 in 0..#n1 {
-                let mut src_idx = i1 * #n2;
-                let row_start = i1 * #n2;
-                for i2 in 0..#n2 {
-                    let dest_idx = row_start + i2;
-                    // SAFETY: `dest_idx < N` enumerates every scratch slot
-                    // exactly once; the read side waits for this loop.
-                    unsafe { scratch_ptr.add(dest_idx).write(data[src_idx]); }
-                    src_idx += #n1;
-                    if src_idx >= #n {
-                        src_idx -= #n;
-                    }
-                }
+            if <F as crate::application::execution::kernel::components::winograd::traits::WinogradScalar>::prefers_split_codelet(#n) {
+                let mut scratch =
+                    std::mem::MaybeUninit::<[eunomia::Complex<F>; #n]>::uninit();
+                let scratch = unsafe { scratch.assume_init_mut() };
+                #rows_fn_name::<F, INVERSE>(data, scratch);
+                #cols_fn_name::<F, INVERSE>(scratch, data);
+                return;
             }
-
-            #transform_rows
-
-            // Transform columns and scatter output. The measured `(3,32)`
-            // schedule expands constant addresses; every other pair retains
-            // the compact incremental-index loop.
-            #transform_columns_and_scatter
+            #fused_body
         }
+
+        #split_variant
     }
 }
 
