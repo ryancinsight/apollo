@@ -1,9 +1,3 @@
-## codex/root — current execution
-
-- [x] [CUDA driver boundary](backlog.md#apollo-cuda-crt-linkage): verify the Windows output-size mismatch against the caller, binding and installed NVIDIA header; enumerate the dependency closure.
-- [ ] [CUDA driver boundary](backlog.md#apollo-cuda-crt-linkage): revise governing ADRs and implement provider-owned ABI/loading in Hephaestus.
-- [ ] [CUDA driver boundary](backlog.md#apollo-cuda-crt-linkage): verify provider contracts, integrate upstream, update Apollo's lock and run consumer gates.
-
 # Apollo Checklist
 
 ## ATLAS-APOLLO-REAL-HALF-THROUGHPUT-2026-09-01 [perf] — Codex
