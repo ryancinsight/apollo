@@ -71,12 +71,6 @@ jobs:
       - uses: dtolnay/rust-toolchain@889fac408b4da0905346410f253f0c55fbcb6613
         with:
           components: clippy, rustfmt
-      # `hephaestus-cuda` uses NVIDIA's generated CUDA bindings, which require
-      # the driver, runtime/compiler, and cuRAND headers from CUDA 13.2+ even
-      # when no device is present. Install only that header closure: the full
-      # toolkit exhausts the hosted runner without adding coverage to this
-      # compile and test gate.
-      - uses: ./apollo/.github/actions/cuda-headers
       - uses: taiki-e/install-action@b20dedce73af6905cdc30d6611090c9b67557c8d
         with:
           tool: cargo-nextest@0.9.140,cargo-audit@0.22.2,cargo-deny@0.20.2
@@ -189,7 +183,6 @@ jobs:
         with:
           path: apollo
       - uses: dtolnay/rust-toolchain@889fac408b4da0905346410f253f0c55fbcb6613
-      - uses: ./apollo/.github/actions/cuda-headers
       - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6
         with:
           workspaces: apollo

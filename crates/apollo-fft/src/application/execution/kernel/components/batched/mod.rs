@@ -33,12 +33,11 @@
 //! [`FftPlanarMut`]: crate::domain::storage::FftPlanarMut
 
 use crate::application::execution::kernel::mixed_radix::MixedRadixScalar;
+mod cache;
+pub(crate) use cache::BatchedPlanCache;
+
 use eunomia::Complex;
 use hermes_simd::{LaneKernel, LaneScalar, Simd, SimdArch, SimdKernel, SimdStorage, Vector};
-use parking_lot::RwLock;
-use std::cell::RefCell;
-use std::collections::HashMap;
-use std::sync::{Arc, LazyLock};
 
 /// Tile side for the in-place transpose, in elements.
 ///
@@ -435,9 +434,8 @@ impl<T: MixedRadixScalar<Complex = Complex<T>>> FourStepPlanes<T> {
     where
         Complex<T>: crate::application::execution::kernel::twiddle_table::TwiddleOutput,
     {
-        // The uncached builder: the interleaved matrix is a build transient
-        // here, split into planes and dropped, so batched sizes cache exactly
-        // one twiddle representation. The threaded four-step's sizes cache
+        // Collect the uncached entry stream directly into its final planes,
+        // so no full interleaved matrix overlaps their allocation. The threaded four-step's sizes cache
         // exactly one too — the interleaved matrix its fused
         // transpose-multiply reads with better locality — and the two size
         // ranges are disjoint by the routing thresholds. An explicit
@@ -454,161 +452,13 @@ impl<T: MixedRadixScalar<Complex = Complex<T>>> FourStepPlanes<T> {
         // consumes natural order: it is decimated in frequency. The planes
         // were row-permuted while that set was decimated in time and its
         // input arrived bit-reversed.
-        let mut re = vec![T::from_precise(0.0); m * m].into_boxed_slice();
-        let mut im = vec![T::from_precise(0.0); m * m].into_boxed_slice();
-        for (row, chunk) in interleaved.chunks_exact(m).enumerate().take(m) {
-            for (col, value) in chunk.iter().enumerate() {
-                re[row * m + col] = value.re;
-                im[row * m + col] = value.im;
-            }
+        let (re, im): (Vec<_>, Vec<_>) = interleaved.map(|value| (value.re, value.im)).unzip();
+        Self {
+            re: re.into_boxed_slice(),
+            im: im.into_boxed_slice(),
         }
-        Self { re, im }
     }
 }
-
-type PlanCache<T> = RefCell<HashMap<(usize, bool), Arc<BatchedPlan<T>>>>;
-type PlanesCache<T> = RefCell<HashMap<(usize, bool), Arc<FourStepPlanes<T>>>>;
-
-/// Process-wide plan storage behind the per-thread caches.
-///
-/// A `BatchedPlan` owns `len - 1` twiddle pairs and a `FourStepPlanes` owns two
-/// planes of `n` scalars, so each is O(16n) bytes at `f64` -- 4 MiB apiece at
-/// n = 262,144. The thread-local maps below are the lock-free fast path, but a
-/// miss used to *build* a private table, so retention multiplied by the worker
-/// count of whatever executor drives the transform. A miss now takes the shared
-/// table and caches the handle, so every thread converges on one allocation.
-type GlobalPlanCache<T> = LazyLock<RwLock<HashMap<(usize, bool), Arc<BatchedPlan<T>>>>>;
-type GlobalPlanesCache<T> = LazyLock<RwLock<HashMap<(usize, bool), Arc<FourStepPlanes<T>>>>>;
-
-static PLAN_GLOBAL_F64: GlobalPlanCache<f64> = LazyLock::new(|| RwLock::new(HashMap::new()));
-static PLAN_GLOBAL_F32: GlobalPlanCache<f32> = LazyLock::new(|| RwLock::new(HashMap::new()));
-static PLANES_GLOBAL_F64: GlobalPlanesCache<f64> = LazyLock::new(|| RwLock::new(HashMap::new()));
-static PLANES_GLOBAL_F32: GlobalPlanesCache<f32> = LazyLock::new(|| RwLock::new(HashMap::new()));
-
-thread_local! {
-    static PLAN_CACHE_F64: PlanCache<f64> = RefCell::new(HashMap::new());
-    static PLAN_CACHE_F32: PlanCache<f32> = RefCell::new(HashMap::new());
-    static PLANES_CACHE_F64: PlanesCache<f64> = RefCell::new(HashMap::new());
-    static PLANES_CACHE_F32: PlanesCache<f32> = RefCell::new(HashMap::new());
-}
-
-/// Scalars whose batched plans are cached per thread.
-pub(crate) trait BatchedPlanCache:
-    MixedRadixScalar + LaneScalar + eunomia::layout::Pod + Sized
-{
-    /// Preferred exact lane width for the in-register boundary passes: the
-    /// planar transpose, the half combine, and the reinterleave sink. Eight
-    /// for `f32` and four for `f64`, which is the native AVX2 width of each.
-    /// Every site tries this width first and falls back to four lanes, then
-    /// to the scalar reference loop.
-    const BOUNDARY_LANES: usize;
-
-    fn cached_plan<const INVERSE: bool>(len: usize) -> Arc<BatchedPlan<Self>>;
-    fn cached_four_step_planes<const INVERSE: bool>(
-        n: usize,
-        m: usize,
-    ) -> Arc<FourStepPlanes<Self>>;
-}
-
-macro_rules! impl_plan_cache {
-    ($t:ty, $cache:ident, $planes:ident, $plan_global:ident, $planes_global:ident, $boundary_lanes:expr) => {
-        impl BatchedPlanCache for $t {
-            const BOUNDARY_LANES: usize = $boundary_lanes;
-
-            fn cached_plan<const INVERSE: bool>(len: usize) -> Arc<BatchedPlan<Self>> {
-                // The miss path is outlined and cold so the thread-local hit --
-                // the only path a warm transform takes -- stays small enough to
-                // inline into the caller. Folding the shared-map lookup inline
-                // here regressed `fft_kernel_strategy/generic_selector` at 64 and
-                // 256 in all four counterbalanced comparisons.
-                #[cold]
-                #[inline(never)]
-                fn miss<const INVERSE: bool>(
-                    key: (usize, bool),
-                    len: usize,
-                ) -> Arc<BatchedPlan<$t>> {
-                    // Drop the read guard before the write path: a guard held in
-                    // an `if let` scrutinee outlives the `else` arm, and this lock
-                    // is not reentrant.
-                    let shared = $plan_global.read().get(&key).cloned();
-                    if let Some(plan) = shared {
-                        return plan;
-                    }
-                    // Re-check under the write lock and build there: these tables
-                    // are O(16n), so blocking a concurrent misser costs less than
-                    // letting it build a duplicate the map discards.
-                    let mut guard = $plan_global.write();
-                    Arc::clone(
-                        guard
-                            .entry(key)
-                            .or_insert_with(|| Arc::new(BatchedPlan::<$t>::new::<INVERSE>(len))),
-                    )
-                }
-
-                $cache.with(|c| {
-                    let key = (len, INVERSE);
-                    if let Some(plan) = c.borrow().get(&key) {
-                        return Arc::clone(plan);
-                    }
-                    let plan = miss::<INVERSE>(key, len);
-                    c.borrow_mut().insert(key, Arc::clone(&plan));
-                    plan
-                })
-            }
-
-            fn cached_four_step_planes<const INVERSE: bool>(
-                n: usize,
-                m: usize,
-            ) -> Arc<FourStepPlanes<Self>> {
-                #[cold]
-                #[inline(never)]
-                fn miss<const INVERSE: bool>(
-                    key: (usize, bool),
-                    n: usize,
-                    m: usize,
-                ) -> Arc<FourStepPlanes<$t>> {
-                    let shared = $planes_global.read().get(&key).cloned();
-                    if let Some(planes) = shared {
-                        return planes;
-                    }
-                    let mut guard = $planes_global.write();
-                    Arc::clone(
-                        guard.entry(key).or_insert_with(|| {
-                            Arc::new(FourStepPlanes::<$t>::new::<INVERSE>(n, m))
-                        }),
-                    )
-                }
-
-                $planes.with(|c| {
-                    let key = (n, INVERSE);
-                    if let Some(planes) = c.borrow().get(&key) {
-                        return Arc::clone(planes);
-                    }
-                    let planes = miss::<INVERSE>(key, n, m);
-                    c.borrow_mut().insert(key, Arc::clone(&planes));
-                    planes
-                })
-            }
-        }
-    };
-}
-
-impl_plan_cache!(
-    f64,
-    PLAN_CACHE_F64,
-    PLANES_CACHE_F64,
-    PLAN_GLOBAL_F64,
-    PLANES_GLOBAL_F64,
-    4
-);
-impl_plan_cache!(
-    f32,
-    PLAN_CACHE_F32,
-    PLANES_CACHE_F32,
-    PLAN_GLOBAL_F32,
-    PLANES_GLOBAL_F32,
-    8
-);
 
 /// Runs the stage set of `batch` transforms of length `plan.len` over planar
 /// `re`/`im`, whose rows the caller has already bit-reversed — which the
@@ -702,41 +552,8 @@ pub(crate) fn split_scratch_len(n: usize) -> usize {
     2 * scratch_len(n / 2)
 }
 
-/// Per-pass cycle attribution for the planar driver, compiled only into test
-/// builds; the release pinned probes run as tests, so they see it, while
-/// production builds carry nothing.
-///
-/// Totals accumulate per label rather than printing per pass. A transform
-/// worth measuring runs thousands of times, and a line of stderr per pass
-/// per call is not a measurement — it is a cost large enough to change the
-/// thing being measured. [`sections::take`] drains the totals.
 #[cfg(all(test, windows, target_arch = "x86_64"))]
-pub(crate) mod sections {
-    use std::cell::RefCell;
-
-    thread_local! {
-        static TOTALS: RefCell<Vec<(&'static str, u64, u64)>> = const { RefCell::new(Vec::new()) };
-    }
-
-    /// Adds one pass's cycle count to its label's running total.
-    pub(crate) fn record(label: &'static str, cycles: u64) {
-        TOTALS.with_borrow_mut(|totals| {
-            if let Some(entry) = totals.iter_mut().find(|(name, _, _)| *name == label) {
-                entry.1 += cycles;
-                entry.2 += 1;
-            } else {
-                totals.push((label, cycles, 1));
-            }
-        });
-    }
-
-    /// Drains the accumulated totals as `(label, cycles, passes)`, in the
-    /// order the labels were first seen — which is the order the driver runs
-    /// them, so a caller can print the pipeline as a pipeline.
-    pub(crate) fn take() -> Vec<(&'static str, u64, u64)> {
-        TOTALS.with_borrow_mut(std::mem::take)
-    }
-}
+pub(crate) mod sections;
 
 #[cfg(all(test, windows, target_arch = "x86_64"))]
 macro_rules! sect {

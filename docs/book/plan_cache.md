@@ -1,52 +1,52 @@
-# Plan Cache
+# Plans, tables, and workspace
 
-Apollo caches FFT execution plans to avoid repeating the expensive
-mixed-radix factorization on every call.
+An FFT plan records how a transform of a particular shape executes. Reusing
+it avoids repeating route selection and allows immutable coefficient tables
+to remain shared. Workspace has a different lifetime: it holds intermediate
+values during execution and must remain disjoint from every active input.
 
-## Runtime-Cached Plans
+## Reusing a plan
 
-`FftPlan1D`, `FftPlan2D`, `FftPlan3D` are created once per unique
-transform size and cached globally:
+`FftPlan1D::<T>::new(Shape1D)` constructs a reusable plan. The corresponding
+2-D and 3-D constructors accept `Shape2D` and `Shape3D`. These shapes validate
+nonzero dimensions before execution. Forward and inverse methods share the
+plan; direction is not a separate plan-cache key.
 
-```rust,ignore
-use apollo_fft::FftPlan1D;
+The array API resolves cached plans through `PlanCacheProvider` on the storage
+scalar. Its `get_1d_plan`, `get_2d_plan`, and `get_3d_plan` methods return `Arc`
+handles. The process caches retain plans by shape for each scalar implementation;
+thread-local handles avoid repeated shared lookups. Explicitly constructing a
+plan does not insert that plan into these caches.
 
-// Plan is computed and cached on first use; subsequent calls hit the cache
-let plan = FftPlan1D::get_or_create(4096)?;
-let out = plan.forward(&input)?;
-```
+`StaticFftPlan1D<T, N>`, `StaticFftPlan2D<T, NX, NY>`, and
+`StaticFftPlan3D<T, NX, NY, NZ>` encode shape in const generics. Their values are
+zero-sized. Their kernels still use coefficient tables and temporary storage;
+a zero-sized plan does not imply a zero-memory transform.
 
-The cache key is `(size, scalar_type, direction)`.
+## Immutable coefficient tables
 
-## `PlanCacheProvider` Trait
+FourStep's planar kernels share process-wide stage tables and twiddle planes.
+A table's key includes length and direction. Each worker keeps only the last
+length's handle for each direction, in fixed inline storage. A first visit to
+a worker can therefore acquire an existing table without allocating a local
+map. Alternating lengths replace handles and consult the shared table cache;
+the globally owned coefficients remain valid throughout execution.
 
-Backends that maintain their own plan cache implement `PlanCacheProvider`:
+## Temporary values
 
-```rust,ignore
-pub trait PlanCacheProvider {
-    fn get_plan_1d(&self, size: usize) -> Option<Arc<FftPlan1D>>;
-    fn insert_plan_1d(&self, size: usize, plan: Arc<FftPlan1D>);
-}
-```
+Mnemosyne supplies Apollo's reusable caller-thread transpose buffers. Leto
+performs layout movement and Moirai joins disjoint lane tasks before those
+buffers can be reused.
 
-The wgpu backend's `GpuTransformPlanner` caches compiled WGSL shader
-pipelines by `(shape, precision_profile, direction)`, avoiding
-shader recompilation across training iterations.
+For generic FourStep lanes longer than 1024, an axis pass uses its inactive
+transpose companion as lane workspace. If a lane needs more scratch elements
+than its length, one task groups enough adjacent lanes to supply that scratch
+and reuses it sequentially. The last incomplete group runs after the parallel
+join. This keeps the existing full-volume storage bound. A degenerate volume
+that cannot supply one workspace uses the existing local execution route.
 
-## `Shape1D / 2D / 3D`
-
-Validated non-zero shape structs prevent zero-size FFT plans from reaching
-the execution path. All plan constructors require a `Shape*D`:
-
-```rust,ignore
-let shape = Shape1D::new(4096)?;  // errors if size == 0
-let plan = FftPlan1D::new(shape)?;
-```
-
-## Static vs. Dynamic Plans
-
-| Plan type | Cache hit | Compile-time size | Use case |
-|-----------|-----------|-------------------|----------|
-| `StaticFftPlan1D<N>` | never needed | yes | Fixed-size inner loops |
-| `FftPlan1D` (cached) | yes | no | Variable-size; amortized |
-| `FftPlan1D` (fresh) | no | no | One-shot calls |
+Moirai workers release Apollo FFT scratch when idle. The enclosing caller's
+buffer survives across submissions, so worker quiescence does not discard the
+lane workspace. Strided views use a separate rank-specific staging role to
+keep their logical values disjoint from transpose scratch. Smaller sized
+kernels retain their own scratch and dispatch policies.

@@ -7,10 +7,11 @@
 
 use crate::application::execution::kernel::mixed_radix::traits::ShortDft;
 use crate::application::execution::kernel::mixed_radix::MixedRadixScalar;
-use crate::application::execution::kernel::pot::StockhamAutosort;
+use crate::application::execution::kernel::pot::{FourStep, PotRoute, StockhamAutosort};
 use crate::with_pot_zst;
 use eunomia::Complex;
 
+use super::strategy::generic_four_step_applies;
 use super::FftPlan1D;
 use crate::application::execution::kernel::components::base128::instance_major::transform_64;
 use crate::application::execution::kernel::components::base128::transform_via_base_128;
@@ -171,6 +172,11 @@ fn static_pot_dispatch<
 >(
     slice: &mut [F::Complex],
 ) {
+    if generic_four_step_applies(N) {
+        FourStep::run::<F, INVERSE, NORMALIZE>(slice, &[]);
+        return;
+    }
+
     let twiddles = if INVERSE {
         F::cached_twiddle_inv(N)
     } else {
@@ -490,6 +496,19 @@ pub(super) fn exec_pot_inverse_unnorm_512<F: MixedRadixScalar<Complex = Complex<
     slice: &mut [F::Complex],
 ) {
     exec_pot_inverse_unnorm_sized::<F, 9>(plan, slice);
+}
+
+/// Four-step owns its table requirements; even powers need no full-length
+/// stage table, while odd powers acquire one inside their combining pass.
+pub(super) fn exec_four_step<
+    F: MixedRadixScalar<Complex = Complex<F>>,
+    const INVERSE: bool,
+    const NORMALIZE: bool,
+>(
+    _plan: &FftPlan1D<F>,
+    slice: &mut [F::Complex],
+) {
+    FourStep::run::<F, INVERSE, NORMALIZE>(slice, &[]);
 }
 
 // 4. PowerOfTwo generic sizes (using cached twiddles)
