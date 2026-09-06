@@ -203,10 +203,10 @@ pub(in crate::application::execution::kernel::mixed_radix::scalar) unsafe fn sma
             // That verdict is a *latency* one, and it does not hold in every
             // regime: measured across 32 independent lanes — the shape a
             // `dimension_2d` axis pass runs — the same register form is 1.87x
-            // faster than this codelet, because the permute chain it pays for
-            // overlaps across lanes. Acting on that needs the lane paths to
-            // select an entry the standalone path does not, which is an
-            // interface question rather than a constant:
+            // faster than this codelet on a performance core, because the
+            // permute chain it pays for overlaps across lanes. It is not free
+            // to take: efficiency cores do not overlap it and lose 1.11x there,
+            // and there is no per-core dispatch. Sizing that trade is
             // `backlog.md#apollo-n8-regime-split`.
             let data_ref = &mut *data.as_mut_ptr().cast::<[Complex64; 8]>();
             crate::application::execution::kernel::components::winograd::dft8_array_impl::<

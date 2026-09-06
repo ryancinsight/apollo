@@ -241,10 +241,13 @@
   was built, and the caveat turned out to be the entire result. A proxy whose
   named confound is not itself measured is not evidence: the lane arms, whose
   transforms each carry different data, are what settled it.
-- **Efficiency core not reported.** Its readings ran under a peer's build and
-  varied 3x within a run; discarded rather than caveated. The declining figure
-  is a performance-core one, and a 2% ceiling there does not become worth
-  collecting on the efficiency core.
+- **Efficiency core, measured 2026-09-06 once the host went quiet.** The
+  crossing is dearer there — N = 16 reads 990.2 ns per call against 948.4 ns
+  framed, 674 ps per crossing, 4.2% of the pass — which is the honest number
+  and still declines: 4% does not buy a change to the lane loop's chunk
+  granularity through `moirai`. N = 8 shows no gain at all on that core
+  (302.5 against 304.7, framed marginally slower), so the effect does not even
+  hold in one direction across sizes.
 - **Consequence for [`#apollo-n8-f64-gap`](#apollo-n8-f64-gap):** none by this
   route — but the lane arms built to settle this turned up something else, in
   [`#apollo-n8-regime-split`](#apollo-n8-regime-split).
@@ -261,14 +264,26 @@
   actually run. The verdict inverts. Performance core, intervals 0.05% wide,
   reproduced:
 
-  | regime | scalar | vector | verdict |
-  | --- | --- | --- | --- |
-  | latency (one round trip) | 12.56 ns | 14.44 | scalar by 1.15x |
-  | throughput (32-lane pass) | 229.3 ns | 122.6 | **vector by 1.87x** |
+  | core | regime | scalar | vector | verdict |
+  | --- | --- | --- | --- | --- |
+  | performance | latency (one round trip) | 12.56 ns | 14.44 | scalar by 1.15x |
+  | performance | throughput (32-lane pass) | 229.3 ns | 122.6 | **vector by 1.87x** |
+  | efficiency | latency | 17.22 ns | 18.19 | scalar by 1.06x |
+  | efficiency | throughput | 271.8 ns | 302.5 | scalar by 1.11x |
 
-  N = 16, already vectorised, moves the same way and further: 757.9 against
-  394.8, a 1.92x throughput win over its scalar codelet against the 1.24x it
-  shows at latency.
+  N = 16, already vectorised, moves the same way on the performance core —
+  757.9 against 394.8, a 1.92x throughput win against the 1.24x it shows at
+  latency — and only marginally on the efficiency core, 1014.1 against 990.2.
+
+- **The efficiency core does not follow, and that is what makes this a
+  decision.** The inversion is a performance-core effect: there the wide
+  out-of-order window overlaps the permute chains across lanes, and on the
+  efficiency core it does not, so the vector arm loses in *both* regimes there
+  (1.06x at latency, 1.11x at throughput). There is no per-core dispatch — the
+  N = 16 arm records the same constraint — so shipping the register form at
+  N = 8 would buy 87% on performance cores and pay 11% on efficiency ones, with
+  `moirai` distributing lane work across both. That is a real trade to size,
+  not a win to take.
 - **Why it inverts, and why that is credible rather than an artifact.** The
   register form's cost is four cross-lane permutes and a transpose whose
   results feed each other — a dependency chain, which is what a latency
@@ -285,16 +300,20 @@
   question, not a constant to flip. It also needs the efficiency core, which
   three attempts could not measure on a contended host, and the throughput
   reading at N = 32 and for `f32`.
-- **DoR to settle before implementing.** (1) Which regime dominates apollo's
-  own usage — `dimension_2d`/`dimension_3d` lane counts against standalone
-  small-transform calls in the plan cache; (2) whether the axis passes can take
+- **DoR to settle before implementing.** (1) The lane mix — how `moirai`
+  distributes an axis pass across core types, since the trade above is decided
+  by that ratio and by nothing else; (2) which regime dominates apollo's own
+  usage — `dimension_2d`/`dimension_3d` lane counts against standalone
+  small-transform calls in the plan cache; (3) whether the axis passes can take
   a lane-pass entry without duplicating the dispatch, since a second entry per
-  size is the cloned-variant defect; (3) the efficiency-core reading on a quiet
-  host.
+  size is the cloned-variant defect; (4) the same throughput reading for `f32`,
+  whose arms are a separate lane-density family.
+  The efficiency-core reading is done (2026-09-06).
 - **Acceptance.** The multi-lane paths run the arm that measures faster in
   their own regime on both core types, through one dispatch rather than two
-  copies of it, with the value oracles unchanged; or the regime split is shown
-  not to survive on the efficiency core and that is recorded with the numbers.
+  copies of it, with the value oracles unchanged; or the performance-core gain
+  is shown not to outweigh the efficiency-core loss across the measured lane
+  mix, and that is recorded with the numbers.
 - **Risk / change class:** [minor] [perf]; **dependencies:** none.
 - **Parent:** [`#atlas-apollo-beat-the-references`](#atlas-apollo-beat-the-references).
 
