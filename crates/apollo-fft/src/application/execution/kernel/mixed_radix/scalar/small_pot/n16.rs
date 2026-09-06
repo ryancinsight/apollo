@@ -171,6 +171,94 @@ unsafe fn vector_arm<const INVERSE: bool, const NORMALIZE: bool>(data: &mut [Com
     }
 }
 
+/// Direct entry to the vector arm, bypassing the per-call capability check.
+///
+/// The `small_pot_arms` probe uses this to separate the body's cost from the
+/// cost of the `OnceLock` check [`try_inplace`] reads first. It does *not*
+/// remove the `#[target_feature]` call boundary — this entry does not carry
+/// the attribute either, so [`vector_arm`] cannot inline into it — which is
+/// why the two arms read the same and the check is what the difference bounds.
+///
+/// # Safety
+///
+/// Carries [`vector_arm`]'s contract, and additionally requires the caller to
+/// have established AVX and FMA support itself.
+#[cfg(all(test, windows, target_arch = "x86_64"))]
+pub(crate) unsafe fn vector_arm_unchecked<const INVERSE: bool, const NORMALIZE: bool>(
+    data: &mut [Complex64],
+) {
+    // SAFETY: the caller carries both the capability and the length contract.
+    unsafe { vector_arm::<INVERSE, NORMALIZE>(data) }
+}
+
+/// Two transforms inside one `#[target_feature]` frame.
+///
+/// The `small_pot_arms` probe pairs this against [`vector_arm_unchecked`] to
+/// price the boundary itself. Both entries run the same two transforms; this
+/// one crosses into a target-feature frame once instead of twice, and
+/// [`vector_arm`] can inline into it because the feature sets match.
+///
+/// The difference between the two is an **upper bound** on what hoisting the
+/// frame would buy, not an exact per-crossing cost, and for two reasons worth
+/// keeping separate. It includes the inlining the crossing prevents, which is
+/// genuinely part of the prize. It also includes something that is not: the
+/// two transforms here share one buffer, so once inlined the compiler may keep
+/// it in registers between them and skip a store-reload that production, whose
+/// consecutive codelet calls carry different data, would still pay.
+///
+/// # Safety
+///
+/// Carries [`vector_arm`]'s contract, and requires the caller to have
+/// established AVX and FMA support itself.
+#[cfg(all(test, windows, target_arch = "x86_64"))]
+#[target_feature(enable = "avx,fma")]
+pub(crate) unsafe fn fused_round_trip_unchecked(data: &mut [Complex64]) {
+    // SAFETY: the caller carries both the capability and the length contract,
+    // and this frame supplies the target features both calls need.
+    unsafe {
+        vector_arm::<false, false>(data);
+        vector_arm::<true, true>(data);
+    }
+}
+
+/// A whole lane pass inside one `#[target_feature]` frame.
+///
+/// This is the shape [`super::super::super::components::base128`]'s
+/// `small_pot_arms` probe uses to price the boundary without the confound its
+/// fused entry carries: every lane is different data, so nothing can be held
+/// in registers between them, and the only thing the frame removes is one
+/// crossing per lane. It mirrors what a hoisted `dimension_2d` axis pass would
+/// do — probe once, then run every lane inside the frame.
+///
+/// # Safety
+///
+/// Requires the caller to have established AVX and FMA, and `data.len()` to be
+/// a multiple of 16.
+#[cfg(all(test, windows, target_arch = "x86_64"))]
+#[target_feature(enable = "avx,fma")]
+pub(crate) unsafe fn framed_lane_pass<const INVERSE: bool, const NORMALIZE: bool>(
+    data: &mut [Complex64],
+) {
+    // SAFETY: each chunk is exactly 16 samples, which is `vector_arm`'s
+    // contract, and this frame supplies the target features it needs.
+    unsafe {
+        for lane in data.chunks_exact_mut(16) {
+            vector_arm::<INVERSE, NORMALIZE>(lane);
+        }
+    }
+}
+
+/// The same lane pass, crossing the boundary once per lane.
+///
+/// This is what `dimension_2d` does today: one plan, called per lane, each
+/// call re-entering the vector frame.
+#[cfg(all(test, windows, target_arch = "x86_64"))]
+pub(crate) fn per_lane_pass<const INVERSE: bool, const NORMALIZE: bool>(data: &mut [Complex64]) {
+    for lane in data.chunks_exact_mut(16) {
+        try_inplace::<INVERSE, NORMALIZE>(lane);
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::Complex64;
