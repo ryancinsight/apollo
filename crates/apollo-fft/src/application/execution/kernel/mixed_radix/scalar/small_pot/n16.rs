@@ -183,7 +183,7 @@ unsafe fn vector_arm<const INVERSE: bool, const NORMALIZE: bool>(data: &mut [Com
 ///
 /// Carries [`vector_arm`]'s contract, and additionally requires the caller to
 /// have established AVX and FMA support itself.
-#[cfg(all(test, target_arch = "x86_64"))]
+#[cfg(all(test, windows, target_arch = "x86_64"))]
 pub(crate) unsafe fn vector_arm_unchecked<const INVERSE: bool, const NORMALIZE: bool>(
     data: &mut [Complex64],
 ) {
@@ -210,7 +210,7 @@ pub(crate) unsafe fn vector_arm_unchecked<const INVERSE: bool, const NORMALIZE: 
 ///
 /// Carries [`vector_arm`]'s contract, and requires the caller to have
 /// established AVX and FMA support itself.
-#[cfg(all(test, target_arch = "x86_64"))]
+#[cfg(all(test, windows, target_arch = "x86_64"))]
 #[target_feature(enable = "avx,fma")]
 pub(crate) unsafe fn fused_round_trip_unchecked(data: &mut [Complex64]) {
     // SAFETY: the caller carries both the capability and the length contract,
@@ -234,7 +234,7 @@ pub(crate) unsafe fn fused_round_trip_unchecked(data: &mut [Complex64]) {
 ///
 /// Requires the caller to have established AVX and FMA, and `data.len()` to be
 /// a multiple of 16.
-#[cfg(all(test, target_arch = "x86_64"))]
+#[cfg(all(test, windows, target_arch = "x86_64"))]
 #[target_feature(enable = "avx,fma")]
 pub(crate) unsafe fn framed_lane_pass<const INVERSE: bool, const NORMALIZE: bool>(
     data: &mut [Complex64],
@@ -252,7 +252,7 @@ pub(crate) unsafe fn framed_lane_pass<const INVERSE: bool, const NORMALIZE: bool
 ///
 /// This is what `dimension_2d` does today: one plan, called per lane, each
 /// call re-entering the vector frame.
-#[cfg(all(test, target_arch = "x86_64"))]
+#[cfg(all(test, windows, target_arch = "x86_64"))]
 pub(crate) fn per_lane_pass<const INVERSE: bool, const NORMALIZE: bool>(data: &mut [Complex64]) {
     for lane in data.chunks_exact_mut(16) {
         try_inplace::<INVERSE, NORMALIZE>(lane);
