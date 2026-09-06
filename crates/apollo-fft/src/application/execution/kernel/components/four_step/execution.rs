@@ -1,4 +1,3 @@
-use super::transpose::transpose_square_inplace;
 use super::PARALLEL_ROW_THRESHOLD;
 use crate::application::execution::kernel::mixed_radix::MixedRadixScalar;
 
@@ -131,7 +130,8 @@ fn decompose<F: MixedRadixScalar<Complex = eunomia::Complex<F>>, const INVERSE: 
     // Step 1: transpose data (N1 × N2 logical) → scratch (N2 × N1 layout).
     #[cfg(test)]
     let phase = super::profile::Phase::FirstTranspose.start();
-    F::transpose_matrix(data, scratch, n1, n2);
+    leto_ops::transpose_complex_matrices(data, scratch, 1, n1, n2)
+        .expect("invariant: FourStep factors exactly cover source and transpose workspace");
     #[cfg(test)]
     drop(phase);
 
@@ -216,9 +216,11 @@ fn decompose<F: MixedRadixScalar<Complex = eunomia::Complex<F>>, const INVERSE: 
     #[cfg(test)]
     let phase = super::profile::Phase::FinalTranspose.start();
     if n1 == n2 {
-        transpose_square_inplace(data, n1);
+        leto_ops::transpose_square_inplace(data, n1)
+            .expect("invariant: equal FourStep factors exactly cover the transform storage");
     } else {
-        F::transpose_matrix(data, scratch, n1, n2);
+        leto_ops::transpose_complex_matrices(data, scratch, 1, n1, n2)
+            .expect("invariant: FourStep factors exactly cover source and transpose workspace");
         data.copy_from_slice(scratch);
     }
     #[cfg(test)]

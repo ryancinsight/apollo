@@ -1,8 +1,9 @@
 //! A transpose permutes complete complex representations without arithmetic.
 
-use super::transpose_tiled_scalar;
 use crate::application::execution::kernel::mixed_radix::MixedRadixScalar;
 use eunomia::{layout::cast_slice, Complex};
+use leto::LetoError;
+use leto_ops::transpose_complex_matrices;
 
 trait Payloads: MixedRadixScalar<Complex = Complex<Self>> + From<u16> {
     const VALUES: [Self; 12];
@@ -58,10 +59,8 @@ fn signal<F: Payloads>(len: usize) -> Vec<Complex<F>> {
         .collect()
 }
 
-fn check_permutation<F: Payloads>(
-    transpose: impl Fn(&[Complex<F>], &mut [Complex<F>], usize, usize),
-) {
-    // Vector widths 2/4 and tile side 16 are crossed on either axis. The
+fn check_permutation<F: Payloads>() {
+    // Register widths 2/4 and tile sides 16/32 are crossed on either axis. The
     // Cartesian product includes square, asymmetric and both tail directions.
     const EXTENTS: [usize; 12] = [0, 1, 2, 3, 4, 5, 15, 16, 17, 31, 32, 33];
     for rows in EXTENTS {
@@ -82,12 +81,14 @@ fn check_permutation<F: Payloads>(
                         *value = source[source_offset + (index % rows) * columns + index / rows];
                     }
                     let mut actual = before;
-                    transpose(
-                        &source[source_offset..],
-                        &mut actual[destination_offset..],
+                    transpose_complex_matrices(
+                        &source[source_offset..source_offset + len],
+                        &mut actual[destination_offset..destination_offset + len],
+                        1,
                         rows,
                         columns,
-                    );
+                    )
+                    .expect("exact matrix slices satisfy the provider contract");
                     assert_eq!(
                         cast_slice::<_, u8>(&actual),
                         cast_slice::<_, u8>(&expected),
@@ -99,9 +100,7 @@ fn check_permutation<F: Payloads>(
     }
 }
 
-fn check_rejection<F: Payloads>(
-    transpose: impl Fn(&[Complex<F>], &mut [Complex<F>], usize, usize),
-) {
+fn check_rejection<F: Payloads>() {
     for (rows, columns, source_len, destination_len) in [
         (4, 4, 15, 16),
         (4, 4, 16, 15),
@@ -113,10 +112,29 @@ fn check_rejection<F: Payloads>(
         let source = signal::<F>(source_len);
         let before = signal::<F>(destination_len);
         let mut destination = before.clone();
-        let outcome = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-            transpose(&source, &mut destination, rows, columns);
-        }));
-        assert!(outcome.is_err(), "invalid extent {rows} x {columns}");
+        let expected_error = match rows.checked_mul(columns) {
+            None => LetoError::Overflow {
+                reason: "complex matrix element count",
+            },
+            Some(expected) => {
+                let (role, actual) = if source_len == expected {
+                    ("destination", destination_len)
+                } else {
+                    ("source", source_len)
+                };
+                LetoError::StorageError {
+                    reason: format!(
+                        "complex matrix transpose {role} length {actual} does not match expected {expected}"
+                    ),
+                }
+            }
+        };
+        let outcome = transpose_complex_matrices(&source, &mut destination, 1, rows, columns);
+        assert_eq!(
+            outcome,
+            Err(expected_error),
+            "invalid extent {rows} x {columns}"
+        );
         assert_eq!(
             cast_slice::<_, u8>(&destination),
             cast_slice::<_, u8>(&before),
@@ -126,21 +144,21 @@ fn check_rejection<F: Payloads>(
     for (rows, columns) in [(0, usize::MAX), (usize::MAX, 0)] {
         let before = signal::<F>(5);
         let mut destination = before.clone();
-        transpose(&[], &mut destination, rows, columns);
+        transpose_complex_matrices::<F>(&[], &mut destination[..0], 1, rows, columns)
+            .expect("zero extent accepts empty matrix slices");
         assert_eq!(
             cast_slice::<_, u8>(&destination),
             cast_slice::<_, u8>(&before),
             "zero extent is a no-op for {rows} x {columns}"
         );
-        transpose(&[], &mut [], rows, columns);
+        transpose_complex_matrices::<F>(&[], &mut [], 1, rows, columns)
+            .expect("zero extent accepts empty matrix slices");
     }
 }
 
 fn check_scalar<F: Payloads>() {
-    check_permutation::<F>(F::transpose_matrix);
-    check_permutation::<F>(transpose_tiled_scalar);
-    check_rejection::<F>(F::transpose_matrix);
-    check_rejection::<F>(transpose_tiled_scalar);
+    check_permutation::<F>();
+    check_rejection::<F>();
 }
 
 #[test]

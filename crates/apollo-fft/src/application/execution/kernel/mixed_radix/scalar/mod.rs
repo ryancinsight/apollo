@@ -5,7 +5,6 @@ mod rader;
 pub(crate) mod simd;
 mod small_pot;
 mod trait_def;
-pub(crate) mod transpose;
 pub(crate) mod twiddle_constants;
 
 pub(crate) use trait_def::MixedRadixScalar;

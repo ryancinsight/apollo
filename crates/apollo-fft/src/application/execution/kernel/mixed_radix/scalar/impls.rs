@@ -1,12 +1,9 @@
 //! Concrete `MixedRadixScalar` implementations for the two production
 //! floating-point precisions.
 //!
-//! The two impls are kept together rather than split per type because they
-//! perform identical trait wiring; the only differences are the concrete
-//! complex element type and the precision-specific SIMD/transpose routines
-//! (`pointwise_mul_reduced`/`_precise`, `transpose_matrix_reduced`/`_precise`).
-//! The precision-tagged names refer to SIMD lane density, not to the type
-//! suffix, so they remain compliant with the naming policy in CLAUDE.md.
+//! Each implementation binds the complex element representation and its
+//! arithmetic kernels to the shared transform algorithms. Pure layout movement
+//! belongs to Leto and does not require scalar-specific trait wiring.
 
 use super::rader::{
     build_rader_negacyclic_spectra, build_rader_negacyclic_twiddles, build_rader_spectrum_vec,
@@ -17,7 +14,6 @@ use super::small_pot::{
     small_pot_inplace_sized_reduced,
 };
 use super::trait_def::MixedRadixScalar;
-use super::transpose::{transpose_matrix_precise, transpose_matrix_reduced};
 use super::twiddle_constants::{
     TWIDDLES_FWD_PRECISE, TWIDDLES_FWD_REDUCED, TWIDDLES_INV_PRECISE, TWIDDLES_INV_REDUCED,
 };
@@ -202,11 +198,6 @@ impl MixedRadixScalar for f32 {
     fn normalize(data: &mut [Complex32], n: usize) {
         normalize_inplace(data, 1.0_f32 / n as f32);
     }
-    #[inline]
-    fn transpose_matrix(src: &[Complex32], dst: &mut [Complex32], n1: usize, n2: usize) {
-        transpose_matrix_reduced(src, dst, n1, n2);
-    }
-
     #[inline]
     unsafe fn small_pot_inplace_sized<
         const N: usize,
@@ -492,11 +483,6 @@ impl MixedRadixScalar for f64 {
     fn normalize(data: &mut [Complex64], n: usize) {
         normalize_inplace(data, 1.0_f64 / n as f64);
     }
-    #[inline]
-    fn transpose_matrix(src: &[Complex64], dst: &mut [Complex64], n1: usize, n2: usize) {
-        transpose_matrix_precise(src, dst, n1, n2);
-    }
-
     #[inline]
     unsafe fn small_pot_inplace_sized<
         const N: usize,

@@ -6,6 +6,7 @@ use crate::application::execution::kernel::tuning::{
 };
 use eunomia::Complex64;
 
+mod transpose;
 mod workspace;
 
 fn signal(n: usize) -> Vec<Complex64> {
