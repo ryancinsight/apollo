@@ -1127,6 +1127,38 @@
       differences the artifact could account for. The n = 50 f32/f64 fused
       ratio of 0.68 is unaffected — that compares two fused arms, neither of
       which allocated scratch in the probe.
+    - **Re-measured 2026-09-07 on the fixed instrument, host at zero
+      concurrent compiler processes.** Both flagged conclusions move, and one
+      was badly understated. Ratios are split/fused; "tie" means the 96.5%
+      median intervals overlap.
+
+      | core | n | scalar | fused ps | split ps | ratio | verdict |
+      | --- | --- | --- | --- | --- | --- | --- |
+      | P | 50 | f64 | 176279 | 180146 | 1.022 | split loses |
+      | P | 50 | f32 | 122959 | 122664 | 0.998 | **tie** |
+      | P | 144 | f64 | 459258 | 358667 | **0.781** | **split wins 22%** |
+      | P | 144 | f32 | 358200 | 357788 | 0.999 | tie |
+      | E | 50 | f64 | 157903 | 144722 | **0.917** | **split wins 8%** |
+      | E | 50 | f32 | 114892 | 118835 | 1.034 | split loses |
+      | E | 144 | f64 | 407140 | 385383 | 0.947 | tie |
+      | E | 144 | f32 | 459576 | 468229 | 1.019 | tie |
+
+      - **The f32 conclusion survives, on narrower evidence.** The recorded
+        "~3% split loss at n = 50" was a performance-core figure and is now a
+        tie — the zero-fill was carrying it, exactly as the bias predicted. A
+        real 3.4% loss remains on the efficiency core. Split still helps `f32`
+        at no length on either core, so fused-body register pressure is still
+        not the `f32` defect; the supporting number just changed.
+      - **The f64 core-split lead was understated by more than half.** Recorded
+        as "10% faster on the perf core, 5.5% worse on efficiency". Measured:
+        `n = 144` runs **21.9% faster split on the performance core** with
+        disjoint intervals, and the efficiency-core penalty is **gone** (a
+        tie). A second win appears that the biased run hid entirely: `n = 50`
+        `f64` on the efficiency core, **8.3% faster split**, disjoint.
+      - **So `prefers_split_codelet` deserves a per-(length, core) decision for
+        `f64`** — 144 wins big on P, 50 wins on E and loses 2.2% on P — and
+        stays off for `f32` at both lengths. That is a routing item, not
+        another measurement.
     - Not measured at the time of writing because the host carried 45
       concurrent compiler processes; the measurement itself is unchanged and
       takes one pinned run.
