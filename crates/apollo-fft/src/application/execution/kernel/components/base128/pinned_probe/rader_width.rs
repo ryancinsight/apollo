@@ -167,7 +167,8 @@ fn rader_width_by_core_type() {
     // about vector width. Refuse rather than report a misleading number.
     if cfg!(debug_assertions) {
         eprintln!(
-            "rader_width: built without optimization; re-run with --cargo-profile \n             bench-quick. No timings reported."
+            "rader_width: built without optimization; re-run with --cargo-profile \
+             bench-quick. No timings reported."
         );
         return;
     }
@@ -232,6 +233,92 @@ fn rader_width_by_core_type() {
             );
         }
         println!("RADER WIDTH cpu={landed} ({core})");
+        print!("{}", suite.report());
+    }
+}
+
+/// The same question one layer out: the whole planned transform, not the Rader
+/// kernel alone.
+///
+/// `rader_width_by_core_type` measures `rader_prime_forward` and finds `f32`
+/// never meaningfully slower than `f64`, while the item's recorded
+/// 674-against-579 ns came from the full path. This widens the measured
+/// region to the whole planned transform so the two can be compared.
+///
+/// Scope: the plan is constructed once and only `forward_complex_slice_inplace`
+/// is timed, so this covers the per-call route dispatch inside execution but
+/// **not** plan construction. A residue that lives in planning is invisible
+/// here and needs its own instrument.
+#[test]
+#[ignore = "measurement instrument for the f32 width question, full plan path"]
+fn plan_width_by_core_type() {
+    if cfg!(debug_assertions) {
+        eprintln!(
+            "plan_width: built without optimization; re-run with --cargo-profile \
+             bench-quick. No timings reported."
+        );
+        return;
+    }
+    let Some(selection) = measurement_cores::selected() else {
+        eprintln!("host reports no processor class information; probe not measurable");
+        return;
+    };
+    print!("{}", selection.describe());
+
+    for core in selection.cores() {
+        let cpu = core.processor().get();
+        let _binding = ProcessorBinding::bind(core.processor())
+            .expect("measurement processor must be available");
+        std::thread::yield_now();
+        let landed = ProcessorIndex::current()
+            .expect("Windows supports processor queries")
+            .get();
+        assert_eq!(landed, cpu, "processor binding must remain exact");
+        let core = core.label();
+
+        let mut suite = BenchmarkSuite::new(BenchmarkConfig::regression());
+        for &n in PRIMES {
+            let precise_source = source(n);
+            let reduced_source: Vec<Complex32> = precise_source
+                .iter()
+                .map(|value| Complex32::new(value.re as f32, value.im as f32))
+                .collect();
+            let shape = crate::Shape1D::new(n).expect("invariant: primes are non-zero");
+
+            // Same equivalence discipline as the kernel probe: the f64 arm is
+            // pinned to a direct DFT, and only then serves as the oracle for
+            // f32. The plan is built once, outside the timed region: what
+            // this times is plan *execution*, including the per-call route
+            // dispatch inside it, not plan construction. Building it per
+            // iteration would add a constant to both arms and compress the
+            // ratio toward 1 — the error this file already records once.
+            let precise_plan = crate::FftPlan1D::<f64>::new(shape);
+            let mut precise_out = precise_source.clone();
+            precise_plan.forward_complex_slice_inplace(&mut precise_out);
+            assert_is_the_transform(n, &precise_out, &direct_dft(&precise_source));
+            let reduced_plan = crate::FftPlan1D::<f32>::new(shape);
+            let mut reduced_out = reduced_source.clone();
+            reduced_plan.forward_complex_slice_inplace(&mut reduced_out);
+            assert_same_transform(n, &precise_out, &reduced_out);
+
+            suite.run_batched(
+                BenchmarkCase::new(core, "plan/f64", n),
+                || precise_source.clone(),
+                |work| {
+                    precise_plan.forward_complex_slice_inplace(std::hint::black_box(work));
+                    std::hint::black_box(work[0]);
+                },
+            );
+            suite.run_batched(
+                BenchmarkCase::new(core, "plan/f32", n),
+                || reduced_source.clone(),
+                |work| {
+                    reduced_plan.forward_complex_slice_inplace(std::hint::black_box(work));
+                    std::hint::black_box(work[0]);
+                },
+            );
+        }
+        println!("PLAN WIDTH cpu={landed} ({core})");
         print!("{}", suite.report());
     }
 }

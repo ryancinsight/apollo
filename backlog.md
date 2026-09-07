@@ -1013,6 +1013,47 @@
     anomaly without touching Rader at all — and the sweep is the instrument
     that will show it.
 
+- **Plan-path measurement, 2026-09-06 (`plan_width_by_core_type`), idle host.**
+  The Rader probe answered for `rader_prime_forward`; this widens the measured
+  region to the whole planned transform over the same eight primes, both
+  scalars in one pinned run per core, on a host with zero concurrent compiler
+  processes for both runs. Same oracles: the `f64` arm is pinned to a direct
+  DFT first, then serves as the `f32` oracle.
+  - **Scope, stated before the numbers.** The plan is built once and only
+    `forward_complex_slice_inplace` is timed, so this covers the per-call route
+    dispatch *inside* execution and **not** plan construction. Building the
+    plan per iteration would add a constant to both arms and compress the
+    ratio toward 1 — the error recorded above. A residue living in planning is
+    invisible here and needs its own instrument.
+
+  | n | P-core f32/f64 | E-core f32/f64 |
+  | --- | --- | --- |
+  | 17 | 0.56 | 0.52 / 0.80 |
+  | 41 | 0.52 | 0.89 / 0.72 |
+  | 97 | 1.01 | 0.93 / 0.95 |
+  | **101** | **0.99 / 0.83** | **1.00 / 0.98** |
+  | 113 | 1.01 / 1.15 | 0.99 / 1.00 |
+  | 151 | 1.00 / 0.94 | 0.83 / 0.84 |
+  | 193 | 0.90 / 0.86 | 0.77 / 0.75 |
+  | 257 | 0.79 / 0.81 | 0.74 / 0.73 |
+
+  Two runs where two figures are shown. Within this instrument no length is
+  reliably above 1.0: the single 1.15 at `n = 113` read 1.01 on the repeat,
+  and the small-`n` rows swing between runs because per-call cost dominates a
+  sub-100 ns body. Agreement is good from `n = 97` upward on the efficiency
+  core, looser on the performance core.
+- **The disagreement is in the `f64` arm, not the `f32` arm — which is where
+  the next round should look.** Round 2 above reports full-path `f32` at
+  665 ns for `n = 101` and this probe measures 674.7 ns, so the two
+  instruments agree on `f32` to about 1.5%. They do **not** agree on `f64`:
+  this probe measures 678.9 ns where the item opened on 579 ns. The recorded
+  1.16 ratio is therefore not evaluable against this instrument — not because
+  `f32` moved, but because the `f64` reference does not reproduce here.
+  Re-establishing that 579 ns figure, or identifying what the two instruments
+  do differently to `f64` (plan construction is the leading candidate, since
+  it is exactly what this probe excludes), is the prerequisite for reading the
+  performance-core excess as a width defect at all.
+
 - **Acceptance.** apollo `f32` is faster than apollo `f64` at every length in
   the table, and the `f32` gap against RustFFT is no worse than the `f64` gap.
   The two halves close separately: the prime anomaly is a defect, the composite
