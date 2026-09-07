@@ -1,26 +1,12 @@
 # Apollo Backlog
 
 <a id="apollo-codelet-experiment-boundary"></a>
-## APOLLO-CODELET-EXPERIMENT-BOUNDARY — Keep rejected codelet routes in tests [patch] — in-progress
-- **Integrator:** codex/main_integration; **last-update:** 2026-09-07; shared branch `codex/four-step-square-movement`.
-- **Scope:** generated Cooley–Tukey/Good–Thomas phase helpers and private Winograd scalar routing introduced by `09325122`; preserve the fused production arithmetic and the real split comparison probe.
-- **Finding:** both scalar implementations return false from the new production selector; experimental phase helpers still compile outside tests. Generated `dft#n_impl` documentation links contain literal interpolation syntax.
-- **Acceptance:** unused experimental selection leaves production; test-only phase helpers retain their shared arithmetic generation and initialized-scratch boundary; generated documentation resolves.
-- **Verification:** macro/FFT compile, existing generic composite cases and split-equivalence tests in debug/release, private Rustdoc, then fresh executable size/codegen evidence. Do not promote timing results already invalidated by the scratch correction.
-- **Dependencies:** `09325122` is staged into `86febbb7`; focused gates run against the frozen cleanup. [FourStep movement](#apollo-four-step-square-movement) keeps its original performance acceptance.
-- **Source review:** fused arithmetic-generation regions and the probe implementation remain unchanged; a generic leaf compares both precisions and directions through borrowed scratch. Cleanup is +123/-194 lines versus the incoming merge, net -71; no timing result is inferred.
-- **Lease:** codex/main_integration `crates/apollo-fft-macros/src/{cooley_tukey,good_thomas,winograd_composites}.rs`, private phase-emission definition, `components/winograd/{traits.rs,composite/}` and probe documentation; 2026-09-07. No benchmark timed-region changes.
+## APOLLO-CODELET-EXPERIMENT-BOUNDARY — Keep rejected codelet routes in tests [patch] — done
+- `7013ea96` removes unused production selection and confines split phases to tests, net -71 lines against incoming main. [Gates](../../output/apollo-square-transpose/integration/merge-gates/collection.json) pass 126 debug/126 release cases; [code evidence](../../output/apollo-square-transpose/integration/merge-gates/census/pe-code-identity.json) preserves instructions and a 512-byte size margin, without a timing claim.
 
 <a id="apollo-benchmark-baseline-closure"></a>
-## APOLLO-BENCHMARK-BASELINE-CLOSURE — Preserve benchmark dependency closures [patch] — in-progress
-- **Integrator:** codex/api_evidence; **last-update:** 2026-09-07; shared branch `codex/four-step-square-movement`.
-- **Scope:** benchmark revision preparation and compiler diagnostics; no production kernel, input, sampling or acceptance changes.
-- **Failure:** [run 34078400901](https://github.com/ryancinsight/apollo/actions/runs/34078400901) cannot compile the baseline. Its prior preparation copied the candidate lock/providers over baseline source, whose `transpose_complex_matrices` import is absent from candidate Leto `633acb7`; Cargo JSON diagnostics were not retained on failure.
-- **Acceptance:** each production revision retains its own manifests and locked providers; shared benchmark sources are checked for equality; preparation rejects incompatible instruments explicitly; failed compilation preserves its diagnostic.
-- **Verification:** preparation regression tests against distinct provider/API fixtures, real baseline/candidate locked compilation, workflow parsing and unchanged workload comparison.
-- **Dependencies:** collect the running [FourStep gates](#apollo-four-step-square-movement) before the exact baseline/candidate locked builds; automation edits are disjoint from their runtime inputs.
-- **Focused evidence:** automation commit `b944eef5` passes ten filesystem regressions, including actual Windows junction rejection; symlink creation requires unavailable host privilege. YAML and Bash syntax pass; downstream measurement jobs remain identical. Preparing exact baseline `09325122` preserves all 1,075 files outside instrument roots and both original dependency locks; the second transfer writes nothing.
-- **Build evidence:** exact baseline `09325122` builds all three unchanged release benchmark targets under its original lock in 156 seconds within the enforced 600-second compilation deadline; all 1,101 captured inputs remain unchanged. Candidate compilation is pending; this is build evidence, not timing.
+## APOLLO-BENCHMARK-BASELINE-CLOSURE — Preserve benchmark dependency closures [patch] — done
+- `b944eef5` preserves each revision's production files and lock while checking shared instrument sources; ten filesystem tests pass. Exact `09325122` baseline and `7013ea96` candidate compile all three unchanged release targets under separate original locks and enforced 600-second build bounds: [baseline](../../output/apollo-square-transpose/integration/baseline-preparation/baseline-build-collection.json), [candidate](../../output/apollo-square-transpose/integration/merge-gates/collection.json). No timing or transitive machine-code equality claim.
 
 <a id="apollo-semver-locked-inputs"></a>
 ## APOLLO-SEMVER-LOCKED-INPUTS — Compare APIs without provider re-resolution [patch] — todo
@@ -44,14 +30,14 @@
 ## APOLLO-FOUR-STEP-SQUARE-MOVEMENT — Consolidate provider-owned FourStep movement [patch] — in-progress
 
 - **Integrator:** codex/01a07370; **last-update:** 2026-09-07; branch `codex/four-step-square-movement`.
-- **Lease:** none; integrated source is verified through immutable tree `304d70d8` under Git checkout filters. The N=101 editor retains its disjoint Rader work.
+- **Lease:** none; current integration `7013ea96` has tree `cee1326e` and 1,102 unchanged captured compiler inputs.
 - **Build coordination:** verify outside the Atlas overlay with standalone lock `F9720DFD…2E90197`; immutable fixtures isolate committed-input gates from active edits. Live-tree timing still requires a stable source/lock and uncontended host.
 - **Scope:** all pure-copy FourStep transposes through Leto, removing Apollo's private copy kernels and scalar trait hook; Hermes owns register movement. No fused multiplication, decomposition, route, normalization, workspace or Apollo API change.
 - **Hypothesis:** square register exchange and a checked canonical dense-copy boundary remove duplicate movement without allocation or an additional full-volume pass. [ADR 0040](docs/adr/0040-leto-fft-layout-ownership.md) owns the design, measured candidate comparison and evidence limits.
 - **Acceptance:** retain production only with unchanged allocation bounds, no executable growth and supported complete-engine improvement without supported regression; preserve the accepted provider ownership decision.
 - **Verification:** generic bitwise tile/tail/offset/canary/special-value oracles, FFT analytical and exact/oversized-workspace cases, full affected gates, unchanged replicated census and matched footprint probe.
 - **Dependencies/closure:** [Leto draft PR 175](https://github.com/ryancinsight/leto/pull/175) contains provider source `633acb7`; [Hermes](../hermes/backlog.md#hermes-complex-permutation-inlining) merges as `9d68a9e` with the locked `07c5e5f` source unchanged. Provider-first adoption and the recorded retention criteria remain required; ADR 0040 owns rejected candidate history.
-- **Evidence:** frozen cold failure commit `3b7311fa` passes size (-512 bytes), 1,445 native/555 release tests, seven smokes and 20 memory windows. Integration tree `304d70d8` passes 33 debug/33 release tests, Clippy, doctest/rustdoc and 223 API checks, preserving 1,099 input hashes. ADR 0040 records limits and artifacts; no complete-engine timing or performance acceptance yet.
+- **Evidence:** `7013ea96` passes 126 focused debug/126 release cases, Clippy, private/hidden Rustdoc, seven smokes and dependency audits. Its census remains 512 bytes below baseline with identical mapped instructions; all 20 fresh allocation windows match baseline. Prior full-workspace/API evidence retains its revision scope in ADR 0040. The incomplete timing suite is rejected after Cargo appears at the third endpoint; no complete-engine performance acceptance yet.
 <a id="apollo-transpose-cache-geometry"></a>
 ## APOLLO-TRANSPOSE-CACHE-GEOMETRY — Model transpose cache-set pressure [patch] — todo
 - Outcome: establish whether power-of-two transpose strides cause cache-set conflicts before changing tile geometry.

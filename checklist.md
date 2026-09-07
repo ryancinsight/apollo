@@ -2,9 +2,7 @@
 
 ## codex/root — current execution
 
-- [ ] [FourStep movement](backlog.md#apollo-four-step-square-movement): collect the full integration gates and matched allocation windows; focused integration, exact-lock API comparison and retained census build are complete.
-- [ ] [FourStep movement](backlog.md#apollo-four-step-square-movement): collect the unchanged census only after its host precondition passes, then apply the recorded retention criteria and provider-first delivery order. The 2026-09-07 attempt invokes no native census because the final guard detects a compiler workload.
-- [ ] [Benchmark dependency closure](backlog.md#apollo-benchmark-baseline-closure): finish preparation diagnosis and replace provider-overwriting baseline construction after the current gate inputs are collected.
+- [ ] [FourStep movement](backlog.md#apollo-four-step-square-movement): collect a complete unchanged census under the host-load guard, then apply retention criteria and provider-first delivery. The 2026-09-07 suite stops after three invocations because Cargo appears in the endpoint snapshot; its timing is excluded. Correctness, size and all 20 allocation windows pass at `7013ea96`.
 
 ## ATLAS-APOLLO-REAL-HALF-THROUGHPUT-2026-09-01 [perf] — Codex
 
@@ -6589,9 +6587,3 @@ Sprint target version: 0.3.0 (first unreleased minor after 0.2.0)
 - [x] Add typed SFT sparse forward/inverse caller-owned coverage for `Complex64`, `Complex32`, mixed `[f16; 2]`, represented-input parity, inverse roundtrip, sparse shape rejection, and profile mismatch rejection.
 - [x] Add typed SHT real/complex caller-owned coverage for `f64`/`Complex64`, `f32`/`Complex32`, mixed `f16`/`[f16; 2]`, represented-input parity, inverse roundtrip, shape rejection, and profile mismatch rejection.
 - [x] Add typed NUFFT 1D/3D Type-1/Type-2 caller-owned coverage for `Complex64`, `Complex32`, mixed `[f16; 2]`, represented-input parity, Type-2 parity, shape rejection, and profile mismatch rejection.
-
-## codex/api_evidence — baseline dependency closure
-
-- [x] [APOLLO-BENCHMARK-BASELINE-CLOSURE](backlog.md#apollo-benchmark-baseline-closure): diagnose graph transplantation; prepare source-only transfer and filesystem regressions.
-- [x] [APOLLO-BENCHMARK-BASELINE-CLOSURE](backlog.md#apollo-benchmark-baseline-closure): apply reviewed automation and contract corrections; collect filesystem, YAML and Bash checks.
-- [ ] [APOLLO-BENCHMARK-BASELINE-CLOSURE](backlog.md#apollo-benchmark-baseline-closure): collect exact three-target locked baseline/candidate builds and integration review.

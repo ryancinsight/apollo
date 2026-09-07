@@ -356,9 +356,42 @@ pass with warnings denied. A transitive proc-macro generation mismatch in the
 shared cache is repaired through Cargo rebuilds without deleting the cache.
 The documentation subprocess completes in 31.628 seconds; its script lacks
 automatic timeout enforcement, so elapsed duration is not an enforced-budget
-claim. Remaining benchmark smokes and dependency audits bind to the final
-integrated source. An uncontended complete-engine comparison remains required
-before performance acceptance.
+claim. An uncontended complete-engine comparison remains required before
+performance acceptance.
+
+The final integration `7013ea96`, tree `cee1326e`, incorporates main `09325122`
+and confines its rejected split-codelet experiment to test compilation.
+The production entries retain the fused arithmetic; one generic test leaf
+covers both precisions and directions with borrowed, fully initialized scratch.
+The cleanup removes 71 net lines against incoming main and changes neither the
+probe's computation nor its timed region. Its [collected gates](../../../../output/apollo-square-transpose/integration/merge-gates/collection.json)
+pass 126 focused debug and 126 release tests, format, Clippy, warning-denied
+private/hidden documentation, seven bounded benchmark smokes, provider audit,
+RustSec and cargo-deny. Cargo-deny retains 32 configured duplicate warnings.
+All 1,102 compiler-input hashes and the standalone lock remain unchanged.
+This private documentation invocation has an automatic 600-second deadline;
+no Miri or sanitizer execution is claimed.
+
+The rebuilt default census is 6,861,312 bytes, still 512 below baseline.
+[Independent PE inspection](../../../../output/apollo-square-transpose/integration/merge-gates/census/pe-code-identity.json)
+finds the complete code section and its addresses identical to the earlier
+mapped image; all 6,630 instruction rows in eleven retained disassemblies
+match. The 215 differing read-only bytes are source-location line fields and
+debug/link metadata; no numerical-data differences remain unclassified. This
+still establishes static evidence rather than a runtime measurement.
+Compiler-load guards reject two attempts before invocation. A later suite
+executes three native invocations in 16.415 seconds, then rejects the third
+after its endpoint snapshot contains two Cargo processes. The incomplete
+[suite is excluded from performance conclusions](../../../../output/apollo-square-transpose/integration/merge-gates/census/timing-validity.json).
+The earlier full-workspace and API results retain their original revision
+scopes; they are not fresh timing evidence.
+
+The unchanged [default-feature footprint probe](../../../../output/apollo-square-transpose/integration/merge-gates/footprint/collection.json)
+also passes at `7013ea96`: all 20 allocation-count, peak-byte, retained-byte
+and block-list windows match the original baseline. Rust inputs and the lock
+remain unchanged; only this ADR's prose changes during collection. The probe
+warms the process pool before its size ladder, so its first-transform windows
+are not cold-process measurements. These are allocation, not latency results.
 
 The current experimental lock selects Leto `633acb7` through two entries and
 Hermes `07c5e5f` through five, without changing manifest requirements or
