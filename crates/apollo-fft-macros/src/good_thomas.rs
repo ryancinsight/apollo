@@ -246,8 +246,14 @@ pub(crate) fn good_thomas_function(
             const INVERSE: bool,
         >(
             data: &[eunomia::Complex<F>; #n],
-            scratch: &mut [eunomia::Complex<F>; #n],
+            scratch: &mut std::mem::MaybeUninit<[eunomia::Complex<F>; #n]>,
         ) {
+            // Taken still uninit: the gather below is what initializes the
+            // region, and forming `&mut [Complex<F>; N]` over uninitialized
+            // memory is undefined behavior whatever the bit patterns are.
+            // Everything here reaches scratch through the raw pointer, and
+            // the array views inside `#transform_rows` are formed only after
+            // the gather has written every slot.
             let scratch_ptr = scratch.as_mut_ptr() as *mut eunomia::Complex<F>;
             #gather
             #transform_rows
@@ -279,8 +285,13 @@ pub(crate) fn good_thomas_function(
             if <F as crate::application::execution::kernel::components::winograd::traits::WinogradScalar>::prefers_split_codelet(#n) {
                 let mut scratch =
                     std::mem::MaybeUninit::<[eunomia::Complex<F>; #n]>::uninit();
+                #rows_fn_name::<F, INVERSE>(data, &mut scratch);
+                // SAFETY: the row phase above runs the gather first, which
+                // writes every one of the #n scratch slots exactly once
+                // before anything reads them. This is the same initialization
+                // order the fused body relies on; only the inlining boundary
+                // moved.
                 let scratch = unsafe { scratch.assume_init_mut() };
-                #rows_fn_name::<F, INVERSE>(data, scratch);
                 #cols_fn_name::<F, INVERSE>(scratch, data);
                 return;
             }

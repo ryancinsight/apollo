@@ -102,8 +102,12 @@ pub(crate) fn cooley_tukey_function(
             const INVERSE: bool,
         >(
             data: &[eunomia::Complex<F>; #n],
-            scratch: &mut [eunomia::Complex<F>; #n],
+            scratch: &mut std::mem::MaybeUninit<[eunomia::Complex<F>; #n]>,
         ) {
+            // The column phase writes every scratch position through the raw
+            // pointer and reads none, so it takes the scratch still uninit:
+            // forming `&mut [Complex<F>; N]` over uninitialized memory would
+            // be undefined behavior regardless of the bit patterns involved.
             let scratch_ptr = scratch.as_mut_ptr() as *mut eunomia::Complex<F>;
             #(#col_blocks)*
         }
@@ -138,8 +142,13 @@ pub(crate) fn cooley_tukey_function(
             if <F as crate::application::execution::kernel::components::winograd::traits::WinogradScalar>::prefers_split_codelet(#n) {
                 let mut scratch =
                     std::mem::MaybeUninit::<[eunomia::Complex<F>; #n]>::uninit();
+                #col_fn_name::<F, INVERSE>(data, &mut scratch);
+                // SAFETY: the column phase above writes all #n scratch
+                // positions before returning — j in 0..n2 writes
+                // scratch[k1*n2+j] for every k1 in 0..n1, which covers each
+                // index exactly once. This is the same initialization order
+                // the fused body relies on; only the inlining boundary moved.
                 let scratch = unsafe { scratch.assume_init_mut() };
-                #col_fn_name::<F, INVERSE>(data, scratch);
                 #row_fn_name::<F, INVERSE>(scratch, data);
                 return;
             }

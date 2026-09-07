@@ -102,47 +102,79 @@ mod split_equivalence_tests {
     #[test]
     fn split_variant_is_bit_identical_to_fused_body() {
         // f64, n=50: fused entry (gate off) vs the split helpers driven by hand.
-        let mut fused_out = source_f64(50).try_into().unwrap();
+        // One source for both arms: a bit-identity claim needs
+        // identical inputs, and calling the generator twice only
+        // supplies them by accident — under Miri, whose libm
+        // precision is deliberately non-deterministic, it does not.
+        let src: [Complex64; 50] = source_f64(50).try_into().unwrap();
+        let mut fused_out = src;
         dft50_impl::<f64, false>(&mut fused_out);
-        let mut split_out = source_f64(50).try_into().unwrap();
-        let mut scratch = [Complex64::new(0.0, 0.0); 50];
+        let mut split_out = src;
+        let mut scratch = core::mem::MaybeUninit::<[Complex64; 50]>::uninit();
         dft50_rows::<f64, false>(&split_out, &mut scratch);
-        dft50_cols::<f64, false>(&mut scratch, &mut split_out);
+        // SAFETY: the first phase writes every one of the 50 slots
+        // before returning, the same order the fused body uses.
+        let scratch = unsafe { scratch.assume_init_mut() };
+        dft50_cols::<f64, false>(scratch, &mut split_out);
         assert_eq!(
             fused_out, split_out,
             "the split variant of dft50 diverges from the fused body (f64)"
         );
 
         // f32, n=50.
-        let mut fused_out = source_f32(50).try_into().unwrap();
+        // One source for both arms: a bit-identity claim needs
+        // identical inputs, and calling the generator twice only
+        // supplies them by accident — under Miri, whose libm
+        // precision is deliberately non-deterministic, it does not.
+        let src: [Complex32; 50] = source_f32(50).try_into().unwrap();
+        let mut fused_out = src;
         dft50_impl::<f32, false>(&mut fused_out);
-        let mut split_out = source_f32(50).try_into().unwrap();
-        let mut scratch = [Complex32::new(0.0, 0.0); 50];
+        let mut split_out = src;
+        let mut scratch = core::mem::MaybeUninit::<[Complex32; 50]>::uninit();
         dft50_rows::<f32, false>(&split_out, &mut scratch);
-        dft50_cols::<f32, false>(&mut scratch, &mut split_out);
+        // SAFETY: the first phase writes every one of the 50 slots
+        // before returning, the same order the fused body uses.
+        let scratch = unsafe { scratch.assume_init_mut() };
+        dft50_cols::<f32, false>(scratch, &mut split_out);
         assert_eq!(
             fused_out, split_out,
             "the split variant of dft50 diverges from the fused body (f32)"
         );
 
         // f64 and f32, n=144 (CT 12×12).
-        let mut fused_out = source_f64(144).try_into().unwrap();
+        // One source for both arms: a bit-identity claim needs
+        // identical inputs, and calling the generator twice only
+        // supplies them by accident — under Miri, whose libm
+        // precision is deliberately non-deterministic, it does not.
+        let src: [Complex64; 144] = source_f64(144).try_into().unwrap();
+        let mut fused_out = src;
         dft144_impl::<f64, false>(&mut fused_out);
-        let mut split_out = source_f64(144).try_into().unwrap();
-        let mut scratch = [Complex64::new(0.0, 0.0); 144];
+        let mut split_out = src;
+        let mut scratch = core::mem::MaybeUninit::<[Complex64; 144]>::uninit();
         dft144_cols::<f64, false>(&split_out, &mut scratch);
-        dft144_rows::<f64, false>(&mut scratch, &mut split_out);
+        // SAFETY: the first phase writes every one of the 144 slots
+        // before returning, the same order the fused body uses.
+        let scratch = unsafe { scratch.assume_init_mut() };
+        dft144_rows::<f64, false>(scratch, &mut split_out);
         assert_eq!(
             fused_out, split_out,
             "the split variant of dft144 diverges from the fused body (f64)"
         );
 
-        let mut fused_out = source_f32(144).try_into().unwrap();
+        // One source for both arms: a bit-identity claim needs
+        // identical inputs, and calling the generator twice only
+        // supplies them by accident — under Miri, whose libm
+        // precision is deliberately non-deterministic, it does not.
+        let src: [Complex32; 144] = source_f32(144).try_into().unwrap();
+        let mut fused_out = src;
         dft144_impl::<f32, false>(&mut fused_out);
-        let mut split_out = source_f32(144).try_into().unwrap();
-        let mut scratch = [Complex32::new(0.0, 0.0); 144];
+        let mut split_out = src;
+        let mut scratch = core::mem::MaybeUninit::<[Complex32; 144]>::uninit();
         dft144_cols::<f32, false>(&split_out, &mut scratch);
-        dft144_rows::<f32, false>(&mut scratch, &mut split_out);
+        // SAFETY: the first phase writes every one of the 144 slots
+        // before returning, the same order the fused body uses.
+        let scratch = unsafe { scratch.assume_init_mut() };
+        dft144_rows::<f32, false>(scratch, &mut split_out);
         assert_eq!(
             fused_out, split_out,
             "the split variant of dft144 diverges from the fused body (f32)"

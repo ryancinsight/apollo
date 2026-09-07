@@ -59,9 +59,16 @@ macro_rules! ab_arm {
         #[inline(never)]
         pub(crate) fn split(data: &mut [Complex<$F>]) {
             let data: &mut [Complex<$F>; $n] = data.try_into().expect("A/B arm length");
-            let mut scratch = [Complex::<$F>::new(0.0, 0.0); $n];
+            // Uninit, exactly as the production split path allocates it. A
+            // zero-filled array here would charge this arm for a pass the
+            // fused arm never pays, biasing the comparison this probe exists
+            // to make.
+            let mut scratch = core::mem::MaybeUninit::<[Complex<$F>; $n]>::uninit();
             $rows::<$F, false>(data, &mut scratch);
-            $cols::<$F, false>(&mut scratch, data);
+            // SAFETY: the row phase gathers into every one of the $n slots
+            // before returning, which is the same order the fused body uses.
+            let scratch = unsafe { scratch.assume_init_mut() };
+            $cols::<$F, false>(scratch, data);
         }
     };
     ($fused:ident, $rows:ident, $cols:ident, $F:ty, $n:literal, cols_rows) => {
@@ -72,9 +79,14 @@ macro_rules! ab_arm {
         #[inline(never)]
         pub(crate) fn split(data: &mut [Complex<$F>]) {
             let data: &mut [Complex<$F>; $n] = data.try_into().expect("A/B arm length");
-            let mut scratch = [Complex::<$F>::new(0.0, 0.0); $n];
+            // Uninit, matching the production split path — see the rows_cols
+            // arm for why a zero fill would bias this comparison.
+            let mut scratch = core::mem::MaybeUninit::<[Complex<$F>; $n]>::uninit();
             $cols::<$F, false>(data, &mut scratch);
-            $rows::<$F, false>(&mut scratch, data);
+            // SAFETY: the column phase writes every one of the $n slots
+            // before returning, which is the same order the fused body uses.
+            let scratch = unsafe { scratch.assume_init_mut() };
+            $rows::<$F, false>(scratch, data);
         }
     };
 }
