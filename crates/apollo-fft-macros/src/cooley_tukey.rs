@@ -1,5 +1,7 @@
 use quote::{format_ident, quote};
 
+use crate::phase_emission::PhaseEmission;
+
 /// Generate a Cooley-Tukey DIT codelet for `n1 × n2`.
 ///
 /// The generated function is `dft{n1*n2}_impl`, const-generic over `INVERSE`.
@@ -10,11 +12,18 @@ pub(crate) fn cooley_tukey_function(
     n1: usize,
     n2: usize,
     inline_attr: proc_macro2::TokenStream,
+    phases: PhaseEmission,
 ) -> proc_macro2::TokenStream {
     let n = n1 * n2;
     let fn_name = format_ident!("dft{}_impl", n);
 
-    // 1. Column blocks (DFT + Twiddles, writing to scratch via pointer)
+    // 1. Column blocks (DFT + Twiddles, writing to scratch via pointer).
+    // Emit both the fused body (historical route for every scalar) and a
+    // split variant whose column/row phases live in `#[inline(never)]`
+    // helpers, capping the register-pressure envelope the fused
+    // monomorphization reaches. The split variant must preserve the fused
+    // body's operation order exactly (asserted by test), so it is generated
+    // from the same block streams.
     let mut col_blocks = vec![];
     for j in 0..n2 {
         let mut col_elements = vec![];
@@ -63,7 +72,66 @@ pub(crate) fn cooley_tukey_function(
         });
     }
 
-    quote! {
+    // The fused body: every block inlined into one monomorphization.
+    let fused_body = quote! {
+        // SAFETY: Every element of `scratch` is written by a col_block before
+        // any row_block reads it. The nested loop structure guarantees all N
+        // positions are covered (col_block for j in 0..n2 writes scratch[k1*n2+j]
+        // for all k1 in 0..n1 and all j in 0..n2 = all N indices).
+        let mut scratch =
+            std::mem::MaybeUninit::<[eunomia::Complex<F>; #n]>::uninit();
+        let scratch_ptr = scratch.as_mut_ptr() as *mut eunomia::Complex<F>;
+        #(#col_blocks)*
+        let scratch = unsafe { scratch.assume_init_mut() };
+        #(#row_blocks)*
+    };
+
+    // The split variant: the column phase (short DFTs + twiddles) in one
+    // `#[inline(never)]` helper, the row phase in another, both over the
+    // caller's scratch. Same blocks, same order — only the inlining
+    // boundary moves.
+    let col_fn_name = format_ident!("dft{}_cols", n);
+    let row_fn_name = format_ident!("dft{}_rows", n);
+    let split_variant = matches!(phases, PhaseEmission::TestOnly).then(|| quote! {
+        /// Experimental column phase: short DFTs and twiddles initialize every
+        /// scratch element in the same order as the fused codelet.
+        #[cfg(test)]
+        #[allow(unused_variables, unused_mut)]
+        #[inline(never)]
+        pub(crate) fn #col_fn_name<
+            F: crate::application::execution::kernel::components::winograd::traits::WinogradScalar
+                + crate::application::execution::kernel::mixed_radix::traits::ShortDft<#n1>,
+            const INVERSE: bool,
+        >(
+            data: &[eunomia::Complex<F>; #n],
+            scratch: &mut std::mem::MaybeUninit<[eunomia::Complex<F>; #n]>,
+        ) {
+            // The column phase writes every scratch position through the raw
+            // pointer and reads none, so it takes the scratch still uninit:
+            // forming `&mut [Complex<F>; N]` over uninitialized memory would
+            // be undefined behavior regardless of the bit patterns involved.
+            let scratch_ptr = scratch.as_mut_ptr() as *mut eunomia::Complex<F>;
+            #(#col_blocks)*
+        }
+
+        /// Experimental row phase: short DFTs and the store permutation
+        /// consume initialized scratch in the fused codelet's order.
+        #[cfg(test)]
+        #[allow(unused_variables, unused_mut)]
+        #[inline(never)]
+        pub(crate) fn #row_fn_name<
+            F: crate::application::execution::kernel::components::winograd::traits::WinogradScalar
+                + crate::application::execution::kernel::mixed_radix::traits::ShortDft<#n2>,
+            const INVERSE: bool,
+        >(
+            scratch: &mut [eunomia::Complex<F>; #n],
+            data: &mut [eunomia::Complex<F>; #n],
+        ) {
+            #(#row_blocks)*
+        }
+    });
+
+    let codelet = quote! {
         #inline_attr
         #[allow(unused_variables, unused_mut)]
         pub(crate) fn #fn_name<
@@ -74,18 +142,12 @@ pub(crate) fn cooley_tukey_function(
         >(
             data: &mut [eunomia::Complex<F>; #n],
         ) {
-            // SAFETY: Every element of `scratch` is written by a col_block before
-            // any row_block reads it. The nested loop structure guarantees all N
-            // positions are covered (col_block for j in 0..n2 writes scratch[k1*n2+j]
-            // for all k1 in 0..n1 and all j in 0..n2 = all N indices).
-            let mut scratch =
-                std::mem::MaybeUninit::<[eunomia::Complex<F>; #n]>::uninit();
-            let scratch_ptr = scratch.as_mut_ptr() as *mut eunomia::Complex<F>;
-            #(#col_blocks)*
-            let scratch = unsafe { scratch.assume_init_mut() };
-            #(#row_blocks)*
+            #fused_body
         }
-    }
+
+        #split_variant
+    };
+    codelet
 }
 
 /// Emit the twiddle-multiplication expression for `W_N^{exp}`.

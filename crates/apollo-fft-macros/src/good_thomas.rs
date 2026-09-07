@@ -6,6 +6,7 @@ use syn::punctuated::Punctuated;
 use syn::{bracketed, parenthesized, parse_macro_input, Ident, LitInt, Result, Token};
 
 use crate::math::mod_inverse_isize;
+use crate::phase_emission::PhaseEmission;
 
 struct GoodThomasInput {
     n1: LitInt,
@@ -101,6 +102,7 @@ pub(crate) fn good_thomas_function(
     n1: usize,
     n2: usize,
     inline_attr: proc_macro2::TokenStream,
+    phases: PhaseEmission,
 ) -> proc_macro2::TokenStream {
     let n = n1 * n2;
 
@@ -195,40 +197,99 @@ pub(crate) fn good_thomas_function(
         }
     };
 
+    // The fused body (historical route) and a split variant whose row and
+    // column phases live in `#[inline(never)]` helpers over the caller's
+    // scratch. Same blocks, same order — only the inlining boundary moves.
+    let gather = quote! {
+        // Gather input using incremental index calculation (no runtime modulo)
+        for i1 in 0..#n1 {
+            let mut src_idx = i1 * #n2;
+            let row_start = i1 * #n2;
+            for i2 in 0..#n2 {
+                let dest_idx = row_start + i2;
+                // SAFETY: `dest_idx < N` enumerates every scratch slot
+                // exactly once; the read side waits for this loop.
+                unsafe { scratch_ptr.add(dest_idx).write(data[src_idx]); }
+                src_idx += #n1;
+                if src_idx >= #n {
+                    src_idx -= #n;
+                }
+            }
+        }
+    };
+
+    let fused_body = quote! {
+        // Use MaybeUninit to avoid zero-initialization overhead
+        // SAFETY: All scratch positions are written via .write() before any .read()
+        let mut scratch = std::mem::MaybeUninit::<[eunomia::Complex<F>; #n]>::uninit();
+        let scratch_ptr = scratch.as_mut_ptr() as *mut eunomia::Complex<F>;
+
+        #gather
+
+        #transform_rows
+
+        // Transform columns and scatter output. The measured `(3,32)`
+        // schedule expands constant addresses; every other pair retains
+        // the compact incremental-index loop.
+        #transform_columns_and_scatter
+    };
+
+    let rows_fn_name = format_ident!("dft{}_rows", n);
+    let cols_fn_name = format_ident!("dft{}_cols", n);
+    let split_variant = matches!(phases, PhaseEmission::TestOnly).then(|| quote! {
+        /// Experimental row phase: the gather initializes every scratch
+        /// element before short DFTs follow the fused codelet's order.
+        #[cfg(test)]
+        #[allow(unused_variables, unused_mut)]
+        #[inline(never)]
+        pub(crate) fn #rows_fn_name<
+            F: crate::application::execution::kernel::components::winograd::traits::WinogradScalar
+                + crate::application::execution::kernel::mixed_radix::traits::ShortDft<#n1>
+                + crate::application::execution::kernel::mixed_radix::traits::ShortDft<#n2> #scalar_bound,
+            const INVERSE: bool,
+        >(
+            data: &[eunomia::Complex<F>; #n],
+            scratch: &mut std::mem::MaybeUninit<[eunomia::Complex<F>; #n]>,
+        ) {
+            // Taken still uninit: the gather below is what initializes the
+            // region, and forming `&mut [Complex<F>; N]` over uninitialized
+            // memory is undefined behavior whatever the bit patterns are.
+            // Everything here reaches scratch through the raw pointer, and
+            // the array views inside `#transform_rows` are formed only after
+            // the gather has written every slot.
+            let scratch_ptr = scratch.as_mut_ptr() as *mut eunomia::Complex<F>;
+            #gather
+            #transform_rows
+        }
+
+        /// Experimental column phase: short DFTs and the scatter permutation
+        /// consume initialized scratch in the fused codelet's order.
+        #[cfg(test)]
+        #[allow(unused_variables, unused_mut)]
+        #[inline(never)]
+        pub(crate) fn #cols_fn_name<
+            F: crate::application::execution::kernel::components::winograd::traits::WinogradScalar
+                + crate::application::execution::kernel::mixed_radix::traits::ShortDft<#n1> #scalar_bound,
+            const INVERSE: bool,
+        >(
+            scratch: &mut [eunomia::Complex<F>; #n],
+            data: &mut [eunomia::Complex<F>; #n],
+        ) {
+            let scratch_ptr = scratch.as_mut_ptr() as *mut eunomia::Complex<F>;
+            #transform_columns_and_scatter
+        }
+    });
+
     quote! {
         #inline_attr
         #[allow(unused_variables, unused_mut)]
         pub(crate) fn #fn_name<F: crate::application::execution::kernel::components::winograd::traits::WinogradScalar + crate::application::execution::kernel::mixed_radix::traits::ShortDft<#n1> + crate::application::execution::kernel::mixed_radix::traits::ShortDft<#n2> #scalar_bound, const INVERSE: bool>(
             data: &mut [eunomia::Complex<F>; #n],
         ) {
-            // Use MaybeUninit to avoid zero-initialization overhead
-            // SAFETY: All scratch positions are written via .write() before any .read()
-            let mut scratch = std::mem::MaybeUninit::<[eunomia::Complex<F>; #n]>::uninit();
-            let scratch_ptr = scratch.as_mut_ptr() as *mut eunomia::Complex<F>;
-
-            // Gather input using incremental index calculation (no runtime modulo)
-            for i1 in 0..#n1 {
-                let mut src_idx = i1 * #n2;
-                let row_start = i1 * #n2;
-                for i2 in 0..#n2 {
-                    let dest_idx = row_start + i2;
-                    // SAFETY: `dest_idx < N` enumerates every scratch slot
-                    // exactly once; the read side waits for this loop.
-                    unsafe { scratch_ptr.add(dest_idx).write(data[src_idx]); }
-                    src_idx += #n1;
-                    if src_idx >= #n {
-                        src_idx -= #n;
-                    }
-                }
-            }
-
-            #transform_rows
-
-            // Transform columns and scatter output. The measured `(3,32)`
-            // schedule expands constant addresses; every other pair retains
-            // the compact incremental-index loop.
-            #transform_columns_and_scatter
+            #fused_body
         }
+
+        #split_variant
     }
 }
 
@@ -243,7 +304,7 @@ pub fn generate_good_thomas_dispatch(input: CompilerTokenStream) -> CompilerToke
 
     let codelets = pairs
         .iter()
-        .map(|&(n1, n2)| good_thomas_function(n1, n2, quote! { #[inline] }));
+        .map(|&(n1, n2)| good_thomas_function(n1, n2, quote! { #[inline] }, PhaseEmission::Omit));
 
     let supported_pairs = pairs.iter().map(|(n1, n2)| quote! { (#n1, #n2) });
     let match_arms = pairs.iter().map(|&(n1, n2)| {

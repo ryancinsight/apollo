@@ -3,6 +3,14 @@ pub(crate) mod power;
 mod radix_four_eight;
 mod small;
 
+/// Experimental transform phases for the 50- and 144-point comparison probes.
+/// Production codelets retain the fused arithmetic body.
+#[cfg(test)]
+pub(crate) mod split {
+    pub(crate) use super::medium::{dft144_cols, dft144_rows};
+    pub(crate) use super::small::{dft50_cols, dft50_rows};
+}
+
 pub(crate) use medium::{
     dft108_impl, dft112_impl, dft120_impl, dft121_impl, dft126_impl, dft144_impl, dft154_impl,
     dft168_impl, dft180_impl, dft189_impl, dft222_impl, dft242_impl, dft246_impl, dft259_impl,
@@ -58,3 +66,6 @@ pub(crate) use small::{
     dft81_impl,
     dft9_impl,
 };
+
+#[cfg(test)]
+mod tests;

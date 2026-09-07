@@ -13,6 +13,7 @@ use syn::{bracketed, parse_macro_input, Ident, LitInt, Result, Token};
 pub(crate) mod cooley_tukey;
 pub(crate) mod good_thomas;
 pub(crate) mod math;
+mod phase_emission;
 pub(crate) mod prime_pair_tables;
 pub(crate) mod prime_power_winograd;
 pub(crate) mod rader;

@@ -89,6 +89,7 @@ impl ProbeScalar for f32 {
 }
 
 mod codelet_selection;
+mod composite_split_ab;
 mod final_store;
 mod lane_routes;
 mod prime_dispatch;
