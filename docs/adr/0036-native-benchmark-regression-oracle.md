@@ -3,6 +3,11 @@
 - **Status:** Accepted
 - **Date:** 2026-07-20
 - **Class:** [minor] [arch]
+- **Revision 2026-09-07:** [Baseline preparation](../../backlog.md#apollo-benchmark-baseline-closure)
+  preserves each revision's manifests and lockfile. Transplanting the candidate
+  provider graph made historical source depend on removed provider APIs.
+  Preparation transfers only benchmark sources, rejects incompatible manifest
+  requirements before mutation, and records exact source and dependency hashes.
 - **Revision 2026-09-06:** The [codelet evidence audit](../../backlog.md#atlas-apollo-n32-f64-liveness)
   corrects reversed bound names in the comparator's Rustdoc. The classifier
   and workloads do not change. Same-executable control drift invalidates the
@@ -47,9 +52,15 @@ Keep report generation and interpretation in `apollo-bench`.
    runner.
 5. Classify a regression only when the candidate lower bound exceeds the
    baseline upper bound in both execution orders.
-6. Compile both revisions against the candidate `apollo-bench` source so the
-   measurement instrument remains constant while the transform implementation
-   varies.
+6. Compile both revisions against the candidate `apollo-bench/src` and
+   `apollo-fft/benches` source sets, including source deletions. Preserve each
+   revision's manifests and `Cargo.lock` and compile both with `--locked`.
+   Preparation rejects incompatible instrument dependency requirements, target
+   declarations, or feature wiring before changing sources. Locked compilation
+   then checks source compatibility with each revision's providers; it must not
+   repair historical source or replace its dependency graph to pass. Record
+   manifest and lock hashes before and after each build, preserving Cargo JSON
+   diagnostics and the failing exit status even when compilation fails.
 7. Delete the copied Python comparator. CI orchestration checks out and runs
    base and candidate revisions separately after the new schema reaches the
    default branch.
@@ -132,8 +143,11 @@ Hosted run `29759735814` falsified counterbalancing alone for a pull request
 that changes `apollo-bench`: compiling each revision against its own harness
 changed the measurement instrument as well as the code under test and produced
 22 apparent regressions. CI therefore holds the candidate harness constant
-across both revision builds and verifies that all benchmark entry points are
-identical. Only the revision-specific transform implementation varies.
+across both revision builds and verifies the complete transferred source set.
+The transform implementation and its locked production dependency closure vary
+by revision. This is source-level instrument equality: shared providers such as
+Hermes can have different transitive locked versions, so it does not establish
+identical instrument machine code or isolate a transform-source-only effect.
 
 Hosted run `29761551514` held that instrument constant but still produced 25
 apparent regressions. The comparator had applied a separate 95% interval to
@@ -167,9 +181,12 @@ descriptive output.
 malformed, insufficient, or unpaired evidence fails closed, including
 mismatched case universes across execution orders or replications. A pull
 request that changes `apollo-bench` measures the base transform with the
-candidate instrument; this intentionally evaluates transform regression
-rather than benchmark-harness performance. The initial serialized
-implementation's eight measurements roughly doubled the empirical lane from
+candidate instrument sources. The comparison evaluates each revision's
+transform and locked providers under that shared source instrument; dependency
+changes require attribution alongside transform changes. Instrument manifest
+migrations that cannot compile against both original graphs fail explicitly
+and require a separately specified measurement, without a compatibility shim.
+The initial serialized implementation's eight measurements roughly doubled the empirical lane from
 17 to 34 minutes while remaining inside its 60-minute purpose-specific bound.
 The base/head CI increment cannot precede this schema on the default branch
 because legacy baseline reports do not contain the ordered observations.

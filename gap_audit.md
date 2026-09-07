@@ -4586,11 +4586,12 @@ upstream as `HS-FEARLESS-TOKEN-2026-08-25`; the Apollo-side retirement is
   the current first-party Git sources and removes 658 lines of obsolete
   Cutile/CUDA transitive closure; locked metadata resolution passes outside the
   Atlas overlay.
-- Benchmark-instrument correction: run `30685105852` failed because the A/B
-  job pinned candidate benchmark sources but compiled the baseline with its
-  stale lock. The fixed instrument now includes the candidate lock, holding
-  provider resolution constant while leaving baseline production source
-  unchanged.
+- Benchmark dependency ownership: the candidate-lock transplantation adopted
+  after run `30685105852` is superseded by
+  [baseline preparation](backlog.md#apollo-benchmark-baseline-closure). Each
+  revision retains its own manifests and lock; only instrument sources transfer.
+  Differing transitive providers remain part of the measured revision closure
+  ([ADR 0036](docs/adr/0036-native-benchmark-regression-oracle.md)).
 - Closure: source `33a40bcee4532c9c1a03fee7cef2d852b3419090` merged as
   `db2186650f2e0889555120e6a1491ad93897409e`. Hosted exact-head Rust/Python
   verification passed in run `30685185998`, and the benchmark regression gate

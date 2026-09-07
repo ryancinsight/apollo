@@ -12,6 +12,8 @@ on:
       - crates/apollo-fft-macros/**
       - crates/apollo-leto-interop/**
       - .github/workflows/benchmark-regression.yml
+      - scripts/prepare_benchmark.py
+      - scripts/tests/**
   workflow_dispatch:
     inputs:
       baseline_ref:
@@ -61,20 +63,9 @@ jobs:
           - candidate
     env:
       BASELINE_REF: ${{ github.event_name == 'pull_request' && github.event.pull_request.base.sha || inputs.baseline_ref }}
-      # The candidate is the pull request's merge ref, not its head. The
-      # baseline is the base branch's tip at event time; a head that has not
-      # been rebased lacks every commit main gained since it branched, so
-      # comparing the two measures main's own progress as the PR's regression.
-      # The merge ref carries the same base plus exactly the PR's change, so
-      # the pair differs by the PR alone -- and an identical pair correctly
-      # skips measurement.
-      # The PR head commit, not `refs/pull/N/merge`. That merge ref is
-      # ephemeral: GitHub deletes it the moment the PR merges, so a run that
-      # is still fetching when auto-merge lands fails with "couldn't find
-      # remote ref" and takes the regression check down with it — the whole
-      # workflow's recent failures are that race, not a measured regression.
-      # `head.sha` is immutable, and pairing it with `base.sha` also isolates
-      # the PR's own commits rather than folding in whatever base moved to.
+      # Immutable head/base SHAs survive deletion of a pull request's merge
+      # ref. They compare those exact revisions; when the head does not contain
+      # the selected base, their delta also includes the branches' divergence.
       CANDIDATE_REF: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || inputs.candidate_ref }}
       CARGO_TARGET_DIR: ${{ github.workspace }}/target
       REVISION: ${{ matrix.revision }}
@@ -114,50 +105,21 @@ jobs:
           sparse-checkout-cone-mode: false
           persist-credentials: false
 
-      # Hold the candidate instrument and representative workloads constant
-      # while leaving baseline production source unchanged.
-      - name: Pin candidate benchmark instrument
+      - name: Test benchmark preparation
+        if: matrix.revision == 'candidate'
+        shell: bash
+        run: python3 -m unittest discover -s apollo-measurement/scripts/tests -v
+
+      # Share only instrument sources; each production revision owns its graph.
+      - name: Prepare baseline benchmark sources
         if: matrix.revision == 'baseline'
         shell: bash
         run: |
           set -euo pipefail
-          cp apollo-candidate-source/Cargo.lock apollo-measurement/Cargo.lock
-          python3 apollo-candidate-source/scripts/pin_workspace_dependencies.py apollo-candidate-source/Cargo.toml apollo-measurement/Cargo.toml
-          cp \
-            apollo-candidate-source/crates/apollo-fft/Cargo.toml \
-            apollo-measurement/crates/apollo-fft/Cargo.toml
-          while IFS= read -r -d '' manifest; do
-            if grep -Eq '^[[:space:]]*apollo-fft[[:space:]]*=' "$manifest"; then
-              relative="${manifest#apollo-candidate-source/}"
-              mkdir -p "apollo-measurement/$(dirname "$relative")"
-              cp "$manifest" "apollo-measurement/$relative"
-            fi
-          done < <(
-            find apollo-candidate-source/crates \
-              -name Cargo.toml -type f -print0
-          )
-          candidate_macro_version="$(
-            grep -m1 '^version = ' \
-              apollo-candidate-source/crates/apollo-fft-macros/Cargo.toml
-          )"
-          test -n "$candidate_macro_version"
-          sed -i "0,/^version = /s|^version = .*$|${candidate_macro_version}|" \
-            apollo-measurement/crates/apollo-fft-macros/Cargo.toml
-          candidate_macro_spec="$(
-            grep -m1 '^apollo-fft-macros = ' \
-              apollo-candidate-source/crates/apollo-fft/Cargo.toml
-          )"
-          test -n "$candidate_macro_spec"
-          sed -i "s|^apollo-fft-macros = .*$|${candidate_macro_spec}|" \
-            apollo-measurement/crates/apollo-fft/Cargo.toml
-          git -C apollo-candidate-source archive HEAD \
-            crates/apollo-bench crates/apollo-fft/benches \
-            | tar -x -C apollo-measurement
-          for benchmark in kernel_strategy prime_compose half_cyclic_rader; do
-            diff --unified \
-              "apollo-measurement/crates/apollo-fft/benches/$benchmark.rs" \
-              "apollo-candidate-source/crates/apollo-fft/benches/$benchmark.rs"
-          done
+          mkdir -p benchmark-build-evidence/baseline
+          python3 apollo-candidate-source/scripts/prepare_benchmark.py \
+            apollo-candidate-source apollo-measurement \
+            > benchmark-build-evidence/baseline/preparation.json
 
       - name: Install the benchmark toolchain
         uses: dtolnay/rust-toolchain@4cda84d5c5c54efe2404f9d843567869ab1699d4 # stable
@@ -176,28 +138,50 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          messages="$RUNNER_TEMP/$REVISION-artifacts.json"
+          evidence="benchmark-build-evidence/$REVISION"
+          mkdir -p "$evidence"
+          messages="$evidence/artifacts.json"
+          git -C apollo-measurement rev-parse HEAD > "$evidence/revision.txt"
+          snapshot_manifests() {
+            (
+              cd apollo-measurement || exit
+              find . -name Cargo.toml -type f -not -path './.git/*' \
+                -not -path './target/*' -print0 | sort -z | xargs -0 sha256sum || exit
+              sha256sum Cargo.lock
+            ) > "$1"
+          }
+          snapshot_manifests "$evidence/manifests-before.sha256"
+          finish() {
+            result=$?
+            trap - EXIT
+            if ! snapshot_manifests "$evidence/manifests-after.sha256"; then
+              if [[ "$result" == 0 ]]; then result=1; fi
+            fi
+            if ! cmp -s "$evidence/manifests-before.sha256" "$evidence/manifests-after.sha256"; then
+              echo "::error::build changed a revision manifest or lockfile" >&2
+              if [[ "$result" == 0 ]]; then result=1; fi
+            fi
+            printf '{"exit_code": %d}\n' "$result" > "$evidence/result.json"
+            if [[ "$result" != 0 ]]; then
+              for diagnostic in "$messages" "$evidence/comparator.json"; do
+                if [[ -f "$diagnostic" ]]; then
+                  if ! jq -r 'select(.reason == "compiler-message") | .message.rendered // empty' "$diagnostic" >&2; then
+                    echo "::error::cannot render $diagnostic; raw diagnostics retained" >&2
+                  fi
+                fi
+              done
+            fi
+            exit "$result"
+          }
+          trap finish EXIT
           target_args=(
             --bench kernel_strategy
             --bench prime_compose
             --bench half_cyclic_rader
           )
-          # The baseline leg resolves against the candidate lock it was seeded
-          # with, not under --locked: the seed already pins every shared
-          # version, and a candidate that adds or removes a dependency on a
-          # crate this step does not copy leaves the seed one edge out of
-          # step with the baseline manifests, which --locked refuses to
-          # reconcile (exit 101 before anything compiles). Reproduced locally
-          # by adding a dev-dependency to apollo-leto-interop: locked fails,
-          # unlocked resolves with a one-line lock delta. The candidate leg
-          # keeps --locked, since its lock and manifests are one revision.
-          locked=()
-          if [[ "$REVISION" == candidate ]]; then
-            locked=(--locked)
-          fi
           cargo bench --profile release \
             --manifest-path apollo-measurement/Cargo.toml \
-            "${locked[@]}" \
+            --locked \
             -p apollo-fft \
             --features kernel-strategy-bench \
             "${target_args[@]}" \
@@ -224,7 +208,8 @@ jobs:
               --manifest-path apollo-measurement/Cargo.toml \
               --locked \
               -p apollo-bench \
-              --bin apollo-bench-compare
+              --bin apollo-bench-compare \
+              --message-format=json > "$evidence/comparator.json"
             install -m 755 \
               "$CARGO_TARGET_DIR/release/apollo-bench-compare" \
               benchmark-executables/apollo-bench-compare
@@ -241,6 +226,15 @@ jobs:
           tar --create --gzip \
             --file "benchmark-executables-$REVISION.tar.gz" \
             benchmark-executables
+
+      - name: Upload benchmark build evidence
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: benchmark-build-evidence-${{ matrix.revision }}
+          path: benchmark-build-evidence/${{ matrix.revision }}
+          if-no-files-found: warn
+          retention-days: 1
 
       - name: Upload benchmark executables
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
