@@ -6,7 +6,7 @@
 //! Canonical definition lives here in the `components::winograd` hierarchy
 //! next to its parent trait `WinogradScalar`, following deep-vertical SSOT.
 //!
-use super::radix::odd_prime_pair::{dft_pair_impl, dft_pair_impl_reduced, PrimePairTable};
+use super::radix::odd_prime_pair::{dft_pair_impl, dft_pair_impl_wide, PrimePairTable};
 use super::WinogradScalar;
 use eunomia::{Complex32, Complex64};
 
@@ -86,17 +86,14 @@ macro_rules! impl_short_winograd_prime_pair {
             }
         )+
     };
-}
-
-macro_rules! impl_short_winograd_prime_pair_reduced {
-    ($(($method:ident, $n:expr, $h:expr)),+ $(,)?) => {
+    ($ty:ty, wide, $(($method:ident, $n:expr, $h:expr)),+ $(,)?) => {
         $(
             #[inline]
             fn $method<const INVERSE: bool>(data: &mut [eunomia::Complex<Self>; $n]) {
-                dft_pair_impl_reduced::<f32, $n, $h, INVERSE>(
+                dft_pair_impl_wide::<$ty, $n, $h, INVERSE>(
                     data,
-                    <f32 as PrimePairTable<$n, $h>>::cos_table(),
-                    <f32 as PrimePairTable<$n, $h>>::sin_table(),
+                    <$ty as PrimePairTable<$n, $h>>::cos_table(),
+                    <$ty as PrimePairTable<$n, $h>>::sin_table(),
                 );
             }
         )+
@@ -290,20 +287,30 @@ impl ShortWinogradScalar for f32 {
         super::dft16_impl::<f32, INVERSE>(data);
     }
 
+    // The wide pair kernel routes f32 where the leaf probe measured it
+    // beating the narrow form (H = 9, 11, 14, 15). H = 5 was tried and
+    // reverted: the doubled live table rows cost more than the extra chains
+    // buy at that depth (1.41x narrowed to 1.47x). H = 6 (dft13, 0.74x) and
+    // H = 8 (dft17, 0.57x) already run at width and stay narrow. Extended
+    // to further half-sizes only as the probe confirms them.
+    impl_short_winograd_prime_pair!(
+        f32,
+        wide,
+        (dft19, 19, 9),
+        (dft23, 23, 11),
+        (dft29, 29, 14),
+        (dft31, 31, 15),
+    );
+
     impl_short_winograd_prime_pair!(
         f32,
         (dft11, 11, 5),
         (dft13, 13, 6),
         (dft17, 17, 8),
-        (dft19, 19, 9),
-        (dft23, 23, 11),
-        (dft29, 29, 14),
         (dft37, 37, 18),
         (dft41, 41, 20),
         (dft43, 43, 21),
         (dft47, 47, 23),
         (dft53, 53, 26),
     );
-
-    impl_short_winograd_prime_pair_reduced!((dft31, 31, 15));
 }

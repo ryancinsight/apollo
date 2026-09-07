@@ -58,6 +58,31 @@ Change-class tags: [patch] backward-compatible fix, [minor] additive non-breakin
   windowing, and weighted overlap-add. See ADR 0008 and
   `docs/MIGRATION_GPU_FFT.md`.
 
+### Added
+
+- [patch] `apollo-fft` gains a pinned prime-dispatch probe
+  (`prime_dispatch_gap_by_core_type`): per prime and scalar it times the
+  production plan against the isolated Rader entry in one pinned run, so the
+  per-scalar `full − entry` gap isolates the dispatch/inline-boundary cost
+  from the transform itself. Instrument-only; no kernel or public API change.
+  It exonerates the dispatch boundary in the `ATLAS-APOLLO-F32-NONPOT-WIDTH`
+  n = 101 anomaly and pins that inversion to the `f32` short-Winograd codelet
+  reached through the half-cyclic Rader convolution's inner length-50
+  transforms.
+- [patch] `apollo-fft` gains a pinned leaf-codelet probe
+  (`short_winograd_leaves_by_core_type`): every distinct leaf of the
+  short-Winograd family (scalar methods, Good-Thomas and Cooley-Tukey/
+  prime-power generated codelets), both scalars, one pinned run, with an
+  f32-vs-f64 equivalence check before any timing is read. It names the
+  defective leaf behind the codelet family's f32 excess: the odd-prime pair
+  kernel at odd half-sizes.
+- [patch] `apollo-fft` gains `dft_pair_impl_wide`, a two-bins-per-iteration
+  form of the odd-prime pair kernel with eight independent FMA chains and
+  per-output summation order identical to the narrow form (in-file test
+  asserts bit-identical outputs). f32 routes dft19/dft23/dft29/dft31 through
+  it where the leaf probe measured the win; the superseded SoA
+  `dft_pair_impl_reduced` form is deleted.
+
 ### Changed
 
 - [patch] `apollo-fft` routes f32 lengths to the generated short-Winograd

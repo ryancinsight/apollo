@@ -9,3 +9,10 @@ pub(crate) mod twiddle_constants;
 
 pub(crate) use trait_def::MixedRadixScalar;
 pub(crate) use trait_def::{BluesteinEntry, BluesteinKey, BluesteinStore};
+
+// Probe-only re-export; see `small_pot`'s note.
+#[cfg(all(test, windows, target_arch = "x86_64"))]
+pub(crate) use small_pot::{
+    n16_framed_lane_pass, n16_fused_round_trip, n16_per_lane_pass, n16_vector_arm_unchecked,
+    n8_framed_lane_pass, n8_fused_round_trip, n8_per_lane_pass, n8_vector_arm_unchecked,
+};

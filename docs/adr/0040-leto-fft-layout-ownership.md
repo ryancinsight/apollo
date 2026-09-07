@@ -286,7 +286,7 @@ FFT/layout/allocation oracles and linked valid-path inspection guard the change.
 Other Leto error consumers can retain duplicates, so no recovered-byte count is
 assumed. All prior codegen, whole-file size and performance gates remain binding.
 
-The concrete cold failure boundary reduces the unchanged census executable to
+The concrete cold failure boundary, committed as `3b7311fa`, reduces the census executable to
 6,861,312 bytes, 512 below baseline and 6,144 below the batch-inline candidate.
 Its SHA256 is `C1019AD5BD24E3DCB6EB782675E4A2C7595F0B640B55A6929CAAB5577DDEB9EC`.
 The [focused gates](../../../../output/apollo-square-transpose/cold-failures/apollo-final-checks.json)
@@ -305,8 +305,37 @@ within their unchanged 60-second bounds. The [default-feature footprint](../../.
 matches all 20 baseline allocation-count and byte windows. Its warmed global
 pool does not establish cold-process memory behavior.
 The first census attempt stops before measurement because two Cargo processes
-are present. Current-source SemVer and an uncontended census remain required
-before performance acceptance.
+are present. The SemVer attempt exits 101 before API comparison: version 0.50.0
+generates an independent workspace, deletes its lockfile and resolves Leto
+`9a68909e` instead of the candidate's `633acb7`. This is a dependency-identity
+failure, not a compatibility verdict. The supported comparison path accepts
+rustdoc JSON generated from each revision with its unchanged lockfile; JSON
+comparison does not include manifest metadata.
+
+**Revision 2026-09-07:** integration of `aae78f26` into `79995843` retains the
+layout boundary and main's wide prime routing. The existing pair-equivalence
+test becomes const-generic and covers 11, 19, 23, 29 and 31 in both directions
+and both scalar types, including the even half-size tail at 29. The retained
+size, memory and timing artifacts above bind to their recorded inputs, not
+this combined source. The immutable integration archive represents staged tree
+`304d70d8f79d432458917c6c1dba814fdc183d83` with Git's checkout line-ending
+conversion and retains the exact standalone lock. Both rustdoc snapshots use
+nightly-2026-08-01 and JSON format 61, with inherited compiler overrides removed
+only from the child environment. Pinned cargo-semver-checks 0.50.0 passes all
+223 applicable checks (31 skipped) and reports no required SemVer update.
+All 25 manifests match the baseline separately; JSON mode does not check them.
+The [API evidence](../../../../output/apollo-square-transpose/integration/api/compare-cache-access-result.json)
+binds that result to the snapshot, not concurrent Rader or overlay-lock edits.
+The [focused integration gates](../../../../output/apollo-square-transpose/integration/snapshot-gates/collection.json)
+pass format, all-target/all-feature FFT Clippy, 33 debug and 33 release tests,
+one compile-fail doctest and warning-denied public rustdoc. All 1,099 archived
+files remain unchanged. Private-item JSON generation retains 20 existing
+documentation warnings on each side; this is separate from the public-doc gate.
+The merge removes 208 duplicated or superseded board lines and replaces the
+prime-pair test's macro/runtime dispatch with const-generic arrays, net -38
+lines before comment clarification. These are behavioral, API and maintenance
+results. A rebuilt census and an uncontended comparison remain required before
+performance acceptance.
 
 The current experimental lock selects Leto `633acb7` through two entries and
 Hermes `07c5e5f` through five, without changing manifest requirements or

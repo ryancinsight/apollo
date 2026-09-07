@@ -5,5 +5,35 @@ mod n32;
 mod precise;
 mod reduced;
 
+// Test-gated deliberately: correct against the direct-DFT oracle in both
+// directions, and measured slower than the scalar codelet it would replace
+// (`small_pot_arms`). It stays as the instrument's subject, so the comparison
+// that declined it can be re-run rather than becoming a note nobody can check.
+#[cfg(test)]
+mod n8;
+
 pub(super) use precise::{small_pot_inplace_precise, small_pot_inplace_sized_precise};
 pub(super) use reduced::{small_pot_inplace_reduced, small_pot_inplace_sized_reduced};
+
+// The probe entries the `small_pot_arms` instrument reaches; they exist only
+// under `cfg(test)` and carry no production call site.
+//
+// The predicate matches that probe's own — it is `windows`-gated because it
+// binds processors through Hermes — rather than just `test`: a narrower
+// consumer than producer makes these dead code everywhere else, which is a
+// `-D warnings` failure on every non-Windows target and invisible to a local
+// gate run here.
+#[cfg(all(test, windows, target_arch = "x86_64"))]
+pub(crate) use n16::fused_round_trip_unchecked as n16_fused_round_trip;
+#[cfg(all(test, windows, target_arch = "x86_64"))]
+pub(crate) use n16::vector_arm_unchecked as n16_vector_arm_unchecked;
+#[cfg(all(test, windows, target_arch = "x86_64"))]
+pub(crate) use n16::{
+    framed_lane_pass as n16_framed_lane_pass, per_lane_pass as n16_per_lane_pass,
+};
+#[cfg(all(test, windows, target_arch = "x86_64"))]
+pub(crate) use n8::fused_round_trip_unchecked as n8_fused_round_trip;
+#[cfg(all(test, windows, target_arch = "x86_64"))]
+pub(crate) use n8::vector_arm_unchecked as n8_vector_arm_unchecked;
+#[cfg(all(test, windows, target_arch = "x86_64"))]
+pub(crate) use n8::{framed_lane_pass as n8_framed_lane_pass, per_lane_pass as n8_per_lane_pass};

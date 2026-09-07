@@ -2,8 +2,8 @@
 
 ## codex/root — current execution
 
-- [ ] [Transpose ISA contract](backlog.md#apollo-transpose-isa-contract): preserve AVX support with bitwise lane movement and checked matrix extents; test both scalar implementations against the direct transpose oracle.
-- [ ] [Transpose ISA contract](backlog.md#apollo-transpose-isa-contract): verify debug/release behavior, emitted ISA, allocation and unchanged complete-transform measurements; integrate the independently reviewed correction.
+- [ ] [FourStep movement](backlog.md#apollo-four-step-square-movement): integrate main, extend exact prime-pair coverage, collect focused debug/release gates and rebuilt census identity.
+- [ ] [FourStep movement](backlog.md#apollo-four-step-square-movement): compare exact-lock API surfaces, collect unchanged census and allocation evidence, then apply the recorded retention criteria and provider-first delivery order.
 
 ## ATLAS-APOLLO-REAL-HALF-THROUGHPUT-2026-09-01 [perf] — Codex
 

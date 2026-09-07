@@ -9,16 +9,15 @@
 <a id="apollo-four-step-square-movement"></a>
 ## APOLLO-FOUR-STEP-SQUARE-MOVEMENT — Consolidate provider-owned FourStep movement [patch] — in-progress
 
-- **Integrator:** codex/root; **last-update:** 2026-09-06; branch `codex/four-step-square-movement`.
-- **Lease:** codex/root scalar bound, Cargo.lock, execution layout failure leaf/manifest, FourStep and FFT axis-layout calls, tests, README and ADR 0040; 2026-09-06. Full verification freezes source; no comparator or codelet edits.
-- **Build coordination:** Leto local layout work is a breaking contract experiment; Apollo peer gates use the standalone locked graph outside the Atlas overlay. The transient overlay lock was preserved as evidence and restored by its owner; current lock remains the verified provider selection.
+- **Integrator:** codex/01a07370; **last-update:** 2026-09-07; branch `codex/four-step-square-movement`.
+- **Lease:** none; integrated source is verified through immutable tree `304d70d8` under Git checkout filters. The N=101 editor retains its disjoint Rader work.
+- **Build coordination:** verify outside the Atlas overlay with standalone lock `F9720DFD…2E90197`; immutable fixtures isolate committed-input gates from active edits. Live-tree timing still requires a stable source/lock and uncontended host.
 - **Scope:** all pure-copy FourStep transposes through Leto, removing Apollo's private copy kernels and scalar trait hook; Hermes owns register movement. No fused multiplication, decomposition, route, normalization, workspace or Apollo API change.
 - **Hypothesis:** square register exchange and a checked canonical dense-copy boundary remove duplicate movement without allocation or an additional full-volume pass. [ADR 0040](docs/adr/0040-leto-fft-layout-ownership.md) owns the design, measured candidate comparison and evidence limits.
 - **Acceptance:** retain production only with unchanged allocation bounds, no executable growth and supported complete-engine improvement without supported regression; preserve the accepted provider ownership decision.
 - **Verification:** generic bitwise tile/tail/offset/canary/special-value oracles, FFT analytical and exact/oversized-workspace cases, full affected gates, unchanged replicated census and matched footprint probe.
-- **State:** candidates 1–7 fail retention gates; candidate 7 also fails the codegen stop condition. Candidate 8 supports an E-core complex/65536 gain but fails executable size. Candidate 9 supports E-core complex/65536 and real-half/262144 gains with unchanged warm allocation bounds, but still fails size by 10,752 bytes. Linked-code attribution identifies duplicated kernels with distinct diagnostic/constant relocations. Candidate 10 reduces file size by 2,560 bytes but triggers an E-core complex/1024 regression and remains 8,192 bytes above baseline; forward restoration `00665a4` passes focused provider gates. No candidate is accepted or merged.
-- **Dependencies/closure:** [Leto](../leto/backlog.md#leto-square-transpose) `00665a4` restores candidate 9 tile source; [Hermes](../hermes/backlog.md#hermes-complex-permutation-inlining) remains `07c5e5f`. These temporary review selections affect two and five lock entries. Restoration passes full consumer gates: 1,442 native/552 release tests, docs, Clippy, seven smokes and 20 unchanged memory windows. Merge providers before accepted consumer delivery, or remove rejected experimental selections.
-- **Next investigation begun:** concrete cold failure boundaries pass size (-512 bytes), full native/release gates (1,445/555), seven smokes, 20 matched footprint windows and independent linked-code review. SemVer is running; census aborted before measurement on host contention. Only two Leto lock entries change to `633acb7`; Hermes/Moirai remain at the measured revisions. No performance acceptance yet.
+- **Dependencies/closure:** [Leto draft PR 175](https://github.com/ryancinsight/leto/pull/175) contains provider source `633acb7`; [Hermes](../hermes/backlog.md#hermes-complex-permutation-inlining) merges as `9d68a9e` with the locked `07c5e5f` source unchanged. Provider-first adoption and the recorded retention criteria remain required; ADR 0040 owns rejected candidate history.
+- **Evidence:** frozen cold failure commit `3b7311fa` passes size (-512 bytes), 1,445 native/555 release tests, seven smokes and 20 memory windows. Integration tree `304d70d8` passes 33 debug/33 release tests, Clippy, doctest/rustdoc and 223 API checks, preserving 1,099 input hashes. ADR 0040 records limits and artifacts; no complete-engine timing or performance acceptance yet.
 <a id="apollo-transpose-cache-geometry"></a>
 ## APOLLO-TRANSPOSE-CACHE-GEOMETRY — Model transpose cache-set pressure [patch] — todo
 - Outcome: establish whether power-of-two transpose strides cause cache-set conflicts before changing tile geometry.
@@ -138,6 +137,197 @@
   `dec3d72` query pin is absent while Mnemosyne and Moirai pins remain unchanged.
 - **Evidence:** format, all-target/all-feature check and Clippy, 1,417 Nextest
   cases, seven doctests, provider audit, and lockfile validation pass.
+
+<a id="apollo-n8-f64-gap"></a>
+
+## APOLLO-N8-F64-GAP-2026-09-04 — N=8 carries the same unexamined "scalar by measurement" note [minor] [perf] — done 2026-09-06 (note confirmed)
+
+- **Result: the note was right, its reasoning was not.** The AVX arm is built,
+  passes the direct-DFT oracle in both directions and an impulse at every one
+  of the eight positions, and loses. Two vector forms were measured; the arm is
+  not wired, and stays test-gated as the subject of the instrument that
+  declined it.
+
+  | arm | P-core | E-core |
+  | --- | --- | --- |
+  | scalar Winograd (shipped) | **11.33 ns** | **15.81 ns** |
+  | AVX, generic `avx_cmul_precise` twiddles | 17.24 ns | 24.44 ns |
+  | AVX, folded `(direct, swapped)` coefficients | 15.08 ns | 21.58 ns |
+
+  Forward plus normalized inverse, one round trip, intervals disjoint over
+  three runs. Folding the twiddles bought 13% and 15% and did not change the
+  verdict, which is the useful part: the better form still loses by a third.
+- **What the note got wrong.** It blamed "call plus probe". The probe's
+  `vector-direct` arm enters the body past the `OnceLock` capability check and
+  reads the same as the dispatched arm, so that check is not the cost. Note the
+  limit precisely: neither entry carries `#[target_feature]`, so both still pay
+  the call boundary into one that does — what this bounds is the capability
+  check alone, not the boundary.
+- **Attributed instead to the twiddles being free in scalar form.** N = 8 is
+  the length at which every twiddle is a trivial rotation — `1`, `-i`,
+  `(±1 - i)/√2` — which the scalar codelet spends as sign flips, part swaps and
+  one real multiply. Any register form still pays four cross-lane `vperm2f128`
+  to make its second stage lanewise, and eight points is not enough arithmetic
+  to amortise them.
+- **The other factorisation is worse, not better.** Taking `n = n1 + 2 n2`
+  makes the first stage a lanewise radix-4 and the second a radix-2, but the
+  outputs then need the same four permutes *and* a third twiddled register. The
+  shape the item proposed was the better of the two.
+- **Where the construction starts paying.** Same shape, same probe, same run:
+  N = 16 reads 22.32 against 28.11 on a P-core, N = 32 reads 37.15 against
+  89.15. The transpose is a fixed four permutes at every length, so it
+  amortises over twice the arithmetic per doubling — N = 8 sits one size below
+  the crossover.
+- **Instrument, and the durable half of this item.** `small_pot_arms`
+  (`components/base128/pinned_probe`) times a forward plus normalized inverse
+  so the buffer returns to its input and needs no per-iteration reseed. Both
+  obvious alternatives are unsound at these sizes and one of them was written
+  and discarded here: a `copy_from_slice` inside the timed closure charges 128
+  bytes to a body of a few nanoseconds and compresses the ratio the decision is
+  drawn on, while `run_batched` moves the reseed out by pre-building one input
+  per iteration — tens of thousands of them, 8-26 MB, every operand from DRAM.
+  The first revision of this probe did exactly that and read N = 16 at 42 ns
+  against the 6.7 ns the same arm measures resident. It was validated by
+  reproducing two results it did not produce: N = 16 wins on the P-core and
+  ties on the E-core, N = 32 wins on both, matching
+  [`#apollo-n16-f64-gap`](#apollo-n16-f64-gap).
+- **Follow-up filed, not closed here:**
+  [`#apollo-target-feature-boundary`](#apollo-target-feature-boundary) — every
+  vector arm crosses a `#[target_feature]` call that cannot inline into its
+  scalar caller, which this item bounded only from one side.
+- **Parent:** [`#atlas-apollo-beat-the-references`](#atlas-apollo-beat-the-references).
+
+<a id="apollo-python-release-crlf"></a>
+## APOLLO-PYTHON-RELEASE-CRLF-2026-09-06 — Normalize the Python release workflow [patch] — done
+- `df5447d0` repairs the CRLF blob introduced by `0917cacd`; merged-index inspection reports `i/lf w/lf` for all five workflows under the committed `*.yml text eol=lf` policy. No fresh-clone check is claimed.
+
+<a id="apollo-target-feature-boundary"></a>
+
+## APOLLO-TARGET-FEATURE-BOUNDARY-2026-09-06 — Measure vector frame crossings [patch] [perf] — done
+
+- **Premise.** `n8`/`n16`/`n32`'s `vector_arm` carries
+  `#[target_feature(enable = "avx,fma")]` and its callers do not, so it can
+  never inline and every codelet call is a real call through memory —
+  `dimension_2d`'s axis passes re-cross it once per lane. Hoisting the frame
+  around the lane loop would remove all but one crossing per pass.
+- **Outcome: hoist rejected on the measured lane mix.** A lane pass of 32 lanes, forward then inverse, is 64 crossings
+  called per lane against 2 framed — 62 removed. Performance core, intervals
+  0.05% wide, reproduced across runs:
+
+  | N | lanes, per call | lanes, framed | per crossing |
+  | --- | --- | --- | --- |
+  | 8 | 122.6 ns | 120.1 ns | **41 ps** |
+  | 16 | 394.8 ns | 388.5 ns | **101 ps** |
+
+  Against a transform of 1.9 ns (N = 8) that is 2%, and it would cost changing
+  the lane loop's chunk granularity through `moirai` to collect it.
+- **The instrument error is the transferable part.** The first measurement here
+  used a `vector-fused` arm — the round trip's *two* transforms in one frame
+  against two crossings — and read 2.49 ns per crossing at N = 8. That is
+  **60x** the real figure. The two transforms shared one buffer, so once
+  inlined the compiler held it in registers between them and skipped a
+  store-reload; almost the whole apparent gain was that reuse, not the
+  crossing. The confound was written into the entry as a caveat when the arm
+  was built, and the caveat turned out to be the entire result. A proxy whose
+  named confound is not itself measured is not evidence: the lane arms, whose
+  transforms each carry different data, are what settled it.
+- **Efficiency core, measured 2026-09-06 once the host went quiet.** The
+  crossing is dearer there — N = 16 reads 990.2 ns per call against 948.4 ns
+  framed, 674 ps per crossing, 4.2% of the pass — which is the honest number
+  and still declines: 4% does not buy a change to the lane loop's chunk
+  granularity through `moirai`. N = 8 shows no gain at all on that core
+  (302.5 against 304.7, framed marginally slower), so the effect does not even
+  hold in one direction across sizes.
+- **Consequence for [`#apollo-n8-f64-gap`](#apollo-n8-f64-gap):** none by this
+  route — but the lane arms built to settle this turned up something else, in
+  [`#apollo-n8-regime-split`](#apollo-n8-regime-split).
+- **Earlier controls and limits:** capability detection and the feature-frame
+  crossing are different costs. A standalone 1-D plan makes one codelet call;
+  moving that frame cannot remove a second crossing. The multi-axis paths call
+  through `lanes::contiguous` / `lanes::execute` once per lane.
+- **Superseded fused proxy:** scalar / vector-direct / vector-fused timings
+  were 11.84 / 15.31 / 12.82 ns at N = 8 and 27.84 / 22.51 / 21.33 ns at
+  N = 16. The 2.49 / 1.18 ns differences include same-buffer register reuse;
+  their disjoint performance-core intervals (0.3%, below 0.5%) do not isolate
+  call overhead. The resulting N = 8 reopening and multi-lane projections
+  are withdrawn. Three earlier efficiency-core attempts varied by 5x under
+  concurrent builds (one interval 175–532 ns) and were discarded; the later
+  independent-lane measurements above govern the decision.
+- **Parent:** [`#atlas-apollo-beat-the-references`](#atlas-apollo-beat-the-references).
+
+<a id="apollo-n8-regime-split"></a>
+
+## APOLLO-N8-REGIME-SPLIT-2026-09-06 — The N=8 arm decision inverts between latency and throughput [minor] [perf] — todo
+
+- **Finding.** [`#apollo-n8-f64-gap`](#apollo-n8-f64-gap) declined the N = 8
+  register codelet on a round-trip measurement, where each inverse waits on its
+  own forward — a *latency* reading. The lane arms measure the same two arms
+  under *throughput*, 32 independent lanes in a forward pass then an inverse
+  pass, which is the shape `dimension_2d` and `dimension_3d` axis passes
+  actually run. The verdict inverts. Performance core, intervals 0.05% wide,
+  reproduced:
+
+  | core | regime | scalar | vector | verdict |
+  | --- | --- | --- | --- | --- |
+  | performance | latency (one round trip) | 12.56 ns | 14.44 | scalar by 1.15x |
+  | performance | throughput (32-lane pass) | 229.3 ns | 122.6 | **vector by 1.87x** |
+  | efficiency | latency | 17.22 ns | 18.19 | scalar by 1.06x |
+  | efficiency | throughput | 271.8 ns | 302.5 | scalar by 1.11x |
+
+  N = 16, already vectorised, moves the same way on the performance core —
+  757.9 against 394.8, a 1.92x throughput win against the 1.24x it shows at
+  latency — and only marginally on the efficiency core, 1014.1 against 990.2.
+
+- **The efficiency core does not follow, and that is what makes this a
+  decision.** The inversion is a performance-core effect: there the wide
+  out-of-order window overlaps the permute chains across lanes, and on the
+  efficiency core it does not, so the vector arm loses in *both* regimes there
+  (1.06x at latency, 1.11x at throughput). There is no per-core dispatch — the
+  N = 16 arm records the same constraint — so shipping the register form at
+  N = 8 would buy 87% on performance cores and pay 11% on efficiency ones. That
+  is a real trade to size, not a win to take.
+- **Why it inverts, and why that is credible rather than an artifact.** The
+  register form's cost is four cross-lane permutes and a transpose whose
+  results feed each other — a dependency chain, which is what a latency
+  measurement charges for. Across independent lanes the machine overlaps those
+  chains, and what remains is instruction count, where the vector form does
+  eight points in four registers against the scalar form's per-sample work. The
+  two arms were run through matched loop structures — a forward pass over every
+  lane, then an inverse pass — after a first attempt interleaved the scalar
+  arm's directions per lane and gave it a serial dependency the vector arms did
+  not have.
+- **Not acted on yet, and deliberately.** One dispatch serves both regimes and
+  the codelet cannot see which it is in, so exploiting this means the lane paths
+  selecting a different entry from the standalone one — a real interface
+  question, not a constant to flip. It also needs the efficiency core, which
+  three attempts could not measure on a contended host, and the throughput
+  reading at N = 32 and for `f32`.
+- **DoR (1) is answered: there is no mix — the pass is sequential.** `lanes::`
+  dispatches through `moirai::AdaptiveWithThreshold<32_768>`, whose
+  `parallelize(len)` is `len >= N` over *total complex elements*. A small-POT
+  codelet is the lane kernel only when the axis is at most 64 long, so every
+  ordinary shape — 8 x 8, 16 x 16, 64 x 64, even 128 x 128 at 16,384 — is below
+  the threshold and runs the whole lane loop on the calling thread. An 8-length
+  axis would need its partner axis above 4,096 to parallelise at all.
+  So the trade is not a ratio across core types: it is decided by which single
+  core the caller is scheduled on, and a compute-bound foreground thread on this
+  host class normally lands on a performance core. An earlier revision of this
+  entry asserted `moirai` spreads the lanes across both; that was wrong, and it
+  moves the expected value of the change substantially toward taking it.
+- **Remaining DoR.** (2) which regime dominates apollo's own
+  usage — `dimension_2d`/`dimension_3d` lane counts against standalone
+  small-transform calls in the plan cache; (3) whether the axis passes can take
+  a lane-pass entry without duplicating the dispatch, since a second entry per
+  size is the cloned-variant defect; (4) the same throughput reading for `f32`,
+  whose arms are a separate lane-density family (`reduced.rs`).
+  The efficiency-core reading is done (2026-09-06).
+- **Acceptance.** The multi-lane paths run the arm that measures faster in
+  their own regime on both core types, through one dispatch rather than two
+  copies of it, with the value oracles unchanged; or the performance-core gain
+  is shown not to outweigh the efficiency-core loss across the measured lane
+  mix, and that is recorded with the numbers.
+- **Risk / change class:** [minor] [perf]; **dependencies:** none.
+- **Parent:** [`#atlas-apollo-beat-the-references`](#atlas-apollo-beat-the-references).
 
 <a id="apollo-n16-f64-gap"></a>
 
@@ -597,10 +787,118 @@
   expected to move that boundary, and the sweep is the instrument that will
   show it.
 
+- **Fourth locus pinned to a leaf, measured 2026-09-05 (`prime_dispatch_gap_by_core_type`).**
+  A new pinned probe (kept in the tree) times, per prime and scalar, the
+  production plan against the isolated Rader entry in one run — the per-scalar
+  `full − entry` gap is the dispatch/inline-boundary cost, the quantity the
+  earlier instruments could not separate.
+
+  | n (m = p−1) | full/f64 | entry/f64 | full/f32 | entry/f32 |
+  | --- | ---: | ---: | ---: | ---: |
+  | 101 (100 = 2²·5², half-cyclic) | 607 | 645 | **673** | **672** |
+  | 149 (148 non-smooth, Bluestein) | 3352 | 3348 | 1735 | 1868 |
+  | 251 (250 = 2·5³, half-cyclic) | 1248 | 1250 | 935 | 936 |
+
+  - **The dispatch boundary is exonerated.** `full − entry` at n = 101 is
+    +0.6 ns for `f32` and −38 ns for `f64` (the plan's cached tables help it);
+    the efficiency core reads the same shape. The inline-boundary hypothesis
+    — `try_static_rader`'s documented f32-only codegen explosion bleeding
+    into the dynamic path — is dead, and so is any scalar-asymmetric plan
+    gate for primes: both scalars take `PlanStrategy::Rader`.
+  - **The inversion is inside Rader and specific to the m = 100 radix mix.**
+    The same entry reads 0.52x at Bluestein's m = 148 and 0.75x at
+    half-cyclic m = 250 — at n = 101 alone it flips to 1.04x. The half-cyclic
+    convolution's inner transforms at m = 100 are length **50** = m/2, and 50
+    is a short-Winograd size, so the prime anomaly reaches the **`f32`
+    short-Winograd codelet** through `rader_convolve_inplace`'s first
+    dispatch arm. The m = 250 control is the crossed proof: its inner halves
+    are 125, which is not a codelet size, and there `f32` wins.
+  - **Both halves of this item are now one leaf.** The n = 101 prime anomaly
+    and the codelet sweep's 1.28x composite arm indict the same codelet
+    family. Closing the `f32` short-Winograd width gap should clear the prime
+    anomaly without touching Rader at all — and the sweep is the instrument
+    that will show it.
+
+- **Plan-path measurement, 2026-09-06 (`plan_width_by_core_type`), idle host.**
+  The Rader probe answered for `rader_prime_forward`; this widens the measured
+  region to the whole planned transform over the same eight primes, both
+  scalars in one pinned run per core, on a host with zero concurrent compiler
+  processes for both runs. Same oracles: the `f64` arm is pinned to a direct
+  DFT first, then serves as the `f32` oracle.
+  - **Scope, stated before the numbers.** The plan is built once and only
+    `forward_complex_slice_inplace` is timed, so this covers the per-call route
+    dispatch *inside* execution and **not** plan construction. Building the
+    plan per iteration would add a constant to both arms and compress the
+    ratio toward 1 — the error recorded above. A residue living in planning is
+    invisible here and needs its own instrument.
+
+  | n | P-core f32/f64 | E-core f32/f64 |
+  | --- | --- | --- |
+  | 17 | 0.56 | 0.52 / 0.80 |
+  | 41 | 0.52 | 0.89 / 0.72 |
+  | 97 | 1.01 | 0.93 / 0.95 |
+  | **101** | **0.99 / 0.83** | **1.00 / 0.98** |
+  | 113 | 1.01 / 1.15 | 0.99 / 1.00 |
+  | 151 | 1.00 / 0.94 | 0.83 / 0.84 |
+  | 193 | 0.90 / 0.86 | 0.77 / 0.75 |
+  | 257 | 0.79 / 0.81 | 0.74 / 0.73 |
+
+  Two runs where two figures are shown. Within this instrument no length is
+  reliably above 1.0: the single 1.15 at `n = 113` read 1.01 on the repeat,
+  and the small-`n` rows swing between runs because per-call cost dominates a
+  sub-100 ns body. Agreement is good from `n = 97` upward on the efficiency
+  core, looser on the performance core.
+- **The disagreement is in the `f64` arm, not the `f32` arm — which is where
+  the next round should look.** Round 2 above reports full-path `f32` at
+  665 ns for `n = 101` and this probe measures 674.7 ns, so the two
+  instruments agree on `f32` to about 1.5%. They do **not** agree on `f64`:
+  this probe measures 678.9 ns where the item opened on 579 ns. The recorded
+  1.16 ratio is therefore not evaluable against this instrument — not because
+  `f32` moved, but because the `f64` reference does not reproduce here.
+  Re-establishing that 579 ns figure, or identifying what the two instruments
+  do differently to `f64` (plan construction is the leading candidate, since
+  it is exactly what this probe excludes), is the prerequisite for reading the
+  performance-core excess as a width defect at all.
+
 - **Acceptance.** apollo `f32` is faster than apollo `f64` at every length in
   the table, and the `f32` gap against RustFFT is no worse than the `f64` gap.
   The two halves close separately: the prime anomaly is a defect, the composite
   ratio is a tuning gap.
+- **Round 2, 2026-09-06: the pair-kernel defect fixed at the leaf, wide form
+  shipped where measured to win.** The new instrument
+  `pinned_probe/short_winograd_leaves.rs` times every distinct leaf of the
+  family, both scalars, one pinned run, and names the defective leaf: the
+  odd-prime pair kernel `dft_pair_impl` loses 1.37x to 1.44x at H = 5, 9, 11,
+  14, 15 while winning 0.57x at H = 8 — a latency-bound reduction signature
+  (four sequential FMA chains per output bin), not a lane-width one. The fix
+  is `dft_pair_impl_wide`: two output bins per k-iteration, eight independent
+  chains, per-output summation order preserved (in-file test asserts
+  bit-identical outputs at n = 11/19, both directions, both scalars).
+  - **Routed where the probe confirms, reverted where it does not.** H = 9
+    (dft19): 1.43x to 0.94x/0.68x. H = 14 (dft29): 1.37x to 1.08x/0.86x.
+    H = 11 (dft23) and H = 15 (dft31): wins on the efficiency core, no perf
+    loss. H = 5 (dft11) measured *worse* wide (1.41x to 1.47x) — the doubled
+    live table rows cost more than the extra chains buy at that depth — and
+    stays narrow. The superseded f32-only SoA form `dft_pair_impl_reduced`
+    (itself 1.42x under the corrected instrument) is deleted; dft31 routes
+    wide instead.
+  - **Codelet-half effect (the item's second clause).** The four coprime
+    codelets now run f32 faster than f64: 222 at 0.74x, 246 at 0.85x, 259 at
+    0.90x, 296 at 0.79x (was 0.85-0.92). At the acceptance lengths apollo
+    f32 is faster than its own f64 at n = 180 (0.71x) and n = 384 (0.62x).
+    The codelet/composite boundary is re-measured on the fixed tree: f32 now
+    also wins 154 on the efficiency core (0.90x) while losing 154 on the
+    performance core (1.04x) — the boundary moved as the item predicted it
+    would, and `use_generated_codelet_plan` needs a per-core or re-swept
+    decision for 154 in a follow-up.
+  - **Prime half: narrowed, not closed.** n = 101 improves (full-path f32
+    672 to 665 ns; efficiency-core inversion 1.03x cleared to 0.99x) but the
+    performance-core excess remains. The leaf probe exonerates every
+    constituent (dft25 at 0.86x, pair kernels now 0.86-1.08x at the relevant
+    half-sizes) while whole-body generated codelets containing them (dft50,
+    dft99, dft144) exceed the sum of their leaves — the f32 codegen asymmetry
+    static_rader documents, living in the generated-body inlining, not in
+    any leaf. That is the remaining locus and the next round.
 
 ## ATLAS-APOLLO-EIGHT-BLOCK-SPLIT-2026-09-03 — Extend the tuned split to 1024 [minor] [perf] — done 2026-09-03 <a id="atlas-apollo-eight-block-split"></a>
 
@@ -2121,10 +2419,6 @@
   (`real_storage/mod.rs:206-213`) — one transient allocation more than the
   complex-to-real untangle needs. Remaining scope is therefore the inverse
   untangle (own derivation + tests) and the multi-dimensional real axes.
-
-## ATLAS-APOLLO-ENGINE-CENSUS-2026-08-25 — Commit the four-engine census as an instrument [patch] — done 2026-08-25 (see above)
-
-- Closed; the delivery record is in git history.
 
 ## ATLAS-APOLLO-POT-PASS-REDUCTION-2026-08-25 — Cut the pass count over the data [arch] — closed 2026-08-25, premise false
 
