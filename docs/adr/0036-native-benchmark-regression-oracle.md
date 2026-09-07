@@ -256,6 +256,28 @@ passed the Rust workspace and Python binding jobs. This is static causal
 evidence for the unchanged artifacts, not empirical performance evidence; any
 differing executable pair enters the complete four-matched-pair experiment.
 
+## Revision: 2026-09-06
+
+The post-PR #342 N=101 f32 investigation adds a test-only attribution probe
+beside the Rader composition module. One optimized `bench-quick` Nextest run
+binds the queried performance and efficiency processors from ADR 0043 and
+measures plan dispatch, Rader entry, the complete half-cyclic composition, and
+split/recombine variants with and without their twiddle operations. The
+composition probe uses full input/output slice barriers; its phase copies are
+instrument code, not alternate production routes. N=97, 113, and 151 run as
+same-suite controls. Run `49557df2-bee5-475c-b8dc-b759471676f1` passed with
+100-observation regression reports on both selected processors.
+
+The measured evidence is attribution evidence only. Static-radix and fixed
+short-DFT candidates did not produce a stable N=101 improvement without a
+performance-core regression or mixed controls, so neither changes the shipped
+convolution path. This is the required negative result: same-run pinning
+separates the loci, but it does not authorize a production change. The probe
+source was `ECE113F38F534B416876F4A1CFBE91B7D8CB6F068A1A609FCE28A450C65F2B37`
+at measurement time. The result does not establish cross-run, cross-host, or
+frequency-state invariance; it is bounded to the queried processors and this
+optimized executable.
+
 ## Revision: 2026-08-26
 
 The post-PR #127 hosted run completed in 12 minutes 36 seconds: 7 minutes

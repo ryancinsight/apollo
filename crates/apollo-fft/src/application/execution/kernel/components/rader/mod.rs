@@ -1,6 +1,8 @@
 //! Rader's Algorithm for prime-length FFTs.
 
 pub(crate) mod bluestein;
+#[cfg(test)]
+mod composition;
 pub(crate) mod convolution;
 pub(crate) mod generator;
 pub(crate) mod ordered;

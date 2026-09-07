@@ -668,7 +668,31 @@
   skipped; doctests, warning-denied Clippy/rustdoc, formatting, and lockfile
   checks passed. Provider-owned transitive edges remain documented.
 
-## ATLAS-APOLLO-F32-NONPOT-WIDTH-2026-09-03 — f32 loses far more than f64 on non-power-of-two lengths [patch] [perf] — todo <a id="atlas-apollo-f32-nonpot-width"></a>
+## ATLAS-APOLLO-F32-NONPOT-WIDTH-2026-09-03 — f32 loses far more than f64 on non-power-of-two lengths [patch] [perf] — in-progress <a id="atlas-apollo-f32-nonpot-width"></a>
+
+- **Integrator:** codex/root; **last-update:** 2026-09-06; shared branch
+  `codex/four-step-square-movement`.
+- **Lease:** N=101 composition probe and `components/rader/convolution.rs`;
+  no edits to the staged FourStep, codelet, or comparator work.
+- **Acceptance for this increment:** same-run, queried-class pinned attribution
+  separates plan/Rader dispatch, half-cyclic twiddle phases, and phase-memory
+  traffic at N=101 f32; retain only a production change that improves N=101
+  and does not regress the matched prime/composite controls.
+- **Composition attribution, 2026-09-06:** the retained ignored probe is
+  source-hashed `ECE113F38F534B416876F4A1CFBE91B7D8CB6F068A1A609FCE28A450C65F2B37`
+  and passed locked `bench-quick` Nextest run
+  `49557df2-bee5-475c-b8dc-b759471676f1`. It binds queried CPU 1
+  (performance) and CPU 3 (efficiency), reports the real N=101 production
+  composition plus local split/recombine twiddle controls, and includes N=97,
+  113 and 151 composition controls in the same run. N=101 composition medians
+  were 751,120 ps (P) and 761,862 ps (E); split/recombine twiddle deltas were
+  separately visible, with the full-slice barriers retained.
+- **Decision:** static-radix and fixed-short-50 production candidates are
+  rejected. Counterbalanced target runs made fixed-short-50 slower by about
+  6--7% on the performance core and mixed on the efficiency core; the
+  static-radix route was slower on the target and controls. No production
+  convolution change is retained. The shipped path remains the pre-probe
+  implementation; this increment retains only the attribution instrument.
 
 - **Finding.** On composite and prime lengths apollo's `f32` is much further
   behind RustFFT than its `f64` is, which inverts the expected order: AVX2
