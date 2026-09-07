@@ -22,9 +22,12 @@ use apollo_bench::{BenchmarkCase, BenchmarkConfig, BenchmarkSuite};
 use eunomia::Complex;
 use hermes_simd::{ProcessorBinding, ProcessorIndex};
 
-/// Distinct leaves the short-Winograd family reaches, one arm per scalar.
+/// Distinct leaves the short-Winograd family reaches, one arm per scalar,
+/// plus two whole-body composite entries (50 = GT(2,25), 144 = CT(12,12))
+/// timed through the gated `ShortDft` entry so the split-vs-fused routing
+/// decision is visible per scalar in the same run as the leaf ratios.
 const LEAVES: &[usize] = &[
-    3, 5, 6, 7, 8, 9, 10, 11, 12, 13, 16, 17, 19, 20, 23, 24, 25, 27, 29, 31, 32,
+    3, 5, 6, 7, 8, 9, 10, 11, 12, 13, 16, 17, 19, 20, 23, 24, 25, 27, 29, 31, 32, 50, 144,
 ];
 
 /// Componentwise gap against the f64 reference, relative to the largest
@@ -105,6 +108,8 @@ leaf_stub!(leaf_f32_27, f32, 27);
 leaf_stub!(leaf_f32_29, f32, 29);
 leaf_stub!(leaf_f32_31, f32, 31);
 leaf_stub!(leaf_f32_32, f32, 32);
+leaf_stub!(leaf_f32_50, f32, 50);
+leaf_stub!(leaf_f32_144, f32, 144);
 leaf_stub!(leaf_f64_3, f64, 3);
 leaf_stub!(leaf_f64_5, f64, 5);
 leaf_stub!(leaf_f64_6, f64, 6);
@@ -126,6 +131,8 @@ leaf_stub!(leaf_f64_27, f64, 27);
 leaf_stub!(leaf_f64_29, f64, 29);
 leaf_stub!(leaf_f64_31, f64, 31);
 leaf_stub!(leaf_f64_32, f64, 32);
+leaf_stub!(leaf_f64_50, f64, 50);
+leaf_stub!(leaf_f64_144, f64, 144);
 
 #[cfg(test)]
 fn run_leaf_f64(n: usize, data: &mut [Complex<f64>]) {
@@ -151,6 +158,8 @@ fn run_leaf_f64(n: usize, data: &mut [Complex<f64>]) {
         29 => leaf_f64_29(data.try_into().unwrap()),
         31 => leaf_f64_31(data.try_into().unwrap()),
         32 => leaf_f64_32(data.try_into().unwrap()),
+        50 => leaf_f64_50(data.try_into().unwrap()),
+        144 => leaf_f64_144(data.try_into().unwrap()),
         _ => unreachable!("leaf set is fixed"),
     }
 }
@@ -179,6 +188,8 @@ fn run_leaf_f32(n: usize, data: &mut [Complex<f32>]) {
         29 => leaf_f32_29(data.try_into().unwrap()),
         31 => leaf_f32_31(data.try_into().unwrap()),
         32 => leaf_f32_32(data.try_into().unwrap()),
+        50 => leaf_f32_50(data.try_into().unwrap()),
+        144 => leaf_f32_144(data.try_into().unwrap()),
         _ => unreachable!("leaf set is fixed"),
     }
 }

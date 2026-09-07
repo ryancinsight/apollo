@@ -1093,6 +1093,43 @@
     dft99, dft144) exceed the sum of their leaves — the f32 codegen asymmetry
     static_rader documents, living in the generated-body inlining, not in
     any leaf. That is the remaining locus and the next round.
+  - **Generated-body round (follow-up, 2026-09-06): mechanism falsified,
+    locus re-pinned.** The generators now emit split variants (transform
+    phases in `#[inline(never)]` helpers through scratch) for CT and GT,
+    proven bit-identical to the fused bodies for dft50/dft144 both scalars,
+    and `composite_split_ab_by_core_type` times fused-vs-split for both
+    scalars in one pinned run (cross-run f64 drift previously drew a false
+    "split wins 0.61x vs 0.79x" conclusion). Result: the fused f32/f64
+    ratio at n = 50 is 0.68 — f32 is *faster* than f64 at codelet
+    granularity — and the split loses ~3% for f32 there (disjoint medians),
+    so fused-body register pressure is **not** the f32 defect; both scalars'
+    `prefers_split_codelet` gates stay off. Every constituent is now
+    exonerated at leaf *and* codelet granularity: the n = 101 excess lives
+    in the composition machinery around the codelets (prime-path dispatch,
+    twiddle application, or memory traffic between phases), which is the
+    next round's target. One genuine lead recorded: f64 dft144 on the perf
+    core runs split 10% faster (disjoint medians) but loses 5.5% on
+    efficiency cores — a core-split candidate, not an f32 item.
+  - **Those A/B figures are not yet reliable: the instrument was biased
+    against the split arm.** The probe allocated its scratch as
+    `[Complex::new(0.0, 0.0); N]` while the production split path allocates
+    `MaybeUninit`, so the split arm paid an N-element zero-fill on every
+    iteration that the fused arm never pays. The bias runs in exactly the
+    direction of the conclusion drawn from it. Order of magnitude: at
+    n = 50 the fill is 400 bytes, roughly 13 AVX2 stores plus loop overhead,
+    call it 5–10 ns against a codelet of order 150 ns — **3–7%**, the same
+    size as the reported ~3% f32 split loss and comparable to the 5.5%
+    efficiency-core figure. The probe now allocates uninit like production
+    (`ddcb9232`), but the recorded numbers predate that.
+    - Re-run `composite_split_ab_by_core_type` under the fixed instrument
+      before either conclusion is relied on: "fused-body register pressure
+      is not the f32 defect" and the f64 dft144 core-split lead both rest on
+      differences the artifact could account for. The n = 50 f32/f64 fused
+      ratio of 0.68 is unaffected — that compares two fused arms, neither of
+      which allocated scratch in the probe.
+    - Not measured at the time of writing because the host carried 45
+      concurrent compiler processes; the measurement itself is unchanged and
+      takes one pinned run.
 
 ## ATLAS-APOLLO-EIGHT-BLOCK-SPLIT-2026-09-03 — Extend the tuned split to 1024 [minor] [perf] — done 2026-09-03 <a id="atlas-apollo-eight-block-split"></a>
 
