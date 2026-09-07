@@ -1,12 +1,14 @@
 # Apollo Backlog
 
 <a id="apollo-codelet-experiment-boundary"></a>
-## APOLLO-CODELET-EXPERIMENT-BOUNDARY — Keep rejected codelet routes in tests [patch] — todo
+## APOLLO-CODELET-EXPERIMENT-BOUNDARY — Keep rejected codelet routes in tests [patch] — in-progress
+- **Integrator:** codex/main_integration; **last-update:** 2026-09-07; shared branch `codex/four-step-square-movement`.
 - **Scope:** generated Cooley–Tukey/Good–Thomas phase helpers and private Winograd scalar routing introduced by `09325122`; preserve the fused production arithmetic and the real split comparison probe.
 - **Finding:** both scalar implementations return false from the new production selector; experimental phase helpers still compile outside tests. Generated `dft#n_impl` documentation links contain literal interpolation syntax.
 - **Acceptance:** unused experimental selection leaves production; test-only phase helpers retain their shared arithmetic generation and initialized-scratch boundary; generated documentation resolves.
 - **Verification:** macro/FFT compile, existing generic composite cases and split-equivalence tests in debug/release, private Rustdoc, then fresh executable size/codegen evidence. Do not promote timing results already invalidated by the scratch correction.
 - **Dependencies:** integrate fetched `09325122` after the current verified increments commit; [FourStep movement](#apollo-four-step-square-movement) keeps its original performance acceptance.
+- **Lease:** codex/main_integration `crates/apollo-fft-macros/src/{cooley_tukey,good_thomas,winograd_composites}.rs`, private phase-emission definition, `components/winograd/{traits.rs,composite/}` and probe documentation; 2026-09-07. No benchmark timed-region changes.
 
 <a id="apollo-benchmark-baseline-closure"></a>
 ## APOLLO-BENCHMARK-BASELINE-CLOSURE — Preserve benchmark dependency closures [patch] — in-progress
@@ -28,7 +30,7 @@
 
 <a id="apollo-private-rustdoc-links"></a>
 ## APOLLO-PRIVATE-RUSTDOC-LINKS — Repair private FFT documentation references [patch] — done
-- Corrected 20 private documentation warnings in 12 FFT files with no non-documentation changes; warning-denied private/hidden Rustdoc passes on nightly-2026-08-01 with lock `F9720DFD…2E90197`; [gate evidence](../../output/apollo-square-transpose/integration/final-gates/documentation-closure.json).
+- `cf1ddd68` corrects 20 private documentation warnings in 12 FFT files with no non-documentation changes; warning-denied private/hidden Rustdoc passes on nightly-2026-08-01 with lock `F9720DFD…2E90197`; [gate evidence](../../output/apollo-square-transpose/integration/final-gates/documentation-closure.json).
 
 <a id="apollo-transpose-isa-contract"></a>
 ## APOLLO-TRANSPOSE-ISA-CONTRACT — Preserve AVX transpose preconditions [patch] — done
