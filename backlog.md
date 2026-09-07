@@ -1,5 +1,35 @@
 # Apollo Backlog
 
+<a id="apollo-codelet-experiment-boundary"></a>
+## APOLLO-CODELET-EXPERIMENT-BOUNDARY — Keep rejected codelet routes in tests [patch] — todo
+- **Scope:** generated Cooley–Tukey/Good–Thomas phase helpers and private Winograd scalar routing introduced by `09325122`; preserve the fused production arithmetic and the real split comparison probe.
+- **Finding:** both scalar implementations return false from the new production selector; experimental phase helpers still compile outside tests. Generated `dft#n_impl` documentation links contain literal interpolation syntax.
+- **Acceptance:** unused experimental selection leaves production; test-only phase helpers retain their shared arithmetic generation and initialized-scratch boundary; generated documentation resolves.
+- **Verification:** macro/FFT compile, existing generic composite cases and split-equivalence tests in debug/release, private Rustdoc, then fresh executable size/codegen evidence. Do not promote timing results already invalidated by the scratch correction.
+- **Dependencies:** integrate fetched `09325122` after the current verified increments commit; [FourStep movement](#apollo-four-step-square-movement) keeps its original performance acceptance.
+
+<a id="apollo-benchmark-baseline-closure"></a>
+## APOLLO-BENCHMARK-BASELINE-CLOSURE — Preserve benchmark dependency closures [patch] — in-progress
+- **Integrator:** codex/api_evidence; **last-update:** 2026-09-07; shared branch `codex/four-step-square-movement`.
+- **Scope:** benchmark revision preparation and compiler diagnostics; no production kernel, input, sampling or acceptance changes.
+- **Failure:** [run 34078400901](https://github.com/ryancinsight/apollo/actions/runs/34078400901) cannot compile the baseline. Its prior preparation copied the candidate lock/providers over baseline source, whose `transpose_complex_matrices` import is absent from candidate Leto `633acb7`; Cargo JSON diagnostics were not retained on failure.
+- **Acceptance:** each production revision retains its own manifests and locked providers; shared benchmark sources are checked for equality; preparation rejects incompatible instruments explicitly; failed compilation preserves its diagnostic.
+- **Verification:** preparation regression tests against distinct provider/API fixtures, real baseline/candidate locked compilation, workflow parsing and unchanged workload comparison.
+- **Dependencies:** collect the running [FourStep gates](#apollo-four-step-square-movement) before the exact baseline/candidate locked builds; automation edits are disjoint from their runtime inputs.
+- **Focused evidence:** automation commit `b944eef5` passes ten filesystem regressions, including actual Windows junction rejection; symlink creation requires unavailable host privilege. YAML and Bash syntax pass; downstream measurement jobs remain identical. Preparing exact baseline `09325122` preserves all 1,075 files outside instrument roots and both original dependency locks; the second transfer writes nothing. Exact baseline/candidate locked builds remain pending.
+
+<a id="apollo-semver-locked-inputs"></a>
+## APOLLO-SEMVER-LOCKED-INPUTS — Compare APIs without provider re-resolution [patch] — todo
+- **Scope:** consume an Atlas-owned exact-lock API generation path; no duplicate member SemVer implementation.
+- **Failure:** [run 34078401287](https://github.com/ryancinsight/apollo/actions/runs/34078401287) fails resolving `moirai-runtime = ^0.5.0` before comparison; the checker discards generated locks.
+- **Acceptance:** both API artifacts identify their source revision, committed lock and toolchain; compilation failure remains distinct from a detected API break.
+- **Verification:** exact-lock artifact generation and comparator tests in the shared owner, then the Apollo caller. Local FFT JSON comparison already passes 223 checks; it does not cover every published workspace package.
+- **Dependencies:** Atlas shared workflow capability and caller pin update; root publication remains subject to the previously recorded shared-tree branch approval.
+
+<a id="apollo-private-rustdoc-links"></a>
+## APOLLO-PRIVATE-RUSTDOC-LINKS — Repair private FFT documentation references [patch] — done
+- Corrected 20 private documentation warnings in 12 FFT files with no non-documentation changes; warning-denied private/hidden Rustdoc passes on nightly-2026-08-01 with lock `F9720DFD…2E90197`; [gate evidence](../../output/apollo-square-transpose/integration/final-gates/documentation-closure.json).
+
 <a id="apollo-transpose-isa-contract"></a>
 ## APOLLO-TRANSPOSE-ISA-CONTRACT — Preserve AVX transpose preconditions [patch] — done
 - [PR 337](https://github.com/ryancinsight/apollo/pull/337), `9da1f9f7`; AVX-contract correction passes native/analytical/allocation/size gates and [landed CI](https://github.com/ryancinsight/apollo/actions/runs/34015129487). Census binary -512 bytes; unchanged comparison supports neither gain nor regression.
@@ -1649,8 +1679,8 @@
 
 ## ✅ ATLAS-APOLLO-BENCH-BASELINE-LOCKFILE-2026-09-01 — Benchmark baseline leg cannot build a PR that adds a dependency [patch] — done 2026-09-02
 
-- **Delivered:** the baseline leg's `cargo bench` resolves against the seeded candidate lock without `--locked`; the candidate leg keeps it. `0abf3b83` had already cured the workspace-inherited half (the pin script); the residual class was a dependency added to a crate the step never copies (`apollo-bench`, `apollo-fft-macros`, `apollo-leto-interop` — the non-consumers of `apollo-fft`).
-- **Evidence:** local reproduction on two `git archive` copies of `main` — a `[dev-dependencies] anyhow` edge on `apollo-leto-interop` in the candidate, the step's own copy/pin sequence applied to the baseline: `cargo metadata --locked` exits 101 ("cannot update the lock file"), unlocked resolution succeeds and the lock delta is that single edge, every version unchanged. The gate run on this PR exercises the changed leg end to end.
+- Historical unlocked candidate-lock transplantation is superseded by [revision-owned locked baseline preparation](#apollo-benchmark-baseline-closure). Its dependency-added fixture established lock inconsistency, not compatibility of historical production source with candidate provider APIs.
+
 
 ## ATLAS-APOLLO-INVERTED-CORE-CLAIMS-2026-09-01 — Sweep merged claims resting on the swapped core labels [patch] — done 2026-09-01
 
@@ -2854,9 +2884,9 @@
   `30684880039` exposed a stale committed dependency closure under `--locked`;
   a workspace-scoped standalone refresh now passes locked metadata resolution
   and removes the obsolete Cutile/CUDA graph. Benchmark run `30685105852`
-  then exposed that its fixed-instrument A/B job retained the baseline lock;
-  the job now pins the candidate lock alongside the candidate benchmark source
-  so both revisions use one provider graph. SemVer remains unavailable before
+  prompted candidate-lock transplantation, now superseded by
+  [revision-owned locked baseline preparation](#apollo-benchmark-baseline-closure).
+  Instrument source equality does not imply provider equality. SemVer remains unavailable before
   API comparison because dependency rustdoc processes fail in `naga`,
   `apollo-fft-macros`, and `hermes-simd-intrinsics`; this is a verification
   environment residual, not an unverified implementation claim. Registry

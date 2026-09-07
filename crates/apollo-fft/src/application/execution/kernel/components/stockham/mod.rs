@@ -214,7 +214,7 @@ impl StockhamKernel for f64 {
 
     /// Sized variant (const LOG2). Mirrors the above but uses const LOG2 for transform
     /// calls and with_strategy arms (no runtime trailing_zeros). The const param + monomorph
-    /// context from caller (pot_inplace_sized<LOG2> etc) allows DCE / direct len* selection.
+    /// context from callers such as `pot_inplace_sized` allows DCE / direct len* selection.
     #[inline]
     fn forward_with_scratch_sized<const LOG2: u32>(
         data: &mut [Complex64],
@@ -376,7 +376,7 @@ impl StockhamKernel for f32 {
 
     /// Sized variant (const LOG2) for f32. Mirrors forward_with_scratch but uses
     /// const LOG2 for transform_sized calls, enabling const propagation from plan
-    /// pot_inplace_sized<LOG2> callers into monomorphized Stockham bodies.
+    /// `pot_inplace_sized` callers into monomorphized Stockham bodies.
     #[inline]
     fn forward_with_scratch_sized<const LOG2: u32>(
         data: &mut [Complex32],

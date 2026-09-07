@@ -264,7 +264,7 @@ pub(in crate::application::execution::kernel::components::radix_composite) unsaf
 
 // ── f32 DFT-4 butterflies ────────────────────────────────────────────────────
 
-/// Radix-4 butterfly for 4 Complex<f32> simultaneously.
+/// Radix-4 butterfly for 4 `Complex<f32>` simultaneously.
 #[target_feature(enable = "avx2,fma")]
 #[inline]
 unsafe fn dft4_f32<const INVERSE: bool>(
@@ -296,7 +296,7 @@ unsafe fn dft4_f32<const INVERSE: bool>(
     }
 }
 
-/// Radix-4 butterfly for 2 Complex<f32> simultaneously (128-bit lane pair).
+/// Radix-4 butterfly for 2 `Complex<f32>` simultaneously (128-bit lane pair).
 /// Used when prev_len is 2 or 3 (less than 4) to process 2 columns at a time.
 #[target_feature(enable = "avx2,fma")]
 #[inline]

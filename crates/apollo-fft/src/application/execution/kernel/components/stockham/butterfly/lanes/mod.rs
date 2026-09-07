@@ -17,6 +17,7 @@
 //!
 //! [`stage_impl`]: super::super::stage::stage_impl
 //! [`stage_pair_impl`]: super::stage::stage_pair_impl
+//! [`stage_triple_impl`]: super::stage::stage_triple_impl
 //! [`ComplexReg`]: hermes_simd::ComplexReg
 
 pub(crate) mod base;

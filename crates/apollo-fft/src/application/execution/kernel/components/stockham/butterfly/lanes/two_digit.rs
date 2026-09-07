@@ -162,7 +162,8 @@ where
     }
 }
 
-/// [`stage_pair_lanes`] for `groups == 4` (`src.len() == 8 * radix`) at the
+/// [`stage_pair_lanes`](super::pair::stage_pair_lanes) for `groups == 4`
+/// (`src.len() == 8 * radix`) at the
 /// widths where two digits share a register.
 #[inline]
 pub(crate) fn stage_pair_quarter_groups_two_lanes<T, const LANES: usize>(
@@ -339,7 +340,8 @@ where
     }
 }
 
-/// [`stage_triple_lanes`] for `groups == 8` (`src.len() == 16 * radix`) at
+/// [`stage_triple_lanes`](super::triple::stage_triple_lanes) for `groups == 8`
+/// (`src.len() == 16 * radix`) at
 /// the widths where a digit's two `k` or two digits share a register.
 #[inline]
 pub(crate) fn stage_triple_groups_eight_lanes<T, const LANES: usize>(

@@ -27,11 +27,12 @@ pub(crate) fn transform<P: StockhamPrecision>(
     transform_sized::<P>(data, scratch, twiddles, scale, log2);
 }
 
-/// Sized entry: routes to monomorphized transform_impl<LOG2, P> for known powers.
+/// Sized entry: routes to monomorphized `transform_impl<LOG2, P>` for known powers.
 /// This enables zero-cost monomorphization per log2 (structural const generic for stage count,
 /// fusion decisions, unroll factors per PoTStrategy ZST). Callers that know the size
 /// (plan PowerOfTwo log2 match, dispatch PoT, bluestein pow2 pads, rader) hit concrete
-/// <LOG2> instance; unknown fall to <0> runtime generic body (inner-fn pattern to bound bloat).
+/// `transform_impl<LOG2, P>` instances; unknown powers use the runtime body
+/// `transform_impl<0, P>` to bound code size.
 #[cfg_attr(debug_assertions, inline(never))]
 #[cfg_attr(not(debug_assertions), inline)]
 pub(crate) fn transform_sized<P: StockhamPrecision>(

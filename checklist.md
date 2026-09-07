@@ -2,8 +2,9 @@
 
 ## codex/root — current execution
 
-- [ ] [FourStep movement](backlog.md#apollo-four-step-square-movement): integrate main, extend exact prime-pair coverage, collect focused debug/release gates and rebuilt census identity.
-- [ ] [FourStep movement](backlog.md#apollo-four-step-square-movement): compare exact-lock API surfaces, collect unchanged census and allocation evidence, then apply the recorded retention criteria and provider-first delivery order.
+- [ ] [FourStep movement](backlog.md#apollo-four-step-square-movement): collect the full integration gates and matched allocation windows; focused integration, exact-lock API comparison and retained census build are complete.
+- [ ] [FourStep movement](backlog.md#apollo-four-step-square-movement): collect the unchanged census only after its host precondition passes, then apply the recorded retention criteria and provider-first delivery order. The 2026-09-07 attempt invokes no native census because the final guard detects a compiler workload.
+- [ ] [Benchmark dependency closure](backlog.md#apollo-benchmark-baseline-closure): finish preparation diagnosis and replace provider-overwriting baseline construction after the current gate inputs are collected.
 
 ## ATLAS-APOLLO-REAL-HALF-THROUGHPUT-2026-09-01 [perf] — Codex
 
@@ -702,8 +703,8 @@ now resolves it, and the outside-overlay workspace check passes.
       bounds, and removal of an unrelated lint suppression.
 - [x] Repair standalone `--locked` resolution with a workspace-scoped lock
       refresh that removes the obsolete Cutile/CUDA dependency closure.
-- [x] Pin the candidate lock as part of the fixed A/B benchmark instrument so
-      the baseline and candidate compile against one provider graph.
+- [x] Replace candidate-lock transplantation with revision-owned locked graphs
+      under [baseline preparation](backlog.md#apollo-benchmark-baseline-closure).
 - [x] Pass exact-head hosted CI and merge: source `33a40bcee4532c9c1a03fee7cef2d852b3419090`,
       merge `db2186650f2e0889555120e6a1491ad93897409e`, hosted Rust/Python run
       `30685185998`, and benchmark run `30685185999`.
@@ -6588,3 +6589,9 @@ Sprint target version: 0.3.0 (first unreleased minor after 0.2.0)
 - [x] Add typed SFT sparse forward/inverse caller-owned coverage for `Complex64`, `Complex32`, mixed `[f16; 2]`, represented-input parity, inverse roundtrip, sparse shape rejection, and profile mismatch rejection.
 - [x] Add typed SHT real/complex caller-owned coverage for `f64`/`Complex64`, `f32`/`Complex32`, mixed `f16`/`[f16; 2]`, represented-input parity, inverse roundtrip, shape rejection, and profile mismatch rejection.
 - [x] Add typed NUFFT 1D/3D Type-1/Type-2 caller-owned coverage for `Complex64`, `Complex32`, mixed `[f16; 2]`, represented-input parity, Type-2 parity, shape rejection, and profile mismatch rejection.
+
+## codex/api_evidence — baseline dependency closure
+
+- [x] [APOLLO-BENCHMARK-BASELINE-CLOSURE](backlog.md#apollo-benchmark-baseline-closure): diagnose graph transplantation; prepare source-only transfer and filesystem regressions.
+- [x] [APOLLO-BENCHMARK-BASELINE-CLOSURE](backlog.md#apollo-benchmark-baseline-closure): apply reviewed automation and contract corrections; collect filesystem, YAML and Bash checks.
+- [ ] [APOLLO-BENCHMARK-BASELINE-CLOSURE](backlog.md#apollo-benchmark-baseline-closure): collect exact three-target locked baseline/candidate builds and integration review.
