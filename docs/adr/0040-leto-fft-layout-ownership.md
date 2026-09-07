@@ -334,14 +334,39 @@ documentation warnings on each side; this is separate from the public-doc gate.
 The merge removes 208 duplicated or superseded board lines and replaces the
 prime-pair test's macro/runtime dispatch with const-generic arrays, net -38
 lines before comment clarification. These are behavioral, API and maintenance
-results. A rebuilt census and an uncontended comparison remain required before
-performance acceptance.
+results.
+
+The [retained integration build](../../../../output/apollo-square-transpose/integration/census/collection.json)
+at `3c4e0a2c` is 6,861,312 bytes, 512 below baseline, with all 316 recorded
+inputs unchanged through collection. Its 4,793,281-byte code section is
+byte-identical to the earlier mapped diagnostic at the same image base and
+section address; [the binding](../../../../output/apollo-square-transpose/integration/census/codegen-binding.json)
+therefore preserves the static square/batch instruction evidence. This does
+not compare data sections or establish latency. Compiler-load guards reject
+both timing attempts before native invocation; no timing result exists for
+this retained image.
+
+The subsequent `a2dbfd7d` test-only increment and private-documentation repairs
+pass [the captured native closure](../../../../output/apollo-square-transpose/integration/final-gates/native-closure.json):
+1,457 workspace tests, 563 release FFT tests, seven doctests with one existing
+ignore, format, Clippy and the safety ratchet. All 20 default-feature allocation
+windows match baseline. Stable public documentation and
+[nightly private/hidden FFT documentation](../../../../output/apollo-square-transpose/integration/final-gates/documentation-closure.json)
+pass with warnings denied. A transitive proc-macro generation mismatch in the
+shared cache is repaired through Cargo rebuilds without deleting the cache.
+The documentation subprocess completes in 31.628 seconds; its script lacks
+automatic timeout enforcement, so elapsed duration is not an enforced-budget
+claim. Remaining benchmark smokes and dependency audits bind to the final
+integrated source. An uncontended complete-engine comparison remains required
+before performance acceptance.
 
 The current experimental lock selects Leto `633acb7` through two entries and
 Hermes `07c5e5f` through five, without changing manifest requirements or
-registry selections. [Leto](../../../leto/backlog.md#leto-square-transpose) and
-[Hermes](../../../hermes/backlog.md#hermes-complex-permutation-inlining) remain
-review-branch dependencies: provider merges precede accepted consumer delivery;
+registry selections. [Leto](../../../leto/backlog.md#leto-square-transpose)
+remains a review-branch dependency. The selected
+[Hermes facet](../../../hermes/backlog.md#hermes-complex-permutation-inlining)
+lands in merge `9d68a9e1`; the lock still identifies the tested provider revision.
+Provider merges precede accepted consumer delivery;
 rejection removes the unaccepted candidate and temporary lock selections.
 The scalar movement role and batch-inline correction are in this lock. Retained output links follow Atlas's
 14-day/10-GiB policy and contain experiment manifests, not release artifacts.
