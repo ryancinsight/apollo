@@ -65,6 +65,25 @@ mod tests {
     }
 
     #[test]
+    fn replacing_low_observations_shifts_the_median_until_breakdown() {
+        // Replacing the lowest r observations leaves central values 50+r and
+        // 51+r for r < 50. At r = 50 the upper central value is a replacement.
+        for replaced in 0..=50_u128 {
+            let samples = (1..=100)
+                .map(|value| if value <= replaced { u128::MAX } else { value })
+                .collect();
+            let summary = SampleSummary::from_samples(samples, 1)
+                .expect("invariant: 100 observations support the one-case interval");
+            let expected = if replaced < 50 {
+                50 + replaced
+            } else {
+                100 + (u128::MAX - 100) / 2
+            };
+            assert_eq!(summary.median_picoseconds, expected);
+        }
+    }
+
+    #[test]
     fn insufficient_samples_do_not_invent_a_timing_summary() {
         assert_eq!(SampleSummary::from_samples(Vec::new(), 1), None);
         assert_eq!(SampleSummary::from_samples(vec![1, 2, 3, 4, 5], 1), None);

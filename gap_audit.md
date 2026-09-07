@@ -10510,17 +10510,9 @@ slower in all four counterbalanced comparisons (+6% to +17%).
 - [minor] Production implication: sustained Bluestein f64 throughput at this size is about
   half its burst figure. Any published per-call number for this path should state which
   regime it describes.
-- [done] Gate design. `compare-replicated-counterbalanced` now requires the slowest candidate
-  median bound to clear the fastest baseline median bound across all four blocks, not merely
-  four independent within-run separations. A per-run interval bounds that run's sampling noise
-  only, so on a host whose regime shifts between runs four of them can separate together with no
-  code change; the replicated design already pays for the between-run evidence and now spends it.
-  Cases that separate within runs but not across them are reported as undecidable rather than
-  folded into a pass, so a host whose spread exceeds the effect stays visible instead of silently
-  disabling the gate. Verified against the exact PR #64 evidence (candidate 30707/30761/34742/31467
-  against baseline 28974/26343/30836/29073): the gate passes and names the case as undecided.
-  Existing fail-closed coverage is unchanged (order drift, single-block slowdown, family-wise
-  false positive, missing-case) and a genuine slowdown clearing the spread is still reported.
+- The comparator's bound direction and sampling assumptions are specified in
+  [ADR 0036](docs/adr/0036-native-benchmark-regression-oracle.md#mathematical-contract).
+  Unchanged-control drift invalidates timing evidence despite interval separation.
 
 ## Slop patterns recorded 2026-09-01
 

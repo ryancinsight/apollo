@@ -8,6 +8,10 @@
   and workloads do not change. Same-executable control drift invalidates the
   associated timing evidence; neither counterbalancing nor interval separation
   establishes causal attribution under an unstable measurement regime.
+  The estimator audit also corrects median replacement resistance versus
+  invariance and states the independent, identically distributed sampling
+  assumption. Deterministic replacement and finite binary-outcome tests exercise
+  these limits; the estimator, classifier, and timing workloads do not change.
 - **Revision 2026-08-27:** Smoke execution now invokes every unchanged case
   exactly once without warm-up or inferential statistics. Full measurement
   retains its budgets, 100 observations, and comparison contract. The change
@@ -70,13 +74,14 @@ the change without improving the statistical contract.
 
 ## Mathematical contract
 
-For ordered independent samples `X_(1), …, X_(n)`, the interval
+For independent samples from one fixed distribution, sorted as
+`X_(1), …, X_(n)`, the interval
 
 \[
   [X_{(k)}, X_{(n-k+1)}]
 \]
 
-covers the population median with probability
+covers a population median with probability at least
 
 \[
   1 - 2 P(\operatorname{Bin}(n, 0.5) \le k - 1).
@@ -84,14 +89,29 @@ covers the population median with probability
 
 This is the distribution-free interval in
 [NIST Technical Note 2119, section 5.3, equations 30–31](https://doi.org/10.6028/NIST.TN.2119).
-For Apollo's fixed `n = 100`, the narrowest symmetric individual interval
-meeting 95% coverage is `[X_(40), X_(61)]`; its exact coverage floors to
+The expression is exact without probability mass at the median and a lower
+bound for discrete observations, including integer timing ties. For Apollo's
+fixed `n = 100`, the narrowest symmetric individual interval
+meeting 95% coverage is `[X_(40), X_(61)]`; its coverage bound floors to
 964799 parts per million. A comparison over `m` cases derives a wider interval
 with per-interval miscoverage no greater than `0.05 / (2m)`.
 [Bonferroni's inequality](https://www.itl.nist.gov/div898/handbook/prc/section4/prc463.htm)
 therefore bounds the probability that any baseline or candidate interval
-misses its population median by 5%, without requiring independence. Integer
-binomial counts encode this contract without floating-point rounding.
+misses its population median by 5%, without requiring independence between
+intervals. It does not remove the within-interval sampling assumption. Integer
+binomial counts encode the bound without floating-point rounding; the reported
+parts per million round down. The report schema cannot establish independence
+or a fixed distribution. Sample count and comparison family are predetermined,
+not selected after observing timings. Perfectly dependent samples can have zero
+actual coverage despite a nominal 95% bound.
+
+The sample median's replacement resistance is a separate deterministic
+property: replacing fewer than half the observations leaves its central values
+inside the original range, but can change their ranks. Replacing the lowest
+`r < 50` values of `1..=100` with larger-than-100 values moves Apollo's floored
+median from 50 to `50 + r`. With 50 replacements the upper central value is
+a replacement and the median is no longer bounded by the original range.
+Resistance to unbounded contamination is therefore not invariance under delay.
 
 The comparison makes no cross-machine absolute-performance claim. Base and
 candidate must execute on the same hosted runner within each matched pair.
@@ -130,9 +150,13 @@ baseline period positions `{1, 4, 6, 7}` and candidate positions
 `{2, 3, 5, 8}`. Both sets sum to 18 and both squared sets sum to 102, so that
 historical one-runner schedule balanced revision exposure to constant, linear,
 and quadratic period terms. The current topology instead executes those four
-ordered pairs independently. The final regression event remains the
-intersection of the four family-wise comparison events and therefore stays
-bounded by 5% without assuming that the pairs are independent.
+ordered pairs independently. The cross-replication separation requirement makes
+the final regression event a subset of the intersection of the four family-wise
+comparison events. For the same specified null hypotheses (no population-median
+slowdown in any case), its false-positive probability therefore stays bounded
+by 5% without assuming that the pairs are independent, provided the individual
+interval sampling assumptions hold. This bounds statistical misclassification
+of population medians, not causal attribution to source code.
 
 ## Consequences
 
