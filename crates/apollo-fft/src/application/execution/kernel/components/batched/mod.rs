@@ -34,6 +34,7 @@
 
 use crate::application::execution::kernel::mixed_radix::MixedRadixScalar;
 mod cache;
+mod radix;
 pub(crate) use cache::BatchedPlanCache;
 
 use eunomia::Complex;
@@ -107,7 +108,7 @@ struct BatchedStages<'a, T> {
 
 impl<T> LaneKernel<T> for BatchedStages<'_, T>
 where
-    T: LaneScalar + MixedRadixScalar,
+    T: LaneScalar + MixedRadixScalar + radix::Lane,
 {
     type Output = ();
 
@@ -117,259 +118,87 @@ where
     )]
     #[inline(always)]
     fn call<A: SimdArch + SimdKernel<T>>(self, simd: Simd<T, A>) {
-        let lanes = <A as SimdStorage<T>>::LANE_COUNT;
-        let b = self.batch;
-        let s = self.stride;
-        let row_bits = self.len.trailing_zeros();
+        let Self {
+            re,
+            im,
+            tw,
+            fold,
+            source,
+            batch: b,
+            stride: s,
+            len,
+        } = self;
+        let row_bits = len.trailing_zeros();
         let mut twx = 0usize;
         let mut l = 2usize;
 
-        // Two stages per pass over the data.
+        // Two stages per pass over the data while two remain, then one. A pass
+        // streams the whole `len * batch` array once, so the fewest passes
+        // win up to the register file: a radix-8 pass holds eight complex
+        // rows, sixteen vectors, the whole AVX2 file, and measured slower
+        // than two radix-4 passes once its spills were paid (ADR 0055). Four
+        // rows and three hoisted twiddles fit. The per-element operation
+        // order is the single-stage one, so results are bitwise those of any
+        // other grouping.
         //
-        // A stage-per-pass loop re-streams the whole `len * batch` array
-        // `log2(len)` times, and at these sizes that traffic binds rather than
-        // the arithmetic: RustFFT runs six stages in two passes by holding a
-        // column in registers, and PhastFT fuses four into one codelet. Fusing
-        // stage `l` with stage `2l` loads each of the four operands once and
-        // writes each once, halving the passes.
-        //
-        // Four is the width rather than eight, and that follows from the planar
-        // layout rather than being a conservative choice: real and imaginary
-        // parts occupy separate registers here, so a radix-8 step would need
-        // sixteen vector registers for operands alone and would spill on AVX2.
-        // The three twiddles are invariant in `g` and hoist out of the inner
-        // loops.
-        while l * 2 <= self.len {
+        // The four-step twiddle and the interleaved source both ride the
+        // first pass, `l == 2`, the one pass that loads every element
+        // exactly once.
+        while l * 2 <= len {
             let half = l >> 1;
-            let groups = self.len / (2 * l);
+            let groups = len / (2 * l);
+            let (pass_fold, pass_source) = if l == 2 { (fold, source) } else { (None, None) };
             for j in 0..half {
-                // Stage `l` occupies `half` table entries and stage `2l` the
-                // `l` that follow, so the second stage's two twiddles are read
-                // straight from the table rather than derived by rotation:
-                // exact stored values, and no sign case for the inverse
-                // direction.
-                let (w1r, w1i) = self.tw[twx + j];
-                let (w2r, w2i) = self.tw[twx + half + j];
-                let (w3r, w3i) = self.tw[twx + half + j + half];
-                let (v1r, v1i) = (simd.splat(w1r), simd.splat(w1i));
-                let (v2r, v2i) = (simd.splat(w2r), simd.splat(w2i));
-                let (v3r, v3i) = (simd.splat(w3r), simd.splat(w3i));
-
-                // The four-step twiddle rides the first stage's loads:
-                // `l == 2` is the pass that reads every element exactly once,
-                // so multiplying there deletes the standalone pass the scalar
-                // transpose multiply used to be.
-                let fold = if l == 2 { self.fold } else { None };
-                let source = if l == 2 { self.source } else { None };
+                let tws = [tw[twx + j], tw[twx + half + j], tw[twx + half + j + half]];
+                let twv = tws.map(|(wr, wi)| (simd.splat(wr), simd.splat(wi)));
                 for g in 0..groups {
-                    let row_a = g * 2 * l + j;
-                    let ia = row_a * s;
-                    let ib = ia + half * s;
-                    let ic = ia + l * s;
-                    let id = ic + half * s;
-                    let ta = row_a * b;
-                    let tb = ta + half * b;
-                    let tc = ta + l * b;
-                    let td = tc + half * b;
-                    // Interleaved source rows for the four plane rows, in
-                    // reals; only consulted on the first pass.
-                    let sa = reverse_row(row_a, row_bits) * b * 2;
-                    let sb = reverse_row(row_a + half, row_bits) * b * 2;
-                    let sc = reverse_row(row_a + l, row_bits) * b * 2;
-                    let sd = reverse_row(row_a + l + half, row_bits) * b * 2;
-                    let mut k = 0;
-                    while k + lanes <= b {
-                        let (mut ar, mut ai, mut br, mut bi, mut cr, mut ci, mut dr, mut di);
-                        if let Some(src) = source {
-                            (ar, ai) = load_interleaved::<T, A>(src, sa + 2 * k);
-                            (br, bi) = load_interleaved::<T, A>(src, sb + 2 * k);
-                            (cr, ci) = load_interleaved::<T, A>(src, sc + 2 * k);
-                            (dr, di) = load_interleaved::<T, A>(src, sd + 2 * k);
-                        } else {
-                            ar = load::<T, A>(self.re, ia + k);
-                            ai = load::<T, A>(self.im, ia + k);
-                            br = load::<T, A>(self.re, ib + k);
-                            bi = load::<T, A>(self.im, ib + k);
-                            cr = load::<T, A>(self.re, ic + k);
-                            ci = load::<T, A>(self.im, ic + k);
-                            dr = load::<T, A>(self.re, id + k);
-                            di = load::<T, A>(self.im, id + k);
-                        }
-                        if let Some((pr, pi)) = fold {
-                            let tw = |r: hermes_simd::Vector<T, A>,
-                                      i: hermes_simd::Vector<T, A>,
-                                      at: usize| {
-                                let wr = load::<T, A>(pr, at + k);
-                                let wi = load::<T, A>(pi, at + k);
-                                (wr.mul_add(r, -(wi * i)), wr.mul_add(i, wi * r))
-                            };
-                            (ar, ai) = tw(ar, ai, ta);
-                            (br, bi) = tw(br, bi, tb);
-                            (cr, ci) = tw(cr, ci, tc);
-                            (dr, di) = tw(dr, di, td);
-                        }
-
-                        // Stage `l`: (a,b) and (c,d), both against W_l^j.
-                        let tbr = v1r.mul_add(br, -(v1i * bi));
-                        let tbi = v1r.mul_add(bi, v1i * br);
-                        let (uar, uai) = (ar + tbr, ai + tbi);
-                        let (ubr, ubi) = (ar - tbr, ai - tbi);
-
-                        let tdr = v1r.mul_add(dr, -(v1i * di));
-                        let tdi = v1r.mul_add(di, v1i * dr);
-                        let (ucr, uci) = (cr + tdr, ci + tdi);
-                        let (udr, udi) = (cr - tdr, ci - tdi);
-
-                        // Stage `2l`: (a,c) against W_2l^j and (b,d) against
-                        // W_2l^(j + l/2). Neither operand has left a register.
-                        let vcr = v2r.mul_add(ucr, -(v2i * uci));
-                        let vci = v2r.mul_add(uci, v2i * ucr);
-                        let vdr = v3r.mul_add(udr, -(v3i * udi));
-                        let vdi = v3r.mul_add(udi, v3i * udr);
-
-                        store::<T, A>(uar + vcr, self.re, ia + k);
-                        store::<T, A>(uai + vci, self.im, ia + k);
-                        store::<T, A>(ubr + vdr, self.re, ib + k);
-                        store::<T, A>(ubi + vdi, self.im, ib + k);
-                        store::<T, A>(uar - vcr, self.re, ic + k);
-                        store::<T, A>(uai - vci, self.im, ic + k);
-                        store::<T, A>(ubr - vdr, self.re, id + k);
-                        store::<T, A>(ubi - vdi, self.im, id + k);
-                        k += lanes;
-                    }
-                    // Scalar remainder when the batch is not a lane multiple.
-                    for k in k..b {
-                        let (mut ar, mut ai, mut br, mut bi, mut cr, mut ci, mut dr, mut di);
-                        if let Some(src) = source {
-                            (ar, ai) = (src[sa + 2 * k], src[sa + 2 * k + 1]);
-                            (br, bi) = (src[sb + 2 * k], src[sb + 2 * k + 1]);
-                            (cr, ci) = (src[sc + 2 * k], src[sc + 2 * k + 1]);
-                            (dr, di) = (src[sd + 2 * k], src[sd + 2 * k + 1]);
-                        } else {
-                            (ar, ai) = (self.re[ia + k], self.im[ia + k]);
-                            (br, bi) = (self.re[ib + k], self.im[ib + k]);
-                            (cr, ci) = (self.re[ic + k], self.im[ic + k]);
-                            (dr, di) = (self.re[id + k], self.im[id + k]);
-                        }
-                        if let Some((pr, pi)) = fold {
-                            let tw = |r: T, i: T, at: usize| {
-                                let (wr, wi) = (pr[at + k], pi[at + k]);
-                                (wr * r - wi * i, wr * i + wi * r)
-                            };
-                            (ar, ai) = tw(ar, ai, ta);
-                            (br, bi) = tw(br, bi, tb);
-                            (cr, ci) = tw(cr, ci, tc);
-                            (dr, di) = tw(dr, di, td);
-                        }
-
-                        let tbr = w1r * br - w1i * bi;
-                        let tbi = w1r * bi + w1i * br;
-                        let (uar, uai) = (ar + tbr, ai + tbi);
-                        let (ubr, ubi) = (ar - tbr, ai - tbi);
-
-                        let tdr = w1r * dr - w1i * di;
-                        let tdi = w1r * di + w1i * dr;
-                        let (ucr, uci) = (cr + tdr, ci + tdi);
-                        let (udr, udi) = (cr - tdr, ci - tdi);
-
-                        let vcr = w2r * ucr - w2i * uci;
-                        let vci = w2r * uci + w2i * ucr;
-                        let vdr = w3r * udr - w3i * udi;
-                        let vdi = w3r * udi + w3i * udr;
-
-                        self.re[ia + k] = uar + vcr;
-                        self.im[ia + k] = uai + vci;
-                        self.re[ib + k] = ubr + vdr;
-                        self.im[ib + k] = ubi + vdi;
-                        self.re[ic + k] = uar - vcr;
-                        self.im[ic + k] = uai - vci;
-                        self.re[id + k] = ubr - vdr;
-                        self.im[id + k] = ubi - vdi;
-                    }
+                    let r0 = g * 2 * l + j;
+                    let rows = [r0, r0 + half, r0 + l, r0 + l + half];
+                    radix::butterfly_rows::<T, A, radix::Dit4, 4, 3>(
+                        re,
+                        im,
+                        rows,
+                        s,
+                        b,
+                        row_bits,
+                        &tws,
+                        &twv,
+                        radix::Seams {
+                            fold: pass_fold,
+                            source: pass_source,
+                            sink: None,
+                        },
+                    );
                 }
             }
             twx += half + l;
             l <<= 2;
         }
 
-        // One radix-2 stage remains when `log2(len)` is odd; when the whole
-        // transform is that single stage, the first-stage fold applies here.
-        if l <= self.len {
+        if l <= len {
             let half = l >> 1;
-            let groups = self.len / l;
-            let fold = if l == 2 { self.fold } else { None };
-            let source = if l == 2 { self.source } else { None };
+            let groups = len / l;
+            let (pass_fold, pass_source) = if l == 2 { (fold, source) } else { (None, None) };
             for j in 0..half {
-                let (twr, twi) = self.tw[twx + j];
-                let wr = simd.splat(twr);
-                let wi = simd.splat(twi);
+                let tws = [tw[twx + j]];
+                let twv = tws.map(|(wr, wi)| (simd.splat(wr), simd.splat(wi)));
                 for g in 0..groups {
-                    let row_lo = g * l + j;
-                    let lo = row_lo * s;
-                    let hi = lo + half * s;
-                    let tlo = row_lo * b;
-                    let thi = tlo + half * b;
-                    let slo = reverse_row(row_lo, row_bits) * b * 2;
-                    let shi = reverse_row(row_lo + half, row_bits) * b * 2;
-                    let mut k = 0;
-                    while k + lanes <= b {
-                        let (lo_s, hi_s) = (lo + k, hi + k);
-                        let (mut ar, mut ai, mut br, mut bi);
-                        if let Some(src) = source {
-                            (ar, ai) = load_interleaved::<T, A>(src, slo + 2 * k);
-                            (br, bi) = load_interleaved::<T, A>(src, shi + 2 * k);
-                        } else {
-                            ar = load::<T, A>(self.re, lo_s);
-                            ai = load::<T, A>(self.im, lo_s);
-                            br = load::<T, A>(self.re, hi_s);
-                            bi = load::<T, A>(self.im, hi_s);
-                        }
-                        if let Some((pr, pi)) = fold {
-                            let tw = |r: hermes_simd::Vector<T, A>,
-                                      i: hermes_simd::Vector<T, A>,
-                                      at: usize| {
-                                let vr = load::<T, A>(pr, at + k);
-                                let vi = load::<T, A>(pi, at + k);
-                                (vr.mul_add(r, -(vi * i)), vr.mul_add(i, vi * r))
-                            };
-                            (ar, ai) = tw(ar, ai, tlo);
-                            (br, bi) = tw(br, bi, thi);
-                        }
-
-                        let tr = wr.mul_add(br, -(wi * bi));
-                        let ti = wr.mul_add(bi, wi * br);
-
-                        store::<T, A>(ar + tr, self.re, lo_s);
-                        store::<T, A>(ai + ti, self.im, lo_s);
-                        store::<T, A>(ar - tr, self.re, hi_s);
-                        store::<T, A>(ai - ti, self.im, hi_s);
-                        k += lanes;
-                    }
-                    for k in k..b {
-                        let (lo_s, hi_s) = (lo + k, hi + k);
-                        let (mut ar, mut ai, mut br, mut bi);
-                        if let Some(src) = source {
-                            (ar, ai) = (src[slo + 2 * k], src[slo + 2 * k + 1]);
-                            (br, bi) = (src[shi + 2 * k], src[shi + 2 * k + 1]);
-                        } else {
-                            (ar, ai) = (self.re[lo_s], self.im[lo_s]);
-                            (br, bi) = (self.re[hi_s], self.im[hi_s]);
-                        }
-                        if let Some((pr, pi)) = fold {
-                            let tw = |r: T, i: T, at: usize| {
-                                let (vr, vi) = (pr[at + k], pi[at + k]);
-                                (vr * r - vi * i, vr * i + vi * r)
-                            };
-                            (ar, ai) = tw(ar, ai, tlo);
-                            (br, bi) = tw(br, bi, thi);
-                        }
-                        let tr = twr * br - twi * bi;
-                        let ti = twr * bi + twi * br;
-                        self.re[lo_s] = ar + tr;
-                        self.im[lo_s] = ai + ti;
-                        self.re[hi_s] = ar - tr;
-                        self.im[hi_s] = ai - ti;
-                    }
+                    let r0 = g * l + j;
+                    radix::butterfly_rows::<T, A, radix::Dit2, 2, 1>(
+                        re,
+                        im,
+                        [r0, r0 + half],
+                        s,
+                        b,
+                        row_bits,
+                        &tws,
+                        &twv,
+                        radix::Seams {
+                            fold: pass_fold,
+                            source: pass_source,
+                            sink: None,
+                        },
+                    );
                 }
             }
         }
@@ -561,7 +390,7 @@ fn run_batched<T>(
     batch: usize,
     stride: usize,
 ) where
-    T: LaneScalar + MixedRadixScalar,
+    T: LaneScalar + MixedRadixScalar + radix::Lane,
 {
     hermes_simd::vectorize(BatchedStages {
         re,
@@ -588,7 +417,7 @@ fn run_batched_dif<T>(
     batch: usize,
     stride: usize,
 ) where
-    T: LaneScalar + MixedRadixScalar,
+    T: LaneScalar + MixedRadixScalar + radix::Lane,
 {
     hermes_simd::vectorize(dif::BatchedStagesDif {
         re,

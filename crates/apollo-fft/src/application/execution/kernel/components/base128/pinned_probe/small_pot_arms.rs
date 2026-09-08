@@ -199,13 +199,8 @@ fn fused_round_trip<const N: usize>(work: &mut [Complex64]) {
 /// N = 64 runs 16. A fixed *lane* count would have put N = 64 at 32 KB, exactly
 /// the efficiency core's L1 size, and charged L2 traffic to the largest codelet
 /// only. Readings are per pass, so compare sizes per lane transform: divide by
-/// `2 * lanes_for::<N>()`.
+/// `2 * LANE_ELEMENTS / N`.
 const LANE_ELEMENTS: usize = 1_024;
-
-/// Lanes in a pass at `N`.
-const fn lanes_for<const N: usize>() -> usize {
-    LANE_ELEMENTS / N
-}
 
 /// A forward pass then a normalized inverse pass over every lane, crossing
 /// into the vector frame once per lane — what `dimension_2d` and
@@ -371,7 +366,7 @@ fn arms_for_size<const N: usize>(suite: &mut BenchmarkSuite, core: &str) {
         });
     }
 
-    // The lane arms time a whole pass of `lanes_for::<N>()` round trips, so
+    // The lane arms time a whole pass of `LANE_ELEMENTS / N` round trips, so
     // their reading is not comparable to the rows above and not directly
     // comparable across sizes either; the quantity is the ratio between arms
     // at one size, or the per-lane figure after dividing by `2 * lanes`.
