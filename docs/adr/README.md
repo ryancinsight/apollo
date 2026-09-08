@@ -58,3 +58,4 @@
 | [0050](0050-cache-line-fused-traversal.md) | Cache-line traversal for fused twiddle multiplication | Rejected |
 | [0052](0052-twiddless-fft-evaluation.md) | Twiddless FFT evaluation | Rejected |
 | [0053](0053-planar-four-step-domain.md) | Planar four-step domain above the threading threshold | Accepted |
+| [0054](0054-planar-seam-fusion.md) | Planar seams fused into the stage passes | Accepted |

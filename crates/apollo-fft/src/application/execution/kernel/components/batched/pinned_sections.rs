@@ -15,7 +15,7 @@ use crate::application::execution::kernel::mixed_radix::scalar::MixedRadixScalar
 
 /// Sizes worth attributing: the even powers, which take the square route
 /// whole, and the odd powers, which decimate and run it twice.
-const SIZES: [usize; 6] = [1024, 2048, 4096, 8192, 16384, 32768];
+const SIZES: [usize; 8] = [1024, 2048, 4096, 8192, 16384, 32768, 65536, 262_144];
 
 /// Calls per size. Enough that per-pass totals are stable, few enough that
 /// the whole probe stays inside the suite's runtime budget.

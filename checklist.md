@@ -7,6 +7,8 @@
 - [x] [Twiddless evaluation](backlog.md#apollo-twiddless-fft-evaluation): PR 349 merged; lease discharged.
 - [x] [Four-step large lengths](backlog.md#apollo-n65536-four-step-scalar-loss): planar domain extended to 2^18, measurement recorded in ADR 0053.
 - [ ] [Four-step large lengths](backlog.md#apollo-n65536-four-step-scalar-loss): exact-tree gate green, PR enqueued, merged, lease discharged.
+- [x] [Planar seam fusion](backlog.md#apollo-planar-seam-fusion): fused source/sink measured, ADR 0054 Accepted.
+- [ ] [Planar seam fusion](backlog.md#apollo-planar-seam-fusion): exact-tree gate green, PR enqueued, merged, lease discharged.
 
 ## codex/root — current execution
 
