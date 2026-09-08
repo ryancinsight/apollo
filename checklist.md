@@ -4,7 +4,9 @@
 
 - [x] [Twiddless evaluation](backlog.md#apollo-twiddless-fft-evaluation): instrument, derived-tolerance tests, five-arm benchmark, ADR 0052 Proposed.
 - [x] [Twiddless evaluation](backlog.md#apollo-twiddless-fft-evaluation): local gate green, pinned measurement recorded in ADR 0052 with its verdict.
-- [ ] [Twiddless evaluation](backlog.md#apollo-twiddless-fft-evaluation): PR enqueued, CI green on the exact revision, merged, lease discharged.
+- [x] [Twiddless evaluation](backlog.md#apollo-twiddless-fft-evaluation): PR 349 merged; lease discharged.
+- [x] [Four-step large lengths](backlog.md#apollo-n65536-four-step-scalar-loss): planar domain extended to 2^18, measurement recorded in ADR 0053.
+- [ ] [Four-step large lengths](backlog.md#apollo-n65536-four-step-scalar-loss): exact-tree gate green, PR enqueued, merged, lease discharged.
 
 ## codex/root — current execution
 

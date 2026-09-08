@@ -516,16 +516,28 @@ pub(crate) fn scratch_len(n: usize) -> usize {
     m * (m + ROW_PAD)
 }
 
+/// Largest length the planar route serves; longer even powers fall to the
+/// generic four-step, whose rows thread through Moirai.
+///
+/// The bound used to be the generic route's threading threshold (65536), on
+/// the premise that threaded rows beat a sequential SIMD pass from there.
+/// Measured on the pinned performance core against that premise (ADR 0053),
+/// the generic route at 65536 cost 2.7 to 4.5 times RustFFT while this route
+/// one length below sat at 1.25 times; at 65536 this route measured 208 to
+/// 228 µs against the generic route's 466 to 767 across four runs, and at
+/// 262144 it halved `f32` while leaving `f64` level. The next even power,
+/// 1048576, was measured only under host contention and stays on the
+/// generic route until a quiet replicated census decides it. The value binds
+/// to one host's cache hierarchy and Moirai's dispatch cost; re-measure
+/// before moving it in either direction.
+pub(crate) const PLANAR_MAX_LEN: usize = 1 << 18;
+
 /// Whether [`four_step_batched`] covers a transform of length `n`.
 ///
 /// The single definition of the planar route's domain: an even power of two
-/// — the square split the driver is written for — below the point where the
-/// row transforms are worth threading.
+/// — the square split the driver is written for — up to [`PLANAR_MAX_LEN`].
 pub(crate) fn planar_applies(n: usize) -> bool {
-    n.is_power_of_two()
-        && n.trailing_zeros() % 2 == 0
-        && n >= 4
-        && n < crate::application::execution::kernel::components::four_step::PARALLEL_ROW_THRESHOLD
+    n.is_power_of_two() && n.trailing_zeros() % 2 == 0 && n >= 4 && n <= PLANAR_MAX_LEN
 }
 
 /// Whether [`four_step_split_batched`] covers a transform of length `n`.
