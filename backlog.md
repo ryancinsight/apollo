@@ -1,5 +1,54 @@
 # Apollo Backlog
 
+<a id="apollo-twiddless-fft-evaluation"></a>
+## APOLLO-TWIDDLESS-FFT-EVALUATION — Measure the twiddless FFT against its butterfly isomorph [patch] — review
+- **Integrator:** claude/fable; **last-update:** 2026-09-08; branch `feat/apollo-twiddless-fft-evaluation` (committed from lane `D:/atlas/worktrees/apollo-route`, HEAD untouched).
+- **Scope:** `kernel/twiddless` instrument under the `benchmark_kernels` boundary, its tests, `benches/twiddless_comparison`, CI smoke registration, [ADR 0052](docs/adr/0052-twiddless-fft-evaluation.md); no production route, public API, dependency or workload change.
+- **Evidence:** Queiroz arXiv:2505.23718v2 Algorithm 1 is the Gentleman–Sande DIF split (`x[n] ± x[n+N/2]`, odd half times `W_N^n`) with a bit-reversal gather; the paper counts `7N·log₂N` against `5N·log₂N` and reports no measurement.
+- **Acceptance:** three schedules with one arithmetic body agree bitwise at every admitted length; forward error within `8u(t+2)‖X‖₂` against a Dot2 oracle and within the summed bound against the production plan; Parseval under proptest; the five-arm benchmark completes inside its 30 s budget and ADR 0052 records the measured verdict.
+- **Verification:** all-target Clippy with the bench feature, focused nextest, doctest of the crate, warning-denied rustdoc, one local measurement run on the pinned core class; no cross-machine claim.
+- **Outcome:** [ADR 0052](docs/adr/0052-twiddless-fft-evaluation.md) Rejected: the published schedule is 2.4 to 10.7 times slower than Apollo's plan at every measured length except 65536 and slower than its in-place isomorph wherever intervals separate; evidence `../../output/apollo-twiddless/`.
+
+<a id="apollo-n65536-four-step-scalar-loss"></a>
+## APOLLO-N65536-FOUR-STEP-SCALAR-LOSS — Attribute the N=65536 four-step loss to a scalar radix-2 [patch] — todo
+- **Evidence:** `benches/twiddless_comparison` run 1 (`../../output/apollo-twiddless/measurement-run1.csv`): Apollo `f64` 1556 µs (interval 1369 to 1741) and `f32` 885 µs against RustFFT 348 µs and 90 µs; the scalar out-of-place radix-2 instrument measures 799 µs `f64` with disjoint intervals. At 16384 Apollo holds 52 µs against 155 µs, so the loss enters with the generic four-step route.
+- **Scope:** re-measure 65536 under the engine census supervisor with replicated counterbalanced runs, then attribute with the retained four-step phase instrument; production change only through its own item.
+- **Acceptance:** either a supported ratio with phase attribution filed as the next vertical item, or the run-1 figure recorded as unsupported with the census evidence.
+- **Dependencies:** [four-step square movement](#apollo-four-step-square-movement). **Verification:** census manifest, comparator intervals, unchanged workload.
+
+<a id="apollo-sft-sublinear-recovery"></a>
+## APOLLO-SFT-SUBLINEAR-RECOVERY — Deliver a sublinear sparse recovery route [minor] — todo
+- **Outcome:** `apollo-sft` offers a recovery whose cost scales with the sparsity `K` and `log N`, not with `N log N`.
+- **Evidence:** `crates/apollo-sft/src/application/execution/transform/sparse.rs:5-13` documents the current route as a dense `O(N log N)` FFT followed by an `O(N log K)` top-K heap; the README presents the crate as the sparse Fourier transform owner and cites Gilbert 2002 and Hassanieh 2012, whose algorithms are sublinear. Surveyed while adjudicating arXiv:2310.14462-adjacent literature (Shen 2024, CONF-MPCS, restates Hassanieh's `O(K log N)` bound; no new technique).
+- **Scope:** one additional plan kind implementing a published sublinear algorithm with its recovery guarantee stated (Hassanieh et al. 2012 "Simple and practical" or Hsieh–Lu–Pei 2015 downsampling); the exact top-K route stays as the oracle. Non-goals: GPU path, noisy-case guarantees beyond the chosen paper's.
+- **Acceptance:** exact recovery on `K`-sparse inputs at every published-guarantee parameter set; measured wall-clock scaling sublinear in `N` at fixed `K` on the pinned core class against the dense route; differential agreement with the dense top-K route within the paper's error bound.
+- **Risk/class:** [minor]; additive public contract, ADR required for the plan-kind seam.
+- **Dependencies:** none. **Verification:** generic instantiation over `f32`/`f64`, property tests over random supports, benchmark with committed budget.
+
+<a id="apollo-sdft-recurrence-stability"></a>
+## APOLLO-SDFT-RECURRENCE-STABILITY — Bound sliding-DFT rounding drift [patch] — todo
+- **Outcome:** the streaming update carries a stated, tested bound on accumulated rounding error over unbounded update counts.
+- **Evidence:** `crates/apollo-sdft/src/infrastructure/kernel/sliding.rs:4-6` applies `X_k <- (X_k + x_new - x_old) · exp(2πi k/N)` with no damping, reset or modulated form; the recurrence's pole sits on the unit circle, so rounding error accumulates without bound (Jacobsen and Lyons, "The sliding DFT", IEEE SP Mag 20(2), 2003, section on stability; Duda, "Accurate, guaranteed stable, sliding DFT", IEEE SP Mag 27(6), 2010). No stability test or recorded limitation exists in the crate.
+- **Scope:** a drift test driving at least `10^6` updates in `f32` against a direct-DFT oracle at the final window, then the stabilization the measurement justifies (modulated SDFT or damping with a derived bound), one implementation, documented. Non-goals: API change beyond a typed configuration where the bound requires it.
+- **Acceptance:** derived drift bound stated in Rustdoc and asserted by the long-run test in both precisions; direct-initialization and single-update fixtures unchanged.
+- **Risk/class:** [patch]. **Dependencies:** none. **Verification:** nextest under the committed budget (the long run sized to fit it), doctest, differential against direct initialization.
+
+<a id="apollo-ntt-circle-group-lengths"></a>
+## APOLLO-NTT-CIRCLE-GROUP-LENGTHS — Admit `n | p + 1` transform lengths [minor] — todo
+- **Outcome:** `apollo-ntt` supports power-of-two lengths over primes whose `p + 1` is smooth, such as Mersenne `2^31 − 1`, through the order-`(p + 1)` cyclic subgroup of `PGL₂(p)` (norm-one elements of `F_{p²}`).
+- **Evidence:** `crates/apollo-ntt/src/application/execution/plan/ntt/dimension_1d.rs:47-57` requires `n | modulus − 1` with a primitive root; `2^31 − 1` therefore admits only `n = 2`. Li and Xing, "Fast Fourier transform via automorphism groups of rational function fields", arXiv:2310.14462 (2023), Theorem 1.1 and section 4, give an `O(n log n)` evaluation map for `n | q + 1`; Haböck, Levit and Papini, "Circle STARKs", IACR ePrint 2024/278, give the practical circle-group FFT for the same case.
+- **Scope:** one plan kind over the circle group with its non-monomial basis stated in the contract (the transform is a multipoint evaluation, not the cyclic DFT), forward and inverse, convolution via pointwise product verified. Non-goals: GPU path, arbitrary `B`-smooth `n`.
+- **Acceptance:** inverse round trip exact for all inputs at `n ≤ 2^16` over `2^31 − 1`; polynomial product matches schoolbook modular multiplication; complexity measured `O(n log n)` on the pinned core class.
+- **Risk/class:** [minor] [arch]; ADR required for the basis and evaluation-set contract. **Dependencies:** none. **Verification:** property tests over random polynomials, published reference vectors from the cited papers.
+
+<a id="apollo-spectral-peak-estimation-spike"></a>
+## APOLLO-SPECTRAL-PEAK-ESTIMATION-SPIKE — Decide a sub-bin sinusoid parameter estimator [patch] — todo
+- **Question:** which published estimator of spectral peak frequency, amplitude and phase below bin resolution should Apollo own, given that no such surface exists (`apollo-stft` provides Hann analysis only)?
+- **Evidence:** Henry, "An ultra-precise fast Fourier transform", Measurement 220 (2023) 113372 and Science Talks 4 (2022) 100097, reports `1e-12`-order frequency, amplitude and phase errors at high SNR from two Prism-derived windows, a magnitude-ratio quadratic transform and Romberg-integrated windowing; the window definitions depend on Henry, IEEE TIM 69 (2020), which was not retrievable this session, so the method is not yet reproducible from resolved sources. Candan, IEEE SPL 18(6) 2011 and Jacobsen–Kootsookos, IEEE SP Mag 24(3) 2007 are the resolved three-bin interpolators with derived error terms.
+- **Method:** resolve and read Henry 2020 for the window construction; implement the Prism pair and the Candan interpolator as test-only candidates against a synthetic three-tone oracle at the paper's conditions (48 kHz, 48 000 samples, tones near 8950 Hz, `1e-6` V middle tone); compare frequency, amplitude and phase error and leakage floor.
+- **Evidence budget:** two sessions. **Decision deliverable:** an ADR selecting one estimator (or none) with the measured error table; the accepted one becomes a DoR item.
+- **Risk/class:** [patch] spike. **Dependencies:** access to the 2020 reference. **Verification:** oracle errors reported with derived uncertainty per numerical discipline.
+
 <a id="apollo-worker-hook-admission"></a>
 ## APOLLO-WORKER-HOOK-ADMISSION — Preserve reclamation under bounded registration [patch] [arch] — todo
 - **Outcome:** adopt the current first-party runtime with explicit owner-thread idle semantics and recoverable registration exhaustion.

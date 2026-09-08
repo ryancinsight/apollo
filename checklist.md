@@ -1,5 +1,11 @@
 # Apollo Checklist
 
+## claude/fable — current execution
+
+- [x] [Twiddless evaluation](backlog.md#apollo-twiddless-fft-evaluation): instrument, derived-tolerance tests, five-arm benchmark, ADR 0052 Proposed.
+- [x] [Twiddless evaluation](backlog.md#apollo-twiddless-fft-evaluation): local gate green, pinned measurement recorded in ADR 0052 with its verdict.
+- [ ] [Twiddless evaluation](backlog.md#apollo-twiddless-fft-evaluation): PR enqueued, CI green on the exact revision, merged, lease discharged.
+
 ## codex/root — current execution
 
 - [ ] [FourStep movement](backlog.md#apollo-four-step-square-movement): verify current Leto/Moirai 0.6 adoption against the accepted `3f1c0db7` evidence, then complete provider-first delivery.
