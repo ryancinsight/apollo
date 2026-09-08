@@ -2,7 +2,7 @@
 
 ## codex/root — current execution
 
-- [ ] [FourStep movement](backlog.md#apollo-four-step-square-movement): collect the unchanged census on refreshed lock `D43E38E8` under the coordinated host-load guard, apply retention criteria, then complete provider-first delivery.
+- [ ] [FourStep movement](backlog.md#apollo-four-step-square-movement): verify current Leto/Moirai 0.6 adoption against the accepted `3f1c0db7` evidence, then complete provider-first delivery.
 
 ## ATLAS-APOLLO-REAL-HALF-THROUGHPUT-2026-09-01 [perf] — Codex
 

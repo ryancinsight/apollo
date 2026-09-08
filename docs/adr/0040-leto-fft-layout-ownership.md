@@ -9,7 +9,9 @@
 
 **Revision 2026-09-06:** [APOLLO-FOUR-STEP-SQUARE-MOVEMENT](../../backlog.md#apollo-four-step-square-movement)
 evaluates extending the accepted layout boundary below to every pure-copy
-FourStep transpose. **No candidate in this experiment is accepted or merged.**
+FourStep transpose. **The candidate at `3f1c0db7` passes local acceptance with
+Leto `633acb7`; provider-first delivery remains open.** Current Leto additionally
+adopts Moirai 0.6, so its consumer graph requires fresh verification.
 Retention requires supported complete-engine improvement without supported
 regression, unchanged allocation bounds and no executable growth. Diagnostic
 timing of a size-rejected candidate informs the next bounded hypothesis; it
@@ -431,7 +433,31 @@ finds all 6,630 retained movement/review instruction rows unchanged. The whole
 code section differs at 691 bytes within prior-map debug-formatter regions;
 read-only differences are checkout paths, debug metadata and two code pointers.
 Whole-image instruction identity is not claimed. Performance acceptance still
-requires the unchanged complete comparison.
+requires the unchanged complete comparison for each adopted graph.
+
+The [independent census audit](../../../../output/apollo-square-transpose/integration/provider-graph/census/independent-audit.json)
+accepts the `3f1c0db7` candidate: all 16 runs, 624 rows and 62,400 samples are
+valid, with fixed artifact identities and an 83.508-second suite inside the
+300-second bound. A coordinated compiler-free interval contains the suite;
+all endpoint guards pass. The complete-family rank-33/68 envelopes support
+one gain and no regression. On the efficiency core, full real length 262,144
+has baseline median envelopes 2.2790–2.9478 ms versus candidate
+2.0837–2.2058 ms. Four paired median reductions span 7.32–26.16%; this range
+describes the samples and is not a confidence interval.
+
+All warmed allocation and retained-byte records match. Efficiency-core cold
+length 65,536 peaks span 2,830,094–2,830,238 candidate bytes versus
+2,830,094–2,830,214 baseline bytes: the observed maximum increases by 24 bytes.
+The separate 20-window footprint oracle matches exactly; identical cold
+behavior is not established. Endpoint snapshots still miss transient processes
+and inaccessible CPU totals, and caller affinity does not pin Moirai workers.
+
+[Direct competitor envelopes](../../../../output/apollo-square-transpose/integration/provider-graph/census/competitor-envelope.csv)
+show four leads, fourteen losses and two overlaps. All leads are on the
+efficiency core: PhastFT at lengths 1,024, 4,096 and 16,384, and RustFFT at
+16,384. This does not establish general superiority to either competitor.
+The raw runner's `DiagnosticOnly` field predates this size-passing candidate;
+the independent audit owns the acceptance verdict without rewriting raw output.
 
 **Revision 2026-09-01:** Leto Ops PR #135, merged as `060eb7eb`, added one
 public allocation-free batched-complex transpose. It selects the widest exact

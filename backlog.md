@@ -30,14 +30,14 @@
 ## APOLLO-FOUR-STEP-SQUARE-MOVEMENT — Consolidate provider-owned FourStep movement [patch] — in-progress
 
 - **Integrator:** codex/01a07370; **last-update:** 2026-09-08; branch `codex/four-step-square-movement`.
-- **Lease:** none; integration of main `4c468c4c` selects Hermes `b51e873` while retaining Leto `633acb7`.
-- **Build coordination:** refreshed standalone gates are collected and the Cargo slot is released; the unchanged retained census awaits the coordinated compiler-free window.
+- **Lease:** codex/root `Cargo.lock` 2026-09-08T14:00Z for current-provider adoption after the collected `3f1c0db7` baseline; no source or workload changes.
+- **Build coordination:** the full unchanged census is collected and independently accepted at `3f1c0db7`; current Leto/Moirai 0.6 adoption requires fresh consumer verification.
 - **Scope:** all pure-copy FourStep transposes through Leto, removing Apollo's private copy kernels and scalar trait hook; Hermes owns register movement. No fused multiplication, decomposition, route, normalization, workspace or Apollo API change.
 - **Hypothesis:** square register exchange and a checked canonical dense-copy boundary remove duplicate movement without allocation or an additional full-volume pass. [ADR 0040](docs/adr/0040-leto-fft-layout-ownership.md) owns the design, measured candidate comparison and evidence limits.
 - **Acceptance:** retain production only with unchanged allocation bounds, no executable growth and supported complete-engine improvement without supported regression; preserve the accepted provider ownership decision.
 - **Verification:** generic bitwise tile/tail/offset/canary/special-value oracles, FFT analytical and exact/oversized-workspace cases, full affected gates, unchanged replicated census and matched footprint probe.
 - **Dependencies/closure:** [Leto draft PR 175](https://github.com/ryancinsight/leto/pull/175) supplies candidate `633acb7`; the composed main integration adopts Hermes `b51e873` and removes eight duplicate Mnemosyne packages. Provider-first adoption and the recorded retention criteria remain required; ADR 0040 owns rejected candidate history.
-- **Evidence:** composed lock `D43E38E8` passes 1,458 workspace and 564 release FFT tests, Clippy, public docs, seven smokes and all 20 matched allocation windows. Provider/advisory checks pass; cargo-deny retains 32 configured duplicate warnings. The census is 512 bytes below baseline. [ADR 0040](docs/adr/0040-leto-fft-layout-ownership.md) records exclusions, instruction attribution and historical evidence scopes; no complete-engine performance acceptance yet.
+- **Evidence:** lock `D43E38E8` passes 1,458 workspace/564 release FFT tests, docs, seven smokes, audits and 20 matched allocation windows. The 16-run census passes size (-512 bytes), allocation and timing acceptance: one E-core real-full/262144 gain, no supported regression. [ADR 0040](docs/adr/0040-leto-fft-layout-ownership.md) records confidence bounds, cold-peak variation, remaining competitor gaps and exclusions.
 <a id="apollo-transpose-cache-geometry"></a>
 ## APOLLO-TRANSPOSE-CACHE-GEOMETRY — Model transpose cache-set pressure [patch] — todo
 - Outcome: establish whether power-of-two transpose strides cause cache-set conflicts before changing tile geometry.
