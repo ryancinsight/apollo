@@ -3,6 +3,10 @@
 - **Status:** Accepted
 - **Date:** 2026-07-20
 - **Class:** [minor] [arch]
+- **Revision 2026-09-08:** [Local performance gate](../../backlog.md#apollo-local-performance-gate)
+  removes hosted timing. Controlled local measurements retain the statistical,
+  source/lock preparation, workload, and runtime-budget contracts. CI retains
+  all seven bounded benchmark smokes and the preparation regression tests.
 - **Revision 2026-09-07:** [Baseline preparation](../../backlog.md#apollo-benchmark-baseline-closure)
   preserves each revision's manifests and lockfile. Transplanting the candidate
   provider graph made historical source depend on removed provider APIs.
@@ -48,8 +52,9 @@ Keep report generation and interpretation in `apollo-bench`.
 3. At comparison time, derive simultaneous intervals whose individual
    miscoverage is at most `0.05 / (2m)` for `m` cases and two revisions.
 4. Counterbalance execution as baseline→candidate then candidate→baseline,
-   with both revisions of each matched pair executing on the same hosted
-   runner.
+   with both revisions of each matched pair executing on the same controlled
+   local host. Record processor identity, machine class, concurrent load,
+   executable hashes, and the execution order with the raw observations.
 5. Classify a regression only when the candidate lower bound exceeds the
    baseline upper bound in both execution orders.
 6. Compile both revisions against the candidate `apollo-bench/src` and
@@ -61,22 +66,28 @@ Keep report generation and interpretation in `apollo-bench`.
    repair historical source or replace its dependency graph to pass. Record
    manifest and lock hashes before and after each build, preserving Cargo JSON
    diagnostics and the failing exit status even when compilation fails.
-7. Delete the copied Python comparator. CI orchestration checks out and runs
-   base and candidate revisions separately after the new schema reaches the
-   default branch.
-8. Replicate both orders twice as four independent matched-pair jobs and
-   require the same slowdown in all four comparisons. The resulting evidence
-   is equivalent to the phase-reversed ABBA/BAAB classifier but does not depend
-   on one long runner timeline.
-9. Execute the hosted experiment only when a pull request changes the measured
-   `apollo-fft` local dependency closure, the `apollo-bench` instrument, Cargo
-   resolution, toolchain configuration, or the benchmark workflow itself.
-   Keep this applicability boundary in a dedicated path-filtered workflow.
-10. Compile baseline and candidate artifacts concurrently at the same
-    canonical checkout path on the pinned runner image. Compile only the three
-    benchmark targets consumed by the gate, restore the shared compiler cache,
-    and pass immutable executables and reports between jobs as one-day
-    artifacts.
+7. Use the existing `scripts/prepare_benchmark.py` for source transfer and
+   explicit locked compilation of the selected benchmark targets. Local Linux
+   execution retains the existing `timeout` process boundary: 60 seconds per
+   smoke invocation and 300 seconds per full-measurement binary. A measurement
+   campaign also enforces its committed suite-total bound. `apollo-bench-compare`
+   owns native report interpretation through `compare-replicated-counterbalanced`.
+   Retain commands, source and dependency identities, executable hashes, and raw
+   reports as local evidence attached to the change. Do not substitute the Criterion
+   report comparator for Apollo's native comparison.
+8. Replicate both orders twice as four matched pairs and require the same
+   slowdown in all four comparisons, including the cross-pair spread test.
+   These measurements run under the existing committed runtime budgets on
+   controlled local hardware. They remain invalid when unchanged controls
+   show treatment-correlated drift; counterbalancing does not repair host noise.
+9. CI builds and smoke-runs all seven existing benchmark targets under their
+   existing bounds. It runs the benchmark-preparation regression tests in the
+   normal tooling step. CI does not perform timing measurements or substitute
+   smoke success for the local performance gate.
+10. Keep immutable baseline and candidate executables with their build
+    provenance. Build-path differences are attribution inputs, not production
+    changes. Byte-identical artifacts establish executable identity only; they
+    do not establish throughput, host stability, or a speedup.
 
 The strongest rejected alternative is converting Apollo to Criterion solely
 to reuse the Atlas Criterion comparator. Apollo already owns a cohesive native
@@ -125,8 +136,8 @@ a replacement and the median is no longer bounded by the original range.
 Resistance to unbounded contamination is therefore not invariance under delay.
 
 The comparison makes no cross-machine absolute-performance claim. Base and
-candidate must execute on the same hosted runner within each matched pair.
-Different pairs may use different hosts because the classifier first requires
+candidate must execute on the same controlled local host within each matched
+pair. Different pairs may use different hosts because the classifier first requires
 a slowdown within every pair and then charges the result the complete
 cross-pair spread: the slowest baseline upper bound must remain below the
 fastest candidate lower bound. This rejects overlapping cross-pair envelopes,
@@ -142,8 +153,9 @@ evidence, not a code-regression claim.
 Hosted run `29759735814` falsified counterbalancing alone for a pull request
 that changes `apollo-bench`: compiling each revision against its own harness
 changed the measurement instrument as well as the code under test and produced
-22 apparent regressions. CI therefore holds the candidate harness constant
-across both revision builds and verifies the complete transferred source set.
+22 apparent regressions. Preparation therefore holds the candidate harness
+constant across both revision builds and verifies the complete transferred
+source set.
 The transform implementation and its locked production dependency closure vary
 by revision. This is source-level instrument equality: shared providers such as
 Hermes can have different transitive locked versions, so it does not establish
@@ -163,9 +175,9 @@ revisions to different periods of one runner timeline. Appending BAAB yields
 baseline period positions `{1, 4, 6, 7}` and candidate positions
 `{2, 3, 5, 8}`. Both sets sum to 18 and both squared sets sum to 102, so that
 historical one-runner schedule balanced revision exposure to constant, linear,
-and quadratic period terms. The current topology instead executes those four
-ordered pairs independently. The cross-replication separation requirement makes
-the final regression event a subset of the intersection of the four family-wise
+and quadratic period terms. The four ordered pairs retain this counterbalanced
+comparison contract on controlled local hosts. The cross-replication separation
+requirement makes the final regression event a subset of the intersection of the four family-wise
 comparison events. For the same specified null hypotheses (no population-median
 slowdown in any case), its false-positive probability therefore stays bounded
 by 5% without assuming that the pairs are independent, provided the individual
@@ -186,49 +198,27 @@ transform and locked providers under that shared source instrument; dependency
 changes require attribution alongside transform changes. Instrument manifest
 migrations that cannot compile against both original graphs fail explicitly
 and require a separately specified measurement, without a compatibility shim.
-The initial serialized implementation's eight measurements roughly doubled the empirical lane from
-17 to 34 minutes while remaining inside its 60-minute purpose-specific bound.
-The base/head CI increment cannot precede this schema on the default branch
-because legacy baseline reports do not contain the ordered observations.
 
-Exact-head hosted run `29766127266` passed the eight-run source-identical
-canary and replicated comparison in 31 minutes. This validates the operational
-orchestration on one hosted runner; it does not establish immunity to arbitrary
-non-polynomial runner noise.
+## Rejected hosted venue
 
-Later run `29788350487` supplied that overturning evidence: base `07462c0` and
-candidate `b825fcb` had an empty diff over the complete measured source,
-instrument, Cargo-resolution, and toolchain closure, but the hosted job still
-reported two candidate slowdowns in all four comparisons. The smallest
-separations were one to nine nanoseconds. A statistical gate cannot attribute
-that source-identical variation to the release-only candidate. The experiment
-therefore runs only for changes capable of altering its measured binary or
-instrument. This changes the gate's applicability, not its workloads,
-thresholds, sample count, or regression classifier.
+Hosted execution repeatedly falsified causal attribution even after the
+statistical controls above. Run `29788350487` reported two supported slowdowns
+with an empty measured source, instrument, dependency, and toolchain diff.
+Path filtering reduced unnecessary runs but did not make shared runners a
+controlled performance instrument. Run `29946182469` further exposed absolute
+checkout paths as a source of binary differences for source-identical inputs.
 
-Exact-head run `29790606838` passed the dedicated workflow's eight
-measurements and replicated comparison in 31 minutes 38 seconds after the path
-split. This validates the benchmark-relevant workflow path; path-selection
-regressions establish release-only exclusion separately.
+Canonical-path compilation in run `29955865616` produced byte-identical
+baseline/candidate executables, yet timing labels still separated one case by
+1–7 ns in all four comparisons. Run `29956621276` subsequently accepted the
+identical-artifact result without timing. These results support retaining
+artifact provenance and rejecting hosted timing; they do not prove local host
+stability or transfer historical measurements to a changed executable.
+Successful hosted orchestration is historical operational evidence only.
+The superseded hosted workflow is removed; its source preparation regressions
+remain in normal CI, and local performance acceptance remains required.
 
-Hosted PR #64 run `29946182469` supplied a second source-identical
-falsification. The base and merge candidate had identical production source,
-manifest, lock, and toolchain inputs, but compiling them in separate absolute
-checkout paths produced persistent f32 N=1031 automatic and forced-Bluestein
-separations in all four comparisons. The experiment cannot attribute that
-binary-level variation to production code.
-
-The workflow therefore compiles baseline and candidate concurrently in
-separate jobs that use the same canonical absolute checkout path, then measures
-the immutable artifacts directly.
-The candidate `apollo-bench` source and benchmark entry points remain pinned
-into the baseline before compilation. SHA-256 identities are emitted as build
-evidence; source-identical revisions can now reuse or reproduce the same
-artifact rather than differing because their checkout paths differ. When all
-three executable pairs are byte-identical, binary identity is conclusive that
-the candidate cannot cause a performance regression, so the empirical
-comparison is inapplicable. Differing executable pairs retain the complete
-replicated measurement and comparison path.
+## Instrument and runtime bounds
 
 The measurement workload uses geometric representatives for each distinct
 dispatch regime instead of dense linear size sweeps. Every retained case still
@@ -257,22 +247,6 @@ respectively. After the correction, all seven custom bench binaries complete
 their unoptimized smoke gate in 26.8 seconds after linking, while the unchanged
 100-observation optimized engine census completes in 5.57 seconds.
 
-Hosted run `29955865616` confirmed that canonical-path compilation produced
-byte-identical SHA-256 values for every base/candidate executable. It then
-falsified empirical comparison of identical binaries by labeling one side
-candidate: `composite_radix_order/r4_2_5_5_f64/200` separated by 1-7 ns in all
-four comparisons. Binary identity is stronger causal evidence than sampled
-timing for this boundary; the identity exit prevents arbitrary labels from
-turning runner noise into a production-regression claim.
-
-Exact-head hosted run `29956621276` validated the final decision path. It
-compiled both revisions at the canonical path, passed all three smoke
-executions, proved all three executable pairs byte-identical, and accepted the
-identity evidence in 4 minutes. Exact-head CI run `29956621235` independently
-passed the Rust workspace and Python binding jobs. This is static causal
-evidence for the unchanged artifacts, not empirical performance evidence; any
-differing executable pair enters the complete four-matched-pair experiment.
-
 ## Revision: 2026-09-06
 
 The post-PR #342 N=101 f32 investigation adds a test-only attribution probe
@@ -294,22 +268,6 @@ source was `ECE113F38F534B416876F4A1CFBE91B7D8CB6F068A1A609FCE28A450C65F2B37`
 at measurement time. The result does not establish cross-run, cross-host, or
 frequency-state invariance; it is bounded to the queried processors and this
 optimized executable.
-
-## Revision: 2026-08-26
-
-The post-PR #127 hosted run completed in 12 minutes 36 seconds: 7 minutes
-11 seconds compiled seven FFT benchmark targets even though the gate retained
-three, and 5 minutes 4 seconds serialized all eight complete measurements.
-It also exposed integer-nanosecond normalization as a resolution defect for
-sub-2 ns kernels. The workflow now compiles only the consumed targets, restores
-compiler artifacts, builds baseline and candidate concurrently at the same
-canonical path, and executes the four matched pairs concurrently. Each pair
-still keeps both revisions on one runner in the prescribed order, and the
-comparator, 100 observations, confidence construction, workloads, and
-four-comparison acceptance rule are unchanged. The operational critical path
-is therefore one artifact build plus one matched pair instead of two builds
-plus eight serialized measurements; hosted validation of the resulting bound
-remains the delivery gate for this revision.
 
 ## Revision: 2026-08-31
 
