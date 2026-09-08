@@ -11,12 +11,14 @@
 - **Verification:** bounded registry/admission tests, owner-thread and wake/shutdown tests, existing Loom suites, unchanged Apollo worker and 20-window footprint oracles, locked API and controlled performance checks.
 
 <a id="apollo-local-performance-gate"></a>
-## APOLLO-LOCAL-PERFORMANCE-GATE — Keep timing on controlled local hosts [patch] [arch] — todo
+## APOLLO-LOCAL-PERFORMANCE-GATE — Keep timing on controlled local hosts [patch] [arch] — in-progress
+- **Integrator:** codex/api_evidence; **last-update:** 2026-09-08; shared branch `codex/four-step-square-movement`.
+- **Lease:** codex/api_evidence `.github/workflows/benchmark-regression.yml`, `.github/workflows/ci.yml`, `docs/adr/0036-native-benchmark-regression-oracle.md`; 2026-09-08T14:57Z.
 - **Outcome:** replace hosted timing jobs with local retained-binary comparisons; CI retains the existing seven bounded benchmark smokes.
 - **Scope:** benchmark workflow and ADR 0036; preserve instruments, statistical comparison, workloads, source/lock identity checks and smoke coverage.
 - **Acceptance:** no hosted timing execution; local baseline/candidate preparation and comparison remain reproducible under the existing bounds; workflow and documentation checks pass.
 - **Evidence:** `.github/workflows/benchmark-regression.yml` still runs timing on pull requests and dispatch, contrary to the current local-only measurement policy. `ci.yml` already runs all seven smokes.
-- **Dependencies:** complete the active provider-adoption gate before publishing its successor; reuse the existing preparation and bounded native runner.
+- **Dependencies:** current-provider correctness, API, memory and timing acceptance is collected; reuse the existing preparation and bounded native runner.
 - **Decision:** revise [ADR 0036](docs/adr/0036-native-benchmark-regression-oracle.md) for the execution venue without changing its statistical contract.
 - **Verification:** workflow lint, script regression tests, existing seven-smoke collection and unchanged local census acceptance.
 
