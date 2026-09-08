@@ -10,11 +10,22 @@
 - **Outcome:** [ADR 0052](docs/adr/0052-twiddless-fft-evaluation.md) Rejected: the published schedule is 2.4 to 10.7 times slower than Apollo's plan at every measured length except 65536 and slower than its in-place isomorph wherever intervals separate; evidence `../../output/apollo-twiddless/`.
 
 <a id="apollo-n65536-four-step-scalar-loss"></a>
-## APOLLO-N65536-FOUR-STEP-SCALAR-LOSS — Attribute the N=65536 four-step loss to a scalar radix-2 [patch] — todo
+## APOLLO-N65536-FOUR-STEP-SCALAR-LOSS — Remove the generic four-step loss from 65536 upward [patch] [perf] — review
+- **Integrator:** claude/fable; **last-update:** 2026-09-08; branch `perf/apollo-four-step-large` on lane `D:/atlas/worktrees/apollo-route`; parent [beat the references](#atlas-apollo-beat-the-references).
+- **Cause:** the batched planar driver stopped at `PARALLEL_ROW_THRESHOLD` (65536) on the unmeasured premise that Moirai-threaded scalar rows beat a sequential SIMD pass from there; baseline shows the generic route at 2.7 to 4.5 times RustFFT at 65536 against 1.25 times one length below.
+- **Decision:** [ADR 0053](docs/adr/0053-planar-four-step-domain.md) bounds the planar domain by its own measured constant `PLANAR_MAX_LEN`.
+- **Outcome:** [ADR 0053](docs/adr/0053-planar-four-step-domain.md) Accepted at `PLANAR_MAX_LEN = 2^18`: 65536 falls from 767 to 220 µs (`f64`) and 219 to 108 µs (`f32`); apollo leads PhastFT there at both precisions and RustFFT in `f32`; evidence `../../output/apollo-planar-domain/`.
 - **Evidence:** `benches/twiddless_comparison` run 1 (`../../output/apollo-twiddless/measurement-run1.csv`): Apollo `f64` 1556 µs (interval 1369 to 1741) and `f32` 885 µs against RustFFT 348 µs and 90 µs; the scalar out-of-place radix-2 instrument measures 799 µs `f64` with disjoint intervals. At 16384 Apollo holds 52 µs against 155 µs, so the loss enters with the generic four-step route.
 - **Scope:** re-measure 65536 under the engine census supervisor with replicated counterbalanced runs, then attribute with the retained four-step phase instrument; production change only through its own item.
 - **Acceptance:** either a supported ratio with phase attribution filed as the next vertical item, or the run-1 figure recorded as unsupported with the census evidence.
 - **Dependencies:** [four-step square movement](#apollo-four-step-square-movement). **Verification:** census manifest, comparator intervals, unchanged workload.
+
+<a id="apollo-n1m-planar-crossover"></a>
+## APOLLO-N1M-PLANAR-CROSSOVER — Decide the planar route at 1048576 [patch] [perf] — todo
+- **Evidence:** ADR 0053's three candidate runs at 1048576 are invalid: a tree-mate built and tested in the shared cache and the PhastFT control arm moved from 7748 to 11248–15772 µs between runs. Within-run ratios to PhastFT read 1.25, 1.45 and 1.62 (`f64`) against the generic route's 1.40, so no direction is supported.
+- **Scope:** replicated counterbalanced census at 1048576 and 2097152 on a quiet host (no concurrent cargo; record the process table), planar candidate against the generic route; move `PLANAR_MAX_LEN` only on disjoint intervals. Non-goals: kernel changes.
+- **Acceptance:** either `PLANAR_MAX_LEN` moves to `2^20` with the supported ratio recorded in ADR 0053's revision note, or the generic route is confirmed and the reason (L3 spill of the 16 MiB padded planes is the hypothesis) is recorded.
+- **Dependencies:** none. **Verification:** existing workspace and differential tests at the moved length.
 
 <a id="apollo-sft-sublinear-recovery"></a>
 ## APOLLO-SFT-SUBLINEAR-RECOVERY — Deliver a sublinear sparse recovery route [minor] — todo

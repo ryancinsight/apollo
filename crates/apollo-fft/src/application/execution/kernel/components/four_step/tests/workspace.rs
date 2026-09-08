@@ -7,7 +7,8 @@ use eunomia::{Complex, Complex64};
 #[test]
 fn workspace_covers_padded_planes_and_nested_gathers() {
     // Square planar rows carry eight padding elements. A fused odd split
-    // holds two planes; an unfused odd split holds n gathered inputs plus
+    // holds two planes; past the planar domain the generic square uses one
+    // transpose buffer and an unfused odd split holds n gathered inputs plus
     // one reusable half-transform transpose buffer.
     for (n, expected) in [
         (4, 2 * (2 + 8)),
@@ -15,8 +16,12 @@ fn workspace_covers_padded_planes_and_nested_gathers() {
         (512, 2 * 16 * (16 + 8)),
         (4096, 64 * (64 + 8)),
         (32_768, 2 * 128 * (128 + 8)),
-        (65_536, 65_536),
-        (131_072, 131_072 + 65_536),
+        (65_536, 256 * (256 + 8)),
+        (131_072, 2 * 256 * (256 + 8)),
+        (262_144, 512 * (512 + 8)),
+        (524_288, 2 * 512 * (512 + 8)),
+        (1_048_576, 1_048_576),
+        (2_097_152, 2_097_152 + 1_048_576),
     ] {
         assert_eq!(scratch_len(n), Some(expected), "length {n}");
     }
@@ -73,7 +78,7 @@ fn check_scalar<F>(unit_roundoff: f64)
 where
     F: MixedRadixScalar<Complex = Complex<F>> + From<f32> + Into<f64>,
 {
-    for n in [4, 128, 512, 4096, 65_536, 131_072] {
+    for n in [4, 128, 512, 4096, 65_536, 131_072, 262_144] {
         for extra_workspace in [0, 1] {
             check_impulse::<F, false, false>(n, unit_roundoff, extra_workspace);
             check_impulse::<F, true, false>(n, unit_roundoff, extra_workspace);
