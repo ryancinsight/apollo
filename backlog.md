@@ -394,43 +394,74 @@
 
 <a id="apollo-n64-lane-pass"></a>
 
-## APOLLO-N64-LANE-PASS-2026-09-08 — The N=64 lane pass is the stack's most-executed kernel and is unmeasured in its own regime [minor] [perf] — todo
+## APOLLO-N64-LANE-PASS-2026-09-08 — The N=64 lane pass is the stack's most-executed kernel and is unmeasured in its own regime [minor] [perf] — measured 2026-09-08: shipped arm confirmed; attribution corrected
 
+- **Integrator:** claude-fable-5.1; **branch:** `perf/apollo-n64-lane-pass`,
+  authored through the git API — both apollo trees were held by live peers.
+- **Last-update:** 2026-09-08.
 - **Finding.** Counting from the consumer rather than from the codelet: a 64³
   forward `FftPlan3D` runs three axis passes, each handing the whole volume to
   `lanes::contiguous` / `lanes::execute` with `lane_len = 64`, so it executes
   **3 x 4,096 = 12,288 length-64 codelet calls per transform** — and kwavers'
   PSTD runs a transform pair per timestep. That makes
   `small_pot_inplace_sized::<64>` the most-executed kernel apollo has in the
-  stack's dominant workload.
-- **It is unmeasured in the throughput regime.** `small_pot_arms`
-  (`components/base128/pinned_probe`) covers N = 8, 16 and 32, and its lane
-  arms cover only 8 and 16. The N = 64 arm has a round-trip (latency) reading
-  and no lane reading at all — precisely the gap that let the N = 8 note stand
-  unexamined, now applied to the size that actually runs.
-- **First increment is measurement, not change.** Extend the probe's lane arms
-  to N = 32 and N = 64: `lanes-per-call`, `lanes-framed` and `lanes-scalar` at
-  both core types, with the lane count sized to keep the pass L1-resident and
-  the loop structure matched across arms — a forward pass over every lane, then
-  an inverse pass. Interleaving the two directions per lane gives one arm a
-  serial dependency the others do not have, which invalidated a first attempt
-  at N = 8.
-- **Then the questions it can answer.** Whether the shipped N = 64 arm is the
-  fastest available in the regime it runs; whether the four-step split inside
-  it is sized for throughput rather than latency; and whether the
-  `#[target_feature]` crossing — priced at 41 ps on the performance core and
-  674 ps on the efficiency core by
-  [`#apollo-target-feature-boundary`](#apollo-target-feature-boundary) — is
-  still negligible when it is paid 12,288 times per transform instead of 62
-  times per pass. At the efficiency-core figure that is 8.3 µs per transform,
-  the first shape in this investigation where the crossing might pay for the
-  hoist that item declined.
-- **Acceptance.** N = 32 and N = 64 lane readings recorded at both core types
-  on a quiet host; then either a faster arm or frame placement lands with the
-  value oracles unchanged, or the shipped arm is confirmed optimal in its own
-  regime and that is recorded with the numbers.
-- **Risk / change class:** [minor] [perf]; **dependencies:** an apollo tree —
-  both were held by live peers when this was filed.
+  stack's dominant workload, and until this item it had a round-trip (latency)
+  reading only.
+- **Delivered: `small_pot_arms` lane arms at N = 32 and N = 64.** The per-lane
+  arm is now the dispatch itself — `small_pot_inplace_sized` once per lane, the
+  call `dimension_2d`/`dimension_3d` make — so it covers every size without a
+  per-size entry. The pass is a fixed 1,024 elements (16 KB) rather than a fixed
+  lane count, so no size is charged L2 traffic: a fixed 32 lanes would have put
+  N = 64 at exactly the efficiency core's 32 KB L1D. N = 32 gained a framed
+  entry; N = 64's vector arm is a function nested inside its dispatch arm in
+  `precise.rs` and cannot be reached, so that size has no framed row.
+- **Result at N = 64: the shipped arm wins in its own regime on both cores.**
+  Per lane transform (pass / 32), intervals under 0.5%:
+
+  | core | scalar `dft64_impl` | shipped vector arm | verdict | latency (round trip / 2) |
+  | --- | --- | --- | --- | --- |
+  | performance | 111 ns | **61.6 ns** | vector by 1.80x | 57.8 ns |
+  | efficiency | 158 ns | **132 ns** | vector by 1.20x | 131.6 ns |
+
+  Throughput equals latency at this size on both cores — 61.6 against 57.8,
+  132 against 131.6 — so unlike N = 8 there is no overlap to recover across
+  lanes: a 64-point body already fills the out-of-order window on its own.
+  The regime question that inverted N = 8 does not arise here, and the arm
+  decision stands as made.
+- **The number that matters most is not the verdict but the per-transform
+  cost, because it corrects an attribution made the same day.** kwavers
+  `#kw-fft3d-baseline` measured a 64³ forward at 1.70 ms and extrapolated the
+  codelet share from a length-32 *latency* reading as `N log N` — 43.6 ns,
+  hence "about a third, movement at least two thirds". The direct figure is
+  **61.6 ns on a performance core: 12,288 x 61.6 ns = 0.76 ms, 45% of the
+  transform.** On an efficiency core it is 132 ns, 1.62 ms — essentially the
+  whole 1.70 ms, which cannot be literally true for a pass moirai spreads across
+  both core types, but says the efficiency-core lanes are the tail. The honest
+  statement replaces the old one: **the codelet share is 45% or more depending
+  on the core mix, and the axis-pass transposes are not unambiguously the larger
+  lever.** The extrapolation was wrong in the direction the kwavers entry
+  warned it might be, only more so. Corrected there in the same delivery.
+- **The efficiency core at N = 64 is 2.1x slower than the performance core**
+  (132 against 61.6 ns) — a wider gap than at 8, 16 or 32. In a 64³ pass that
+  moirai distributes across core types, the efficiency-core lanes finish last,
+  and that ratio, not the codelet, may be what bounds the pass. Worth its own
+  measurement of `moirai`'s lane assignment against core type; filed as a
+  question inside this entry rather than an item, since a pass-level profile is
+  the instrument it needs and none exists yet.
+- **Rows not reported.** The performance-core lane rows at N = 8, 16 and 32
+  ran under a peer's concurrent build in the same tree and carry 10–30%
+  intervals; discarded. The N = 8 and 16 performance-core readings from
+  2026-09-06 stand (`#apollo-n8-regime-split`). The efficiency-core rows are
+  tight throughout and agree with the earlier ones: N = 8 scalar leads by 1.37x
+  at throughput (was 1.11x at 32 lanes), N = 16 vector by 1.03x, N = 32 vector
+  by 1.21x; the frame crossing at N = 32 on the efficiency core is at the noise
+  floor (framed 0.3% *slower*), and at N = 16 reads 619 ps, matching the 674 ps
+  recorded by `#apollo-target-feature-boundary`.
+- **Acceptance.** Lane readings at N = 32 and N = 64 recorded at both core
+  types: met. A faster arm or frame placement: not warranted — the shipped arm
+  is confirmed faster than its scalar fallback in both regimes on both cores,
+  and the crossing is negligible at these sizes. Recorded with the numbers.
+- **Risk / change class:** [minor] [perf]; **dependencies:** none.
 - **Parent:** [`#atlas-apollo-beat-the-references`](#atlas-apollo-beat-the-references).
 
 <a id="apollo-n16-f64-gap"></a>

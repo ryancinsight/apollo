@@ -248,17 +248,6 @@ pub(crate) unsafe fn framed_lane_pass<const INVERSE: bool, const NORMALIZE: bool
     }
 }
 
-/// The same lane pass, crossing the boundary once per lane.
-///
-/// This is what `dimension_2d` does today: one plan, called per lane, each
-/// call re-entering the vector frame.
-#[cfg(all(test, windows, target_arch = "x86_64"))]
-pub(crate) fn per_lane_pass<const INVERSE: bool, const NORMALIZE: bool>(data: &mut [Complex64]) {
-    for lane in data.chunks_exact_mut(16) {
-        try_inplace::<INVERSE, NORMALIZE>(lane);
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::Complex64;
