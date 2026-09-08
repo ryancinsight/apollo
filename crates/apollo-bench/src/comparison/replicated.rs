@@ -90,11 +90,13 @@ impl ReplicatedCounterbalancedComparisonSummary {
 ///
 /// Each baseline/candidate pair executes on one host in its prescribed order;
 /// pairs may execute independently. A case regresses only when all four
-/// base/head comparisons support it *and* the slowest candidate median bound
-/// still clears the fastest baseline median bound across all four. The second
+/// base/head comparisons support it *and* the fastest candidate lower bound
+/// still exceeds the slowest baseline upper bound across all four. The second
 /// requirement charges the decision the between-pair spread; a per-run median
 /// interval bounds only that run's sampling noise, so four intervals can
 /// separate together when execution regimes differ between pairs.
+/// This comparison does not establish host stability or causal attribution;
+/// the caller must reject measurements invalidated by control drift.
 ///
 /// # Errors
 ///
@@ -200,8 +202,8 @@ pub fn compare_replicated_counterbalanced_report_directories(
 /// move a case's median far beyond that interval when the kernel occupies a
 /// different load-duration regime from run to run, and four such intervals can
 /// then separate together without any code change. Charging the decision the
-/// slowest candidate bound against the fastest baseline bound, across every
-/// replication and execution order, spends the between-run evidence the four
+/// fastest candidate lower bound against the slowest baseline upper bound,
+/// across every replication and execution order, spends the evidence the four
 /// blocks were executed to obtain instead of discarding it.
 fn separated_across_replications(
     first: &CounterbalancedBenchmarkRegression,

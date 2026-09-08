@@ -54,7 +54,11 @@ impl BenchmarkRecord {
         self.median_upper_picoseconds
     }
 
-    /// Returns the exact median interval coverage in parts per million.
+    /// Returns the binomial median coverage lower bound, floored to parts per million.
+    ///
+    /// The bound assumes independent observations from one fixed distribution.
+    /// Discrete timing ties can make actual coverage larger; serial dependence
+    /// or drift can invalidate the bound. This value does not assess host stability.
     ///
     /// Smoke records return zero because one executable observation does not
     /// support population-median inference.

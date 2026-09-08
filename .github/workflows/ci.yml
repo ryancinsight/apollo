@@ -89,6 +89,8 @@ jobs:
           cargo metadata --locked --no-deps --format-version=1 \
             | jq -r '.packages[].name' \
             | while read -r package; do cargo fmt -p "$package" -- --check; done
+      - name: Tooling regression tests
+        run: python3 -m unittest discover -s scripts/tests -v
       - name: SAFETY ratchet
         run: python scripts/safety_ratchet.py check
       - name: Clippy

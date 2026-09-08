@@ -2,8 +2,7 @@
 
 ## codex/root — current execution
 
-- [ ] [Transpose ISA contract](backlog.md#apollo-transpose-isa-contract): preserve AVX support with bitwise lane movement and checked matrix extents; test both scalar implementations against the direct transpose oracle.
-- [ ] [Transpose ISA contract](backlog.md#apollo-transpose-isa-contract): verify debug/release behavior, emitted ISA, allocation and unchanged complete-transform measurements; integrate the independently reviewed correction.
+- [ ] [FourStep movement](backlog.md#apollo-four-step-square-movement): verify current Leto/Moirai 0.6 adoption against the accepted `3f1c0db7` evidence, then complete provider-first delivery.
 
 ## ATLAS-APOLLO-REAL-HALF-THROUGHPUT-2026-09-01 [perf] — Codex
 
@@ -702,8 +701,8 @@ now resolves it, and the outside-overlay workspace check passes.
       bounds, and removal of an unrelated lint suppression.
 - [x] Repair standalone `--locked` resolution with a workspace-scoped lock
       refresh that removes the obsolete Cutile/CUDA dependency closure.
-- [x] Pin the candidate lock as part of the fixed A/B benchmark instrument so
-      the baseline and candidate compile against one provider graph.
+- [x] Replace candidate-lock transplantation with revision-owned locked graphs
+      under [baseline preparation](backlog.md#apollo-benchmark-baseline-closure).
 - [x] Pass exact-head hosted CI and merge: source `33a40bcee4532c9c1a03fee7cef2d852b3419090`,
       merge `db2186650f2e0889555120e6a1491ad93897409e`, hosted Rust/Python run
       `30685185998`, and benchmark run `30685185999`.

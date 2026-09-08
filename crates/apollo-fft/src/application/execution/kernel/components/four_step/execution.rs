@@ -1,6 +1,6 @@
-use super::transpose::transpose_square_inplace;
 use super::PARALLEL_ROW_THRESHOLD;
 use crate::application::execution::kernel::mixed_radix::MixedRadixScalar;
+use crate::application::execution::layout::{layout_failure, square_failure};
 
 /// In-place four-step FFT for large power-of-two lengths.
 /// One radix-2 decimation in time, delegating both halves to the route above.
@@ -112,6 +112,9 @@ fn decompose<F: MixedRadixScalar<Complex = eunomia::Complex<F>>, const INVERSE: 
     let n1 = 1usize << k1; // number of columns / length of second set of FFTs
     let n2 = 1usize << k2; // number of rows / length of first set of FFTs
 
+    #[cfg(test)]
+    super::profile::observe_buffers(data, scratch, n1, n2);
+
     let tw1 = if INVERSE {
         F::cached_twiddle_inv(n1)
     } else {
@@ -131,7 +134,12 @@ fn decompose<F: MixedRadixScalar<Complex = eunomia::Complex<F>>, const INVERSE: 
     // Step 1: transpose data (N1 × N2 logical) → scratch (N2 × N1 layout).
     #[cfg(test)]
     let phase = super::profile::Phase::FirstTranspose.start();
-    F::transpose_matrix(data, scratch, n1, n2);
+    if let Err(error) = F::transpose_complex_matrices(data, scratch, 1, n1, n2) {
+        layout_failure(
+            error,
+            "invariant: FourStep factors exactly cover source and transpose workspace",
+        );
+    }
     #[cfg(test)]
     drop(phase);
 
@@ -216,9 +224,19 @@ fn decompose<F: MixedRadixScalar<Complex = eunomia::Complex<F>>, const INVERSE: 
     #[cfg(test)]
     let phase = super::profile::Phase::FinalTranspose.start();
     if n1 == n2 {
-        transpose_square_inplace(data, n1);
+        if let Err(error) = F::transpose_square_inplace(data, n1) {
+            square_failure(
+                error,
+                "invariant: equal FourStep factors exactly cover the transform storage",
+            );
+        }
     } else {
-        F::transpose_matrix(data, scratch, n1, n2);
+        if let Err(error) = F::transpose_complex_matrices(data, scratch, 1, n1, n2) {
+            layout_failure(
+                error,
+                "invariant: FourStep factors exactly cover source and transpose workspace",
+            );
+        }
         data.copy_from_slice(scratch);
     }
     #[cfg(test)]

@@ -1,27 +1,74 @@
 # Apollo Backlog
 
+<a id="apollo-worker-hook-admission"></a>
+## APOLLO-WORKER-HOOK-ADMISSION — Preserve reclamation under bounded registration [patch] [arch] — todo
+- **Outcome:** adopt the current first-party runtime with explicit owner-thread idle semantics and recoverable registration exhaustion.
+- **Scope:** Moirai idle-hook provider and Apollo registration/reclamation boundary; no kernel arithmetic, workload reduction or silent loss of cleanup.
+- **Evidence:** pinned `83aa411` has 16 non-deduplicating slots; Apollo's `ensure_thread_local_scratch_hook_registered` expects capacity without reserving it. The observer also assumes hook order that the provider documentation disclaims.
+- **Acceptance:** full registration rejects without mutation or panic in fallible consumer paths; ordered snapshot semantics or order-independent observation; every participating owner releases idle scratch while active borrows and later reuse remain valid.
+- **Dependencies:** complete current layout adoption; implement the missing hook in current Moirai before removing Apollo's direct pin. Reconcile Moirai's landed Mnemosyne quarantine separately.
+- **Decision:** specify publication, reentrant registration, panic, wake and shutdown behavior in the owning runtime ADR; synchronize Apollo's lifecycle contract.
+- **Verification:** bounded registry/admission tests, owner-thread and wake/shutdown tests, existing Loom suites, unchanged Apollo worker and 20-window footprint oracles, locked API and controlled performance checks.
+
+<a id="apollo-local-performance-gate"></a>
+## APOLLO-LOCAL-PERFORMANCE-GATE — Keep timing on controlled local hosts [patch] [arch] — review
+- **Integrator:** codex/api_evidence; **last-update:** 2026-09-08; shared branch `codex/four-step-square-movement`.
+- **Outcome:** replace hosted timing jobs with local retained-binary comparisons; CI retains the existing seven bounded benchmark smokes.
+- **Scope:** benchmark workflow and ADR 0036; preserve instruments, statistical comparison, workloads, source/lock identity checks and smoke coverage.
+- **Acceptance:** no hosted timing execution; local baseline/candidate preparation and comparison remain reproducible under the existing bounds; workflow and documentation checks pass.
+- **Evidence:** hosted timing workflow removed; all seven smoke targets and their bounds remain unchanged. Preparation tests: ten pass, one symlink-privilege skip; four workflows parse and 19 shell steps pass syntax checks. Actionlint is unavailable.
+- **Dependencies:** current-provider correctness, API, memory and timing acceptance is collected; reuse the existing preparation and bounded native runner.
+- **Decision:** revise [ADR 0036](docs/adr/0036-native-benchmark-regression-oracle.md) for the execution venue without changing its statistical contract.
+- **Verification:** workflow lint, script regression tests, existing seven-smoke collection and unchanged local census acceptance.
+
+<a id="apollo-codelet-experiment-boundary"></a>
+## APOLLO-CODELET-EXPERIMENT-BOUNDARY — Keep rejected codelet routes in tests [patch] — done
+- `7013ea96` removes unused production selection and confines split phases to tests, net -71 lines against incoming main. [Gates](../../output/apollo-square-transpose/integration/merge-gates/collection.json) pass 126 debug/126 release cases; [code evidence](../../output/apollo-square-transpose/integration/merge-gates/census/pe-code-identity.json) preserves instructions and a 512-byte size margin, without a timing claim.
+
+<a id="apollo-benchmark-baseline-closure"></a>
+## APOLLO-BENCHMARK-BASELINE-CLOSURE — Preserve benchmark dependency closures [patch] — done
+- `b944eef5` preserves each revision's production files and lock while checking shared instrument sources; ten filesystem tests pass. Exact `09325122` baseline and `7013ea96` candidate compile all three unchanged release targets under separate original locks and enforced 600-second build bounds: [baseline](../../output/apollo-square-transpose/integration/baseline-preparation/baseline-build-collection.json), [candidate](../../output/apollo-square-transpose/integration/merge-gates/collection.json). No timing or transitive machine-code equality claim.
+
+<a id="apollo-semver-locked-inputs"></a>
+## APOLLO-SEMVER-LOCKED-INPUTS — Compare APIs without provider re-resolution [patch] — todo
+- **Scope:** consume an Atlas-owned exact-lock API generation path; no duplicate member SemVer implementation.
+- **Failure:** [run 34078401287](https://github.com/ryancinsight/apollo/actions/runs/34078401287) fails resolving `moirai-runtime = ^0.5.0` before comparison; the checker discards generated locks.
+- **Acceptance:** both API artifacts identify their source revision, committed lock and toolchain; compilation failure remains distinct from a detected API break.
+- **Verification:** exact-lock artifact generation and comparator tests in the shared owner, then the Apollo caller. Local FFT JSON comparison already passes 223 checks; it does not cover every published workspace package.
+- **Dependencies:** Atlas shared workflow capability and caller pin update; root publication remains subject to the previously recorded shared-tree branch approval.
+
+<a id="apollo-private-rustdoc-links"></a>
+## APOLLO-PRIVATE-RUSTDOC-LINKS — Repair private FFT documentation references [patch] — done
+- `cf1ddd68` corrects 20 private documentation warnings in 12 FFT files with no non-documentation changes; warning-denied private/hidden Rustdoc passes on nightly-2026-08-01 with lock `F9720DFD…2E90197`; [gate evidence](../../output/apollo-square-transpose/integration/final-gates/documentation-closure.json).
+
 <a id="apollo-transpose-isa-contract"></a>
-## APOLLO-TRANSPOSE-ISA-CONTRACT — Preserve AVX transpose preconditions [patch] — review
-
-- **Integrator:** codex/root; **contributor:** workspace_tests; **last-update:** 2026-09-06; branch `codex/cuda-provider-boundary`.
-- **Scope:** `mixed_radix/scalar/transpose.rs` and direct tests; no public API, FFT arithmetic, route, dependency or benchmark change.
-- **Evidence:** the old AVX-dispatched reduced transpose calls three AVX2-contract intrinsics. This is a feature-contract defect, not an observed illegal instruction.
-- **Outcome:** AVX bit-preserving shuffles and checked borrowed matrix slices preserve empty matrices and suffixes. Rust's existing CPU/OS detection cache replaces two local caches.
-- **Acceptance:** generic bitwise oracles cover both precisions, tiles/tails, offsets, special payloads and invalid extents with no writes on rejection. Final codegen requires only AVX; independent source reviews pass.
-- **Verification:** source `F6A0A42F`, census `FB06C558`; Clippy, 1442 all-feature workspace tests, 552 all-feature release FFT tests, doctests, warning-denied rustdoc, safety ratchet and six bounded FFT benchmark smokes pass.
-- **Measurement:** executable -512 bytes / sections -952 bytes; all 20 matched first/warm allocation windows equal baseline, every measured warm window zero. Unchanged 16-run census supports no gain or regression in either core class, not equivalence or f32 performance.
-- **Artifacts:** `../../output/apollo-transpose-isa/` retains source/binary hashes, native samples, counterbalanced comparisons, codegen and allocation evidence under Atlas retention. Baseline is restored production from `1de31e26`.
-- **Limits:** no AVX-only physical host or instrumented unsafe execution; [coverage blocker](#apollo-workspace-instrumented-verification) remains. Endpoint load cannot observe transient processes or inaccessible CPU totals; caller affinity does not pin Moirai workers.
+## APOLLO-TRANSPOSE-ISA-CONTRACT — Preserve AVX transpose preconditions [patch] — done
+- [PR 337](https://github.com/ryancinsight/apollo/pull/337), `9da1f9f7`; AVX-contract correction passes native/analytical/allocation/size gates and [landed CI](https://github.com/ryancinsight/apollo/actions/runs/34015129487). Census binary -512 bytes; unchanged comparison supports neither gain nor regression.
+<a id="apollo-required-merge-checks"></a>
+## APOLLO-REQUIRED-MERGE-CHECKS — Enforce core verification before automatic merge [patch] — done
+- Installed and read back on 2026-09-06: strict `rust workspace` and `Lockfile integrity / Lockfile integrity` requirements on `main`, with automatic merge enabled. The prior unprotected branch let `--auto` merge before hosted checks completed; [landed CI](https://github.com/ryancinsight/apollo/actions/runs/34015129487) subsequently passes.
 <a id="apollo-four-step-square-movement"></a>
-## APOLLO-FOUR-STEP-SQUARE-MOVEMENT — Specify provider-owned in-place square movement [patch] — in-progress
+## APOLLO-FOUR-STEP-SQUARE-MOVEMENT — Consolidate provider-owned FourStep movement [patch] — review
 
-- **Integrator:** codex/root; **last-update:** 2026-09-06; investigation proceeds while the ISA item awaits final gates.
-- **Scope:** final square transpose in `components/four_step/transpose.rs`, Leto layout operations and locked Hermes register movement; no fused multiplication, decomposition, route, normalization or workspace change.
-- **Evidence:** prior N=262144 diagnostic attributes about 460 microseconds to final transpose (about 18% of instrumented execution); this is historical attribution, not a fresh baseline or cache-miss measurement. The current scalar pair-swap loop does not stage tile pairs as its comment claims.
-- **Hypothesis:** load symmetric off-diagonal tiles, transpose complete complex representations through Hermes and exchange contiguous register rows in Leto without allocating or adding a full-volume pass.
-- **Acceptance:** resolve exact register/borrow contracts, update [ADR 0040](docs/adr/0040-leto-fft-layout-ownership.md) with the bounded design and dependency closure, then instantiate provider/consumer verification. Retain production only with unchanged allocation bounds, no executable growth and supported complete-engine improvement without supported regression.
-- **Verification:** independent bitwise tile/tail/offset/sentinel/special-value oracles for both precisions; FFT analytical and workspace suites; unchanged replicated census and matched footprint probe. Reject an unsupported candidate.
-- **Dependencies:** [ISA correction](#apollo-transpose-isa-contract); Leto's canonical checkout is behind fetched origin and must reconcile before provider edits. Hermes `ComplexReg::transpose_square` is verified at locked `e6e08211`; Leto currently exposes out-of-place batched movement only.
+- **Integrator:** codex/01a07370; **last-update:** 2026-09-08; branch `codex/four-step-square-movement`.
+- **Build coordination:** current-provider gates and the independent 16-run census are collected; no owned native process remains. API, allocation, size and timing acceptance pass at `54e8f2d8`.
+- **Scope:** all pure-copy FourStep transposes through Leto, removing Apollo's private copy kernels and scalar trait hook; Hermes owns register movement. No fused multiplication, decomposition, route, normalization, workspace or Apollo API change.
+- **Hypothesis:** square register exchange and a checked canonical dense-copy boundary remove duplicate movement without allocation or an additional full-volume pass. [ADR 0040](docs/adr/0040-leto-fft-layout-ownership.md) owns the design, measured candidate comparison and evidence limits.
+- **Acceptance:** retain production only with unchanged allocation bounds, no executable growth and supported complete-engine improvement without supported regression; preserve the accepted provider ownership decision.
+- **Verification:** generic bitwise tile/tail/offset/canary/special-value oracles, FFT analytical and exact/oversized-workspace cases, full affected gates, unchanged replicated census and matched footprint probe.
+- **Dependencies/closure:** [Leto PR 175](https://github.com/ryancinsight/leto/pull/175) merges as `d9ca3252`. Joint adoption with Hephaestus `f6f55f45` resolves Moirai 0.6; direct `83aa411` preserves worker-idle reclamation. Lock `0ECC20AB` passes [consumer gates](../../output/apollo-square-transpose/integration/provider-adoption/collection.json) and [independent timing acceptance](../../output/apollo-square-transpose/integration/provider-adoption/census/independent-audit.json).
+- **Evidence:** current lock `0ECC20AB` passes 1,458 workspace/564 release FFT tests, docs, seven smokes, audits, 223 API checks and 20 matched allocation windows. The 16-run census passes size (-512 bytes), allocation and timing acceptance: one E-core real-half/262144 gain, no supported regression. [ADR 0040](docs/adr/0040-leto-fft-layout-ownership.md) records confidence bounds, cold-peak variation, remaining competitor gaps and exclusions.
+<a id="apollo-transpose-cache-geometry"></a>
+## APOLLO-TRANSPOSE-CACHE-GEOMETRY — Model transpose cache-set pressure [patch] — todo
+- Outcome: establish whether power-of-two transpose strides cause cache-set conflicts before changing tile geometry.
+- Scope: existing dense-copy/FourStep traversals and first-party topology; no FFT arithmetic, workload or tolerance changes.
+- Evidence: retained `output/apollo-cache-tile/cache-topology.txt` identifies P CPU 1 L1D 48 KiB and E CPU 3 L1D 32 KiB, both 64-byte lines. Capacity alone does not establish conflict misses.
+- Investigation: [source model](../../output/apollo-square-transpose/tile-diagnostics/restoration/cache-investigation.md) gives row strides 4,096/8,192 bytes and orbit `S/gcd(S,stride/64)`. Both alias identically when `S=64`; this alone cannot explain a size-specific slowdown. Tile footprint is not per-set reuse distance.
+- Next evidence: unchanged phase attribution and actual buffer geometry before API or tile changes. Windows exposes generic CacheMisses/LLC counters, but the queried list does not identify L1D replacement or DTLB events; establish event semantics before attribution.
+- Dependency: Themis `3540692` omits associativity; adding it to exhaustive public `CacheLevel` is breaking. Implement typed metadata upstream only if validated production selection requires it, rather than expanding the API for observation alone.
+- Acceptance: verify per-core geometry, derive address-to-set occupancy with stated mapping assumptions, and confirm or reject the conflict hypothesis with controlled counters or an independently checked cache model.
+- Verification: unchanged complete-engine census and allocation windows for any resulting production change; no inferred cache-miss or performance claim from capacity alone.
+- Risk/class: performance-model investigation; source analysis and counter availability are established, with no measured miss or new speedup claim. Production work follows closure of the active movement increment.
 <a id="apollo-four-step-cache-tile"></a>
 ## APOLLO-FOUR-STEP-CACHE-TILE — Evaluate cache-line fused traversal [patch] — done
 - [PR 336](https://github.com/ryancinsight/apollo/pull/336), `7976ab49`; [Rejected ADR 0050](docs/adr/0050-cache-line-fused-traversal.md) records no supported performance gain, executable/cold-allocation growth and restored production.
@@ -191,36 +238,19 @@
 - **Parent:** [`#atlas-apollo-beat-the-references`](#atlas-apollo-beat-the-references).
 
 <a id="apollo-python-release-crlf"></a>
-
-## APOLLO-PYTHON-RELEASE-CRLF-2026-09-06 — `python-release.yml` landed as a CRLF blob [patch] — todo
-
-- **Finding.** `.gitattributes` declares `*.yml text eol=lf`, and every other
-  workflow stores LF. `python-release.yml` on `main` stores CRLF as of
-  [PR 339](https://github.com/ryancinsight/apollo/pull/339) (`0917cacd`), so
-  every Windows checkout reports the file dirty the moment git touches it and
-  every writer is offered a 58-line whole-file diff they did not make.
-- **Not fixed in passing.** The repair is one `git add --renormalize`, but it
-  is a whole-file diff in a workflow a peer landed minutes ago; it belongs in
-  its own [patch] rather than inside an unrelated change, which is how it was
-  found ([`#apollo-n8-f64-gap`](#apollo-n8-f64-gap)'s merge surfaced it).
-- **Acceptance.** `git ls-files --eol .github/workflows` reports `w/lf i/lf`
-  for every entry, and a fresh Windows clone has a clean tree. Worth checking
-  the same command across all workflows in the same change — one CRLF blob
-  landing after a fleet-wide normalization suggests the writer's client, not a
-  one-off.
-- **Risk / change class:** [patch]; **dependencies:** none.
+## APOLLO-PYTHON-RELEASE-CRLF-2026-09-06 — Normalize the Python release workflow [patch] — done
+- `df5447d0` repairs the CRLF blob introduced by `0917cacd`; merged-index inspection reports `i/lf w/lf` for all five workflows under the committed `*.yml text eol=lf` policy. No fresh-clone check is claimed.
 
 <a id="apollo-target-feature-boundary"></a>
 
-## APOLLO-TARGET-FEATURE-BOUNDARY-2026-09-06 — The vector frame's call boundary costs 0.04 ns [patch] [perf] — declined 2026-09-06 on measurement
+## APOLLO-TARGET-FEATURE-BOUNDARY-2026-09-06 — Measure vector frame crossings [patch] [perf] — done
 
 - **Premise.** `n8`/`n16`/`n32`'s `vector_arm` carries
   `#[target_feature(enable = "avx,fma")]` and its callers do not, so it can
   never inline and every codelet call is a real call through memory —
   `dimension_2d`'s axis passes re-cross it once per lane. Hoisting the frame
   around the lane loop would remove all but one crossing per pass.
-- **Declined: the crossing costs about 0.04 ns and there is nothing to
-  recover.** A lane pass of 32 lanes, forward then inverse, is 64 crossings
+- **Outcome: hoist rejected on the measured lane mix.** A lane pass of 32 lanes, forward then inverse, is 64 crossings
   called per lane against 2 framed — 62 removed. Performance core, intervals
   0.05% wide, reproduced across runs:
 
@@ -251,6 +281,19 @@
 - **Consequence for [`#apollo-n8-f64-gap`](#apollo-n8-f64-gap):** none by this
   route — but the lane arms built to settle this turned up something else, in
   [`#apollo-n8-regime-split`](#apollo-n8-regime-split).
+- **Earlier controls and limits:** capability detection and the feature-frame
+  crossing are different costs. A standalone 1-D plan makes one codelet call;
+  moving that frame cannot remove a second crossing. The multi-axis paths call
+  through `lanes::contiguous` / `lanes::execute` once per lane.
+- **Superseded fused proxy:** scalar / vector-direct / vector-fused timings
+  were 11.84 / 15.31 / 12.82 ns at N = 8 and 27.84 / 22.51 / 21.33 ns at
+  N = 16. The 2.49 / 1.18 ns differences include same-buffer register reuse;
+  their disjoint performance-core intervals (0.3%, below 0.5%) do not isolate
+  call overhead. The resulting N = 8 reopening and multi-lane projections
+  are withdrawn. Three earlier efficiency-core attempts varied by 5x under
+  concurrent builds (one interval 175–532 ns) and were discarded; the later
+  independent-lane measurements above govern the decision.
+- **Parent:** [`#atlas-apollo-beat-the-references`](#atlas-apollo-beat-the-references).
 
 <a id="apollo-n8-regime-split"></a>
 
@@ -339,206 +382,6 @@
   regime and that is recorded with the numbers.
 - **Risk / change class:** [minor] [perf]; **dependencies:** an apollo tree —
   both were held by live peers when this was filed.
-- **Parent:** [`#atlas-apollo-beat-the-references`](#atlas-apollo-beat-the-references).
-
-<a id="apollo-python-release-crlf"></a>
-
-## APOLLO-PYTHON-RELEASE-CRLF-2026-09-06 — `python-release.yml` landed as a CRLF blob [patch] — todo
-
-- **Finding.** `.gitattributes` declares `*.yml text eol=lf`, and every other
-  workflow stores LF. `python-release.yml` on `main` stores CRLF as of
-  [PR 339](https://github.com/ryancinsight/apollo/pull/339) (`0917cacd`), so
-  every Windows checkout reports the file dirty the moment git touches it and
-  every writer is offered a 58-line whole-file diff they did not make.
-- **Not fixed in passing.** The repair is one `git add --renormalize`, but it
-  is a whole-file diff in a workflow a peer landed minutes ago; it belongs in
-  its own [patch] rather than inside an unrelated change, which is how it was
-  found ([`#apollo-n8-f64-gap`](#apollo-n8-f64-gap)'s merge surfaced it).
-- **Acceptance.** `git ls-files --eol .github/workflows` reports `w/lf i/lf`
-  for every entry, and a fresh Windows clone has a clean tree. Worth checking
-  the same command across all workflows in the same change — one CRLF blob
-  landing after a fleet-wide normalization suggests the writer's client, not a
-  one-off.
-- **Risk / change class:** [patch]; **dependencies:** none.
-
-<a id="apollo-target-feature-boundary"></a>
-
-## APOLLO-TARGET-FEATURE-BOUNDARY-2026-09-06 — Every lane of a multi-dimensional pass re-crosses into the vector frame [patch] [perf] — measured 2026-09-06; hoist not yet built
-
-- **Finding.** `n8`/`n16`/`n32`'s `vector_arm` carries
-  `#[target_feature(enable = "avx,fma")]`; `try_inplace` and everything above it
-  do not. A `#[target_feature]` function cannot be inlined into a caller that
-  lacks the feature, so reaching the codelet is a real call with its operands
-  going through memory, where the scalar codelet it competes with inlines into
-  the dispatcher and keeps them in registers.
-- **Measured cost of one crossing.** `small_pot_arms` gained a `vector-fused`
-  arm running the round trip's two transforms inside one target-feature frame
-  instead of two, so it pays one crossing where `vector-direct` pays two.
-  Performance core, round trip, intervals disjoint and under 0.5% wide:
-
-  | N | scalar | vector-direct (2 crossings) | vector-fused (1 crossing) | one crossing |
-  | --- | --- | --- | --- | --- |
-  | 8 | 11.84 ns | 15.31 | 12.82 | **2.49 ns** |
-  | 16 | 27.84 ns | 22.51 | 21.33 | **1.18 ns** |
-
-- **Where that is recoverable, corrected.** An earlier revision of this entry
-  read the N = 8 row as a reason to re-open
-  [`#apollo-n8-f64-gap`](#apollo-n8-f64-gap). That was wrong, and the call
-  graph says why: a standalone 1-D length-8 transform makes exactly **one**
-  codelet call, so it pays exactly one crossing whether the frame sits at the
-  codelet or at the plan entry. There is no second crossing to remove, and
-  hoisting alone changes nothing for it. N = 8 stays closed on its own
-  measurement.
-- **The multi-lane paths are the real subject.** `dimension_2d`'s
-  `axis0_pass_complex`/`axis1_pass_complex` build one `StaticFftPlan1D` and
-  then call it once per lane through `lanes::contiguous`/`lanes::execute`;
-  `dimension_3d` does the same per axis. Every one of those lanes re-crosses
-  the boundary today. An 8 x 8 forward is sixteen lane transforms, so at the
-  N = 8 figure the crossings alone are on the order of 37 ns against a pass
-  whose codelet work is roughly 138 ns — the reason to build the hoist, and
-  the place to measure it.
-- **The per-crossing figure is an upper bound, deliberately.** The fused arm's
-  two transforms share one buffer, so once inlined the compiler may hold it in
-  registers between them and skip a store-reload that a lane loop, whose
-  consecutive calls carry different data, would still pay. The hoist itself is
-  what separates the crossing from that reuse, which is why the next increment
-  is the change rather than a better probe.
-- **Efficiency core not measured.** Three attempts ran under a peer's
-  concurrent build and varied by 5x run to run (one interval spanned
-  175-532 ns), beyond any derived noise bound, so they are discarded rather
-  than reported with a caveat. The performance-core figures above were taken in
-  the quiet window of the same runs and are 0.3% wide.
-- **Next increment.** Give the lane loop a target-feature frame: probe the
-  capability once in the axis pass, then run the whole `lanes::` loop inside an
-  entry carrying the feature, so each lane's codelet inlines instead of being
-  called. The scalar fallback path stays as it is, which is what keeps the
-  dispatcher callable on hosts without AVX — the design question the previous
-  revision of this entry left open, answered by putting the branch at the pass
-  rather than at the plan.
-- **Acceptance.** A 2-D pass at N = 8, 16 and 32 measures faster on both core
-  types with the lane count held fixed, value oracles unchanged; or the frame
-  is shown not to reach the lane loop and that is recorded with the reason.
-- **Risk / change class:** [patch] [perf]; **dependencies:** none.
-- **Parent:** [`#atlas-apollo-beat-the-references`](#atlas-apollo-beat-the-references).
-
-<a id="apollo-python-release-crlf"></a>
-
-## APOLLO-PYTHON-RELEASE-CRLF-2026-09-06 — `python-release.yml` landed as a CRLF blob [patch] — todo
-
-- **Finding.** `.gitattributes` declares `*.yml text eol=lf`, and every other
-  workflow stores LF. `python-release.yml` on `main` stores CRLF as of
-  [PR 339](https://github.com/ryancinsight/apollo/pull/339) (`0917cacd`), so
-  every Windows checkout reports the file dirty the moment git touches it and
-  every writer is offered a 58-line whole-file diff they did not make.
-- **Not fixed in passing.** The repair is one `git add --renormalize`, but it
-  is a whole-file diff in a workflow a peer landed minutes ago; it belongs in
-  its own [patch] rather than inside an unrelated change, which is how it was
-  found ([`#apollo-n8-f64-gap`](#apollo-n8-f64-gap)'s merge surfaced it).
-- **Acceptance.** `git ls-files --eol .github/workflows` reports `w/lf i/lf`
-  for every entry, and a fresh Windows clone has a clean tree. Worth checking
-  the same command across all workflows in the same change — one CRLF blob
-  landing after a fleet-wide normalization suggests the writer's client, not a
-  one-off.
-- **Risk / change class:** [patch]; **dependencies:** none.
-
-<a id="apollo-target-feature-boundary"></a>
-
-## APOLLO-TARGET-FEATURE-BOUNDARY-2026-09-06 — Vector codelets cannot inline into their dispatcher [patch] [perf] — measured 2026-09-06; hoist not yet designed
-
-- **Finding.** `n8`/`n16`/`n32`'s `vector_arm` carries
-  `#[target_feature(enable = "avx,fma")]`; `try_inplace` and everything above it
-  do not. A `#[target_feature]` function cannot be inlined into a caller that
-  lacks the feature, so every small-power-of-two transform crosses a real call
-  with its operands going through memory, where the scalar codelet it competes
-  with inlines into the dispatcher and keeps them in registers.
-- **Measured, and it is not small.** `small_pot_arms` gained a `vector-fused`
-  arm that runs the round trip's two transforms inside one target-feature frame
-  instead of two, so it pays one crossing where `vector-direct` pays two.
-  Performance core, round trip, intervals disjoint and under 0.5% wide:
-
-  | N | scalar | vector-direct (2 crossings) | vector-fused (1 crossing) | one crossing |
-  | --- | --- | --- | --- | --- |
-  | 8 | 11.84 ns | 15.31 | 12.82 | **2.49 ns** |
-  | 16 | 27.84 ns | 22.51 | 21.33 | **1.18 ns** |
-
-- **What that implies, stated as the bound it is.** At N = 8 the vector arm
-  trails the scalar codelet by 3.47 ns and one crossing accounts for 2.49 of
-  it, so a fully hoisted frame would bring the two within about 8% and could
-  reverse [`#apollo-n8-f64-gap`](#apollo-n8-f64-gap) — which is why that item
-  closed on the note being *confirmed*, not on the construction being wrong.
-  N = 16 is already shipped and would gain about 4% on top of its existing win.
-- **The number is an upper bound, deliberately.** The fused arm's two
-  transforms share one buffer, so once inlined the compiler may hold it in
-  registers between them and skip a store-reload that production — consecutive
-  codelet calls on different data — would still pay. Separating that from the
-  crossing itself needs the hoist, not a better probe, so the next increment is
-  the change rather than another measurement.
-- **Efficiency core not measured.** Three attempts ran under a peer's
-  concurrent build; the readings varied by 5x run to run (one interval spanned
-  175-532 ns), which is beyond any derived noise bound and is discarded rather
-  than reported with a caveat. The performance-core figures above were taken in
-  the quiet window of the same runs and are 0.3% wide.
-- **Next increment: hoist the frame.** Establish the capability once at the
-  plan or route boundary and call a target-feature entry that covers the loop,
-  rather than per transform. Design question to settle first — where the frame
-  can live without making the dispatcher itself target-feature-gated, since
-  `small_pot_inplace_sized` is reached from generic scalar code that must stay
-  callable on hosts without AVX.
-- **Acceptance.** A hoisted frame lands with a measured win at N = 16 and 32 on
-  both core types, and N = 8 is re-decided on the same instrument; or the
-  design is shown to be unreachable and that is recorded with the reason.
-- **Risk / change class:** [patch] [perf]; **dependencies:** none.
-- **Parent:** [`#atlas-apollo-beat-the-references`](#atlas-apollo-beat-the-references).
-
-<a id="apollo-python-release-crlf"></a>
-
-## APOLLO-PYTHON-RELEASE-CRLF-2026-09-06 — `python-release.yml` landed as a CRLF blob [patch] — todo
-
-- **Finding.** `.gitattributes` declares `*.yml text eol=lf`, and every other
-  workflow stores LF. `python-release.yml` on `main` stores CRLF as of
-  [PR 339](https://github.com/ryancinsight/apollo/pull/339) (`0917cacd`), so
-  every Windows checkout reports the file dirty the moment git touches it and
-  every writer is offered a 58-line whole-file diff they did not make.
-- **Not fixed in passing.** The repair is one `git add --renormalize`, but it
-  is a whole-file diff in a workflow a peer landed minutes ago; it belongs in
-  its own [patch] rather than inside an unrelated change, which is how it was
-  found ([`#apollo-n8-f64-gap`](#apollo-n8-f64-gap)'s merge surfaced it).
-- **Acceptance.** `git ls-files --eol .github/workflows` reports `w/lf i/lf`
-  for every entry, and a fresh Windows clone has a clean tree. Worth checking
-  the same command across all workflows in the same change — one CRLF blob
-  landing after a fleet-wide normalization suggests the writer's client, not a
-  one-off.
-- **Risk / change class:** [patch]; **dependencies:** none.
-
-<a id="apollo-target-feature-boundary"></a>
-
-## APOLLO-TARGET-FEATURE-BOUNDARY-2026-09-06 — Vector codelets cannot inline into their dispatcher [patch] [perf] — todo
-
-- **Finding.** `n8`/`n16`/`n32`'s `vector_arm` carries
-  `#[target_feature(enable = "avx,fma")]`; `try_inplace` and everything above it
-  do not. A `#[target_feature]` function cannot be inlined into a caller that
-  lacks the feature, so every small-power-of-two transform crosses a real call
-  with its operands going through memory, where the scalar codelet it competes
-  with inlines into the dispatcher and keeps them in registers.
-- **Why this item exists separately.**
-  [`#apollo-n8-f64-gap`](#apollo-n8-f64-gap) measured the capability *check* at
-  approximately zero, but its `vector-direct` control does not carry the
-  attribute either, so it never removed the boundary — the boundary's cost is
-  unmeasured, not measured-small.
-- **First increment is a measurement, not a change.** Add an arm to
-  `small_pot_arms` that runs the whole round trip inside one
-  `#[target_feature]` frame, so the two transforms inline together and one
-  crossing is paid instead of two. The difference against the dispatched arm is
-  the per-crossing cost.
-- **If it is material,** the change is to hoist the frame: establish the
-  capability once at the plan or route boundary and call a target-feature entry
-  that covers the loop, rather than per transform. That would move N = 16 and
-  N = 32 as well as re-opening N = 8, which is why it is worth measuring before
-  designing.
-- **Acceptance.** The per-crossing cost is measured and recorded; either a
-  hoisted frame lands with a measured win at N = 16 and 32, or the cost is
-  recorded as immaterial and the arms stand as they are.
-- **Risk / change class:** [patch] [perf]; **dependencies:** none.
 - **Parent:** [`#atlas-apollo-beat-the-references`](#atlas-apollo-beat-the-references).
 
 <a id="apollo-n16-f64-gap"></a>
@@ -703,16 +546,19 @@
 <a id="atlas-apollo-n32-f64-liveness"></a>
 ## ATLAS-APOLLO-N32-F64-LIVENESS-2026-09-04 — Bound the n=32 codelet and reduce register pressure [patch] [perf] — in-progress
 
-- **Integrator:** codex; **branch:** `perf/apollo-n32-f64-liveness`; **last-update:** 2026-09-04.
+- **Integrator:** codex/n32; **branch:** `codex/four-step-square-movement` (shared tree); **last-update:** 2026-09-06. Resume landed safety work with a read-only dispatch/codegen investigation; FourStep peer regions remain untouched.
 - **Scope:** n=32 AVX2 codelet, its caller and regression tests; shared radix-8 changes require n=64 controls. No provider migration or public API change.
 - **Acceptance:** fixed-size safe entry; all direction/normalization and guarded-span tests pass; retain a schedule change only with counterbalanced same-host improvement and unchanged n=16/64 controls.
 - **Safety increment verified:** array borrow establishes 32 initialized values; guarded tests cover both AVX alignment residues, assert host dispatch and reject NaN output. Release run `75c7d45c-4e69-4023-bbf7-30840d0020d6` passes 526/526 enabled tests (29 ignored instruments); format, all-target Clippy, doctest, rustdoc and safety ratchet pass. All three emitted AVX bodies match the entry baseline after label normalization.
 - **Retained schedule:** 64-double stack intermediate, radix-4 stages then two radix-8 halves. Prior experiments are archived in `0a3a7a8f:backlog.md`; their cross-run absolute timings are not regression evidence.
 - **Pair-emission experiment:** rejected for unestablished benefit, not proven slowdown. Nine focused and 526 enabled CPU library tests pass; the callback inlines and reduces forward/normalized frames 872→840 bytes.
-- **Counterbalanced n=32 medians [interval], ns:** baseline-first 26.803 [26.757,26.870]→26.950 [26.490,29.773]; candidate-first 26.371 [26.323,26.561]→27.179 [27.110,27.366]. Intervals are descriptive 96.48%; the native comparator also flags the unchanged RustFFT control.
+- **Invalid timing evidence:** candidate/control runs exhibit unchanged-control drift and are discarded as optimization evidence. Raw samples remain diagnostic artifacts only; no speedup or slowdown is established.
 - **Evidence:** immutable executable hashes, source/assembly snapshots and raw 100-sample CSVs under `../../output/fft-liveness/`, governed by Atlas output retention. Intel Core Ultra 9 285K, CPU 1 performance core, Rust 1.97.0 MSVC. No Miri/sanitizer or cross-target coverage is claimed.
-- **Measurement correction:** historical RustFFT 15.28 ns is not a portable acceptance threshold. Compare matched executables in both orders; control drift prevents causal timing attribution.
-- **Reference-control diagnosis:** four runs of the same executable (`CD7EC903C67500A29804DE90A4B94C3D665D466BA91F743203685D8FB105720F`, same pinned core and inputs) produce n=32 Apollo medians 26.539, 26.212, 17.001, 17.138 ns; RustFFT 22.543, 29.248, 20.025, 16.853 ns. Source changes cannot explain this variation; the single-set comparator still flags RustFFT, so this is not a sufficient regression gate. Raw samples are in `../../output/fft-liveness/control/`; planner-state versus host-regime attribution is the next bounded investigation, begun at the public plan constructor and execution entry.
+- **Dispatch audit:** at `530ea774`, n=32 bypasses tiny dispatch (2/3/4), uses fixed plan executors and selects AVX/FMA through a cached capability predicate. No runtime autotuning, input-dependent route or plan twiddle-cache read occurs. Independent source review agrees; this rules out plan reselection with unchanged capabilities, not host or loader effects.
+- **Instruction analysis:** `../../output/fft-liveness/scheduling-model.json` records all three historical baseline/candidate bodies under LLVM 22.1.8. Forward instructions 284→282, normalized inverse 302→299, inverse 282→283. `arrowlake-s` uses `AlderlakePModel`; changing the alias assumption reverses estimated cycle directions. These are static/model observations, not counters or performance acceptance.
+- **Estimator correction:** [ADR 0036](docs/adr/0036-native-benchmark-regression-oracle.md) owns bound direction, replacement resistance, sampling assumptions and conservative integer coverage. Four deterministic tests added; no estimator, classifier or timing workload changes. On base `3b7311fa`, locked standalone entry run `faf96172-7df0-49e5-bdc2-b6e4683f0bff` passes 44; delivered-diff run `c8c24271-4582-4a14-91e6-33a2c3ffc042` passes 48. Three doctests, format, all-target Clippy and rustdoc pass; independent source review has no remaining blocker. Cargo.lock is unchanged.
+- **Counter constraint:** Windows inventory exposes retired instructions and cycles, not established process attribution. [EnableThreadProfiling](https://learn.microsoft.com/en-us/windows/win32/api/winbase/nf-winbase-enablethreadprofiling#remarks) requires driver-configured global counters; an unconfigured requested counter returns zero. No driver or trace starts. `QueryThreadCycleTime` is not retired-instruction evidence.
+- **Profiling environment:** Ubuntu is registered, but `wsl -d Ubuntu --exec sh -lc ...` fails before executing with `Wsl/Service/CreateInstance/MountDisk/HCS/ERROR_PATH_NOT_FOUND` for its registered `ext4.vhdx` (2026-09-06). Only the Linux profiling substep is blocked; re-open on restored WSL disk access or another verified local profiling environment. No WSL registration or user data changes.
 - **Residual stash:** `cfe297dde91870790a57e02aaec5925eb91b4f9b` contains old Mnemosyne manifest work; preserved after the tool safety review refused deletion.
 
 ## ATLAS-APOLLO-SIXTEEN-BLOCK-SPLIT-2026-09-03 — n = 2048 is a local peak, and the split does not reach it [minor] [perf] — done 2026-09-03 (falsified) <a id="atlas-apollo-sixteen-block-split"></a>
@@ -877,7 +723,31 @@
   skipped; doctests, warning-denied Clippy/rustdoc, formatting, and lockfile
   checks passed. Provider-owned transitive edges remain documented.
 
-## ATLAS-APOLLO-F32-NONPOT-WIDTH-2026-09-03 — f32 loses far more than f64 on non-power-of-two lengths [patch] [perf] — todo <a id="atlas-apollo-f32-nonpot-width"></a>
+## ATLAS-APOLLO-F32-NONPOT-WIDTH-2026-09-03 — f32 loses far more than f64 on non-power-of-two lengths [patch] [perf] — in-progress <a id="atlas-apollo-f32-nonpot-width"></a>
+
+- **Integrator:** codex/root; **last-update:** 2026-09-06; shared branch
+  `codex/four-step-square-movement`.
+- **Lease:** N=101 composition probe and `components/rader/convolution.rs`;
+  no edits to the staged FourStep, codelet, or comparator work.
+- **Acceptance for this increment:** same-run, queried-class pinned attribution
+  separates plan/Rader dispatch, half-cyclic twiddle phases, and phase-memory
+  traffic at N=101 f32; retain only a production change that improves N=101
+  and does not regress the matched prime/composite controls.
+- **Composition attribution, 2026-09-06:** the retained ignored probe is
+  source-hashed `ECE113F38F534B416876F4A1CFBE91B7D8CB6F068A1A609FCE28A450C65F2B37`
+  and passed locked `bench-quick` Nextest run
+  `49557df2-bee5-475c-b8dc-b759471676f1`. It binds queried CPU 1
+  (performance) and CPU 3 (efficiency), reports the real N=101 production
+  composition plus local split/recombine twiddle controls, and includes N=97,
+  113 and 151 composition controls in the same run. N=101 composition medians
+  were 751,120 ps (P) and 761,862 ps (E); split/recombine twiddle deltas were
+  separately visible, with the full-slice barriers retained.
+- **Decision:** static-radix and fixed-short-50 production candidates are
+  rejected. Counterbalanced target runs made fixed-short-50 slower by about
+  6--7% on the performance core and mixed on the efficiency core; the
+  static-radix route was slower on the target and controls. No production
+  convolution change is retained. The shipped path remains the pre-probe
+  implementation; this increment retains only the attribution instrument.
 
 - **Finding.** On composite and prime lengths apollo's `f32` is much further
   behind RustFFT than its `f64` is, which inverts the expected order: AVX2
@@ -1903,8 +1773,8 @@
 
 ## ✅ ATLAS-APOLLO-BENCH-BASELINE-LOCKFILE-2026-09-01 — Benchmark baseline leg cannot build a PR that adds a dependency [patch] — done 2026-09-02
 
-- **Delivered:** the baseline leg's `cargo bench` resolves against the seeded candidate lock without `--locked`; the candidate leg keeps it. `0abf3b83` had already cured the workspace-inherited half (the pin script); the residual class was a dependency added to a crate the step never copies (`apollo-bench`, `apollo-fft-macros`, `apollo-leto-interop` — the non-consumers of `apollo-fft`).
-- **Evidence:** local reproduction on two `git archive` copies of `main` — a `[dev-dependencies] anyhow` edge on `apollo-leto-interop` in the candidate, the step's own copy/pin sequence applied to the baseline: `cargo metadata --locked` exits 101 ("cannot update the lock file"), unlocked resolution succeeds and the lock delta is that single edge, every version unchanged. The gate run on this PR exercises the changed leg end to end.
+- Historical unlocked candidate-lock transplantation is superseded by [revision-owned locked baseline preparation](#apollo-benchmark-baseline-closure). Its dependency-added fixture established lock inconsistency, not compatibility of historical production source with candidate provider APIs.
+
 
 ## ATLAS-APOLLO-INVERTED-CORE-CLAIMS-2026-09-01 — Sweep merged claims resting on the swapped core labels [patch] — done 2026-09-01
 
@@ -2698,10 +2568,6 @@
   complex-to-real untangle needs. Remaining scope is therefore the inverse
   untangle (own derivation + tests) and the multi-dimensional real axes.
 
-## ATLAS-APOLLO-ENGINE-CENSUS-2026-08-25 — Commit the four-engine census as an instrument [patch] — done 2026-08-25 (see above)
-
-- Closed; the delivery record is in git history.
-
 ## ATLAS-APOLLO-POT-PASS-REDUCTION-2026-08-25 — Cut the pass count over the data [arch] — closed 2026-08-25, premise false
 
 - **Outcome:** the power-of-two f64 transform moves less memory, which is the
@@ -3112,9 +2978,9 @@
   `30684880039` exposed a stale committed dependency closure under `--locked`;
   a workspace-scoped standalone refresh now passes locked metadata resolution
   and removes the obsolete Cutile/CUDA graph. Benchmark run `30685105852`
-  then exposed that its fixed-instrument A/B job retained the baseline lock;
-  the job now pins the candidate lock alongside the candidate benchmark source
-  so both revisions use one provider graph. SemVer remains unavailable before
+  prompted candidate-lock transplantation, now superseded by
+  [revision-owned locked baseline preparation](#apollo-benchmark-baseline-closure).
+  Instrument source equality does not imply provider equality. SemVer remains unavailable before
   API comparison because dependency rustdoc processes fail in `naga`,
   `apollo-fft-macros`, and `hermes-simd-intrinsics`; this is a verification
   environment residual, not an unverified implementation claim. Registry

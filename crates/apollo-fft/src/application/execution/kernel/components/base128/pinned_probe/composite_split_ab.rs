@@ -2,21 +2,15 @@
 //! scalar, per length.
 #![cfg(test)]
 //!
-//! The split variant (transform phases in `#[inline(never)]` helpers) exists
-//! so a scalar whose fused monomorphization explodes into spills — the
-//! documented f32 LLVM codegen asymmetry — can take the split instead. A
-//! cross-run ratio cannot decide the routing: f64's absolute level drifts
-//! tens of percent between runs on this machine, which once drew the
-//! `use_generated_codelet_plan` boundary on flattened numbers. This probe
-//! times all four arms (f64/fused, f64/split, f32/fused, f32/split) inside
-//! one pinned run per core, so the per-length routing decision is a
-//! within-run quantity.
+//! Test-only phase helpers preserve the fused codelet's arithmetic while
+//! changing its inlining boundaries. Production retains the fused body.
+//! All four arms (f64/fused, f64/split, f32/fused, f32/split) run inside one
+//! pinned run per core, so comparisons use the same run's measurements.
 //!
 //! Each split arm replicates the exact phase order and buffer roles of the
-//! equivalence test in `composite::split_equivalence_tests`: Good–Thomas
+//! equivalence test in `composite::tests`: Good–Thomas
 //! (n=50) runs rows → cols through scratch, Cooley–Tukey (n=144) runs
-//! cols → rows. A divergence there would time a different computation than
-//! the one the dispatch would route to.
+//! cols → rows. A divergence there would invalidate the phase comparison.
 
 use crate::application::execution::kernel::components::winograd::composite::split::{
     dft144_cols, dft144_rows, dft50_cols, dft50_rows,

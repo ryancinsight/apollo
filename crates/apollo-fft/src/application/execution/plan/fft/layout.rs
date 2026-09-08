@@ -2,9 +2,9 @@ use crate::application::execution::kernel::mixed_radix::scalar::plan_scratch::{
     with_view_staging, PlanScratch,
 };
 use crate::application::execution::kernel::mixed_radix::MixedRadixScalar;
+use crate::application::execution::layout::layout_failure;
 use eunomia::Complex;
 use leto::{ArrayViewMut, Layout};
-use leto_ops::transpose_complex_matrices;
 
 /// Execute against a logical C-order view, staging only non-C-dense inputs.
 ///
@@ -21,18 +21,33 @@ where
     T: Copy + PlanScratch,
 {
     let shape = data.shape();
-    let layout = Layout::c_contiguous(shape)
-        .expect("invariant: validated FFT view shape has a C-order layout");
+    let layout = match Layout::c_contiguous(shape) {
+        Ok(layout) => layout,
+        Err(error) => layout_failure(
+            error,
+            "invariant: validated FFT view shape has a C-order layout",
+        ),
+    };
 
     if let Some(slice) = data.as_mut_slice() {
-        let view = ArrayViewMut::try_new(layout, slice)
-            .expect("invariant: dense FFT view slice matches its logical shape");
+        let view = match ArrayViewMut::try_new(layout, slice) {
+            Ok(view) => view,
+            Err(error) => layout_failure(
+                error,
+                "invariant: dense FFT view slice matches its logical shape",
+            ),
+        };
         return execute(view);
     }
 
     with_view_staging::<T, N, _>(data.size(), |scratch| {
-        let mut staged = ArrayViewMut::try_new(layout, scratch)
-            .expect("invariant: FFT view staging matches its logical shape");
+        let mut staged = match ArrayViewMut::try_new(layout, scratch) {
+            Ok(staged) => staged,
+            Err(error) => layout_failure(
+                error,
+                "invariant: FFT view staging matches its logical shape",
+            ),
+        };
         staged.assign(&data.as_view());
         let result = execute(staged.reborrow());
         data.assign(&staged.as_view());
@@ -54,8 +69,14 @@ pub(super) fn transpose_matrices<T>(
 ) where
     T: MixedRadixScalar<Complex = Complex<T>>,
 {
-    transpose_complex_matrices(source, destination, matrix_count, rows, columns)
-        .expect("invariant: FFT matrix batch satisfies Leto's transpose contract");
+    if let Err(error) =
+        T::transpose_complex_matrices(source, destination, matrix_count, rows, columns)
+    {
+        layout_failure(
+            error,
+            "invariant: FFT matrix batch satisfies Leto's transpose contract",
+        );
+    }
 }
 
 #[cfg(test)]

@@ -16,6 +16,7 @@ use syn::{bracketed, parenthesized, parse_macro_input, Ident, LitInt, Result, To
 
 use crate::cooley_tukey::cooley_tukey_function;
 use crate::good_thomas::good_thomas_function;
+use crate::phase_emission::PhaseEmission;
 use crate::prime_power_winograd::prime_power_winograd_function;
 
 // ── Input parsing ──────────────────────────────────────────────────────────
@@ -141,13 +142,20 @@ pub fn generate_winograd_composites(input: CompilerTokenStream) -> CompilerToken
 
     let inline_tokens = input.inline_attr.to_tokens();
 
+    // Only the measured composite pairs expose test phases. Fixed dispatch
+    // uses the same generators but has no phase comparison consumer.
     let gt_codelets: Vec<_> = input
         .gt_pairs
         .iter()
         .map(|pair| {
             let n1 = pair.n1.base10_parse::<usize>().unwrap();
             let n2 = pair.n2.base10_parse::<usize>().unwrap();
-            good_thomas_function(n1, n2, inline_tokens.clone())
+            let phases = if (n1, n2) == (2, 25) {
+                PhaseEmission::TestOnly
+            } else {
+                PhaseEmission::Omit
+            };
+            good_thomas_function(n1, n2, inline_tokens.clone(), phases)
         })
         .collect();
 
@@ -157,7 +165,12 @@ pub fn generate_winograd_composites(input: CompilerTokenStream) -> CompilerToken
         .map(|pair| {
             let n1 = pair.n1.base10_parse::<usize>().unwrap();
             let n2 = pair.n2.base10_parse::<usize>().unwrap();
-            cooley_tukey_function(n1, n2, inline_tokens.clone())
+            let phases = if (n1, n2) == (12, 12) {
+                PhaseEmission::TestOnly
+            } else {
+                PhaseEmission::Omit
+            };
+            cooley_tukey_function(n1, n2, inline_tokens.clone(), phases)
         })
         .collect();
 

@@ -1,6 +1,6 @@
 //! Phase observations over the existing generic FourStep operation.
 
-use super::{capture, Phase, Total};
+use super::{capture, capture_buffers, observe_buffers, Buffers, Phase, Total};
 use crate::application::execution::kernel::measurement_cores;
 use crate::application::execution::kernel::mixed_radix::MixedRadixScalar;
 use apollo_bench::{BenchmarkCase, BenchmarkConfig, BenchmarkSuite};
@@ -92,7 +92,22 @@ where
         let plan =
             crate::FftPlan1D::<F>::new(crate::Shape1D::new(n).expect("valid profile length"));
         let mut work = source.clone();
-        plan.forward_complex_slice_inplace(&mut work);
+        let ((), buffers) = capture_buffers(|| plan.forward_complex_slice_inplace(&mut work));
+        let side = 1usize << (n.trailing_zeros() / 2);
+        let matrix_bytes = n * size_of::<Complex<F>>();
+        assert_eq!(buffers.data_address, work.as_ptr().addr());
+        assert_eq!(buffers.data_bytes, matrix_bytes);
+        assert_eq!(buffers.scratch_bytes, matrix_bytes);
+        assert_eq!((buffers.rows, buffers.columns), (side, side));
+        assert_eq!(buffers.data_row_bytes, side * size_of::<Complex<F>>());
+        assert_eq!(buffers.scratch_row_bytes, buffers.data_row_bytes);
+        assert!(buffers.data_address.abs_diff(buffers.scratch_address) >= matrix_bytes);
+        println!(
+            "FBUFFER cpu={processor} class={core_class} type={precision} n={n} data_address={:#x} scratch_address={:#x} data_bytes={} scratch_bytes={} rows={} columns={} data_row_bytes={} scratch_row_bytes={}",
+            buffers.data_address, buffers.scratch_address, buffers.data_bytes,
+            buffers.scratch_bytes, buffers.rows, buffers.columns,
+            buffers.data_row_bytes, buffers.scratch_row_bytes,
+        );
         plan.inverse_complex_slice_inplace(&mut work);
         // A forward and normalized inverse each contribute gamma_k ||x||_1,
         // with at most sixteen rounded real operations per radix stage.
@@ -169,4 +184,31 @@ where
         );
     }
     println!("{}", row_suite.report());
+}
+
+#[test]
+fn buffer_observation_preserves_borrowed_extents() {
+    let data = [0u32; 10];
+    let scratch = [0u32; 12];
+    let (result, observed) = capture_buffers(|| {
+        observe_buffers(&data[1..7], &scratch[2..8], 2, 3);
+        7
+    });
+    assert_eq!(result, 7);
+    assert_eq!(
+        observed,
+        Buffers {
+            data_address: data[1..].as_ptr().addr(),
+            scratch_address: scratch[2..].as_ptr().addr(),
+            data_bytes: 24,
+            scratch_bytes: 24,
+            rows: 2,
+            columns: 3,
+            data_row_bytes: 12,
+            scratch_row_bytes: 8,
+        }
+    );
+    let ((), totals, _) = capture(|| observe_buffers(&data, &scratch, 2, 3));
+    assert_eq!(totals.map(|total| total.calls), [0; Phase::ALL.len()]);
+    assert_eq!(super::BUFFERS.get(), None);
 }

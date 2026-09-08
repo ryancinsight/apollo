@@ -174,7 +174,8 @@ where
     }
 }
 
-/// [`stage_triple_lanes`] for `groups == 4` (`src.len() == 8 * radix`), where
+/// [`stage_triple_lanes`](super::triple::stage_triple_lanes) for `groups == 4`
+/// (`src.len() == 8 * radix`), where
 /// each digit's inputs are adjacent and the general kernel's per-group loop
 /// would run entirely in its scalar tail.
 #[inline]

@@ -43,7 +43,7 @@ pub(crate) const ONE_DIMENSIONAL_FOUR_STEP_THRESHOLD: usize = 1 << 8;
 ///
 /// Bounds the intermediate buffer allocated from the thread-local `COMPOSE_ARENA`
 /// in `Compose::compute_group`.  The arena pre-grows to 2 × FUSE_THRESHOLD ×
-/// sizeof(Complex<f64>) ≈ 2 MB on the outermost call and is reused thereafter.
+/// `size_of::<Complex<f64>>()` ≈ 2 MB on the outermost call and is reused thereafter.
 ///
 /// Active chains at FUSE_THRESHOLD = 65536:
 ///

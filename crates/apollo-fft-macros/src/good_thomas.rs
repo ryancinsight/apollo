@@ -6,6 +6,7 @@ use syn::punctuated::Punctuated;
 use syn::{bracketed, parenthesized, parse_macro_input, Ident, LitInt, Result, Token};
 
 use crate::math::mod_inverse_isize;
+use crate::phase_emission::PhaseEmission;
 
 struct GoodThomasInput {
     n1: LitInt,
@@ -101,6 +102,7 @@ pub(crate) fn good_thomas_function(
     n1: usize,
     n2: usize,
     inline_attr: proc_macro2::TokenStream,
+    phases: PhaseEmission,
 ) -> proc_macro2::TokenStream {
     let n = n1 * n2;
 
@@ -234,9 +236,10 @@ pub(crate) fn good_thomas_function(
 
     let rows_fn_name = format_ident!("dft{}_rows", n);
     let cols_fn_name = format_ident!("dft{}_cols", n);
-    let split_variant = quote! {
-        /// Split row phase of [`dft#n_impl`]: the gather plus row short DFTs,
-        /// exactly as the fused body emits them.
+    let split_variant = matches!(phases, PhaseEmission::TestOnly).then(|| quote! {
+        /// Experimental row phase: the gather initializes every scratch
+        /// element before short DFTs follow the fused codelet's order.
+        #[cfg(test)]
         #[allow(unused_variables, unused_mut)]
         #[inline(never)]
         pub(crate) fn #rows_fn_name<
@@ -259,8 +262,9 @@ pub(crate) fn good_thomas_function(
             #transform_rows
         }
 
-        /// Split column phase of [`dft#n_impl`]: column short DFTs and the
-        /// scatter permutation, exactly as the fused body emits them.
+        /// Experimental column phase: short DFTs and the scatter permutation
+        /// consume initialized scratch in the fused codelet's order.
+        #[cfg(test)]
         #[allow(unused_variables, unused_mut)]
         #[inline(never)]
         pub(crate) fn #cols_fn_name<
@@ -274,7 +278,7 @@ pub(crate) fn good_thomas_function(
             let scratch_ptr = scratch.as_mut_ptr() as *mut eunomia::Complex<F>;
             #transform_columns_and_scatter
         }
-    };
+    });
 
     quote! {
         #inline_attr
@@ -282,19 +286,6 @@ pub(crate) fn good_thomas_function(
         pub(crate) fn #fn_name<F: crate::application::execution::kernel::components::winograd::traits::WinogradScalar + crate::application::execution::kernel::mixed_radix::traits::ShortDft<#n1> + crate::application::execution::kernel::mixed_radix::traits::ShortDft<#n2> #scalar_bound, const INVERSE: bool>(
             data: &mut [eunomia::Complex<F>; #n],
         ) {
-            if <F as crate::application::execution::kernel::components::winograd::traits::WinogradScalar>::prefers_split_codelet(#n) {
-                let mut scratch =
-                    std::mem::MaybeUninit::<[eunomia::Complex<F>; #n]>::uninit();
-                #rows_fn_name::<F, INVERSE>(data, &mut scratch);
-                // SAFETY: the row phase above runs the gather first, which
-                // writes every one of the #n scratch slots exactly once
-                // before anything reads them. This is the same initialization
-                // order the fused body relies on; only the inlining boundary
-                // moved.
-                let scratch = unsafe { scratch.assume_init_mut() };
-                #cols_fn_name::<F, INVERSE>(scratch, data);
-                return;
-            }
             #fused_body
         }
 
@@ -313,7 +304,7 @@ pub fn generate_good_thomas_dispatch(input: CompilerTokenStream) -> CompilerToke
 
     let codelets = pairs
         .iter()
-        .map(|&(n1, n2)| good_thomas_function(n1, n2, quote! { #[inline] }));
+        .map(|&(n1, n2)| good_thomas_function(n1, n2, quote! { #[inline] }, PhaseEmission::Omit));
 
     let supported_pairs = pairs.iter().map(|(n1, n2)| quote! { (#n1, #n2) });
     let match_arms = pairs.iter().map(|&(n1, n2)| {

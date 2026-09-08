@@ -351,86 +351,48 @@ apollo_fft_macros::generate_prime_pair_tables![
 mod tests {
     use super::ODD_PRIME_PAIR_SIZES;
     use super::{dft_pair_impl, dft_pair_impl_wide, PrimePairTable};
-    use crate::application::execution::kernel::components::winograd::radix::odd_prime_pair::PrimePairTables;
     use crate::application::execution::kernel::components::winograd::traits::WinogradScalar;
 
-    /// Bit-exact equivalence between the narrow and wide pair kernels at a
-    /// given (n, h): same outputs, not merely close ones.
-    fn check_wide_equivalence<F>(n: usize, h: usize)
+    /// Each output retains its summation order when neighboring bins are paired.
+    fn check_wide_equivalence<F, const N: usize, const H: usize, const INVERSE: bool>()
     where
-        F: WinogradScalar + PrimePairTables + eunomia::NumericElement,
+        F: WinogradScalar + PrimePairTable<N, H>,
     {
-        let build = |phase: f64| -> Vec<eunomia::Complex<F>> {
-            (0..n)
-                .map(|i| {
-                    let x = (i as f64 + phase) * 0.173;
-                    eunomia::Complex::new(
-                        <F as WinogradScalar>::from_precise(x.sin() * 3.0 - 0.5),
-                        <F as WinogradScalar>::from_precise(x.cos() * 1.5),
-                    )
-                })
-                .collect()
-        };
-        macro_rules! run_form {
-            ($func:ident, $n:literal, $h:literal, $buf:ident, $inverse:literal) => {{
-                let arr: &mut [eunomia::Complex<F>; $n] = $buf.as_mut_slice().try_into().unwrap();
-                if $inverse {
-                    $func::<F, $n, $h, true>(
-                        arr,
-                        <F as PrimePairTable<$n, $h>>::cos_table(),
-                        <F as PrimePairTable<$n, $h>>::sin_table(),
-                    );
-                } else {
-                    $func::<F, $n, $h, false>(
-                        arr,
-                        <F as PrimePairTable<$n, $h>>::cos_table(),
-                        <F as PrimePairTable<$n, $h>>::sin_table(),
-                    );
-                }
-            }};
+        let mut narrow = std::array::from_fn(|i| {
+            let x = f64::from(u32::try_from(i).unwrap()) * 0.173;
+            eunomia::Complex::new(
+                F::from_precise(x.sin() * 3.0 - 0.5),
+                F::from_precise(x.cos() * 1.5),
+            )
+        });
+        let mut wide = narrow;
+        dft_pair_impl::<F, N, H, INVERSE>(&mut narrow, F::cos_table(), F::sin_table());
+        dft_pair_impl_wide::<F, N, H, INVERSE>(&mut wide, F::cos_table(), F::sin_table());
+        assert_eq!(
+            narrow, wide,
+            "wide pair form diverged from narrow at n={N}, inverse={INVERSE}"
+        );
+    }
+
+    fn check_wide_sizes<F: WinogradScalar>() {
+        fn direction<F: WinogradScalar, const INVERSE: bool>() {
+            check_wide_equivalence::<F, 11, 5, INVERSE>();
+            check_wide_equivalence::<F, 19, 9, INVERSE>();
+            check_wide_equivalence::<F, 23, 11, INVERSE>();
+            check_wide_equivalence::<F, 29, 14, INVERSE>();
+            check_wide_equivalence::<F, 31, 15, INVERSE>();
         }
-        let (n_lit, h_lit): (usize, usize) = (n, h);
-        let _ = (n_lit, h_lit);
-        for inverse in [false, true] {
-            let mut narrow = build(0.0);
-            let mut wide = build(0.0);
-            match (n, h) {
-                (11, 5) => {
-                    if inverse {
-                        run_form!(dft_pair_impl, 11, 5, narrow, true);
-                        run_form!(dft_pair_impl_wide, 11, 5, wide, true);
-                    } else {
-                        run_form!(dft_pair_impl, 11, 5, narrow, false);
-                        run_form!(dft_pair_impl_wide, 11, 5, wide, false);
-                    }
-                }
-                (19, 9) => {
-                    if inverse {
-                        run_form!(dft_pair_impl, 19, 9, narrow, true);
-                        run_form!(dft_pair_impl_wide, 19, 9, wide, true);
-                    } else {
-                        run_form!(dft_pair_impl, 19, 9, narrow, false);
-                        run_form!(dft_pair_impl_wide, 19, 9, wide, false);
-                    }
-                }
-                _ => unreachable!("test sizes are fixed"),
-            }
-            assert_eq!(
-                narrow, wide,
-                "wide pair form diverged from narrow at n={n}, inverse={inverse}"
-            );
-        }
+        direction::<F, false>();
+        direction::<F, true>();
     }
 
     #[test]
     fn wide_pair_form_matches_narrow_exactly() {
         // The wide form is a scheduling change only: per output bin the
         // summation order (m ascending, base then delta) is the narrow
-        // form's, so the results must be bit-identical, not merely close.
-        check_wide_equivalence::<f32>(11, 5);
-        check_wide_equivalence::<f64>(11, 5);
-        check_wide_equivalence::<f32>(19, 9);
-        check_wide_equivalence::<f64>(19, 9);
+        // form's, so finite results must compare exactly without a tolerance.
+        check_wide_sizes::<f32>();
+        check_wide_sizes::<f64>();
     }
 
     #[test]

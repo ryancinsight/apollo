@@ -1,5 +1,7 @@
 use quote::{format_ident, quote};
 
+use crate::phase_emission::PhaseEmission;
+
 /// Generate a Cooley-Tukey DIT codelet for `n1 × n2`.
 ///
 /// The generated function is `dft{n1*n2}_impl`, const-generic over `INVERSE`.
@@ -10,6 +12,7 @@ pub(crate) fn cooley_tukey_function(
     n1: usize,
     n2: usize,
     inline_attr: proc_macro2::TokenStream,
+    phases: PhaseEmission,
 ) -> proc_macro2::TokenStream {
     let n = n1 * n2;
     let fn_name = format_ident!("dft{}_impl", n);
@@ -89,11 +92,10 @@ pub(crate) fn cooley_tukey_function(
     // boundary moves.
     let col_fn_name = format_ident!("dft{}_cols", n);
     let row_fn_name = format_ident!("dft{}_rows", n);
-    let split_variant = quote! {
-        /// Split column phase of [`dft#n_impl`]: short column DFTs plus
-        /// twiddles into `scratch`, exactly as the fused body emits them.
-        /// `#[inline(never)]` caps the register-pressure envelope; the body
-        /// is otherwise generated from the same blocks as the fused variant.
+    let split_variant = matches!(phases, PhaseEmission::TestOnly).then(|| quote! {
+        /// Experimental column phase: short DFTs and twiddles initialize every
+        /// scratch element in the same order as the fused codelet.
+        #[cfg(test)]
         #[allow(unused_variables, unused_mut)]
         #[inline(never)]
         pub(crate) fn #col_fn_name<
@@ -112,8 +114,9 @@ pub(crate) fn cooley_tukey_function(
             #(#col_blocks)*
         }
 
-        /// Split row phase of [`dft#n_impl`]: row short DFTs and the store
-        /// permutation, exactly as the fused body emits them.
+        /// Experimental row phase: short DFTs and the store permutation
+        /// consume initialized scratch in the fused codelet's order.
+        #[cfg(test)]
         #[allow(unused_variables, unused_mut)]
         #[inline(never)]
         pub(crate) fn #row_fn_name<
@@ -126,7 +129,7 @@ pub(crate) fn cooley_tukey_function(
         ) {
             #(#row_blocks)*
         }
-    };
+    });
 
     let codelet = quote! {
         #inline_attr
@@ -139,19 +142,6 @@ pub(crate) fn cooley_tukey_function(
         >(
             data: &mut [eunomia::Complex<F>; #n],
         ) {
-            if <F as crate::application::execution::kernel::components::winograd::traits::WinogradScalar>::prefers_split_codelet(#n) {
-                let mut scratch =
-                    std::mem::MaybeUninit::<[eunomia::Complex<F>; #n]>::uninit();
-                #col_fn_name::<F, INVERSE>(data, &mut scratch);
-                // SAFETY: the column phase above writes all #n scratch
-                // positions before returning — j in 0..n2 writes
-                // scratch[k1*n2+j] for every k1 in 0..n1, which covers each
-                // index exactly once. This is the same initialization order
-                // the fused body relies on; only the inlining boundary moved.
-                let scratch = unsafe { scratch.assume_init_mut() };
-                #row_fn_name::<F, INVERSE>(scratch, data);
-                return;
-            }
             #fused_body
         }
 

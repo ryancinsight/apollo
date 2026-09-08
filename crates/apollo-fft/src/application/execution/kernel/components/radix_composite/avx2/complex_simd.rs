@@ -73,9 +73,9 @@ pub(super) unsafe fn apply_pointwise_f64(
 
 // ── f32 primitives ──────────────────────────────────────────────────────────
 
-/// Complex multiply for 4 Complex<f32> pairs simultaneously (8 f32 = __m256).
+/// Complex multiply for 4 `Complex<f32>` pairs simultaneously (8 f32 = __m256).
 ///
-/// Layout: [re0,im0,re1,im1,re2,im2,re3,im3].
+/// Layout: `[re0,im0,re1,im1,re2,im2,re3,im3]`.
 /// moveldup/movehdup broadcast re/im; permute(0xB1) swaps re↔im within each pair.
 #[target_feature(enable = "avx2,fma")]
 #[inline]
@@ -86,7 +86,7 @@ pub(super) unsafe fn cmul_f32(a: __m256, b: __m256) -> __m256 {
     _mm256_fmaddsub_ps(a_re, b, _mm256_mul_ps(a_im, b_sw))
 }
 
-/// Multiply 4 Complex<f32> by -i: (re+i·im) → (im, -re).
+/// Multiply 4 `Complex<f32>` by -i: (re+i·im) → (im, -re).
 /// permute(0xB1) swaps pairs → [im,re,...]; XOR negates re positions (1,3,5,7).
 #[target_feature(enable = "avx2,fma")]
 #[inline]
@@ -95,7 +95,7 @@ pub(super) unsafe fn rot_neg_i_f32(v: __m256) -> __m256 {
     _mm256_xor_ps(_mm256_permute_ps(v, 0xB1), sign)
 }
 
-/// Multiply 4 Complex<f32> by +i: (re+i·im) → (-im, re).
+/// Multiply 4 `Complex<f32>` by +i: (re+i·im) → (-im, re).
 /// permute(0xB1) swaps pairs → [im,re,...]; XOR negates im positions (0,2,4,6).
 #[target_feature(enable = "avx2,fma")]
 #[inline]
@@ -139,7 +139,7 @@ pub(super) unsafe fn apply_pointwise_f32(
     }
 }
 
-/// cmul for 2 Complex<f32> via __m128.
+/// cmul for 2 `Complex<f32>` via __m128.
 #[target_feature(enable = "avx2,fma")]
 #[inline]
 pub(super) unsafe fn cmul_f32_128(a: __m128, b: __m128) -> __m128 {

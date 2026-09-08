@@ -1,4 +1,4 @@
-/// Exact symmetric distribution-free interval for a population median.
+/// Symmetric order-statistic interval with binomial coverage bounds.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub(crate) struct MedianInterval {
     pub(crate) lower_picoseconds: u128,
@@ -10,12 +10,18 @@ impl MedianInterval {
     /// Computes the narrowest symmetric interval that controls joint
     /// miscoverage at 5% over `simultaneous_intervals` intervals.
     ///
-    /// For ordered samples `X_(1), …, X_(n)`, the interval
-    /// `[X_(k), X_(n-k+1)]` covers the population median with probability
-    /// `1 - 2 * P(Bin(n, 0.5) <= k - 1)`. Bonferroni's inequality requires
-    /// each interval's miscoverage to at most
+    /// For independent samples from one fixed distribution, sorted as
+    /// `X_(1), …, X_(n)`, the interval `[X_(k), X_(n-k+1)]` covers a
+    /// population median with probability at least
+    /// `1 - 2 * P(Bin(n, 0.5) <= k - 1)`. Equality holds without probability
+    /// mass at the median; discrete timing ties can increase coverage.
+    /// Bonferroni's inequality requires each interval's miscoverage to be at most
     /// `0.05 / simultaneous_intervals`. Apollo fixes `n = 100`, so binomial
-    /// outcome counts fit exactly in `u128`.
+    /// outcome counts fit exactly in `u128`. The reported parts per million
+    /// floor this bound. Dependence between intervals is permitted, but this
+    /// function cannot establish independence or stationarity of observations.
+    /// Sample count and comparison family must be chosen independently of
+    /// observed timings; adaptive selection requires a separate error analysis.
     ///
     /// Median coverage: NIST Technical Note 2119, section 5.3, equations
     /// 30–31: <https://doi.org/10.6028/NIST.TN.2119>.
@@ -138,5 +144,53 @@ mod tests {
     fn empty_samples_or_family_produce_no_interval() {
         assert_eq!(MedianInterval::from_ordered_samples(&[], 1), None);
         assert_eq!(MedianInterval::from_ordered_samples(&[1], 0), None);
+    }
+
+    #[test]
+    fn independent_binary_samples_match_binomial_coverage() {
+        // Six independent fair binary observations have 64 equiprobable
+        // outcomes. The interval covers the population median 1 unless all
+        // observations equal 0 or all equal 2: coverage is exactly 62/64.
+        let mut covering = 0_u32;
+        for outcome in 0..64_u32 {
+            let mut samples: [u128; 6] =
+                core::array::from_fn(|bit| u128::from((outcome >> bit) & 1) * 2);
+            samples.sort_unstable();
+            let interval = MedianInterval::from_ordered_samples(&samples, 1)
+                .expect("invariant: six samples support the one-case interval");
+            covering +=
+                u32::from(interval.lower_picoseconds <= 1 && interval.upper_picoseconds >= 1);
+            assert_eq!(interval.confidence_parts_per_million, 968_750);
+        }
+        assert_eq!(covering, 62);
+    }
+
+    #[test]
+    fn perfectly_dependent_samples_do_not_inherit_binomial_coverage() {
+        // One fair draw copied six times has the same marginal distribution
+        // as above, but neither possible interval covers its median 1.
+        let mut covering = 0_u32;
+        for value in [0, 2] {
+            let interval = MedianInterval::from_ordered_samples(&[value; 6], 1)
+                .expect("invariant: six samples support the one-case interval");
+            assert_eq!(interval.lower_picoseconds, value);
+            assert_eq!(interval.upper_picoseconds, value);
+            covering +=
+                u32::from(interval.lower_picoseconds <= 1 && interval.upper_picoseconds >= 1);
+            assert_eq!(interval.confidence_parts_per_million, 968_750);
+        }
+        assert_eq!(covering, 0);
+    }
+
+    #[test]
+    fn point_mass_retains_a_conservative_coverage_bound() {
+        // A constant population's only sample covers its median with
+        // probability one. Report the floored binomial bound, not that
+        // population-specific coverage, which the observations cannot identify.
+        let interval = MedianInterval::from_ordered_samples(&[17; 100], 1)
+            .expect("invariant: 100 observations support the one-case interval");
+        assert_eq!(interval.lower_picoseconds, 17);
+        assert_eq!(interval.upper_picoseconds, 17);
+        assert_eq!(interval.confidence_parts_per_million, 964_799);
     }
 }

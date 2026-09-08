@@ -25,19 +25,22 @@ fn workspace_covers_padded_planes_and_nested_gathers() {
     }
 }
 
-fn check_impulse<F, const INVERSE: bool, const NORMALIZE: bool>(n: usize, unit_roundoff: f64)
-where
+fn check_impulse<F, const INVERSE: bool, const NORMALIZE: bool>(
+    n: usize,
+    unit_roundoff: f64,
+    extra_workspace: usize,
+) where
     F: MixedRadixScalar<Complex = Complex<F>> + From<f32> + Into<f64>,
 {
     let zero = Complex::new(F::from(0.0), F::from(0.0));
     let mut data = vec![zero; n];
     data[n / 4] = Complex::new(F::from(0.5), F::from(-0.25));
     let required = scratch_len(n).expect("test length admits four-step workspace");
-    // Nonzero scratch exposes read-before-write errors. A sentinel suffix
-    // establishes that execution consumes only its declared workspace.
+    // Nonzero scratch exposes read-before-write errors. The sentinel beyond
+    // the required prefix also checks clipping when the caller lends it.
     let sentinel = Complex::new(F::from(7.0), F::from(-3.0));
     let mut scratch = vec![sentinel; required + 1];
-    four_step_fft::<F, INVERSE, NORMALIZE>(&mut data, &mut scratch[..required]);
+    four_step_fft::<F, INVERSE, NORMALIZE>(&mut data, &mut scratch[..required + extra_workspace]);
 
     let scale = if INVERSE && NORMALIZE {
         f64::from(u32::try_from(n).expect("test length fits u32")).recip()
@@ -71,14 +74,16 @@ where
     F: MixedRadixScalar<Complex = Complex<F>> + From<f32> + Into<f64>,
 {
     for n in [4, 128, 512, 4096, 65_536, 131_072] {
-        check_impulse::<F, false, false>(n, unit_roundoff);
-        check_impulse::<F, true, false>(n, unit_roundoff);
-        check_impulse::<F, true, true>(n, unit_roundoff);
+        for extra_workspace in [0, 1] {
+            check_impulse::<F, false, false>(n, unit_roundoff, extra_workspace);
+            check_impulse::<F, true, false>(n, unit_roundoff, extra_workspace);
+            check_impulse::<F, true, true>(n, unit_roundoff, extra_workspace);
+        }
     }
 }
 
 #[test]
-fn exact_workspaces_preserve_the_impulse_spectrum() {
+fn workspace_extents_preserve_the_impulse_spectrum() {
     check_scalar::<f32>(f64::from(f32::EPSILON) / 2.0);
     check_scalar::<f64>(f64::EPSILON / 2.0);
 }

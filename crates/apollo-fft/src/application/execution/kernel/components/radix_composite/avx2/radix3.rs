@@ -1,6 +1,8 @@
 //! AVX2+FMA flat radix-3 Stockham pass for f64 and f32.
 //!
 //! DFT-3 butterfly (from dft3_impl):
+//!
+//! ```text
 //!   sum = x1 + x2,  diff = x1 - x2
 //!   b0  = x0 + sum
 //!   m0  = x0 + sum * (-0.5)          [fused: fmadd(sum, -0.5, x0)]
@@ -8,6 +10,7 @@
 //!         rot_pos_i(diff) * s        [inverse]
 //!   b1  = m0 + m1
 //!   b2  = m0 - m1
+//! ```
 //!
 //! Cost: 4 real multiplies, 6 complex adds — minimal for radix-3.
 

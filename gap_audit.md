@@ -4586,11 +4586,12 @@ upstream as `HS-FEARLESS-TOKEN-2026-08-25`; the Apollo-side retirement is
   the current first-party Git sources and removes 658 lines of obsolete
   Cutile/CUDA transitive closure; locked metadata resolution passes outside the
   Atlas overlay.
-- Benchmark-instrument correction: run `30685105852` failed because the A/B
-  job pinned candidate benchmark sources but compiled the baseline with its
-  stale lock. The fixed instrument now includes the candidate lock, holding
-  provider resolution constant while leaving baseline production source
-  unchanged.
+- Benchmark dependency ownership: the candidate-lock transplantation adopted
+  after run `30685105852` is superseded by
+  [baseline preparation](backlog.md#apollo-benchmark-baseline-closure). Each
+  revision retains its own manifests and lock; only instrument sources transfer.
+  Differing transitive providers remain part of the measured revision closure
+  ([ADR 0036](docs/adr/0036-native-benchmark-regression-oracle.md)).
 - Closure: source `33a40bcee4532c9c1a03fee7cef2d852b3419090` merged as
   `db2186650f2e0889555120e6a1491ad93897409e`. Hosted exact-head Rust/Python
   verification passed in run `30685185998`, and the benchmark regression gate
@@ -10510,17 +10511,9 @@ slower in all four counterbalanced comparisons (+6% to +17%).
 - [minor] Production implication: sustained Bluestein f64 throughput at this size is about
   half its burst figure. Any published per-call number for this path should state which
   regime it describes.
-- [done] Gate design. `compare-replicated-counterbalanced` now requires the slowest candidate
-  median bound to clear the fastest baseline median bound across all four blocks, not merely
-  four independent within-run separations. A per-run interval bounds that run's sampling noise
-  only, so on a host whose regime shifts between runs four of them can separate together with no
-  code change; the replicated design already pays for the between-run evidence and now spends it.
-  Cases that separate within runs but not across them are reported as undecidable rather than
-  folded into a pass, so a host whose spread exceeds the effect stays visible instead of silently
-  disabling the gate. Verified against the exact PR #64 evidence (candidate 30707/30761/34742/31467
-  against baseline 28974/26343/30836/29073): the gate passes and names the case as undecided.
-  Existing fail-closed coverage is unchanged (order drift, single-block slowdown, family-wise
-  false positive, missing-case) and a genuine slowdown clearing the spread is still reported.
+- The comparator's bound direction and sampling assumptions are specified in
+  [ADR 0036](docs/adr/0036-native-benchmark-regression-oracle.md#mathematical-contract).
+  Unchanged-control drift invalidates timing evidence despite interval separation.
 
 ## Slop patterns recorded 2026-09-01
 

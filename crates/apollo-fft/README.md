@@ -36,6 +36,9 @@ and general strided views assign once into reusable logical C-order staging,
 transform, and assign back; warmed staging allocates nothing. Row and
 depth-axis passes operate on chunks through Moirai, while non-contiguous axes
 transpose through Leto Ops into reusable caller-thread scratch. Generic
+FourStep's pure-copy transposes use Leto Ops through the static `ComplexLayout`
+scalar role: square output transposes
+operate in place, and out-of-place passes use exact borrowed matrix slices.
 FourStep lanes beyond 1024 borrow the inactive transpose buffer as workspace;
 workers release their borrows at the join and retain no FFT scratch when idle.
 Leto selects exact Hermes

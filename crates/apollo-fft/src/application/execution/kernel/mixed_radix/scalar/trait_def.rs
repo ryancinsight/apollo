@@ -1,4 +1,3 @@
-use super::transpose::transpose_tiled_scalar;
 use crate::application::execution::kernel::components::radix_composite::CompositeCache;
 use crate::application::execution::kernel::components::winograd::ShortWinogradScalar;
 use crate::application::execution::kernel::pot::{PoTStrategy, SizedPoT};
@@ -28,9 +27,7 @@ pub trait MixedRadixScalar:
     + Sized
     + Copy
     + 'static
-    + hermes_simd::LaneScalar
-    + eunomia::layout::Pod
-    + eunomia::Pod
+    + leto_ops::ComplexLayout
     + ShortWinogradScalar
     + CompositeCache
     + BluesteinStore<Cpx = Self::Complex>
@@ -186,10 +183,6 @@ pub trait MixedRadixScalar:
     fn composite_inverse(data: &mut [Self::Complex], radices: &[usize]);
 
     fn normalize(data: &mut [Self::Complex], n: usize);
-
-    fn transpose_matrix(src: &[Self::Complex], dst: &mut [Self::Complex], n1: usize, n2: usize) {
-        transpose_tiled_scalar(src, dst, n1, n2);
-    }
 
     /// Optimized power-of-two in-place transform.
     fn pot_inplace<const INVERSE: bool, const NORMALIZE: bool>(

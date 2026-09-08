@@ -271,7 +271,7 @@ unsafe fn scalar_dft7_f32<const INVERSE: bool>(
     *out.add(6 * prev_len) = Complex::new(re1.re - d1.re, re1.im - d1.im);
 }
 
-/// AVX2 radix-7 butterfly for 4 Complex<f32> columns simultaneously.
+/// AVX2 radix-7 butterfly for 4 `Complex<f32>` columns simultaneously.
 #[target_feature(enable = "avx2,fma")]
 #[inline]
 unsafe fn dft7_f32<const INVERSE: bool>(a: [__m256; 7]) -> [__m256; 7] {

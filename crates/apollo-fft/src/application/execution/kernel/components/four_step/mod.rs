@@ -19,7 +19,6 @@
 
 mod execution;
 mod selection;
-mod transpose;
 mod workspace;
 
 #[cfg(test)]

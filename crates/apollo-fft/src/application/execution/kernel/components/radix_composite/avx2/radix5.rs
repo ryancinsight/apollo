@@ -234,7 +234,7 @@ unsafe fn scalar_dft5_f32<const INVERSE: bool>(
     *out.add(4 * prev_len) = Complex::new(a1c_re + q3_im, a1c_im - q3_re);
 }
 
-/// AVX2 radix-5 butterfly for 4 Complex<f32> columns simultaneously.
+/// AVX2 radix-5 butterfly for 4 `Complex<f32>` columns simultaneously.
 #[target_feature(enable = "avx2,fma")]
 #[inline]
 unsafe fn dft5_f32<const INVERSE: bool>(

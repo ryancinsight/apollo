@@ -380,13 +380,9 @@ where
 /// stride.
 pub(crate) const ROW_PAD: usize = 8;
 
-/// Tile edge for [`twiddle_transpose`]. The plane stride is `m * 8` bytes — a power of
-/// two, so at `m >= 256` every tile row aliases to the same L1 set, and `re`
-/// and `im` (halves of one allocation, also a power of two apart) share sets
-/// too. A 32-row tile then puts 64+ lines into one set of an 8/12-way cache
-/// and thrashes: the standalone transpose measured 20x slower per element at
-/// `m = 256` than at `m = 128`. Eight rows keeps the in-flight lines per set
-/// within associativity.
+/// Tile edge for [`transpose_planes`]. Rows use the padded element stride
+/// returned by [`plane_geometry`]; their byte stride also depends on the scalar
+/// width. Tile capacity alone does not establish cache-set occupancy.
 const TWIDDLE_TRANSPOSE_TILE: usize = 8;
 
 /// Transposes both `m x m` planes in place, tiled.
@@ -855,7 +851,7 @@ pub(crate) fn four_step_split_batched<T, const INVERSE: bool>(
 /// Combines two planar half-transforms into `data` in one pass.
 ///
 /// `even` and `odd` hold the transforms of the even- and odd-indexed
-/// subsequences in the padded plane layout [`four_step_planes`] returns.
+/// subsequences in the padded plane layout defined by [`plane_geometry`].
 /// This writes `X[j] = E[j] + W_N^j O[j]` and `X[j + N/2] = E[j] - W_N^j
 /// O[j]`, so the butterfly rides the pass that would have interleaved each
 /// half back on its own — the pass, and the half-sized buffers it would

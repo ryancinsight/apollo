@@ -3,27 +3,30 @@
 
 //! Native benchmark measurement for Apollo's CPU and provider-backed kernels.
 //!
-//! # Estimator theorem
+//! # Estimator assumptions
 //!
 //! Let `x₁, …, x₂m` be the 100 per-operation timing samples and let the
-//! reported value be `⌊(xₘ + x₍m₊₁₎) / 2⌋` after sorting. At least `m` samples
-//! are no greater than `xₘ`, and at least `m` samples are no smaller than
-//! `x₍m₊₁₎`. Therefore fewer than `m` arbitrarily large scheduler or
-//! device-delay outliers cannot replace the central pair that determines the
-//! reported median.
+//! reported value be `⌊(xₘ + x₍m₊₁₎) / 2⌋` after sorting. Replacing fewer
+//! than `m` observations cannot move this value outside the original sample
+//! range: more than half the observations remain inside that range. It can
+//! still change both central ranks. For example, replacing `1` in `1..=100`
+//! by a larger-than-100 observation changes the reported median from 50 to 51.
 //!
-//! The proof follows directly from sorted-index cardinality. This is a robust
-//! summary property, not a claim that wall-clock measurements are noise-free
-//! or comparable across machines.
+//! This finite replacement bound does not establish timing stability. Neither
+//! sorting nor counterbalancing removes serial dependence or systematic drift.
 //!
-//! For a comparison containing `m` cases, the native comparator selects each
-//! baseline and candidate interval with miscoverage at most `0.05 / (2m)`.
-//! Bonferroni's inequality then bounds the probability that any of the `2m`
-//! intervals misses its population median by 5%, without an independence
-//! assumption. CI intersects four such comparison events across two
-//! counterbalanced replications and requires the candidate to clear the full
-//! cross-replication spread, so the final family-wise false-positive event
-//! remains bounded by any one comparison's 5% bound.
+//! For a predetermined comparison family containing `c` cases, the comparator
+//! selects each baseline and candidate interval with miscoverage at most `0.05 / (2c)`,
+//! assuming independent observations from one fixed distribution per interval.
+//! Integer timing ties make the binomial coverage a lower bound, not an exact
+//! coverage probability. Bonferroni's inequality bounds joint miscoverage by
+//! 5% without independence *between intervals*; it does not remove the
+//! within-interval sampling assumption. Intersecting four comparison events
+//! preserves that bound under the same assumptions, not under arbitrary host
+//! drift. These conditions are not established by the report schema. Discard
+//! measurements invalidated by unchanged-control drift as performance evidence.
+//! The interval construction follows
+//! [NIST Technical Note 2119, section 5.3](https://doi.org/10.6028/NIST.TN.2119).
 //!
 //! Benchmark closures execute sequentially. Parallel execution would overlap
 //! the measured work and destroy the per-operation timing contract; Moirai
