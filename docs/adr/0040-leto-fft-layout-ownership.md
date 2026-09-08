@@ -1,588 +1,238 @@
 # ADR 0040: Leto FFT layout ownership
 
-- **Status:** Accepted
-- **Date:** 2026-08-26
-- **Class:** [patch] [arch]
-- **Items:** `ATLAS-APOLLO-LETO-LAYOUT-PASSES-2026-08-26`,
+- Status: Accepted
+- Date: 2026-08-26
+- Class: [patch] [arch] in Apollo; breaking provider migration in Leto
+- Item: [APOLLO-FOUR-STEP-SQUARE-MOVEMENT](../../backlog.md#apollo-four-step-square-movement)
+- Earlier drivers: `ATLAS-APOLLO-LETO-LAYOUT-PASSES-2026-08-26`,
   `ATLAS-APOLLO-LETO-VIEW-LAYOUT-2026-08-27`,
   `ATLAS-APOLLO-HERMES-COMPLEX-TRANSPOSE-2026-09-01`
 
-**Revision 2026-09-06:** [APOLLO-FOUR-STEP-SQUARE-MOVEMENT](../../backlog.md#apollo-four-step-square-movement)
-evaluates extending the accepted layout boundary below to every pure-copy
-FourStep transpose. **The candidate at `3f1c0db7` passes local acceptance with
-Leto `633acb7`; provider-first delivery remains open.** Current Leto additionally
-adopts Moirai 0.6, so its consumer graph requires fresh verification.
-Retention requires supported complete-engine improvement without supported
-regression, unchanged allocation bounds and no executable growth. Diagnostic
-timing of a size-rejected candidate informs the next bounded hypothesis; it
-does not relax acceptance.
+Revision 2026-09-08: retain the accepted CPU layout boundary and extend it to
+FourStep's pure-copy transposes. The `3f1c0db7` consumer graph passes its local
+retention criteria. Leto PR 175 lands as `d9ca3252`; Apollo's joint provider
+adoption under lock `0ECC20AB` requires fresh acceptance.
 
-### Experimental boundary and verification
+## Context and ownership
 
-Leto owns in-place complex square movement and the existing
-`transpose_complex_matrices` operation. Apollo's experimental FourStep calls
-use the latter with matrix count one at both out-of-place sites and the square
-operation at the in-place site. `MixedRadixScalar<Complex = eunomia::Complex<F>>`
-requires `ComplexLayout`, which implies `LaneScalar + Pod`. Exact factor-sized slices and caller
-workspace clipping require no conversion or additional scratch role. The
-private scalar transpose hook, two scalar overrides and scalar/AVX copy
-modules are removed without a forwarding layer. FFT arithmetic, fused twiddle
-multiplication, decomposition, routes, sign and normalization remain unchanged;
-The sealed scalar implementor set remains unchanged; current-source SemVer
-verification checks the public surface before delivery.
+Static and dynamic multidimensional FFT plans duplicated tiled gather/scatter
+loops for non-contiguous axes. FourStep also owned scalar and AVX transpose
+implementations. These operations move values without FFT arithmetic, while
+Leto owns shape, stride, assignment and layout movement in Atlas.
 
-The moved provider-contract tests preserve the original Cartesian product of
-shapes, offsets, special-value payloads and whole-buffer canaries for both
-precisions. Typed errors replace the removed private kernel's panic contract;
-short storage and overflow must leave destination bytes unchanged. Zero-area
-cases borrow empty windows. Every original impulse case now covers exact and
-oversized caller workspaces with the same analytical bound and an untouched
-suffix. Provider tests cover f32, f64, F16 and Bf16, including the scalar path.
+Apollo owns decomposition, lane scheduling, scratch lifetime, twiddles, sign
+and normalization. Leto owns value-preserving movement; Hermes supplies its
+register operations and hardware dispatch. Hephaestus remains the GPU provider.
+This decision changes no Apollo public API, scalar support or transform
+convention and introduces no GPU algorithm change.
 
-[Candidate 6 consumer gates](../../../../output/apollo-square-transpose/pure-copy/apollo-gates/final-checks.json)
-pass 1,442 debug tests, 552 release FFT tests, Clippy, documentation, seven
-bounded benchmark smokes and all 20 matched default-feature allocation windows.
-[The locked tile-span provider gates](../../../../output/apollo-square-transpose/tile-span/leto-gates/final-checks.json)
-pass 923 native tests, nine focused cases in debug and release, Clippy, minimal
-features, 27 doctests (one existing ignored), rustdoc and 24 smoke cases.
-The earlier additive square API passes 196 SemVer checks against `a2006ad`;
-subsequent private traversal revisions do not change its public contract.
-Hermes `07c5e5f` passes 548 native and 16 release tests. These gates establish
-behavior and specified memory windows, not performance acceptance; unavailable
-ISA execution, Python extension runtime tests and Miri/sanitizer coverage are
-not claimed by the consumer record.
+## Decision and contracts
 
-### Candidate comparison
+Public multidimensional entry points execute C-dense views directly, including
+offset C-dense views. Fortran-dense and general strided views stage once in
+logical C order, execute the complete transform, then assign logical indices
+back through Leto. Physical memory order is not the transform's logical order.
 
-The retained [baseline](../../../../output/apollo-square-transpose/baseline.json)
-is 6,861,824 bytes. Each size below comes from the unchanged census executable
-build scenario; P and E denote its selected performance and efficiency logical
-processors. Percentage ranges describe four paired sample medians. Supported
-directions additionally require rank-33/68 intervals to separate across both
-execution orders and both replications for the complete 39-case family.
+Staging borrows a rank-disjoint existing plan-scratch role: rank two uses the
+otherwise dormant 3-D X role; rank three uses the otherwise dormant 2-D role.
+That role is unreachable from the rank's nested axis passes. No additional
+full-volume scratch slot or temporary transposed allocation is introduced.
 
-| Candidate | Bounded change | Executable bytes; delta | Result and retained evidence |
-|---|---|---:|---|
-| 1 | Initial square register tiles | 6,876,160; +14,336 | Size rejected; no timing. [Build](../../../../output/apollo-square-transpose/array-construction/candidate.json) |
-| 2 | Seed one register row, fill the exact remainder; lazy overflow error | 6,874,624; +12,800 | Size rejected; no timing. [Build](../../../../output/apollo-square-transpose/seeded-array/candidate.json) |
-| 3 | Hermes facet inlining and exact fill slice | 6,873,600; +11,776 | Size rejected; no timing. Outlined helpers and complete-tile payload spills eliminated. [Codegen](../../../../output/apollo-square-transpose/feature-frame/codegen.md) |
-| 4, Leto `ce9d02b` | Shared scalar tail outside ISA frames; narrow extent error | 6,868,992; +7,168 | Size and performance rejected: P real-full/1024 slower by 0.95–1.51%; no supported gain. [Census](../../../../output/apollo-square-transpose/census-manifest.json), [regression](../../../../output/apollo-square-transpose/performance/regressions-stderr.txt), [memory/load audit](../../../../output/apollo-square-transpose/audit-summary.json) |
-| 5, Leto `6013768` | Restore 16-by-16 outer cache blocks around register tiles | 6,871,552; +9,728 | Size rejected. E real-half/262144 improves by 17.40–35.35%; no supported regression. [Audit](../../../../output/apollo-square-transpose/cache-blocking/audit-summary.json) |
-| 6 | Route all FourStep pure copies through existing Leto APIs | 6,892,544; +30,720 | Size and performance rejected: P complex/4096 slower by 2.64–11.92%, P real-full/16384 slower by 11.60–26.58%; E real-half/262144 improves by 15.14–41.35%. [Independent audit](../../../../output/apollo-square-transpose/pure-copy/audit-summary.json) |
-| 7, Leto `f3a6dd8` | Checked shared tile spans and disjoint row slices | 6,902,272; +40,448 | Size and codegen rejected: +9,728 versus candidate 6; AVX-512 adds runtime division and payload spills. Provider behavioral gates pass; consumer build/assembly only, no timing. [Build](../../../../output/apollo-square-transpose/tile-span/candidate.json), [codegen](../../../../output/apollo-square-transpose/tile-span/codegen.md) |
-| 8, Leto `3ad43b7` | Checked canonical `transpose_copy` boundary and lazy layout errors | 6,872,576; +10,752 | Size rejected. E complex/65536 improves by 12.65–20.62%; no supported regression or P-core direction. Warm allocations and retained bytes match. [Independent audit](../../../../output/apollo-square-transpose/dense-copy/audit-summary.json) |
-| 9, Leto `9a47d6b` | Inline existing extent validation across crates | 6,872,576; +10,752 | Size rejected. E complex/65536 improves by 16.55–17.81%, E real-half/262144 by 29.90–38.30%; no supported regression or P-core direction. [Independent audit](../../../../output/apollo-square-transpose/preflight-inline/audit-summary.json) |
-| 10, Leto `437b502` | Shared private tile bounds-failure diagnostic | 6,870,016; +8,192 | Size and performance rejected: E complex/1024 slower by 0.59–4.22%; E complex/65536 improves by 14.36–17.83% and real-half/262144 by 27.17–33.63%. No supported P-core direction. [Audit](../../../../output/apollo-square-transpose/tile-diagnostics/audit-summary.json) |
+Internal axis passes use `ComplexLayout::transpose_complex_matrices` with
+adjacent row-major `[rows, columns]` sources and `[columns, rows]` destinations.
+The 2-D plan uses one matrix; the 3-D Y pass uses adjacent `[ny, nz]` planes;
+the X pass treats the volume as one `[nx, ny * nz]` matrix. Reverse passes
+exchange the dimensions to restore row-major ordering.
 
-Candidates 4–6 each retain 16 runs, 39 unique eight-field cases and 100 ordered
-samples per case. Native output and extracted CSV match; executable,
-instrument, runner, comparator and lock hashes match their manifests. Their
-suites take 90.704, 90.906 and 91.040 seconds respectively within 300 seconds;
-every invocation passes its existing 60-second bound. Candidate 4's narrow
-regression clears the complete enclosure: candidate lower 1,570,350 ps exceeds
-baseline upper 1,567,021 ps. The audits preserve the other full envelopes and
-paired medians; they establish retained-binary differences, not their cause.
+FourStep uses the same batch operation with count one at both out-of-place
+sites and `ComplexLayout::transpose_square_inplace` at the square in-place
+site. Its caller-owned workspace is clipped to the required extent before
+decomposition. The private `MixedRadixScalar` bound requires `ComplexLayout`,
+which supplies `LaneScalar + Pod`; the supported implementor set is unchanged.
+The former scalar transpose hook, its two overrides and the scalar/AVX copy
+modules are deleted without forwarding functions. Fused twiddle/transposition
+arithmetic remains Apollo-owned and unchanged.
 
-Across these censuses all warmed allocation signatures and retained-byte
-ranges match. Cold 65,536-point peaks have overlapping, nonidentical ranges;
-no exact cold equivalence is claimed. The census measures global allocator
-live-byte windows, not OS resident memory: cold includes plan construction and
-first execution at each ordered size, retained is the ending live balance,
-and warm is one further call. Caller signal buffers are excluded and caches
-can persist across sizes. The separate footprint probe warms the process pool
-before its ladder and therefore is not cold-process evidence.
+For source `(r, c)`, `r * columns + c` equals the Fortran-view offset of `(c, r)`
+in shape `[columns, rows]`. Copying those logical indices to row-major storage
+therefore transposes the matrix; exchanging dimensions twice is an involution.
+Provider preflight checks dimension products and exact source/destination
+lengths before mutation. Empty batches and zero-area matrices do no assignment.
+Square tile pairs are loaded before either store; diagonal tiles transpose in
+place, and each ragged border pair moves once. Movement performs no scalar
+arithmetic and preserves complete complex representations.
 
-Endpoint process snapshots show no compiler/linker, but inaccessible CPU
-totals remain null and new/dead or entirely transient processes have no complete
-interval CPU bound. The audits use double CPU differences, DateTimeOffset
-elapsed intervals and 24 logical processors; low observed load is not proof
-of an uncontended interval. Caller affinity does not pin Moirai workers.
+Leto's four concrete scalar implementations call one private generic movement
+family. A non-generic square entry owns each scalar's instantiation; the batch
+entry exposes count/extent specialization. Apollo's concrete cold failure
+functions preserve invariant messages, typed error Debug output and tracked
+caller locations without duplicating generic error-formatting paths. These
+are internal impossible-state failures, not alternate valid-input execution.
+Leto's removed free functions and migration are specified by
+[provider ADR 0027](../../../leto/docs/adr/0027-hermes-complex-batch-transpose.md).
 
-### Code-generation evidence and remaining hypothesis
+## Alternatives and causal evidence
 
-Historical phase attribution places the final transpose near 18% of a generic
-262,144-point execution; candidate 4's retained diagnostic places it near 21%.
-Neither is a matched speed comparison or a cache-miss measurement. The retained
-[baseline assembly](../../../../output/apollo-transpose-isa/library.s)
-(`54D2023E...05832E4DFA`) emits one `Complex<f64>` pair-swap specialization:
-two bounds branches per pair, 16-byte matrix loads/stores and a 16-byte stack
-store/reload. Its paired addresses advance by 16 and `16 * side` bytes
-(4,096/8,192-byte strides at sides 256/512). It does not establish a standalone
-f32 specialization or measured cache traffic. Square register exchange instead
-loads both off-diagonal tiles before writing, transposes diagonal tiles in
-place and handles each ragged border element once.
+- Keeping Apollo's copy family duplicates provider indexing, tile selection,
+  tails and tuning. Allocating Leto arrays instead violates warmed allocation
+  bounds. General axis iteration discards the known dense transpose structure;
+  Leto's checked canonical dense-copy operation preserves it.
+- Executing Fortran-dense views in physical order is incorrect for rectangular
+  logical lanes. The original 2-D/3-D comparisons produced errors of 3.10/7.38;
+  staged-versus-C-order exact-value tests reject this semantic error without
+  relaxing floating-point tolerances.
+- Source deletion alone does not guarantee smaller code. Count-one calls do
+  not select the high-count register path, and generic assignment retained
+  layout validation and error cleanup. The checked dense-copy boundary removes
+  that machinery without removing preflight. Exposing validation removed
+  divisions but did not alone satisfy executable size acceptance.
+- A generic/default scalar-role method or generic `inline(never)` does not
+  remove multiple consumer instantiation roots. Retained linker maps observed
+  duplicate square bodies; concrete provider entries reduced them to one per
+  ISA. Library count-one specialization and a general census call already
+  coexisted before that change. See the
+  [linked attribution](../../../../output/apollo-square-transpose/preflight-inline/map/attribution.md).
+- A shared checked tile-span formulation added runtime division and AVX-512
+  payload staging; it was rejected by the
+  [codegen comparison](../../../../output/apollo-square-transpose/tile-span/codegen.md).
+  Consolidating provider tile-range diagnostics reduced some duplication but
+  produced a supported complete-engine regression. Other gains did not excuse
+  it; the [rejected comparison](../../../../output/apollo-square-transpose/tile-diagnostics/audit-summary.json)
+  remains the falsifying evidence, not a causal attribution of that regression.
+- Apollo's concrete error boundary instead removed duplicate Debug/drop roots
+  while preserving square and batch bodies. The
+  [linked comparison](../../../../output/apollo-square-transpose/cold-failures/map/normalized-comparison.json)
+  and [caller-location decoding](../../../../output/apollo-square-transpose/cold-failures/map/caller-locations.json)
+  support that mechanism. Its executable fell to 6,861,312 bytes, 512 below the
+  6,861,824-byte baseline; static identity alone supplies no latency result.
 
-Construction and code-placement changes remove eager success-path extent
-errors, outlined array/permutation helpers and duplicated scalar tails; the
-narrow square error also avoids rejection-time allocation and unrelated solver
-diagnostic dependencies. These mechanisms have codegen and behavioral evidence,
-but their candidate executables still grow.
+## Retention and verification
 
-[Candidate 6 assembly](../../../../output/apollo-square-transpose/pure-copy/codegen.md)
-shows why source deletion alone is insufficient. Matrix count one excludes
-Leto's high-count register route; generic assignment retains borrowed-layout
-and validation machinery. Its body has 1,476 instructions plus 354 cleanup
-instructions, versus 370 in the canonical mover. The removed Apollo dispatcher
-and AVX family total 656 instructions; the new provider/generic/mover bodies
-total 2,044 before cleanup and supporting layout/error functions. These are
-library instruction counts, not exact linked-byte attribution or valid-input
-allocation counts. Eager overflow-error drops also remain on success paths.
-Candidate 8 targets that checked dense boundary through the existing mover,
-preserving batch validation, dispatch, error behavior and all value tests;
-its provider verification passes 930 native tests, 366 release tests, 28
-doctests (one existing ignored), Clippy, documentation, the 24-case smoke and
-196 SemVer checks per package. Its retained assembly removes the generic
-assignment and cleanup family and all ordinary successful-path LetoError drop
-calls. The new 16-run census takes 90.967 seconds within 300 seconds and
-supports the E complex/65536 gain in the table: candidate rank-68 upper
-476,500,000 ps falls below baseline rank-33 lower 518,100,000 ps. Endpoint
-snapshots do not bound inaccessible or transient load. Size acceptance still
-fails, so the prepared full Apollo gate remains pending.
+Retain the production change only when unchanged behavioral and allocation
+oracles pass, the linked movement code introduces no new payload spills or
+divisions, the executable does not grow, and the complete-engine comparison
+supports an improvement without any supported regression. A size-rejected
+candidate's timing informs diagnosis only. Change direction when those
+falsifiers hold; neither favorable isolated cases nor source-level elegance
+overrides them. Do not change the workload, sampling or thresholds to pass.
 
-Candidate 9 exposes existing length/extent validation
-to cross-crate compilation. Candidate 8 retained two pairs of
-alternative-width chunk-count divisions in the count-one copy path. Checks,
-error values and ordering stay intact. Division/loop removal must avoid cold
-code duplication and text growth; this hypothesis does not promise recovery
-of the remaining 10,752-byte gap. Candidate 9 removes both targeted batch
-chunk-count division pairs and both validator calls. Five inherited row-division
-pairs remain. The copy body falls from 535 to 437 instructions; its frame grows
-from 296 to 328 bytes. Text falls by 32 bytes, while the executable remains
-6,872,576 bytes. These code-generation observations do not establish an FFT
-speedup. The 16-run complete-engine census takes 90.105 seconds and supports
-the two E-core directions in the table. Candidate upper bounds are 448,400,000
-ps for complex/65536 and 1,394,300,000 ps for real-half/262144, below baseline
-lower bounds of 514,500,000 and 1,635,400,000 ps respectively. Warm allocation
-signatures and retained-byte ranges match; cold peaks overlap but differ.
-[Whole-library attribution](../../../../output/apollo-square-transpose/preflight-inline/codegen.md)
-finds a net 619 emitted instructions above baseline, including register kernels,
-copy validation, formatting and unwind cleanup. It is not linked-byte ownership;
-the completed [linker-map diagnostic](../../../../output/apollo-square-transpose/preflight-inline/map/identities.json)
-matches all 4,801,601 code bytes, their section address and image base against
-the timed candidate. Only PE headers and read-only data differ. The map exposes
-distinct Apollo-library and census-crate instantiations of the same f64 square
-operation. Their instantiating-crate symbol suffixes differ; this establishes
-duplicate instantiation roots, not ThinLTO import as their cause. Linked body
-and relocation comparisons show identical AVX2/AVX-512 instruction streams
-after normalizing address displacements, with identical external call targets.
-Separate identical shuffle constants and `tile.rs:30:47` panic-location records
-distinguish the copies. Their redundant pair occupies a 4,032-byte interval
-including padding; this is not a guaranteed saving or an attribution of all
-growth. [Linked attribution](../../../../output/apollo-square-transpose/preflight-inline/map/attribution.md)
-records the exact evidence and limits.
+The retained comparison uses 16 prescribed baseline/candidate invocations,
+39 cases and 100 ordered samples per case across two processor classes,
+counterbalanced orders and replications. Complete-family rank-33/68 intervals
+must separate across every comparison and the full between-run enclosure.
+Paired median percentage ranges are descriptive, not confidence intervals.
+The suite remains within 300 seconds and each invocation within 60 seconds.
+The statistical assumptions and source-only baseline preparation contract
+belong to [ADR 0036](0036-native-benchmark-regression-oracle.md): each revision
+retains its production manifests/lock; identical instrument source does not
+imply identical transitive provider locks. Control drift invalidates timing.
 
-Candidate 10 consolidates the private load/store tile-range failure into one
-non-generic cold diagnostic. Checked slice access preserves the safe boundary;
-the failure carries the offending range and storage length. Public typed errors,
-tile construction, movement, ISA coverage and workloads remain unchanged. The
-falsifier is retained per-instantiation location data, new spills/divisions,
-text growth or a supported complete-engine regression. Removing the full
-10,752-byte gap is not assumed. A generic `inline(never)` attribute is rejected
-as an ownership fix because the two instantiating-crate roots would remain. Provider
-revision `437b502` passes Clippy, format and all 30 unchanged focused tests in
-debug and release. Independent source review finds no defect. The consumer
-[linked map](../../../../output/apollo-square-transpose/tile-diagnostics/codegen.md)
-confirms one folded AVX2 square body and one diagnostic helper; AVX-512 copies
-retain distinct constant references. No new divisions or payload spills appear.
-The unchanged 16-run census takes 90.141 seconds and triggers the performance
-stop condition: E complex/1024 candidate lower 2,977,157 ps exceeds baseline
-upper 2,975,000 ps. Other supported gains do not override this failure. Warm
-allocation signatures and retained bytes match. The candidate is rejected;
-forward restoration `00665a4` matches candidate 9 tile access exactly and passes
-the unchanged 30 provider tests in debug and release, Clippy and format.
-Candidate 10 evidence remains intact. This comparison establishes a regression,
-not its cause. Full consumer restoration gates pass; the prior size failure
-remains a merge blocker.
+Behavioral oracles cover rectangular/ragged/multi-plane permutations, offsets,
+whole-buffer canaries and NaN/infinity/signed-zero/subnormal payload bits for
+both Apollo precisions. Provider coverage additionally includes F16/Bf16 and
+the private scalar path. Exact and oversized FourStep workspaces use the same
+impulse-spectrum error bound and preserve unused suffixes; short storage and
+overflow reject before mutation. Static/dynamic 2-D/3-D direct-DFT, normalized
+round-trip, Fortran/strided parity and C-dense pointer-identity tests guard
+composition and staging. The warmed allocation census rejects temporary
+allocation. Standalone locked consumer gates and provider audits guard drift.
 
-The restored consumer executable is 6,872,576 bytes, still 10,752 above the
-baseline. Its 4,801,601-byte `.text` payload has the same SHA256 as retained
-candidate 9; the complete executable hash differs. The
-[identity record](../../../../output/apollo-square-transpose/tile-diagnostics/restoration/text-identities.json)
-establishes code-byte equality, not a fresh timing result. No timing rerun
-replaces candidate 10's rejection evidence.
+Public API comparison must use each revision's exact lock. The checker's
+independent-manifest generation previously selected the wrong Leto revision
+and failed before comparison. The retained
+[JSON comparison](../../../../output/apollo-square-transpose/integration/api/compare-cache-access-result.json)
+passes 223 applicable checks, with 31 skipped, for archived tree `304d70d8`
+against its recorded baseline. Both JSON files use nightly-2026-08-01 format
+61 and cargo-semver-checks 0.50.0; 25 manifests were compared separately.
+JSON mode does not compare manifests. This result is historical, not a fresh
+SemVer verdict for the current graph.
 
-The [restoration gates](../../../../output/apollo-square-transpose/tile-diagnostics/restoration/apollo-gates/final-checks.json)
-pass 1,442 native tests, 552 release tests, six focused tests, seven doctests
-(one existing ignored), Clippy, rustdoc, format, the safety ratchet and seven
-bounded smoke cases. All 20 default-feature retained-memory windows match
-the accepted baseline. Thirty-five compiled input hashes and the lock remain
-fixed throughout; subsequent board/ADR changes only record results. Configured
-Python exclusions and unavailable sanitizer/ISA coverage remain explicit.
+## Evidence boundaries
 
-The unchanged bounded phase probe also completes in 3.598 seconds. Its three
-blocks place fused multiply/transpose at 38.0–38.7% of P-core and 36.7–37.4%
-of E-core time for complex f64 length 262,144; pure-copy movement remains
-material. This is phase attribution, not a baseline speedup comparison or
-cache-miss measurement. Worker placement, inaccessible processes and transient
-load remain uncontrolled, as recorded with the
-[probe](../../../../output/apollo-square-transpose/tile-diagnostics/restoration/phase-profile/result.json).
+### Accepted historical consumer graph
 
-The existing probe now observes actual borrowed data/scratch addresses, byte
-extents and row strides during its first unmeasured prewarm call. Timing and
-geometry capture are mutually exclusive and share the same RAII reset; the
-hook and capture types exist only under `cfg(test)`. The offset-slice oracle
-and unchanged two-size/two-scalar/two-core probe pass in release (two tests,
-eight geometry records), with format and Clippy passing. The
-[observation record](../../../../output/apollo-square-transpose/tile-diagnostics/restoration/buffer-observation/rationale.md)
-states the source/lock identity and transient peer overlay reconciliation.
-Virtual addresses establish borrowed-buffer geometry, not physical cache
-mapping or a speedup. No timing workload or production algorithm changes.
-
-[Direct competitor envelopes](../../../../output/apollo-square-transpose/preflight-inline/competitor-envelope.csv)
-reuse the same complete-family rank intervals across four candidate runs per
-core. Apollo trails RustFFT at all five P-core sizes and all E-core sizes except
-16,384. It leads PhastFT at E-core sizes 1,024, 4,096 and 16,384. At 262,144 it
-trails both competitors on both cores. P-core PhastFT comparisons at 4,096,
-16,384 and 65,536 overlap. These results describe this retained candidate and
-machine, not a stack-wide performance claim.
-
-The next bounded provider experiment uses Leto's `ComplexLayout` scalar role
-for both complex movement operations. Four concrete provider implementations
-call the existing private generic checked algorithms. Their non-generic entry
-methods preserve one instantiation root per scalar under ThinLTO; whether
-this eliminates the measured duplicate code is verified by the linked map.
-Apollo calls `F::transpose_complex_matrices` and
-`F::transpose_square_inplace` through its existing scalar bound. The batch
-axis path and bitwise tests migrate with the FourStep calls; no compatibility
-free functions remain. Fused math, dimensions, dispatch and storage stay fixed.
-
-This is a source-breaking Leto API migration, defined in
-[ADR 0027](../../../leto/docs/adr/0027-hermes-complex-batch-transpose.md), without
-a release or manifest version bump. A generic/default role implementation
-would retain consumer instantiation roots; a broad arithmetic trait would
-misstate the movement contract. Loss of count-one specialization is a risk.
-Keep the candidate only if unchanged behavioral/allocation gates pass, the
-linked code has no new payload spills or divisions, executable size meets
-the original baseline bound, and the complete-engine census supports a gain
-without a regression. The role is a tested ownership hypothesis, not a
-zero-cost claim before codegen and timing evidence.
-
-With Leto `843febc`, the normal unchanged census executable is 6,866,432
-bytes, 4,608 above baseline and 6,144 below the restored candidate. Its SHA256
-is `ACEC93405684CE193A7982DBCFAB88512A8FFE57DBD0E7BC337C2953C605A52A`.
-The focused consumer format, all-target Clippy and 13 FourStep/layout/workspace
-tests pass. This candidate fails the existing no-growth condition; no timing
-run or performance acceptance is claimed. The map-only relink has identical
-normal-executable `.text` bytes (4,796,561 bytes). It shows one provider-owned
-square entry and one kernel per ISA, satisfying the instantiation hypothesis.
-Two consumer-owned `SquareTransposeError::Debug` addresses remain. The saved
-map spans include padding and cannot account additively for whole-file size.
-
-The batch-inline correction `633acb7` passes the same focused gates but grows
-the executable to 6,867,456 bytes (+5,632 baseline), SHA256
-`C44D1F2EF2E77BCFE6162C0D14AB0B93C1487DDF2206FA48E0966B050D439B77`.
-It also fails size acceptance; no timing result is collected. The map confirms
-the prior library-specialized/census-general count-one relationship: the latter
-already retained the general batch in `preflight-inline`. This corrects the
-earlier all-callers specialization premise; no new general call or timing
-regression follows from that residue. One provider square kernel per ISA remains.
-
-Independent caller/vtable analysis identifies the remaining failure roots:
-library and census FourStep `expect` calls pass different Leto error Debug/drop
-and square-error Debug vtables to the same `unwrap_failed` function. A bounded
-next correction moves only failure branches into concrete owned-error cold
-functions shared by execution kernels and plans. It preserves each original
-message, Debug representation and tracked caller location; it adds no public
-wrapper or generic error adapter. Exact panic-payload tests, unchanged valid
-FFT/layout/allocation oracles and linked valid-path inspection guard the change.
-Other Leto error consumers can retain duplicates, so no recovered-byte count is
-assumed. All prior codegen, whole-file size and performance gates remain binding.
-
-The concrete cold failure boundary, committed as `3b7311fa`, reduces the census executable to
-6,861,312 bytes, 512 below baseline and 6,144 below the batch-inline candidate.
-Its SHA256 is `C1019AD5BD24E3DCB6EB782675E4A2C7595F0B640B55A6929CAAB5577DDEB9EC`.
-The [focused gates](../../../../output/apollo-square-transpose/cold-failures/apollo-final-checks.json)
-pass 15 tests in debug and release, format and all-target/all-feature Clippy.
-The normal and map-only builds have identical `.text`. Independent
-[linked-code comparison](../../../../output/apollo-square-transpose/cold-failures/map/normalized-comparison.json)
-finds unchanged square kernels and batch bodies; square Debug roots decrease
-from two to one and standalone Leto error drop roots from three to two.
-Two Leto error Debug roots remain. [Caller-location decoding](../../../../output/apollo-square-transpose/cold-failures/map/caller-locations.json)
-confirms tracked source locations reach the cold panic handlers.
-These are size, behavioral and structural results, not latency evidence.
-Full consumer verification passes 1,445 native tests, 555 release FFT tests,
-seven doctests (one existing ignored), format, the safety ratchet, all-target
-workspace Clippy and warning-denied rustdoc. Seven benchmark smokes complete
-within their unchanged 60-second bounds. The [default-feature footprint](../../../../output/apollo-square-transpose/cold-failures/apollo-gates/footprint-summary.json)
-matches all 20 baseline allocation-count and byte windows. Its warmed global
-pool does not establish cold-process memory behavior.
-The first census attempt stops before measurement because two Cargo processes
-are present. The SemVer attempt exits 101 before API comparison: version 0.50.0
-generates an independent workspace, deletes its lockfile and resolves Leto
-`9a68909e` instead of the candidate's `633acb7`. This is a dependency-identity
-failure, not a compatibility verdict. The supported comparison path accepts
-rustdoc JSON generated from each revision with its unchanged lockfile; JSON
-comparison does not include manifest metadata.
-
-**Revision 2026-09-07:** integration of `aae78f26` into `79995843` retains the
-layout boundary and main's wide prime routing. The existing pair-equivalence
-test becomes const-generic and covers 11, 19, 23, 29 and 31 in both directions
-and both scalar types, including the even half-size tail at 29. The retained
-size, memory and timing artifacts above bind to their recorded inputs, not
-this combined source. The immutable integration archive represents staged tree
-`304d70d8f79d432458917c6c1dba814fdc183d83` with Git's checkout line-ending
-conversion and retains the exact standalone lock. Both rustdoc snapshots use
-nightly-2026-08-01 and JSON format 61, with inherited compiler overrides removed
-only from the child environment. Pinned cargo-semver-checks 0.50.0 passes all
-223 applicable checks (31 skipped) and reports no required SemVer update.
-All 25 manifests match the baseline separately; JSON mode does not check them.
-The [API evidence](../../../../output/apollo-square-transpose/integration/api/compare-cache-access-result.json)
-binds that result to the snapshot, not concurrent Rader or overlay-lock edits.
-The [focused integration gates](../../../../output/apollo-square-transpose/integration/snapshot-gates/collection.json)
-pass format, all-target/all-feature FFT Clippy, 33 debug and 33 release tests,
-one compile-fail doctest and warning-denied public rustdoc. All 1,099 archived
-files remain unchanged. Private-item JSON generation retains 20 existing
-documentation warnings on each side; this is separate from the public-doc gate.
-The merge removes 208 duplicated or superseded board lines and replaces the
-prime-pair test's macro/runtime dispatch with const-generic arrays, net -38
-lines before comment clarification. These are behavioral, API and maintenance
-results.
-
-The [retained integration build](../../../../output/apollo-square-transpose/integration/census/collection.json)
-at `3c4e0a2c` is 6,861,312 bytes, 512 below baseline, with all 316 recorded
-inputs unchanged through collection. Its 4,793,281-byte code section is
-byte-identical to the earlier mapped diagnostic at the same image base and
-section address; [the binding](../../../../output/apollo-square-transpose/integration/census/codegen-binding.json)
-therefore preserves the static square/batch instruction evidence. This does
-not compare data sections or establish latency. Compiler-load guards reject
-both timing attempts before native invocation; no timing result exists for
-this retained image.
-
-The subsequent `a2dbfd7d` test-only increment and private-documentation repairs
-pass [the captured native closure](../../../../output/apollo-square-transpose/integration/final-gates/native-closure.json):
-1,457 workspace tests, 563 release FFT tests, seven doctests with one existing
-ignore, format, Clippy and the safety ratchet. All 20 default-feature allocation
-windows match baseline. Stable public documentation and
-[nightly private/hidden FFT documentation](../../../../output/apollo-square-transpose/integration/final-gates/documentation-closure.json)
-pass with warnings denied. A transitive proc-macro generation mismatch in the
-shared cache is repaired through Cargo rebuilds without deleting the cache.
-The documentation subprocess completes in 31.628 seconds; its script lacks
-automatic timeout enforcement, so elapsed duration is not an enforced-budget
-claim. An uncontended complete-engine comparison remains required before
-performance acceptance.
-
-The final integration `7013ea96`, tree `cee1326e`, incorporates main `09325122`
-and confines its rejected split-codelet experiment to test compilation.
-The production entries retain the fused arithmetic; one generic test leaf
-covers both precisions and directions with borrowed, fully initialized scratch.
-The cleanup removes 71 net lines against incoming main and changes neither the
-probe's computation nor its timed region. Its [collected gates](../../../../output/apollo-square-transpose/integration/merge-gates/collection.json)
-pass 126 focused debug and 126 release tests, format, Clippy, warning-denied
-private/hidden documentation, seven bounded benchmark smokes, provider audit,
-RustSec and cargo-deny. Cargo-deny retains 32 configured duplicate warnings.
-All 1,102 compiler-input hashes and the standalone lock remain unchanged.
-This private documentation invocation has an automatic 600-second deadline;
-no Miri or sanitizer execution is claimed.
-
-The rebuilt default census is 6,861,312 bytes, still 512 below baseline.
-[Independent PE inspection](../../../../output/apollo-square-transpose/integration/merge-gates/census/pe-code-identity.json)
-finds the complete code section and its addresses identical to the earlier
-mapped image; all 6,630 instruction rows in eleven retained disassemblies
-match. The 215 differing read-only bytes are source-location line fields and
-debug/link metadata; no numerical-data differences remain unclassified. This
-still establishes static evidence rather than a runtime measurement.
-Compiler-load guards reject two attempts before invocation. A later suite
-executes three native invocations in 16.415 seconds, then rejects the third
-after its endpoint snapshot contains two Cargo processes. The incomplete
-[suite is excluded from performance conclusions](../../../../output/apollo-square-transpose/integration/merge-gates/census/timing-validity.json).
-The earlier full-workspace and API results retain their original revision
-scopes; they are not fresh timing evidence.
-
-The unchanged [default-feature footprint probe](../../../../output/apollo-square-transpose/integration/merge-gates/footprint/collection.json)
-also passes at `7013ea96`: all 20 allocation-count, peak-byte, retained-byte
-and block-list windows match the original baseline. Rust inputs and the lock
-remain unchanged; only this ADR's prose changes during collection. The probe
-warms the process pool before its size ladder, so its first-transform windows
-are not cold-process measurements. These are allocation, not latency results.
-
-The `7013ea96` experimental lock selects Leto `633acb7` through two entries and
-Hermes `07c5e5f` through five, without changing manifest requirements or
-registry selections. [Leto](../../../leto/backlog.md#leto-square-transpose)
-remains a review-branch dependency. The selected
-[Hermes facet](../../../hermes/backlog.md#hermes-complex-permutation-inlining)
-lands in merge `9d68a9e1`; that lock identifies the tested provider revision.
-Provider merges precede accepted consumer delivery;
-rejection removes the unaccepted candidate and temporary lock selections.
-The scalar movement role and batch-inline correction are in this lock. Retained output links follow Atlas's
-14-day/10-GiB policy and contain experiment manifests, not release artifacts.
-
-**Revision 2026-09-08:** integrating main `4c468c4c` selects Hermes `b51e873`
-and removes eight duplicated Mnemosyne packages while retaining Leto `633acb7`.
-The composed lock SHA256 is
+Revision `3f1c0db7` uses Leto `633acb7` and lock
 `D43E38E8A3C55A976E6FDA7B77685086C60B24987278339EA3ACFB9C20023D42`.
-The [input manifest](../../../../output/apollo-square-transpose/integration/provider-graph/manifest.json)
-binds fresh checks to staged tree `8fcbdb41`; earlier results retain their
-original dependency scope. No FFT source or manifest changes accompany this
-integration. Fresh all-feature checks pass 1,458 workspace tests excluding
-`apollo-python` (38 skipped) and 564 release FFT library tests (37 skipped).
-Clippy passes across workspace targets and features. Default-feature docs
-and doctests exclude `apollo-python`: seven doctests pass, one remains ignored,
-and public documentation denies warnings. All [20 default-feature f64 allocation windows](../../../../output/apollo-square-transpose/integration/provider-graph/footprint-summary.json)
-match baseline counts, peak bytes, retained bytes and block lists. The same
-pool-warmup and worker-placement limits apply; other precisions and feature
-combinations are not covered by this footprint probe.
-
-The [collected gate record](../../../../output/apollo-square-transpose/integration/provider-graph/collection.json)
-also includes seven benchmark smokes under unchanged 60-second bounds, provider
-audit and RustSec checks. Cargo-deny passes its configured policy with 32
-duplicate warnings; this is not warning-free dependency evidence. Compiler
-inputs and the lock remain fixed throughout; ADR prose records the results.
-
-The rebuilt census remains 6,861,312 bytes. [PE inspection](../../../../output/apollo-square-transpose/integration/provider-graph/census/pe-code-identity.json)
-finds all 6,630 retained movement/review instruction rows unchanged. The whole
-code section differs at 691 bytes within prior-map debug-formatter regions;
-read-only differences are checkout paths, debug metadata and two code pointers.
-Whole-image instruction identity is not claimed. Performance acceptance still
-requires the unchanged complete comparison for each adopted graph.
+The [collected gates](../../../../output/apollo-square-transpose/integration/provider-graph/collection.json)
+include 1,458 all-feature workspace tests excluding Python (38 skipped),
+564 release FFT library tests (37 skipped), Clippy, seven doctests (one
+ignored), warning-denied docs, seven bounded smokes and supply-chain checks.
+Default-feature docs also exclude Python. Cargo-deny retains 32 configured
+duplicate warnings; this is not warning-free dependency evidence.
 
 The [independent census audit](../../../../output/apollo-square-transpose/integration/provider-graph/census/independent-audit.json)
-accepts the `3f1c0db7` candidate: all 16 runs, 624 rows and 62,400 samples are
-valid, with fixed artifact identities and an 83.508-second suite inside the
-300-second bound. A coordinated compiler-free interval contains the suite;
-all endpoint guards pass. The complete-family rank-33/68 envelopes support
-one gain and no regression. On the efficiency core, full real length 262,144
-has baseline median envelopes 2.2790–2.9478 ms versus candidate
-2.0837–2.2058 ms. Four paired median reductions span 7.32–26.16%; this range
-describes the samples and is not a confidence interval.
+accepts all 16 runs, 624 rows and 62,400 samples with unchanged artifact
+identities, a 6,861,312-byte executable and an 83.508-second suite. It supports
+one gain and no regression: efficiency-core full-real length 262,144 has
+baseline median envelopes 2.2790–2.9478 ms versus 2.0837–2.2058 ms. Four paired
+median reductions span 7.32–26.16%, not a confidence interval. Direct competitor
+comparisons have four leads, fourteen losses and two overlaps; no general
+superiority over RustFFT or PhastFT is established.
 
-All warmed allocation and retained-byte records match. Efficiency-core cold
-length 65,536 peaks span 2,830,094–2,830,238 candidate bytes versus
-2,830,094–2,830,214 baseline bytes: the observed maximum increases by 24 bytes.
-The separate 20-window footprint oracle matches exactly; identical cold
-behavior is not established. Endpoint snapshots still miss transient processes
-and inaccessible CPU totals, and caller affinity does not pin Moirai workers.
+All warmed allocation/retained records and the separate 20 default-feature
+f64 footprint windows match. Efficiency-core cold length-65,536 maxima differ
+by 24 bytes; identical cold behavior is not established. The footprint probe
+warms the process pool. Its live-byte windows exclude caller signal buffers,
+may retain caches across sizes, and measure neither process-cold memory nor
+OS resident memory. Other precisions/features need their own footprint evidence.
 
-[Direct competitor envelopes](../../../../output/apollo-square-transpose/integration/provider-graph/census/competitor-envelope.csv)
-show four leads, fourteen losses and two overlaps. All leads are on the
-efficiency core: PhastFT at lengths 1,024, 4,096 and 16,384, and RustFFT at
-16,384. This does not establish general superiority to either competitor.
-The raw runner's `DiagnosticOnly` field predates this size-passing candidate;
-the independent audit owns the acceptance verdict without rewriting raw output.
+[PE inspection](../../../../output/apollo-square-transpose/integration/provider-graph/census/pe-code-identity.json)
+matches 6,630 retained movement/review instruction rows; 691 other code bytes
+differ in prior-map debug-formatter regions. Whole-image identity is not
+claimed. Geometry captured during unmeasured prewarm is test-only; virtual
+addresses do not establish physical cache mapping. Phase shares are attribution,
+not speedup or cache-miss measurements. Endpoint load guards passed within a
+coordinated compiler-free interval, but miss inaccessible CPU totals and
+transient processes. Caller affinity does not pin Moirai workers.
 
-**Revision 2026-09-01:** Leto Ops PR #135, merged as `060eb7eb`, added one
-public allocation-free batched-complex transpose. It selects the widest exact
-Hermes hardware width among 16/8/4 scalar lanes for the measured high-count
-small-matrix regime and retains Leto's generic assignment for every other
-shape or target. Apollo now delegates its one private CPU axis-transpose
-boundary to that provider instead of reconstructing a Leto view pair per
-matrix. Apollo retains plan-owned scratch and Moirai axis scheduling; it owns
-no register-tile implementation or capability probe.
+### Current provider adoption
 
-**Revision 2026-08-27:** The first implementation established Leto ownership
-for internal transpose passes but admitted public mutable views through
-`as_mut_slice_memory_order`. That accessor returns physical order for both C-
-and Fortran-dense layouts, while Apollo's axis kernels require logical C order.
-The corrected boundary executes C-dense views directly and stages every other
-layout once through a rank-disjoint reusable scratch role before assigning the
-result back through Leto.
+Leto PR 175 lands as `d9ca3252`; joint adoption with Hephaestus `f6f55f45`
+resolves the old default-runtime requirement conflict. Lock
+`0ECC20ABAF30420CD543A13141557BE266AC5AB1AD94A0A39CF5C3B602BF66C8`
+selects default Moirai 0.6 `5c8a9e8`, default Mnemosyne `82d3daa1` and
+Aequitas `a442d16`. Eunomia, Hermes and Themis identities remain unchanged.
+Moirai adds eight Mnemosyne packages pinned to `2eb49c1`; the old direct
+runtime retains its eight-package `7f173751` memory pin. There are three
+Mnemosyne identities and two Moirai identities; total packages rise 307→314.
 
-## Context
+The `2eb49c1` pin belongs to Moirai's WASM provider co-evolution. Its manifest
+gives no concrete removal condition; correcting that provider declaration and
+stale ADR is upstream work, not a downstream source patch. Distinct runtime
+and allocator sources carry distinct nominal types and state. The public Leto
+partition API's Moirai 0.6 types cannot accept Apollo's direct 0.5 types.
 
-Apollo's two- and three-dimensional FFT plans apply one-dimensional kernels
-along non-contiguous axes. The plans gathered each axis into reusable scratch,
-executed contiguous lane transforms, and scattered the result back. Static and
-dynamic plans each contained their own tiled index loops for those layout
-passes even though the loops performed no FFT arithmetic.
+Apollo retains direct Moirai `83aa411` because
+[source inspection](../../../../output/apollo-square-transpose/integration/provider-graph/moirai-closure.json)
+finds its worker-idle hook absent from default `5c8a9e8`. Allocator maintenance
+cannot release Apollo's live worker-thread scratch. Removing the pin requires
+an upstream owner-thread idle capability and the existing reclamation oracles;
+it must not delete reclamation or substitute an adapter. Keeping the direct
+hook does not install it in the other runtime pool.
 
-Leto owns array shape, stride, and assignment semantics in the Atlas stack.
-Provider PR 125, merged as `1e70b27e`, made rank-two assignment use one
-canonical kernel and added a tiled C-destination/Fortran-source transpose.
-Retaining Apollo's copies after that provider change would duplicate both the
-layout policy and its performance tuning.
-
-## Decision
-
-Apollo owns FFT decomposition, lane scheduling, scratch lifetime, twiddle
-selection, sign, and normalization. Leto owns value-preserving layout movement.
-Two private Apollo helpers enforce that boundary:
-
-1. The public multidimensional view entry exposes a C-dense block directly,
-   including offset C-dense views. Fortran-dense and general strided layouts
-   are assigned into a C-order view backed by a rank-disjoint plan-scratch
-   role. Rank two borrows the otherwise dormant 3-D X role; rank three borrows
-   the otherwise dormant 2-D role. The complete transform runs there before
-   Leto assigns logical indices back to the caller's layout.
-2. Each internal non-contiguous FFT axis pass calls Leto Ops' batched complex
-   transpose with adjacent row-major `[rows, columns]` sources and row-major
-   `[columns, rows]` destinations. Leto performs complete preflight, selects
-   the Hermes register-tile or canonical assignment route, and writes directly
-   into Apollo's caller-owned scratch without intermediate allocation.
-
-The two-dimensional plan uses one matrix. The three-dimensional Y pass uses a
-batch of adjacent `[ny, nz]` planes. Its X pass treats the volume as one
-`[nx, ny * nz]` matrix. Reverse assignments exchange the dimensions and restore
-the original row-major layout.
-
-This changes no public API, transform convention, scalar support, or GPU
-execution. Hephaestus remains the GPU provider; this decision covers the CPU
-layout boundary used by Apollo plans.
-
-## Rejected alternatives
-
-### Keep Apollo's tiled copies
-
-Rejected because the four copies in static and dynamic execution encode the
-same transpose that Leto now owns. They duplicate indexing, tile selection,
-tail handling, and future tuning work.
-
-### Use Leto's general axis iterators
-
-Rejected for this contiguous rank-two case. The provider's assignment kernel
-recognizes the exact C-destination/Fortran-source layout pair and executes its
-tiled transpose directly. General strided iteration would discard that
-structural information.
-
-### Allocate transposed arrays
-
-Rejected because Apollo already owns reusable scratch sized for the complete
-plan. A temporary Leto allocation would violate the established zero-allocation
-warm execution contract.
-
-### Execute Fortran-dense views in physical order
-
-Rejected because physical-order chunks do not represent row-major logical
-lanes for a rectangular Fortran layout. The old implementation produced 2-D
-and 3-D errors of `3.10` and `7.38` relative to C-order execution of the same
-plans. The corrected layout tests require bit-for-bit staged-versus-C-order
-parity, so this is a semantic mismatch rather than a floating-point tolerance
-issue. Separate C-order tests retain direct-DFT and normalized round-trip
-coverage for the transform algorithm.
-
-## Correctness and performance contract
-
-For row-major source element `(r, c)`, the linear offset is
-`r * columns + c`. A Fortran-contiguous view of shape `[columns, rows]` maps
-logical element `(c, r)` to `c + r * columns`, the same offset. Assigning that
-view to a row-major destination therefore produces the mathematical transpose.
-Repeating the operation with exchanged dimensions restores the original
-ordering.
-
-The provider accepts only exactly sized source and destination slices and
-checks dimension multiplication before selecting a kernel. Empty batches and
-zero-area matrices perform no assignment. The public-view entry helper
-preserves logical indices for any valid injective mutable layout. The selected
-staging role is unreachable from that rank's nested axis passes, so it remains
-live without adding another full-volume scratch slot. All scratch remains
-thread-local and reused by the plan scratch bank.
-
-The controlled provider benchmark compares Leto's generic assignment with its
-Hermes-backed batched operation in one binary at identical addresses. Both
-runs improve every measured f32/f64 small-matrix case. Apollo's unchanged
-100-sample engine census reduces the selected f64 4,096x4x4 3-D median from
-the 1.1567 ms entry to 263.225/265.350 us (77.24%/77.06%) while retaining zero
-warmed allocations for every measured 2-D and 3-D shape. These timings are
-local Windows AVX2 evidence; AArch64 is compile-only evidence.
-
-## Failure modes and verification
-
-- Swapped dimensions or matrix counts fail rectangular, ragged-tile, and
-  multi-plane transpose tests.
-- Tail loss fails the 35x67 and 67x35 generic cases and the 256x15x13
-  register-path batch; the 256x16x16 case covers complete provider tiles.
-- Incorrect axis composition fails static and dynamic two- and
-  three-dimensional direct-DFT and round-trip tests.
-- Confusing physical and logical order fails Fortran-dense rectangular cases;
-  rejecting non-dense input fails strided cases; copying C-dense input fails
-  the offset-view pointer-identity case.
-- A temporary allocation fails the warmed allocation census.
-- Provider drift fails the standalone locked build and provider audit.
+The [collected adoption gates](../../../../output/apollo-square-transpose/integration/provider-adoption/collection.json)
+bind 19 passing commands to HEAD `4fbdeb26` plus this lock. They cover format,
+safety, all-target/all-feature Clippy, 1,458 workspace tests with 38 skips and
+564 release FFT tests with 37 skips. No test crosses the 30-second slow bound.
+Seven doctests pass with one ignored; public workspace documentation denies
+warnings. Both exclude Python. Seven benchmark smokes, provider and advisory
+checks pass; cargo-deny retains 32 configured duplicate warnings. All 20
+default-feature allocation windows exactly match baseline counts and bytes.
+The [locked API comparison](../../../../output/apollo-square-transpose/integration/provider-adoption/api/manifest.json)
+passes 223 checks with 31 skipped against `9da1f9f7`, using the two original
+locks and JSON format 61. All 25 manifests match after line-ending normalization.
+The
+[retained build](../../../../output/apollo-square-transpose/integration/provider-adoption/census/collection.json)
+is 6,861,312 bytes, but its build record is not a timing result.
+[Current PE inspection](../../../../output/apollo-square-transpose/integration/provider-adoption/census/pe-code-identity.json)
+finds nine of eleven retained movement ranges identical at the same addresses.
+The other two differ in four address operands: two relocated callees preserve
+their normalized instruction rows and 55 referenced read-only bytes match.
+The whole code section has 215,012 differing aligned bytes; remaining program
+and runtime-state differences are unclassified. Final adoption still requires
+controlled performance evidence for this graph. Historical timing cannot
+supply it. All 1,102 tracked compiler inputs remain fixed through collection;
+only this ADR's prose changes.
+No Python extension runtime, Miri/sanitizer, physical AVX-512 or unexecuted
+platform coverage is implied. Output links follow Atlas's 14-day/10-GiB
+retention policy; they are experiment evidence, not release artifacts.

@@ -1,5 +1,25 @@
 # Apollo Backlog
 
+<a id="apollo-worker-hook-admission"></a>
+## APOLLO-WORKER-HOOK-ADMISSION — Preserve reclamation under bounded registration [patch] [arch] — todo
+- **Outcome:** adopt the current first-party runtime with explicit owner-thread idle semantics and recoverable registration exhaustion.
+- **Scope:** Moirai idle-hook provider and Apollo registration/reclamation boundary; no kernel arithmetic, workload reduction or silent loss of cleanup.
+- **Evidence:** pinned `83aa411` has 16 non-deduplicating slots; Apollo's `ensure_thread_local_scratch_hook_registered` expects capacity without reserving it. The observer also assumes hook order that the provider documentation disclaims.
+- **Acceptance:** full registration rejects without mutation or panic in fallible consumer paths; ordered snapshot semantics or order-independent observation; every participating owner releases idle scratch while active borrows and later reuse remain valid.
+- **Dependencies:** complete current layout adoption; implement the missing hook in current Moirai before removing Apollo's direct pin. Reconcile Moirai's landed Mnemosyne quarantine separately.
+- **Decision:** specify publication, reentrant registration, panic, wake and shutdown behavior in the owning runtime ADR; synchronize Apollo's lifecycle contract.
+- **Verification:** bounded registry/admission tests, owner-thread and wake/shutdown tests, existing Loom suites, unchanged Apollo worker and 20-window footprint oracles, locked API and controlled performance checks.
+
+<a id="apollo-local-performance-gate"></a>
+## APOLLO-LOCAL-PERFORMANCE-GATE — Keep timing on controlled local hosts [patch] [arch] — todo
+- **Outcome:** replace hosted timing jobs with local retained-binary comparisons; CI retains the existing seven bounded benchmark smokes.
+- **Scope:** benchmark workflow and ADR 0036; preserve instruments, statistical comparison, workloads, source/lock identity checks and smoke coverage.
+- **Acceptance:** no hosted timing execution; local baseline/candidate preparation and comparison remain reproducible under the existing bounds; workflow and documentation checks pass.
+- **Evidence:** `.github/workflows/benchmark-regression.yml` still runs timing on pull requests and dispatch, contrary to the current local-only measurement policy. `ci.yml` already runs all seven smokes.
+- **Dependencies:** complete the active provider-adoption gate before publishing its successor; reuse the existing preparation and bounded native runner.
+- **Decision:** revise [ADR 0036](docs/adr/0036-native-benchmark-regression-oracle.md) for the execution venue without changing its statistical contract.
+- **Verification:** workflow lint, script regression tests, existing seven-smoke collection and unchanged local census acceptance.
+
 <a id="apollo-codelet-experiment-boundary"></a>
 ## APOLLO-CODELET-EXPERIMENT-BOUNDARY — Keep rejected codelet routes in tests [patch] — done
 - `7013ea96` removes unused production selection and confines split phases to tests, net -71 lines against incoming main. [Gates](../../output/apollo-square-transpose/integration/merge-gates/collection.json) pass 126 debug/126 release cases; [code evidence](../../output/apollo-square-transpose/integration/merge-gates/census/pe-code-identity.json) preserves instructions and a 512-byte size margin, without a timing claim.
@@ -30,13 +50,12 @@
 ## APOLLO-FOUR-STEP-SQUARE-MOVEMENT — Consolidate provider-owned FourStep movement [patch] — in-progress
 
 - **Integrator:** codex/01a07370; **last-update:** 2026-09-08; branch `codex/four-step-square-movement`.
-- **Lease:** codex/root `Cargo.lock` 2026-09-08T14:00Z for current-provider adoption after the collected `3f1c0db7` baseline; no source or workload changes.
-- **Build coordination:** the full unchanged census is collected and independently accepted at `3f1c0db7`; current Leto/Moirai 0.6 adoption requires fresh consumer verification.
+- **Build coordination:** current-provider gates are collected; no owned Cargo process remains. The exact-lock API, 20 allocation windows and size pass; controlled timing remains required.
 - **Scope:** all pure-copy FourStep transposes through Leto, removing Apollo's private copy kernels and scalar trait hook; Hermes owns register movement. No fused multiplication, decomposition, route, normalization, workspace or Apollo API change.
 - **Hypothesis:** square register exchange and a checked canonical dense-copy boundary remove duplicate movement without allocation or an additional full-volume pass. [ADR 0040](docs/adr/0040-leto-fft-layout-ownership.md) owns the design, measured candidate comparison and evidence limits.
 - **Acceptance:** retain production only with unchanged allocation bounds, no executable growth and supported complete-engine improvement without supported regression; preserve the accepted provider ownership decision.
 - **Verification:** generic bitwise tile/tail/offset/canary/special-value oracles, FFT analytical and exact/oversized-workspace cases, full affected gates, unchanged replicated census and matched footprint probe.
-- **Dependencies/closure:** [Leto draft PR 175](https://github.com/ryancinsight/leto/pull/175) supplies candidate `633acb7`; the composed main integration adopts Hermes `b51e873` and removes eight duplicate Mnemosyne packages. Provider-first adoption and the recorded retention criteria remain required; ADR 0040 owns rejected candidate history.
+- **Dependencies/closure:** [Leto PR 175](https://github.com/ryancinsight/leto/pull/175) merges as `d9ca3252`. Joint adoption with Hephaestus `f6f55f45` resolves Moirai 0.6; direct `83aa411` preserves worker-idle reclamation. New lock `0ECC20AB` passes [consumer gates](../../output/apollo-square-transpose/integration/provider-adoption/collection.json); its timing remains pending.
 - **Evidence:** lock `D43E38E8` passes 1,458 workspace/564 release FFT tests, docs, seven smokes, audits and 20 matched allocation windows. The 16-run census passes size (-512 bytes), allocation and timing acceptance: one E-core real-full/262144 gain, no supported regression. [ADR 0040](docs/adr/0040-leto-fft-layout-ownership.md) records confidence bounds, cold-peak variation, remaining competitor gaps and exclusions.
 <a id="apollo-transpose-cache-geometry"></a>
 ## APOLLO-TRANSPOSE-CACHE-GEOMETRY — Model transpose cache-set pressure [patch] — todo
