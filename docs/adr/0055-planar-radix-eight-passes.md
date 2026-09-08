@@ -130,3 +130,19 @@ trigger.
 
 2026-09-08: changed Proposed to Accepted with the radix-8 grouping rejected
 and the shared driver retained, after the replicated measurements above.
+
+2026-09-08, second increment: the driver's seams became compile-time. Each
+pass now runs a monomorphization carrying only the seams it uses (planes,
+interleaved source, fold, interleaved sink, fold with sink), and rows are
+addressed as first plus step rather than as an offset table. The plain
+radix-4 pass fell from 88 to 114 instructions per four-lane quad to 53
+(8 FMA, 16 loads, 8 stores, no vector spills, no general-register reloads,
+5 scalar); the folded pass to 82 with 4 reloads and the sourced pass to 71.
+Whole-transform timings moved within noise in both instruments (census
+`f64` 16384: 45.3 / 41.4 / 40.8 to 42.4 / 37.6; 65536: 227 / 238 / 206 to
+203 / 202; warm neutral within 3%). With the overhead gone the pass sits at
+the vector-arithmetic floor, 32 vector operations per quad per pass at
+about 3.6 per cycle, so the remaining lever is the arithmetic itself: the
+first time-decimated pass, the last frequency-decimated pass and the `j = 0`
+row set of every pass multiply by `1` and `∓i` with full complex multiplies.
+Listings under `output/apollo-planar-radix8/asm_spec_*.s`.

@@ -213,31 +213,66 @@ impl Radix<4, 3> for Dif4 {
     }
 }
 
+/// The rows of one row set: `first + i * step` for `i < N`.
+///
+/// Every pass in both stage sets addresses equally spaced rows, and stating
+/// the spacing rather than listing the rows lets the pass keep one base and
+/// one step per plane instead of a table of offsets that would otherwise
+/// occupy, and then overflow, the general registers.
+#[derive(Clone, Copy)]
+pub(super) struct Rows {
+    /// Plane row of the first element of the set.
+    pub(super) first: usize,
+    /// Plane rows between consecutive elements of the set.
+    pub(super) step: usize,
+}
+
 /// Where a pass reads its rows and where it writes them.
 ///
-/// The interleaved source is the caller's buffer on the first pass of the
-/// time-decimated set and the interleaved sink the caller's buffer on the
-/// last pass of the frequency-decimated set; every other pass reads and
-/// writes the planes. `fold` multiplies the four-step twiddle planes into
-/// the loaded rows on whichever pass carries it.
-pub(super) struct Seams<'a, 'b, T> {
-    /// Four-step twiddle planes, row-major with row stride `batch`.
-    pub(super) fold: Option<(&'a [T], &'a [T])>,
-    /// Interleaved input rows of `batch` complexes; plane row `p` reads row
-    /// `rev(p)`.
-    pub(super) source: Option<&'a [T]>,
-    /// Interleaved output rows; plane row `p` writes row `rev(p)`.
-    pub(super) sink: Option<&'b mut [T]>,
+/// Exactly the combinations the two stage sets produce: the time-decimated
+/// set reads the caller's interleaved buffer on its first pass and the planes
+/// otherwise; the frequency-decimated set folds the four-step twiddle on its
+/// first pass, writes the caller's buffer on its last, and both when the two
+/// coincide. Each variant selects a monomorphized pass whose row loop carries
+/// no seam it does not use, which is what keeps the pass's addressing in
+/// registers.
+pub(super) enum Seams<'a, 'b, T> {
+    /// Planes in, planes out.
+    Planes,
+    /// Interleaved rows in; plane row `p` reads row `rev(p)`.
+    Source(&'a [T]),
+    /// Planes in with the four-step twiddle planes multiplied into the loads.
+    Fold((&'a [T], &'a [T])),
+    /// Planes in, interleaved rows out; plane row `p` writes row `rev(p)`.
+    Sink(&'b mut [T]),
+    /// Folded loads and interleaved stores in one pass.
+    FoldSink((&'a [T], &'a [T]), &'b mut [T]),
+}
+
+impl<'a, 'b, T> Seams<'a, 'b, T> {
+    /// The frequency-decimated set's seams for one pass.
+    pub(super) fn frequency(fold: Option<(&'a [T], &'a [T])>, sink: Option<&'b mut [T]>) -> Self {
+        match (fold, sink) {
+            (Some(fold), Some(sink)) => Self::FoldSink(fold, sink),
+            (Some(fold), None) => Self::Fold(fold),
+            (None, Some(sink)) => Self::Sink(sink),
+            (None, None) => Self::Planes,
+        }
+    }
+
+    /// The time-decimated set's seams for one pass.
+    pub(super) fn time(source: Option<&'a [T]>) -> Self {
+        source.map_or(Self::Planes, Self::Source)
+    }
 }
 
 /// Runs radix `R` over one row set across the whole batch: the vector loop
 /// over `LANE_COUNT` columns at a time and the scalar remainder.
 ///
-/// `rows` are plane row indices in the order `R` expects; `tw` holds the
-/// scalar twiddles for the remainder and `twv` their lane splats for the
-/// vector loop. The caller has bounded every row index by the plane extent
-/// and the batch by the row length, which is what the unchecked loads and
-/// stores rely on.
+/// `tw` holds the scalar twiddles for the remainder and `twv` their lane
+/// splats for the vector loop. The caller has bounded every row of `rows` by
+/// the plane extent and the batch by the row length, which is what the
+/// unchecked loads and stores rely on.
 #[expect(
     clippy::inline_always,
     reason = "the driver must fold into the dispatcher's target-feature scope with the kernel that calls it"
@@ -246,7 +281,7 @@ pub(super) struct Seams<'a, 'b, T> {
 pub(super) fn butterfly_rows<T, A, R, const N: usize, const NT: usize>(
     re: &mut [T],
     im: &mut [T],
-    rows: [usize; N],
+    rows: Rows,
     stride: usize,
     batch: usize,
     row_bits: u32,
@@ -258,43 +293,150 @@ pub(super) fn butterfly_rows<T, A, R, const N: usize, const NT: usize>(
     A: SimdArch + SimdKernel<T>,
     R: Radix<N, NT>,
 {
+    let none: (&[T], &[T]) = (&[], &[]);
+    match seams {
+        Seams::Planes => pass::<T, A, R, N, NT, false, false, false>(
+            re,
+            im,
+            rows,
+            stride,
+            batch,
+            row_bits,
+            tw,
+            twv,
+            none,
+            &[],
+            &mut [],
+        ),
+        Seams::Source(source) => pass::<T, A, R, N, NT, true, false, false>(
+            re,
+            im,
+            rows,
+            stride,
+            batch,
+            row_bits,
+            tw,
+            twv,
+            none,
+            source,
+            &mut [],
+        ),
+        Seams::Fold(fold) => pass::<T, A, R, N, NT, false, true, false>(
+            re,
+            im,
+            rows,
+            stride,
+            batch,
+            row_bits,
+            tw,
+            twv,
+            fold,
+            &[],
+            &mut [],
+        ),
+        Seams::Sink(sink) => pass::<T, A, R, N, NT, false, false, true>(
+            re,
+            im,
+            rows,
+            stride,
+            batch,
+            row_bits,
+            tw,
+            twv,
+            none,
+            &[],
+            sink,
+        ),
+        Seams::FoldSink(fold, sink) => pass::<T, A, R, N, NT, false, true, true>(
+            re,
+            im,
+            rows,
+            stride,
+            batch,
+            row_bits,
+            tw,
+            twv,
+            fold,
+            &[],
+            sink,
+        ),
+    }
+}
+
+/// One monomorphized pass: the seams it carries are compile-time, so its
+/// row loop tests nothing and computes only the offsets it uses.
+#[expect(
+    clippy::inline_always,
+    reason = "must fold into the caller's target-feature scope, as the driver"
+)]
+#[expect(
+    clippy::too_many_arguments,
+    reason = "the pass is the inner function of one driver; its arguments are the driver's, unbundled so each monomorphization keeps only the seams it carries in registers"
+)]
+#[inline(always)]
+fn pass<
+    T,
+    A,
+    R,
+    const N: usize,
+    const NT: usize,
+    const SOURCE: bool,
+    const FOLD: bool,
+    const SINK: bool,
+>(
+    re: &mut [T],
+    im: &mut [T],
+    rows: Rows,
+    stride: usize,
+    batch: usize,
+    row_bits: u32,
+    tw: &[Pair<T>; NT],
+    twv: &[Pair<Vector<T, A>>; NT],
+    fold: (&[T], &[T]),
+    source: &[T],
+    sink: &mut [T],
+) where
+    T: LaneScalar + Lane,
+    A: SimdArch + SimdKernel<T>,
+    R: Radix<N, NT>,
+{
     let lanes = <A as SimdStorage<T>>::LANE_COUNT;
-    let plane: [usize; N] = rows.map(|row| row * stride);
-    let fold_at: [usize; N] = rows.map(|row| row * batch);
-    let interleaved: [usize; N] = rows.map(|row| reverse_row(row, row_bits) * batch * 2);
-    let Seams {
-        fold,
-        source,
-        mut sink,
-    } = seams;
+    let plane_first = rows.first * stride;
+    let plane_step = rows.step * stride;
+    let fold_first = rows.first * batch;
+    let fold_step = rows.step * batch;
+    // The bit-reversed row map is not affine, so the interleaved rows keep a
+    // table; it is dead, and so unmaterialized, in the passes without a seam.
+    let interleaved: [usize; N] =
+        core::array::from_fn(|i| reverse_row(rows.first + i * rows.step, row_bits) * batch * 2);
 
     let mut k = 0;
     while k + lanes <= batch {
-        let mut x: [(Vector<T, A>, Vector<T, A>); N] = core::array::from_fn(|i| match source {
-            Some(src) => load_interleaved::<T, A>(src, interleaved[i] + 2 * k),
-            None => (
-                load::<T, A>(re, plane[i] + k),
-                load::<T, A>(im, plane[i] + k),
-            ),
+        let mut x: [Pair<Vector<T, A>>; N] = core::array::from_fn(|i| {
+            if SOURCE {
+                load_interleaved::<T, A>(source, interleaved[i] + 2 * k)
+            } else {
+                let at = plane_first + i * plane_step + k;
+                (load::<T, A>(re, at), load::<T, A>(im, at))
+            }
         });
-        if let Some((pr, pi)) = fold {
-            for (value, at) in x.iter_mut().zip(fold_at) {
-                let w = (load::<T, A>(pr, at + k), load::<T, A>(pi, at + k));
+        if FOLD {
+            for (i, value) in x.iter_mut().enumerate() {
+                let at = fold_first + i * fold_step + k;
+                let w = (load::<T, A>(fold.0, at), load::<T, A>(fold.1, at));
                 *value = cmul(*value, w);
             }
         }
         let y = R::apply(x, twv);
-        match sink.as_deref_mut() {
-            Some(out) => {
-                for (value, at) in y.into_iter().zip(interleaved) {
-                    store_interleaved::<T, A>(value.0, value.1, out, at + 2 * k);
-                }
+        if SINK {
+            for (value, at) in y.into_iter().zip(interleaved) {
+                store_interleaved::<T, A>(value.0, value.1, sink, at + 2 * k);
             }
-            None => {
-                for (value, at) in y.into_iter().zip(plane) {
-                    store::<T, A>(value.0, re, at + k);
-                    store::<T, A>(value.1, im, at + k);
-                }
+        } else {
+            for (i, value) in y.into_iter().enumerate() {
+                let at = plane_first + i * plane_step + k;
+                store::<T, A>(value.0, re, at);
+                store::<T, A>(value.1, im, at);
             }
         }
         k += lanes;
@@ -302,28 +444,34 @@ pub(super) fn butterfly_rows<T, A, R, const N: usize, const NT: usize>(
 
     // Scalar remainder when the batch is not a lane multiple.
     for k in k..batch {
-        let mut x: [(T, T); N] = core::array::from_fn(|i| match source {
-            Some(src) => (src[interleaved[i] + 2 * k], src[interleaved[i] + 2 * k + 1]),
-            None => (re[plane[i] + k], im[plane[i] + k]),
+        let mut x: [Pair<T>; N] = core::array::from_fn(|i| {
+            if SOURCE {
+                (
+                    source[interleaved[i] + 2 * k],
+                    source[interleaved[i] + 2 * k + 1],
+                )
+            } else {
+                let at = plane_first + i * plane_step + k;
+                (re[at], im[at])
+            }
         });
-        if let Some((pr, pi)) = fold {
-            for (value, at) in x.iter_mut().zip(fold_at) {
-                *value = cmul(*value, (pr[at + k], pi[at + k]));
+        if FOLD {
+            for (i, value) in x.iter_mut().enumerate() {
+                let at = fold_first + i * fold_step + k;
+                *value = cmul(*value, (fold.0[at], fold.1[at]));
             }
         }
         let y = R::apply(x, tw);
-        match sink.as_deref_mut() {
-            Some(out) => {
-                for (value, at) in y.into_iter().zip(interleaved) {
-                    out[at + 2 * k] = value.0;
-                    out[at + 2 * k + 1] = value.1;
-                }
+        if SINK {
+            for (value, at) in y.into_iter().zip(interleaved) {
+                sink[at + 2 * k] = value.0;
+                sink[at + 2 * k + 1] = value.1;
             }
-            None => {
-                for (value, at) in y.into_iter().zip(plane) {
-                    re[at + k] = value.0;
-                    im[at + k] = value.1;
-                }
+        } else {
+            for (i, value) in y.into_iter().enumerate() {
+                let at = plane_first + i * plane_step + k;
+                re[at] = value.0;
+                im[at] = value.1;
             }
         }
     }
