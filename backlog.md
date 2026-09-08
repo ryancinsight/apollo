@@ -20,6 +20,21 @@
 - **Acceptance:** either a supported ratio with phase attribution filed as the next vertical item, or the run-1 figure recorded as unsupported with the census evidence.
 - **Dependencies:** [four-step square movement](#apollo-four-step-square-movement). **Verification:** census manifest, comparator intervals, unchanged workload.
 
+<a id="apollo-planar-seam-fusion"></a>
+## APOLLO-PLANAR-SEAM-FUSION — Delete the planar route's deinterleave and reinterleave passes [patch] [perf] — review
+- **Integrator:** claude/fable; **last-update:** 2026-09-08; branch `perf/apollo-four-step-large` (stacked on PR 351); parent [beat the references](#atlas-apollo-beat-the-references).
+- **Cause:** per-pass attribution puts the deinterleave and reinterleave at 26 to 38% of the planar route while the stage sets are instruction-issue-bound (an L1 column-blocking arm slowed them 1.4 to 2.4 times and is rejected in [ADR 0054](docs/adr/0054-planar-seam-fusion.md)).
+- **Decision:** the first time-decimated pass reads the caller's interleaved buffer and the last frequency-decimated pass writes it, through `source`/`sink` beside the existing twiddle `fold`; per-element arithmetic unchanged.
+- **Acceptance:** whole-transform intervals at 16384, 65536 and 262144 below ADR 0053's; batched, four-step workspace, RustFFT-differential and dimension-1d suites green.
+- **Outcome:** [ADR 0054](docs/adr/0054-planar-seam-fusion.md) Accepted: census `f64` 3 to 12% faster at 4096 through 65536, warm instrument neutral; L1 column blocking rejected as evidence the stage sets are issue-bound; evidence `../../output/apollo-planar-seams/`.
+
+<a id="apollo-planar-radix-depth"></a>
+## APOLLO-PLANAR-RADIX-DEPTH — Cut the planar stage sets' instructions per element [minor] [perf] — todo
+- **Evidence:** ADR 0054's two arms: L1 blocking slowed the stage sets 1.4 to 2.4 times and deleting two memory passes returned 3 to 12%, so the fused radix-4 pass is bound by instruction issue (about 4.4 cycles per four-lane quad, roughly 36 vector operations). Apollo `f64` trails RustFFT by 1.2 times at 16384 and 65536 after both changes; RustFFT's AVX path runs radix-8 butterflies on interleaved data with in-register transposes.
+- **Scope:** one design spike then one implementation: a radix-8 planar pass (three stages per pass, one third fewer passes, sixteen live vector registers on AVX2 so the register schedule is the design), measured against the current radix-4 pair on `pinned_sections` and the census; alternatives to evaluate in the spike are a radix-8 pass over half-width lanes and a mixed 8/4 schedule.
+- **Acceptance:** whole-transform intervals at 16384 and 65536 below ADR 0054's in the census, no regression in the warm instrument, bitwise or bounded agreement per the existing suites; an ADR records the register schedule and the codegen inspection (spills counted).
+- **Dependencies:** none. **Verification:** existing batched, workspace, RustFFT-differential and dimension-1d suites; `cargo asm` on the pass.
+
 <a id="apollo-n1m-planar-crossover"></a>
 ## APOLLO-N1M-PLANAR-CROSSOVER — Decide the planar route at 1048576 [patch] [perf] — todo
 - **Evidence:** ADR 0053's three candidate runs at 1048576 are invalid: a tree-mate built and tested in the shared cache and the PhastFT control arm moved from 7748 to 11248–15772 µs between runs. Within-run ratios to PhastFT read 1.25, 1.45 and 1.62 (`f64`) against the generic route's 1.40, so no direction is supported.

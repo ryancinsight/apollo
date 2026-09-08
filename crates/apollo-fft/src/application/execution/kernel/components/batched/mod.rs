@@ -90,6 +90,14 @@ struct BatchedStages<'a, T> {
     /// loads, or `None` for a plain stage set. Row-major with row stride
     /// `batch`, rows in the same bit-reversed order the data rows carry.
     fold: Option<(&'a [T], &'a [T])>,
+    /// Interleaved input read by the first pass in place of the planes, or
+    /// `None` when the planes already hold it. Rows of `batch` complexes as
+    /// `2 * batch` reals in natural order; plane row `p` reads source row
+    /// `rev(p)`, which is the row map the deinterleave pass used to apply.
+    /// Reading here deletes that pass: the first stage pair is the one that
+    /// loads every element exactly once, and two interleaved vector loads
+    /// plus one register deinterleave replace the two plane loads.
+    source: Option<&'a [T]>,
     /// Live columns per row — the loop bound.
     batch: usize,
     /// Elements per row including [`ROW_PAD`] — the index multiplier.
@@ -112,6 +120,7 @@ where
         let lanes = <A as SimdStorage<T>>::LANE_COUNT;
         let b = self.batch;
         let s = self.stride;
+        let row_bits = self.len.trailing_zeros();
         let mut twx = 0usize;
         let mut l = 2usize;
 
@@ -151,6 +160,7 @@ where
                 // so multiplying there deletes the standalone pass the scalar
                 // transpose multiply used to be.
                 let fold = if l == 2 { self.fold } else { None };
+                let source = if l == 2 { self.source } else { None };
                 for g in 0..groups {
                     let row_a = g * 2 * l + j;
                     let ia = row_a * s;
@@ -161,16 +171,30 @@ where
                     let tb = ta + half * b;
                     let tc = ta + l * b;
                     let td = tc + half * b;
+                    // Interleaved source rows for the four plane rows, in
+                    // reals; only consulted on the first pass.
+                    let sa = reverse_row(row_a, row_bits) * b * 2;
+                    let sb = reverse_row(row_a + half, row_bits) * b * 2;
+                    let sc = reverse_row(row_a + l, row_bits) * b * 2;
+                    let sd = reverse_row(row_a + l + half, row_bits) * b * 2;
                     let mut k = 0;
                     while k + lanes <= b {
-                        let mut ar = load::<T, A>(self.re, ia + k);
-                        let mut ai = load::<T, A>(self.im, ia + k);
-                        let mut br = load::<T, A>(self.re, ib + k);
-                        let mut bi = load::<T, A>(self.im, ib + k);
-                        let mut cr = load::<T, A>(self.re, ic + k);
-                        let mut ci = load::<T, A>(self.im, ic + k);
-                        let mut dr = load::<T, A>(self.re, id + k);
-                        let mut di = load::<T, A>(self.im, id + k);
+                        let (mut ar, mut ai, mut br, mut bi, mut cr, mut ci, mut dr, mut di);
+                        if let Some(src) = source {
+                            (ar, ai) = load_interleaved::<T, A>(src, sa + 2 * k);
+                            (br, bi) = load_interleaved::<T, A>(src, sb + 2 * k);
+                            (cr, ci) = load_interleaved::<T, A>(src, sc + 2 * k);
+                            (dr, di) = load_interleaved::<T, A>(src, sd + 2 * k);
+                        } else {
+                            ar = load::<T, A>(self.re, ia + k);
+                            ai = load::<T, A>(self.im, ia + k);
+                            br = load::<T, A>(self.re, ib + k);
+                            bi = load::<T, A>(self.im, ib + k);
+                            cr = load::<T, A>(self.re, ic + k);
+                            ci = load::<T, A>(self.im, ic + k);
+                            dr = load::<T, A>(self.re, id + k);
+                            di = load::<T, A>(self.im, id + k);
+                        }
                         if let Some((pr, pi)) = fold {
                             let tw = |r: hermes_simd::Vector<T, A>,
                                       i: hermes_simd::Vector<T, A>,
@@ -215,10 +239,18 @@ where
                     }
                     // Scalar remainder when the batch is not a lane multiple.
                     for k in k..b {
-                        let (mut ar, mut ai) = (self.re[ia + k], self.im[ia + k]);
-                        let (mut br, mut bi) = (self.re[ib + k], self.im[ib + k]);
-                        let (mut cr, mut ci) = (self.re[ic + k], self.im[ic + k]);
-                        let (mut dr, mut di) = (self.re[id + k], self.im[id + k]);
+                        let (mut ar, mut ai, mut br, mut bi, mut cr, mut ci, mut dr, mut di);
+                        if let Some(src) = source {
+                            (ar, ai) = (src[sa + 2 * k], src[sa + 2 * k + 1]);
+                            (br, bi) = (src[sb + 2 * k], src[sb + 2 * k + 1]);
+                            (cr, ci) = (src[sc + 2 * k], src[sc + 2 * k + 1]);
+                            (dr, di) = (src[sd + 2 * k], src[sd + 2 * k + 1]);
+                        } else {
+                            (ar, ai) = (self.re[ia + k], self.im[ia + k]);
+                            (br, bi) = (self.re[ib + k], self.im[ib + k]);
+                            (cr, ci) = (self.re[ic + k], self.im[ic + k]);
+                            (dr, di) = (self.re[id + k], self.im[id + k]);
+                        }
                         if let Some((pr, pi)) = fold {
                             let tw = |r: T, i: T, at: usize| {
                                 let (wr, wi) = (pr[at + k], pi[at + k]);
@@ -266,6 +298,7 @@ where
             let half = l >> 1;
             let groups = self.len / l;
             let fold = if l == 2 { self.fold } else { None };
+            let source = if l == 2 { self.source } else { None };
             for j in 0..half {
                 let (twr, twi) = self.tw[twx + j];
                 let wr = simd.splat(twr);
@@ -276,13 +309,21 @@ where
                     let hi = lo + half * s;
                     let tlo = row_lo * b;
                     let thi = tlo + half * b;
+                    let slo = reverse_row(row_lo, row_bits) * b * 2;
+                    let shi = reverse_row(row_lo + half, row_bits) * b * 2;
                     let mut k = 0;
                     while k + lanes <= b {
                         let (lo_s, hi_s) = (lo + k, hi + k);
-                        let mut ar = load::<T, A>(self.re, lo_s);
-                        let mut ai = load::<T, A>(self.im, lo_s);
-                        let mut br = load::<T, A>(self.re, hi_s);
-                        let mut bi = load::<T, A>(self.im, hi_s);
+                        let (mut ar, mut ai, mut br, mut bi);
+                        if let Some(src) = source {
+                            (ar, ai) = load_interleaved::<T, A>(src, slo + 2 * k);
+                            (br, bi) = load_interleaved::<T, A>(src, shi + 2 * k);
+                        } else {
+                            ar = load::<T, A>(self.re, lo_s);
+                            ai = load::<T, A>(self.im, lo_s);
+                            br = load::<T, A>(self.re, hi_s);
+                            bi = load::<T, A>(self.im, hi_s);
+                        }
                         if let Some((pr, pi)) = fold {
                             let tw = |r: hermes_simd::Vector<T, A>,
                                       i: hermes_simd::Vector<T, A>,
@@ -306,8 +347,14 @@ where
                     }
                     for k in k..b {
                         let (lo_s, hi_s) = (lo + k, hi + k);
-                        let (mut ar, mut ai) = (self.re[lo_s], self.im[lo_s]);
-                        let (mut br, mut bi) = (self.re[hi_s], self.im[hi_s]);
+                        let (mut ar, mut ai, mut br, mut bi);
+                        if let Some(src) = source {
+                            (ar, ai) = (src[slo + 2 * k], src[slo + 2 * k + 1]);
+                            (br, bi) = (src[shi + 2 * k], src[shi + 2 * k + 1]);
+                        } else {
+                            (ar, ai) = (self.re[lo_s], self.im[lo_s]);
+                            (br, bi) = (self.re[hi_s], self.im[hi_s]);
+                        }
                         if let Some((pr, pi)) = fold {
                             let tw = |r: T, i: T, at: usize| {
                                 let (vr, vi) = (pr[at + k], pi[at + k]);
@@ -363,6 +410,51 @@ where
     debug_assert!(at + <A as SimdStorage<T>>::LANE_COUNT <= data.len());
     // SAFETY: as `load` above.
     unsafe { v.store_unaligned(data.as_mut_ptr().add(at)) }
+}
+
+/// Two adjacent vectors of interleaved complexes at `at` (in reals), split
+/// into their real and imaginary lanes.
+#[expect(
+    clippy::inline_always,
+    reason = "must fold into the caller's target-feature scope, as `load`"
+)]
+#[inline(always)]
+pub(super) fn load_interleaved<T, A>(data: &[T], at: usize) -> (Vector<T, A>, Vector<T, A>)
+where
+    T: LaneScalar,
+    A: SimdArch + SimdKernel<T>,
+{
+    let lanes = <A as SimdStorage<T>>::LANE_COUNT;
+    load::<T, A>(data, at).deinterleave(load::<T, A>(data, at + lanes))
+}
+
+/// The counterpart of [`load_interleaved`]: real and imaginary lanes stored
+/// as two adjacent vectors of interleaved complexes at `at` (in reals).
+#[expect(
+    clippy::inline_always,
+    reason = "must fold into the caller's target-feature scope, as `store`"
+)]
+#[inline(always)]
+pub(super) fn store_interleaved<T, A>(re: Vector<T, A>, im: Vector<T, A>, data: &mut [T], at: usize)
+where
+    T: LaneScalar,
+    A: SimdArch + SimdKernel<T>,
+{
+    let lanes = <A as SimdStorage<T>>::LANE_COUNT;
+    let (lo, hi) = re.interleave(im);
+    store::<T, A>(lo, data, at);
+    store::<T, A>(hi, data, at + lanes);
+}
+
+/// Bit-reverses a row index within `bits` bits; the map between plane rows
+/// and interleaved rows on both sides of the stage sets.
+#[inline]
+pub(super) fn reverse_row(row: usize, bits: u32) -> usize {
+    if bits == 0 {
+        0
+    } else {
+        row.reverse_bits() >> (usize::BITS - bits)
+    }
 }
 
 /// Square in-place transpose of an `m x m` plane, tiled for locality.
@@ -465,6 +557,7 @@ fn run_batched<T>(
     im: &mut [T],
     plan: &BatchedPlan<T>,
     fold: Option<(&[T], &[T])>,
+    source: Option<&[T]>,
     batch: usize,
     stride: usize,
 ) where
@@ -475,6 +568,7 @@ fn run_batched<T>(
         im,
         tw: &plan.tw,
         fold,
+        source,
         batch,
         stride,
         len: plan.len,
@@ -490,6 +584,7 @@ fn run_batched_dif<T>(
     im: &mut [T],
     plan: &BatchedPlan<T>,
     fold: Option<(&[T], &[T])>,
+    sink: Option<&mut [T]>,
     batch: usize,
     stride: usize,
 ) where
@@ -500,6 +595,7 @@ fn run_batched_dif<T>(
         im,
         tw: &plan.tw,
         fold,
+        sink,
         batch,
         stride,
         len: plan.len,
@@ -619,33 +715,6 @@ where
     flat.split_at_mut(plane)
 }
 
-/// Writes `src` into the padded planes in bit-reversed row order.
-///
-/// The stage set wants bit-reversed rows, so the deinterleave writes each row
-/// at its reversed position and the separate permutation pass this replaces
-/// is deleted: bit reversal is an involution, so writing to `rev(row)` is
-/// exactly the swap list the plan would have applied.
-///
-/// The scalar loop stays deliberately: a vectorized sibling built on the
-/// native deinterleave network measured slower (1431 -> 1520 TSC pinned) —
-/// LLVM already auto-vectorizes this loop well (see [`boundary`]).
-fn deinterleave_rows<T: Copy>(
-    src: &[Complex<T>],
-    re: &mut [T],
-    im: &mut [T],
-    m: usize,
-    stride: usize,
-) {
-    let row_bits = m.trailing_zeros();
-    for (row, chunk) in src.chunks_exact(m).enumerate().take(m) {
-        let dest = row.reverse_bits() >> (usize::BITS - row_bits);
-        for (b, c) in chunk.iter().enumerate() {
-            re[dest * stride + b] = c.re;
-            im[dest * stride + b] = c.im;
-        }
-    }
-}
-
 /// Writes both halves of a radix-2 decimation into their planes in one pass.
 ///
 /// The alternative is [`deinterleave_rows`] twice over a strided view, which
@@ -677,21 +746,31 @@ fn deinterleave_decimated_rows<T: Copy>(
     }
 }
 
-/// Runs both four-step stage sets over planes already in bit-reversed rows.
+/// Runs both four-step stage sets over the planes.
+///
+/// With `seams` the interleaved buffer is the input of the first stage set
+/// and the output of the second: the first pass reads it in bit-reversed row
+/// order and the last pass writes it back the same way, so neither a
+/// deinterleave nor a reinterleave pass exists. Without it the planes hold
+/// the input in bit-reversed rows on entry and the output on exit, which is
+/// what the odd-power split needs, since its input is decimated and its
+/// output combined by their own sinks.
 fn planar_stages<T, const INVERSE: bool>(
     re: &mut [T],
     im: &mut [T],
     n: usize,
     m: usize,
     stride: usize,
+    seams: Option<&mut [Complex<T>]>,
 ) where
     T: BatchedPlanCache<Complex = Complex<T>>,
 {
+    let seams = seams.map(|data| -> &mut [T] { eunomia::layout::cast_slice_mut(data) });
     // 1. The `m` transforms of length `m` along the first axis; the input is
     //    already batch-major for this direction, so no transpose is needed.
     let plan = T::cached_plan::<INVERSE>(m);
     sect!("stages1", {
-        run_batched(re, im, plan.as_ref(), None, m, stride)
+        run_batched(re, im, plan.as_ref(), None, seams.as_deref(), m, stride)
     });
 
     // 2. Transpose so the second axis becomes batch-major. Pure exchange:
@@ -737,6 +816,7 @@ fn planar_stages<T, const INVERSE: bool>(
             im,
             plan.as_ref(),
             Some((&planes.re, &planes.im)),
+            seams,
             m,
             stride,
         )
@@ -759,63 +839,11 @@ pub(crate) fn four_step_batched<T, const INVERSE: bool>(
     let (m, stride) = plane_geometry(n);
     let plane = scratch_len(n);
     let (re, im) = split_plane(scratch, plane);
-    sect!("deint", { deinterleave_rows(data, re, im, m, stride) });
-    planar_stages::<T, INVERSE>(re, im, n, m, stride);
-
-    // The stage set left its rows bit-reversed, so the sink absorbs that
-    // permutation — the one the route used to spend a whole pass on — as an
-    // index computation on a pass that had to happen anyway.
-    let bits = m.trailing_zeros();
-    sect!("reint", {
-        let handled = if T::BOUNDARY_LANES == 8 {
-            hermes_simd::vectorize_lanes::<8, T, _>(boundary::InterleaveRows {
-                re: &*re,
-                im: &*im,
-                data: eunomia::layout::cast_slice_mut(&mut *data),
-                m,
-                stride,
-            })
-            .unwrap_or(false)
-        } else {
-            false
-        } || hermes_simd::vectorize_lanes::<4, T, _>(boundary::InterleaveRows {
-            re,
-            im,
-            data: eunomia::layout::cast_slice_mut(data),
-            m,
-            stride,
-        })
-        .unwrap_or(false);
-        if !handled {
-            for row in 0..m {
-                let src = row * stride;
-                let dst = (row.reverse_bits() >> (usize::BITS - bits)) * m;
-                for b in 0..m {
-                    data[dst + b] = Complex::new(re[src + b], im[src + b]);
-                }
-            }
-        }
-    });
+    // The interleaved buffer is read by the first stage pass and written by
+    // the last, so the route is exactly two stage sets and one transpose.
+    planar_stages::<T, INVERSE>(re, im, n, m, stride, Some(data));
 }
 
-/// In-place four-step FFT for an odd power of two, decimated once.
-///
-/// `X[j] = E[j] + W_N^j O[j]` and `X[j + N/2] = E[j] - W_N^j O[j]`, with `E`
-/// and `O` the transforms of the even- and odd-indexed samples. Both halves
-/// are even powers, so each takes the planar route — and each takes it
-/// *from `data` directly*, at stride two, so the decimation never
-/// materializes. The combine then rides the pass that would have
-/// interleaved the halves back.
-///
-/// That fusion is the whole point of the route. Transforming the halves as
-/// free-standing inputs costs three extra passes over `n`, which at
-/// n = 8192 measured as the entire deficit against the reference
-/// (`gap_audit.md#reference-standing`).
-///
-/// # Panics
-///
-/// Panics unless [`planar_split_applies`] accepts `data.len()`, or if
-/// `scratch` is shorter than [`split_scratch_len`].
 pub(crate) fn four_step_split_batched<T, const INVERSE: bool>(
     data: &mut [Complex<T>],
     scratch: &mut [Complex<T>],
@@ -851,11 +879,11 @@ pub(crate) fn four_step_split_batched<T, const INVERSE: bool>(
     });
     {
         let (re, im) = split_plane(even, plane);
-        planar_stages::<T, INVERSE>(re, im, half, m, stride);
+        planar_stages::<T, INVERSE>(re, im, half, m, stride, None);
     }
     {
         let (re, im) = split_plane(odd, plane);
-        planar_stages::<T, INVERSE>(re, im, half, m, stride);
+        planar_stages::<T, INVERSE>(re, im, half, m, stride, None);
     }
     combine_planar_halves(data, even, odd, m, stride, combine);
 }

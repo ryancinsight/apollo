@@ -28,7 +28,7 @@
 //! at offset `l / 2 - 1`, holding `W_l^j`. DIT walks those stages upward and
 //! DIF downward, over the same values.
 
-use super::{load, store};
+use super::{load, reverse_row, store, store_interleaved};
 use crate::application::execution::kernel::mixed_radix::MixedRadixScalar;
 use hermes_simd::{LaneKernel, LaneScalar, Simd, SimdArch, SimdKernel, SimdStorage, Vector};
 
@@ -46,6 +46,14 @@ pub(super) struct BatchedStagesDif<'a, T> {
     /// order the data rows now carry — the mirror of the bit-reversed planes
     /// the decimation-in-time set required.
     pub(super) fold: Option<(&'a [T], &'a [T])>,
+    /// Interleaved output written by the last pass in place of the planes,
+    /// or `None` to leave the result in the planes. Rows of `batch`
+    /// complexes as `2 * batch` reals; plane row `p` lands in output row
+    /// `rev(p)`, the permutation the reinterleave pass used to absorb. Writing
+    /// here deletes that pass: the last stage pair stores every element
+    /// exactly once, and one register interleave plus two interleaved stores
+    /// replace the two plane stores.
+    pub(super) sink: Option<&'a mut [T]>,
     pub(super) batch: usize,
     pub(super) stride: usize,
     pub(super) len: usize,
@@ -66,6 +74,8 @@ where
         let lanes = <A as SimdStorage<T>>::LANE_COUNT;
         let b = self.batch;
         let s = self.stride;
+        let row_bits = self.len.trailing_zeros();
+        let mut sink = self.sink;
         let mut l = self.len;
 
         // An odd `log2(len)` leaves one stage unpaired. It runs first, at the
@@ -75,6 +85,8 @@ where
         if self.len.trailing_zeros() % 2 == 1 {
             let half = l >> 1;
             let base = half - 1;
+            // When this is the whole transform it is also the last pass.
+            let last = self.len == 2;
             for j in 0..half {
                 let (twr, twi) = self.tw[base + j];
                 let (wr, wi) = (simd.splat(twr), simd.splat(twi));
@@ -82,6 +94,8 @@ where
                 let ib = ia + half * s;
                 let ta = j * b;
                 let tb = ta + half * b;
+                let oa = reverse_row(j, row_bits) * b * 2;
+                let ob = reverse_row(j + half, row_bits) * b * 2;
                 let mut k = 0;
                 while k + lanes <= b {
                     let mut ar = load::<T, A>(self.re, ia + k);
@@ -101,10 +115,20 @@ where
                     // twiddle. That ordering is what decimation in frequency
                     // is; the time-decimated set multiplies first instead.
                     let (dr, di) = (ar - br, ai - bi);
-                    store::<T, A>(ar + br, self.re, ia + k);
-                    store::<T, A>(ai + bi, self.im, ia + k);
-                    store::<T, A>(wr.mul_add(dr, -(wi * di)), self.re, ib + k);
-                    store::<T, A>(wr.mul_add(di, wi * dr), self.im, ib + k);
+                    let (oar, oai) = (ar + br, ai + bi);
+                    let (obr, obi) = (wr.mul_add(dr, -(wi * di)), wr.mul_add(di, wi * dr));
+                    match (last, sink.as_deref_mut()) {
+                        (true, Some(out)) => {
+                            store_interleaved::<T, A>(oar, oai, out, oa + 2 * k);
+                            store_interleaved::<T, A>(obr, obi, out, ob + 2 * k);
+                        }
+                        _ => {
+                            store::<T, A>(oar, self.re, ia + k);
+                            store::<T, A>(oai, self.im, ia + k);
+                            store::<T, A>(obr, self.re, ib + k);
+                            store::<T, A>(obi, self.im, ib + k);
+                        }
+                    }
                     k += lanes;
                 }
                 for k in k..b {
@@ -119,10 +143,22 @@ where
                         (br, bi) = tw(br, bi, tb);
                     }
                     let (dr, di) = (ar - br, ai - bi);
-                    self.re[ia + k] = ar + br;
-                    self.im[ia + k] = ai + bi;
-                    self.re[ib + k] = twr * dr - twi * di;
-                    self.im[ib + k] = twr * di + twi * dr;
+                    let (oar, oai) = (ar + br, ai + bi);
+                    let (obr, obi) = (twr * dr - twi * di, twr * di + twi * dr);
+                    match (last, sink.as_deref_mut()) {
+                        (true, Some(out)) => {
+                            out[oa + 2 * k] = oar;
+                            out[oa + 2 * k + 1] = oai;
+                            out[ob + 2 * k] = obr;
+                            out[ob + 2 * k + 1] = obi;
+                        }
+                        _ => {
+                            self.re[ia + k] = oar;
+                            self.im[ia + k] = oai;
+                            self.re[ib + k] = obr;
+                            self.im[ib + k] = obi;
+                        }
+                    }
                 }
             }
             l >>= 1;
@@ -141,6 +177,9 @@ where
             let wide = half - 1;
             let narrow = quarter - 1;
             let folding = l == self.len;
+            // The pair (4, 2) is the last pass of every stage set that has a
+            // paired loop at all.
+            let last = l == 4;
             for j in 0..quarter {
                 let (w1r, w1i) = self.tw[wide + j];
                 let (w2r, w2i) = self.tw[wide + j + quarter];
@@ -159,6 +198,10 @@ where
                     let tb = ta + quarter * b;
                     let tc = ta + half * b;
                     let td = tc + quarter * b;
+                    let oa = reverse_row(row_a, row_bits) * b * 2;
+                    let ob = reverse_row(row_a + quarter, row_bits) * b * 2;
+                    let oc = reverse_row(row_a + half, row_bits) * b * 2;
+                    let od = reverse_row(row_a + half + quarter, row_bits) * b * 2;
                     let mut k = 0;
                     while k + lanes <= b {
                         let mut ar = load::<T, A>(self.re, ia + k);
@@ -198,14 +241,30 @@ where
                         let (sbr, sbi) = (uar - ubr, uai - ubi);
                         let (sfr, sfi) = (ucr - udr, uci - udi);
 
-                        store::<T, A>(uar + ubr, self.re, ia + k);
-                        store::<T, A>(uai + ubi, self.im, ia + k);
-                        store::<T, A>(v3r.mul_add(sbr, -(v3i * sbi)), self.re, ib + k);
-                        store::<T, A>(v3r.mul_add(sbi, v3i * sbr), self.im, ib + k);
-                        store::<T, A>(ucr + udr, self.re, ic + k);
-                        store::<T, A>(uci + udi, self.im, ic + k);
-                        store::<T, A>(v3r.mul_add(sfr, -(v3i * sfi)), self.re, id + k);
-                        store::<T, A>(v3r.mul_add(sfi, v3i * sfr), self.im, id + k);
+                        let (oar, oai) = (uar + ubr, uai + ubi);
+                        let (obr, obi) =
+                            (v3r.mul_add(sbr, -(v3i * sbi)), v3r.mul_add(sbi, v3i * sbr));
+                        let (ocr, oci) = (ucr + udr, uci + udi);
+                        let (odr, odi) =
+                            (v3r.mul_add(sfr, -(v3i * sfi)), v3r.mul_add(sfi, v3i * sfr));
+                        match (last, sink.as_deref_mut()) {
+                            (true, Some(out)) => {
+                                store_interleaved::<T, A>(oar, oai, out, oa + 2 * k);
+                                store_interleaved::<T, A>(obr, obi, out, ob + 2 * k);
+                                store_interleaved::<T, A>(ocr, oci, out, oc + 2 * k);
+                                store_interleaved::<T, A>(odr, odi, out, od + 2 * k);
+                            }
+                            _ => {
+                                store::<T, A>(oar, self.re, ia + k);
+                                store::<T, A>(oai, self.im, ia + k);
+                                store::<T, A>(obr, self.re, ib + k);
+                                store::<T, A>(obi, self.im, ib + k);
+                                store::<T, A>(ocr, self.re, ic + k);
+                                store::<T, A>(oci, self.im, ic + k);
+                                store::<T, A>(odr, self.re, id + k);
+                                store::<T, A>(odi, self.im, id + k);
+                            }
+                        }
                         k += lanes;
                     }
                     // Scalar remainder when the batch is not a lane multiple.
@@ -237,14 +296,32 @@ where
                         let (sbr, sbi) = (uar - ubr, uai - ubi);
                         let (sfr, sfi) = (ucr - udr, uci - udi);
 
-                        self.re[ia + k] = uar + ubr;
-                        self.im[ia + k] = uai + ubi;
-                        self.re[ib + k] = w3r * sbr - w3i * sbi;
-                        self.im[ib + k] = w3r * sbi + w3i * sbr;
-                        self.re[ic + k] = ucr + udr;
-                        self.im[ic + k] = uci + udi;
-                        self.re[id + k] = w3r * sfr - w3i * sfi;
-                        self.im[id + k] = w3r * sfi + w3i * sfr;
+                        let (oar, oai) = (uar + ubr, uai + ubi);
+                        let (obr, obi) = (w3r * sbr - w3i * sbi, w3r * sbi + w3i * sbr);
+                        let (ocr, oci) = (ucr + udr, uci + udi);
+                        let (odr, odi) = (w3r * sfr - w3i * sfi, w3r * sfi + w3i * sfr);
+                        match (last, sink.as_deref_mut()) {
+                            (true, Some(out)) => {
+                                out[oa + 2 * k] = oar;
+                                out[oa + 2 * k + 1] = oai;
+                                out[ob + 2 * k] = obr;
+                                out[ob + 2 * k + 1] = obi;
+                                out[oc + 2 * k] = ocr;
+                                out[oc + 2 * k + 1] = oci;
+                                out[od + 2 * k] = odr;
+                                out[od + 2 * k + 1] = odi;
+                            }
+                            _ => {
+                                self.re[ia + k] = oar;
+                                self.im[ia + k] = oai;
+                                self.re[ib + k] = obr;
+                                self.im[ib + k] = obi;
+                                self.re[ic + k] = ocr;
+                                self.im[ic + k] = oci;
+                                self.re[id + k] = odr;
+                                self.im[id + k] = odi;
+                            }
+                        }
                     }
                 }
             }
