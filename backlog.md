@@ -1,5 +1,15 @@
 # Apollo Backlog
 
+<a id="apollo-codelet-schedule-controls"></a>
+## APOLLO-CODELET-SCHEDULE-CONTROLS — Share composite schedule controls [patch] [arch] — in-progress
+- **Integrator:** codex/root; **contributor:** codex/main_integration; **last-update:** 2026-09-08; branch `codex/composite-phase-schedules`.
+- **Scope:** integrate the preserved lane's private schedule dimension into current providers, deleting duplicate arithmetic and obsolete emission modes; no production split routing.
+- **Acceptance:** selected, forced-fused and forced-split values agree for lengths 50/144, both precisions and directions; independent DFT oracles pass; no added production scratch or attributed code-size growth.
+- **Decision:** ADR 0051 is reserved for composite phase schedules; sealed zero-sized strategies share one generated arithmetic body.
+- **Evidence:** lane format, strict Clippy and 20 focused debug tests pass; release and full oracle collection remains active against the lane's original lock. This does not verify current-provider integration.
+- **Verification:** generic debug/release tests, unchanged complete oracle sweep, private Rustdoc and linked code/size comparison against the retained current-provider executable.
+- **Dependencies:** [PR 338](https://github.com/ryancinsight/apollo/pull/338) lands as `2ac33b95`; preserve both original locks during source reconciliation.
+
 <a id="apollo-worker-hook-admission"></a>
 ## APOLLO-WORKER-HOOK-ADMISSION — Preserve reclamation under bounded registration [patch] [arch] — todo
 - **Outcome:** adopt the current first-party runtime with explicit owner-thread idle semantics and recoverable registration exhaustion.
@@ -11,15 +21,8 @@
 - **Verification:** bounded registry/admission tests, owner-thread and wake/shutdown tests, existing Loom suites, unchanged Apollo worker and 20-window footprint oracles, locked API and controlled performance checks.
 
 <a id="apollo-local-performance-gate"></a>
-## APOLLO-LOCAL-PERFORMANCE-GATE — Keep timing on controlled local hosts [patch] [arch] — review
-- **Integrator:** codex/api_evidence; **last-update:** 2026-09-08; shared branch `codex/four-step-square-movement`.
-- **Outcome:** replace hosted timing jobs with local retained-binary comparisons; CI retains the existing seven bounded benchmark smokes.
-- **Scope:** benchmark workflow and ADR 0036; preserve instruments, statistical comparison, workloads, source/lock identity checks and smoke coverage.
-- **Acceptance:** no hosted timing execution; local baseline/candidate preparation and comparison remain reproducible under the existing bounds; workflow and documentation checks pass.
-- **Evidence:** hosted timing workflow removed; all seven smoke targets and their bounds remain unchanged. Preparation tests: ten pass, one symlink-privilege skip; four workflows parse and 19 shell steps pass syntax checks. Actionlint is unavailable.
-- **Dependencies:** current-provider correctness, API, memory and timing acceptance is collected; reuse the existing preparation and bounded native runner.
-- **Decision:** revise [ADR 0036](docs/adr/0036-native-benchmark-regression-oracle.md) for the execution venue without changing its statistical contract.
-- **Verification:** workflow lint, script regression tests, existing seven-smoke collection and unchanged local census acceptance.
+## APOLLO-LOCAL-PERFORMANCE-GATE — Keep timing on controlled local hosts [patch] [arch] — done
+- `b255df12`, [PR 338](https://github.com/ryancinsight/apollo/pull/338), merged `2ac33b95`: hosted timing removed; seven bounded smokes and preparation regressions remain in passing required CI. [ADR 0036](docs/adr/0036-native-benchmark-regression-oracle.md) preserves the statistical contract; actionlint remains unavailable locally.
 
 <a id="apollo-codelet-experiment-boundary"></a>
 ## APOLLO-CODELET-EXPERIMENT-BOUNDARY — Keep rejected codelet routes in tests [patch] — done
@@ -48,16 +51,8 @@
 ## APOLLO-REQUIRED-MERGE-CHECKS — Enforce core verification before automatic merge [patch] — done
 - Installed and read back on 2026-09-06: strict `rust workspace` and `Lockfile integrity / Lockfile integrity` requirements on `main`, with automatic merge enabled. The prior unprotected branch let `--auto` merge before hosted checks completed; [landed CI](https://github.com/ryancinsight/apollo/actions/runs/34015129487) subsequently passes.
 <a id="apollo-four-step-square-movement"></a>
-## APOLLO-FOUR-STEP-SQUARE-MOVEMENT — Consolidate provider-owned FourStep movement [patch] — review
-
-- **Integrator:** codex/01a07370; **last-update:** 2026-09-08; branch `codex/four-step-square-movement`.
-- **Build coordination:** current-provider gates and the independent 16-run census are collected; no owned native process remains. API, allocation, size and timing acceptance pass at `54e8f2d8`.
-- **Scope:** all pure-copy FourStep transposes through Leto, removing Apollo's private copy kernels and scalar trait hook; Hermes owns register movement. No fused multiplication, decomposition, route, normalization, workspace or Apollo API change.
-- **Hypothesis:** square register exchange and a checked canonical dense-copy boundary remove duplicate movement without allocation or an additional full-volume pass. [ADR 0040](docs/adr/0040-leto-fft-layout-ownership.md) owns the design, measured candidate comparison and evidence limits.
-- **Acceptance:** retain production only with unchanged allocation bounds, no executable growth and supported complete-engine improvement without supported regression; preserve the accepted provider ownership decision.
-- **Verification:** generic bitwise tile/tail/offset/canary/special-value oracles, FFT analytical and exact/oversized-workspace cases, full affected gates, unchanged replicated census and matched footprint probe.
-- **Dependencies/closure:** [Leto PR 175](https://github.com/ryancinsight/leto/pull/175) merges as `d9ca3252`. Joint adoption with Hephaestus `f6f55f45` resolves Moirai 0.6; direct `83aa411` preserves worker-idle reclamation. Lock `0ECC20AB` passes [consumer gates](../../output/apollo-square-transpose/integration/provider-adoption/collection.json) and [independent timing acceptance](../../output/apollo-square-transpose/integration/provider-adoption/census/independent-audit.json).
-- **Evidence:** current lock `0ECC20AB` passes 1,458 workspace/564 release FFT tests, docs, seven smokes, audits, 223 API checks and 20 matched allocation windows. The 16-run census passes size (-512 bytes), allocation and timing acceptance: one E-core real-half/262144 gain, no supported regression. [ADR 0040](docs/adr/0040-leto-fft-layout-ownership.md) records confidence bounds, cold-peak variation, remaining competitor gaps and exclusions.
+## APOLLO-FOUR-STEP-SQUARE-MOVEMENT — Consolidate provider-owned FourStep movement [patch] — done
+- [PR 338](https://github.com/ryancinsight/apollo/pull/338), `2ac33b95`; Leto-owned copy movement passes current-provider correctness, API, allocation and size gates, plus independently accepted timing: one supported E-core real-half/262144 gain, no supported regression. [ADR 0040](docs/adr/0040-leto-fft-layout-ownership.md) records cold-memory increases and the remaining competitor losses.
 <a id="apollo-transpose-cache-geometry"></a>
 ## APOLLO-TRANSPOSE-CACHE-GEOMETRY — Model transpose cache-set pressure [patch] — todo
 - Outcome: establish whether power-of-two transpose strides cause cache-set conflicts before changing tile geometry.
