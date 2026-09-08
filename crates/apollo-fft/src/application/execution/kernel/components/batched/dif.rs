@@ -28,7 +28,7 @@
 //! at offset `l / 2 - 1`, holding `W_l^j`. DIT walks those stages upward and
 //! DIF downward, over the same values.
 
-use super::radix::{butterfly_rows, Dif2, Dif4, Lane, Seams};
+use super::radix::{butterfly_rows, Dif2, Dif4, Lane, Rows, Seams};
 use crate::application::execution::kernel::mixed_radix::MixedRadixScalar;
 use hermes_simd::{LaneKernel, LaneScalar, Simd, SimdArch, SimdKernel};
 
@@ -102,8 +102,10 @@ where
                 let tws = [tw[wide + j], tw[wide + j + quarter], tw[narrow + j]];
                 let twv = tws.map(|(wr, wi)| (simd.splat(wr), simd.splat(wi)));
                 for g in 0..groups {
-                    let r0 = g * l + j;
-                    let rows = [r0, r0 + quarter, r0 + 2 * quarter, r0 + 3 * quarter];
+                    let rows = Rows {
+                        first: g * l + j,
+                        step: quarter,
+                    };
                     butterfly_rows::<T, A, Dif4, 4, 3>(
                         re,
                         im,
@@ -113,11 +115,7 @@ where
                         row_bits,
                         &tws,
                         &twv,
-                        Seams {
-                            fold: pass_fold,
-                            source: None,
-                            sink: if last { sink.as_deref_mut() } else { None },
-                        },
+                        Seams::frequency(pass_fold, if last { sink.as_deref_mut() } else { None }),
                     );
                 }
             }
@@ -133,21 +131,20 @@ where
                 let tws = [tw[base + j]];
                 let twv = tws.map(|(wr, wi)| (simd.splat(wr), simd.splat(wi)));
                 for g in 0..groups {
-                    let r0 = g * l + j;
+                    let rows = Rows {
+                        first: g * l + j,
+                        step: half,
+                    };
                     butterfly_rows::<T, A, Dif2, 2, 1>(
                         re,
                         im,
-                        [r0, r0 + half],
+                        rows,
                         s,
                         b,
                         row_bits,
                         &tws,
                         &twv,
-                        Seams {
-                            fold: pass_fold,
-                            source: None,
-                            sink: sink.as_deref_mut(),
-                        },
+                        Seams::frequency(pass_fold, sink.as_deref_mut()),
                     );
                 }
             }

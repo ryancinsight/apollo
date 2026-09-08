@@ -87,10 +87,6 @@ struct BatchedStages<'a, T> {
     re: &'a mut [T],
     im: &'a mut [T],
     tw: &'a [(T, T)],
-    /// Planar four-step twiddle planes multiplied into the first stage's
-    /// loads, or `None` for a plain stage set. Row-major with row stride
-    /// `batch`, rows in the same bit-reversed order the data rows carry.
-    fold: Option<(&'a [T], &'a [T])>,
     /// Interleaved input read by the first pass in place of the planes, or
     /// `None` when the planes already hold it. Rows of `batch` complexes as
     /// `2 * batch` reals in natural order; plane row `p` reads source row
@@ -122,7 +118,6 @@ where
             re,
             im,
             tw,
-            fold,
             source,
             batch: b,
             stride: s,
@@ -147,13 +142,15 @@ where
         while l * 2 <= len {
             let half = l >> 1;
             let groups = len / (2 * l);
-            let (pass_fold, pass_source) = if l == 2 { (fold, source) } else { (None, None) };
+            let pass_source = if l == 2 { source } else { None };
             for j in 0..half {
                 let tws = [tw[twx + j], tw[twx + half + j], tw[twx + half + j + half]];
                 let twv = tws.map(|(wr, wi)| (simd.splat(wr), simd.splat(wi)));
                 for g in 0..groups {
-                    let r0 = g * 2 * l + j;
-                    let rows = [r0, r0 + half, r0 + l, r0 + l + half];
+                    let rows = radix::Rows {
+                        first: g * 2 * l + j,
+                        step: half,
+                    };
                     radix::butterfly_rows::<T, A, radix::Dit4, 4, 3>(
                         re,
                         im,
@@ -163,11 +160,7 @@ where
                         row_bits,
                         &tws,
                         &twv,
-                        radix::Seams {
-                            fold: pass_fold,
-                            source: pass_source,
-                            sink: None,
-                        },
+                        radix::Seams::time(pass_source),
                     );
                 }
             }
@@ -178,26 +171,25 @@ where
         if l <= len {
             let half = l >> 1;
             let groups = len / l;
-            let (pass_fold, pass_source) = if l == 2 { (fold, source) } else { (None, None) };
+            let pass_source = if l == 2 { source } else { None };
             for j in 0..half {
                 let tws = [tw[twx + j]];
                 let twv = tws.map(|(wr, wi)| (simd.splat(wr), simd.splat(wi)));
                 for g in 0..groups {
-                    let r0 = g * l + j;
+                    let rows = radix::Rows {
+                        first: g * l + j,
+                        step: half,
+                    };
                     radix::butterfly_rows::<T, A, radix::Dit2, 2, 1>(
                         re,
                         im,
-                        [r0, r0 + half],
+                        rows,
                         s,
                         b,
                         row_bits,
                         &tws,
                         &twv,
-                        radix::Seams {
-                            fold: pass_fold,
-                            source: pass_source,
-                            sink: None,
-                        },
+                        radix::Seams::time(pass_source),
                     );
                 }
             }
@@ -385,7 +377,6 @@ fn run_batched<T>(
     re: &mut [T],
     im: &mut [T],
     plan: &BatchedPlan<T>,
-    fold: Option<(&[T], &[T])>,
     source: Option<&[T]>,
     batch: usize,
     stride: usize,
@@ -396,7 +387,6 @@ fn run_batched<T>(
         re,
         im,
         tw: &plan.tw,
-        fold,
         source,
         batch,
         stride,
@@ -599,7 +589,7 @@ fn planar_stages<T, const INVERSE: bool>(
     //    already batch-major for this direction, so no transpose is needed.
     let plan = T::cached_plan::<INVERSE>(m);
     sect!("stages1", {
-        run_batched(re, im, plan.as_ref(), None, seams.as_deref(), m, stride)
+        run_batched(re, im, plan.as_ref(), seams.as_deref(), m, stride)
     });
 
     // 2. Transpose so the second axis becomes batch-major. Pure exchange:
