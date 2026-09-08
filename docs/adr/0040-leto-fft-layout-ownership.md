@@ -11,7 +11,7 @@
 Revision 2026-09-08: retain the accepted CPU layout boundary and extend it to
 FourStep's pure-copy transposes. The `3f1c0db7` consumer graph passes its local
 retention criteria. Leto PR 175 lands as `d9ca3252`; Apollo's joint provider
-adoption under lock `0ECC20AB` requires fresh acceptance.
+adoption at `54e8f2d8`, lock `0ECC20AB`, also passes the unchanged acceptance.
 
 ## Context and ownership
 
@@ -229,10 +229,39 @@ finds nine of eleven retained movement ranges identical at the same addresses.
 The other two differ in four address operands: two relocated callees preserve
 their normalized instruction rows and 55 referenced read-only bytes match.
 The whole code section has 215,012 differing aligned bytes; remaining program
-and runtime-state differences are unclassified. Final adoption still requires
-controlled performance evidence for this graph. Historical timing cannot
-supply it. All 1,102 tracked compiler inputs remain fixed through collection;
+and runtime-state differences are unclassified. All 1,102 tracked compiler
+inputs remain fixed through gate collection;
 only this ADR's prose changes.
+
+The [independent current-graph audit](../../../../output/apollo-square-transpose/integration/provider-adoption/census/independent-audit.json)
+accepts all 16 runs and 62,400 samples in 83.445 seconds within the reserved
+compiler-free interval and unchanged 300-second suite bound. One supported
+gain remains after charging the complete-family and between-run spread:
+efficiency-core real half-spectrum length 262,144 has median envelopes
+1.4389–1.9973 ms before versus 1.2802–1.3558 ms after. Four paired median
+reductions span 9.88–23.52%; this is a descriptive range, not a confidence
+interval. No supported regression or unchanged-control difference is found.
+
+Warm and retained records match, as do the separate 20 footprint windows.
+Cold length-65,536 maxima increase by 58 bytes on the performance core and
+48 bytes on the efficiency core; cold-process equivalence is not established.
+No compiler endpoint includes rustdoc or other compiler/linker processes.
+The observed 6.93–11.11% host CPU utilization excludes 247–249 surviving
+processes with unreadable totals and cannot bound entirely transient work.
+Caller affinity still does not pin runtime workers.
+
+[Current direct competitor envelopes](../../../../output/apollo-square-transpose/integration/provider-adoption/census/competitor-envelope.csv)
+contain four efficiency-core leads: PhastFT at 1,024 and 4,096, and both
+PhastFT and RustFFT at 16,384. Thirteen comparisons lose and three overlap;
+this is no general superiority claim. The audit preserves raw output,
+including the inherited `DiagnosticOnly` runner label, and owns the acceptance
+verdict for this size-passing graph.
+
+The retained-executable Atlas runner extension used by this experiment is
+verified local work whose upstream commit remains pending. Its executable
+hash is retained with the run; this evidence does not establish availability
+of that option from the published Atlas tooling.
+
 No Python extension runtime, Miri/sanitizer, physical AVX-512 or unexecuted
 platform coverage is implied. Output links follow Atlas's 14-day/10-GiB
 retention policy; they are experiment evidence, not release artifacts.

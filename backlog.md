@@ -11,13 +11,12 @@
 - **Verification:** bounded registry/admission tests, owner-thread and wake/shutdown tests, existing Loom suites, unchanged Apollo worker and 20-window footprint oracles, locked API and controlled performance checks.
 
 <a id="apollo-local-performance-gate"></a>
-## APOLLO-LOCAL-PERFORMANCE-GATE — Keep timing on controlled local hosts [patch] [arch] — in-progress
+## APOLLO-LOCAL-PERFORMANCE-GATE — Keep timing on controlled local hosts [patch] [arch] — review
 - **Integrator:** codex/api_evidence; **last-update:** 2026-09-08; shared branch `codex/four-step-square-movement`.
-- **Lease:** codex/api_evidence `.github/workflows/benchmark-regression.yml`, `.github/workflows/ci.yml`, `docs/adr/0036-native-benchmark-regression-oracle.md`; 2026-09-08T14:57Z.
 - **Outcome:** replace hosted timing jobs with local retained-binary comparisons; CI retains the existing seven bounded benchmark smokes.
 - **Scope:** benchmark workflow and ADR 0036; preserve instruments, statistical comparison, workloads, source/lock identity checks and smoke coverage.
 - **Acceptance:** no hosted timing execution; local baseline/candidate preparation and comparison remain reproducible under the existing bounds; workflow and documentation checks pass.
-- **Evidence:** `.github/workflows/benchmark-regression.yml` still runs timing on pull requests and dispatch, contrary to the current local-only measurement policy. `ci.yml` already runs all seven smokes.
+- **Evidence:** hosted timing workflow removed; all seven smoke targets and their bounds remain unchanged. Preparation tests: ten pass, one symlink-privilege skip; four workflows parse and 19 shell steps pass syntax checks. Actionlint is unavailable.
 - **Dependencies:** current-provider correctness, API, memory and timing acceptance is collected; reuse the existing preparation and bounded native runner.
 - **Decision:** revise [ADR 0036](docs/adr/0036-native-benchmark-regression-oracle.md) for the execution venue without changing its statistical contract.
 - **Verification:** workflow lint, script regression tests, existing seven-smoke collection and unchanged local census acceptance.
@@ -49,16 +48,16 @@
 ## APOLLO-REQUIRED-MERGE-CHECKS — Enforce core verification before automatic merge [patch] — done
 - Installed and read back on 2026-09-06: strict `rust workspace` and `Lockfile integrity / Lockfile integrity` requirements on `main`, with automatic merge enabled. The prior unprotected branch let `--auto` merge before hosted checks completed; [landed CI](https://github.com/ryancinsight/apollo/actions/runs/34015129487) subsequently passes.
 <a id="apollo-four-step-square-movement"></a>
-## APOLLO-FOUR-STEP-SQUARE-MOVEMENT — Consolidate provider-owned FourStep movement [patch] — in-progress
+## APOLLO-FOUR-STEP-SQUARE-MOVEMENT — Consolidate provider-owned FourStep movement [patch] — review
 
 - **Integrator:** codex/01a07370; **last-update:** 2026-09-08; branch `codex/four-step-square-movement`.
-- **Build coordination:** current-provider gates are collected; no owned Cargo process remains. The exact-lock API, 20 allocation windows and size pass; controlled timing remains required.
+- **Build coordination:** current-provider gates and the independent 16-run census are collected; no owned native process remains. API, allocation, size and timing acceptance pass at `54e8f2d8`.
 - **Scope:** all pure-copy FourStep transposes through Leto, removing Apollo's private copy kernels and scalar trait hook; Hermes owns register movement. No fused multiplication, decomposition, route, normalization, workspace or Apollo API change.
 - **Hypothesis:** square register exchange and a checked canonical dense-copy boundary remove duplicate movement without allocation or an additional full-volume pass. [ADR 0040](docs/adr/0040-leto-fft-layout-ownership.md) owns the design, measured candidate comparison and evidence limits.
 - **Acceptance:** retain production only with unchanged allocation bounds, no executable growth and supported complete-engine improvement without supported regression; preserve the accepted provider ownership decision.
 - **Verification:** generic bitwise tile/tail/offset/canary/special-value oracles, FFT analytical and exact/oversized-workspace cases, full affected gates, unchanged replicated census and matched footprint probe.
-- **Dependencies/closure:** [Leto PR 175](https://github.com/ryancinsight/leto/pull/175) merges as `d9ca3252`. Joint adoption with Hephaestus `f6f55f45` resolves Moirai 0.6; direct `83aa411` preserves worker-idle reclamation. New lock `0ECC20AB` passes [consumer gates](../../output/apollo-square-transpose/integration/provider-adoption/collection.json); its timing remains pending.
-- **Evidence:** lock `D43E38E8` passes 1,458 workspace/564 release FFT tests, docs, seven smokes, audits and 20 matched allocation windows. The 16-run census passes size (-512 bytes), allocation and timing acceptance: one E-core real-full/262144 gain, no supported regression. [ADR 0040](docs/adr/0040-leto-fft-layout-ownership.md) records confidence bounds, cold-peak variation, remaining competitor gaps and exclusions.
+- **Dependencies/closure:** [Leto PR 175](https://github.com/ryancinsight/leto/pull/175) merges as `d9ca3252`. Joint adoption with Hephaestus `f6f55f45` resolves Moirai 0.6; direct `83aa411` preserves worker-idle reclamation. Lock `0ECC20AB` passes [consumer gates](../../output/apollo-square-transpose/integration/provider-adoption/collection.json) and [independent timing acceptance](../../output/apollo-square-transpose/integration/provider-adoption/census/independent-audit.json).
+- **Evidence:** current lock `0ECC20AB` passes 1,458 workspace/564 release FFT tests, docs, seven smokes, audits, 223 API checks and 20 matched allocation windows. The 16-run census passes size (-512 bytes), allocation and timing acceptance: one E-core real-half/262144 gain, no supported regression. [ADR 0040](docs/adr/0040-leto-fft-layout-ownership.md) records confidence bounds, cold-peak variation, remaining competitor gaps and exclusions.
 <a id="apollo-transpose-cache-geometry"></a>
 ## APOLLO-TRANSPOSE-CACHE-GEOMETRY — Model transpose cache-set pressure [patch] — todo
 - Outcome: establish whether power-of-two transpose strides cause cache-set conflicts before changing tile geometry.
