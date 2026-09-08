@@ -24,16 +24,16 @@ pub(super) use reduced::{small_pot_inplace_reduced, small_pot_inplace_sized_redu
 // `-D warnings` failure on every non-Windows target and invisible to a local
 // gate run here.
 #[cfg(all(test, windows, target_arch = "x86_64"))]
+pub(crate) use n16::framed_lane_pass as n16_framed_lane_pass;
+#[cfg(all(test, windows, target_arch = "x86_64"))]
 pub(crate) use n16::fused_round_trip_unchecked as n16_fused_round_trip;
 #[cfg(all(test, windows, target_arch = "x86_64"))]
 pub(crate) use n16::vector_arm_unchecked as n16_vector_arm_unchecked;
 #[cfg(all(test, windows, target_arch = "x86_64"))]
-pub(crate) use n16::{
-    framed_lane_pass as n16_framed_lane_pass, per_lane_pass as n16_per_lane_pass,
-};
+pub(crate) use n32::framed_lane_pass as n32_framed_lane_pass;
+#[cfg(all(test, windows, target_arch = "x86_64"))]
+pub(crate) use n8::framed_lane_pass as n8_framed_lane_pass;
 #[cfg(all(test, windows, target_arch = "x86_64"))]
 pub(crate) use n8::fused_round_trip_unchecked as n8_fused_round_trip;
 #[cfg(all(test, windows, target_arch = "x86_64"))]
 pub(crate) use n8::vector_arm_unchecked as n8_vector_arm_unchecked;
-#[cfg(all(test, windows, target_arch = "x86_64"))]
-pub(crate) use n8::{framed_lane_pass as n8_framed_lane_pass, per_lane_pass as n8_per_lane_pass};
