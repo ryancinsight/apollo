@@ -296,76 +296,91 @@
 
 <a id="apollo-n8-regime-split"></a>
 
-## APOLLO-N8-REGIME-SPLIT-2026-09-06 — The N=8 arm decision inverts between latency and throughput [minor] [perf] — todo
+## APOLLO-N8-REGIME-SPLIT-2026-09-06 — The N=8 arm decision inverts between latency and throughput [minor] [perf] — downgraded 2026-09-08: real, and not at a size consumers run
 
-- **Finding.** [`#apollo-n8-f64-gap`](#apollo-n8-f64-gap) declined the N = 8
-  register codelet on a round-trip measurement, where each inverse waits on its
-  own forward — a *latency* reading. The lane arms measure the same two arms
-  under *throughput*, 32 independent lanes in a forward pass then an inverse
-  pass, which is the shape `dimension_2d` and `dimension_3d` axis passes
-  actually run. The verdict inverts. Performance core, intervals 0.05% wide,
-  reproduced:
-
-  | core | regime | scalar | vector | verdict |
-  | --- | --- | --- | --- | --- |
-  | performance | latency (one round trip) | 12.56 ns | 14.44 | scalar by 1.15x |
-  | performance | throughput (32-lane pass) | 229.3 ns | 122.6 | **vector by 1.87x** |
-  | efficiency | latency | 17.22 ns | 18.19 | scalar by 1.06x |
-  | efficiency | throughput | 271.8 ns | 302.5 | scalar by 1.11x |
-
-  N = 16, already vectorised, moves the same way on the performance core —
-  757.9 against 394.8, a 1.92x throughput win against the 1.24x it shows at
-  latency — and only marginally on the efficiency core, 1014.1 against 990.2.
-
-- **The efficiency core does not follow, and that is what makes this a
-  decision.** The inversion is a performance-core effect: there the wide
-  out-of-order window overlaps the permute chains across lanes, and on the
-  efficiency core it does not, so the vector arm loses in *both* regimes there
-  (1.06x at latency, 1.11x at throughput). There is no per-core dispatch — the
-  N = 16 arm records the same constraint — so shipping the register form at
-  N = 8 would buy 87% on performance cores and pay 11% on efficiency ones. That
-  is a real trade to size, not a win to take.
-- **Why it inverts, and why that is credible rather than an artifact.** The
-  register form's cost is four cross-lane permutes and a transpose whose
-  results feed each other — a dependency chain, which is what a latency
-  measurement charges for. Across independent lanes the machine overlaps those
-  chains, and what remains is instruction count, where the vector form does
-  eight points in four registers against the scalar form's per-sample work. The
-  two arms were run through matched loop structures — a forward pass over every
-  lane, then an inverse pass — after a first attempt interleaved the scalar
-  arm's directions per lane and gave it a serial dependency the vector arms did
-  not have.
-- **Not acted on yet, and deliberately.** One dispatch serves both regimes and
-  the codelet cannot see which it is in, so exploiting this means the lane paths
-  selecting a different entry from the standalone one — a real interface
-  question, not a constant to flip. It also needs the efficiency core, which
-  three attempts could not measure on a contended host, and the throughput
-  reading at N = 32 and for `f32`.
-- **DoR (1) is answered: there is no mix — the pass is sequential.** `lanes::`
-  dispatches through `moirai::AdaptiveWithThreshold<32_768>`, whose
-  `parallelize(len)` is `len >= N` over *total complex elements*. A small-POT
-  codelet is the lane kernel only when the axis is at most 64 long, so every
-  ordinary shape — 8 x 8, 16 x 16, 64 x 64, even 128 x 128 at 16,384 — is below
-  the threshold and runs the whole lane loop on the calling thread. An 8-length
-  axis would need its partner axis above 4,096 to parallelise at all.
-  So the trade is not a ratio across core types: it is decided by which single
-  core the caller is scheduled on, and a compute-bound foreground thread on this
-  host class normally lands on a performance core. An earlier revision of this
-  entry asserted `moirai` spreads the lanes across both; that was wrong, and it
-  moves the expected value of the change substantially toward taking it.
-- **Remaining DoR.** (2) which regime dominates apollo's own
-  usage — `dimension_2d`/`dimension_3d` lane counts against standalone
-  small-transform calls in the plan cache; (3) whether the axis passes can take
-  a lane-pass entry without duplicating the dispatch, since a second entry per
-  size is the cloned-variant defect; (4) the same throughput reading for `f32`,
-  whose arms are a separate lane-density family (`reduced.rs`).
-  The efficiency-core reading is done (2026-09-06).
-- **Acceptance.** The multi-lane paths run the arm that measures faster in
-  their own regime on both core types, through one dispatch rather than two
-  copies of it, with the value oracles unchanged; or the performance-core gain
-  is shown not to outweigh the efficiency-core loss across the measured lane
-  mix, and that is recorded with the numbers.
+- **Finding (unchanged).** [`#apollo-n8-f64-gap`](#apollo-n8-f64-gap) declined
+  the N = 8 register codelet on a round trip, where each inverse waits on its
+  own forward — a *latency* reading. Across 32 independent lanes the verdict
+  inverts on the performance core: 229.3 ns scalar against 122.6 vector, a
+  **1.87x** win, where at latency the scalar codelet leads by 1.15x. The
+  efficiency core does not follow (1.11x to scalar at throughput), and there is
+  no per-core dispatch.
+- **Downgraded on the usage question — DoR (2), answered 2026-09-08.** The
+  inversion only changes a *decision* at N = 8, and nothing in the stack plans
+  a length-8 axis. The dominant consumer is kwavers' PSTD path, which plans
+  `FftPlan3D<f64>` over 32³ and 64³ grids (`kwavers-math/src/fft/plan.rs`;
+  `benches/fdtd_propagation_benchmark.rs` fixes `(32,32,32)` and
+  `(64,64,64)`). Those axes route to the N = 32 and N = 64 codelets, which
+  already ship vector arms and already win in *both* regimes — so the arm they
+  select does not change. An 8-length axis means an 8³ volume or a 2-D
+  transform with an 8 axis, which no consumer plans.
+- **So the finding is methodological, not a pending win.** It stands as the
+  reason a codelet decision must name its regime — recorded at the N = 8 arm in
+  `precise.rs` — and it is not worth a [minor] change to the dispatch on its
+  own.
+- **Correction to this entry's own threshold claim, which is size-dependent.**
+  An earlier revision said a small-POT lane pass runs sequentially, because
+  `lanes::` dispatches through `moirai::AdaptiveWithThreshold<32_768>` over
+  *total* elements. That holds for the 2-D shapes it was written about — 8 x 8
+  through 128 x 128 are all below the threshold. It does **not** hold at the
+  sizes consumers actually run: a 64³ volume is 262,144 elements, well above,
+  so those lanes *are* distributed across core types and the performance /
+  efficiency mix is a genuine ratio again. Both statements are true at their
+  own sizes; neither generalises, and any future arm decision has to say which
+  size it is talking about.
+- **Remaining DoR, if it is ever picked up.** (3) whether the axis passes can
+  take a lane-pass entry without duplicating the dispatch, since a second entry
+  per size is the cloned-variant defect; (4) the same throughput reading for
+  `f32`, whose arms are a separate lane-density family (`reduced.rs`). The
+  efficiency-core reading is done (2026-09-06); the usage question is answered
+  above.
+- **Acceptance if resumed.** The multi-lane paths run the arm that measures
+  faster in their own regime on both core types, through one dispatch rather
+  than two copies of it, with the value oracles unchanged.
 - **Risk / change class:** [minor] [perf]; **dependencies:** none.
+- **Successor:** [`#apollo-n64-lane-pass`](#apollo-n64-lane-pass) carries the
+  hot path this investigation actually found.
+- **Parent:** [`#atlas-apollo-beat-the-references`](#atlas-apollo-beat-the-references).
+
+<a id="apollo-n64-lane-pass"></a>
+
+## APOLLO-N64-LANE-PASS-2026-09-08 — The N=64 lane pass is the stack's most-executed kernel and is unmeasured in its own regime [minor] [perf] — todo
+
+- **Finding.** Counting from the consumer rather than from the codelet: a 64³
+  forward `FftPlan3D` runs three axis passes, each handing the whole volume to
+  `lanes::contiguous` / `lanes::execute` with `lane_len = 64`, so it executes
+  **3 x 4,096 = 12,288 length-64 codelet calls per transform** — and kwavers'
+  PSTD runs a transform pair per timestep. That makes
+  `small_pot_inplace_sized::<64>` the most-executed kernel apollo has in the
+  stack's dominant workload.
+- **It is unmeasured in the throughput regime.** `small_pot_arms`
+  (`components/base128/pinned_probe`) covers N = 8, 16 and 32, and its lane
+  arms cover only 8 and 16. The N = 64 arm has a round-trip (latency) reading
+  and no lane reading at all — precisely the gap that let the N = 8 note stand
+  unexamined, now applied to the size that actually runs.
+- **First increment is measurement, not change.** Extend the probe's lane arms
+  to N = 32 and N = 64: `lanes-per-call`, `lanes-framed` and `lanes-scalar` at
+  both core types, with the lane count sized to keep the pass L1-resident and
+  the loop structure matched across arms — a forward pass over every lane, then
+  an inverse pass. Interleaving the two directions per lane gives one arm a
+  serial dependency the others do not have, which invalidated a first attempt
+  at N = 8.
+- **Then the questions it can answer.** Whether the shipped N = 64 arm is the
+  fastest available in the regime it runs; whether the four-step split inside
+  it is sized for throughput rather than latency; and whether the
+  `#[target_feature]` crossing — priced at 41 ps on the performance core and
+  674 ps on the efficiency core by
+  [`#apollo-target-feature-boundary`](#apollo-target-feature-boundary) — is
+  still negligible when it is paid 12,288 times per transform instead of 62
+  times per pass. At the efficiency-core figure that is 8.3 µs per transform,
+  the first shape in this investigation where the crossing might pay for the
+  hoist that item declined.
+- **Acceptance.** N = 32 and N = 64 lane readings recorded at both core types
+  on a quiet host; then either a faster arm or frame placement lands with the
+  value oracles unchanged, or the shipped arm is confirmed optimal in its own
+  regime and that is recorded with the numbers.
+- **Risk / change class:** [minor] [perf]; **dependencies:** an apollo tree —
+  both were held by live peers when this was filed.
 - **Parent:** [`#atlas-apollo-beat-the-references`](#atlas-apollo-beat-the-references).
 
 <a id="apollo-n16-f64-gap"></a>
