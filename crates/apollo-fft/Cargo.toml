@@ -73,5 +73,10 @@ harness = false
 name = "half_cyclic_rader"
 harness = false
 
+[[bench]]
+name = "twiddless_comparison"
+harness = false
+required-features = ["kernel-strategy-bench"]
+
 [lints]
 workspace = true
