@@ -393,16 +393,45 @@ remain unchanged; only this ADR's prose changes during collection. The probe
 warms the process pool before its size ladder, so its first-transform windows
 are not cold-process measurements. These are allocation, not latency results.
 
-The current experimental lock selects Leto `633acb7` through two entries and
+The `7013ea96` experimental lock selects Leto `633acb7` through two entries and
 Hermes `07c5e5f` through five, without changing manifest requirements or
 registry selections. [Leto](../../../leto/backlog.md#leto-square-transpose)
 remains a review-branch dependency. The selected
 [Hermes facet](../../../hermes/backlog.md#hermes-complex-permutation-inlining)
-lands in merge `9d68a9e1`; the lock still identifies the tested provider revision.
+lands in merge `9d68a9e1`; that lock identifies the tested provider revision.
 Provider merges precede accepted consumer delivery;
 rejection removes the unaccepted candidate and temporary lock selections.
 The scalar movement role and batch-inline correction are in this lock. Retained output links follow Atlas's
 14-day/10-GiB policy and contain experiment manifests, not release artifacts.
+
+**Revision 2026-09-08:** integrating main `4c468c4c` selects Hermes `b51e873`
+and removes eight duplicated Mnemosyne packages while retaining Leto `633acb7`.
+The composed lock SHA256 is
+`D43E38E8A3C55A976E6FDA7B77685086C60B24987278339EA3ACFB9C20023D42`.
+The [input manifest](../../../../output/apollo-square-transpose/integration/provider-graph/manifest.json)
+binds fresh checks to staged tree `8fcbdb41`; earlier results retain their
+original dependency scope. No FFT source or manifest changes accompany this
+integration. Fresh all-feature checks pass 1,458 workspace tests excluding
+`apollo-python` (38 skipped) and 564 release FFT library tests (37 skipped).
+Clippy passes across workspace targets and features. Default-feature docs
+and doctests exclude `apollo-python`: seven doctests pass, one remains ignored,
+and public documentation denies warnings. All [20 default-feature f64 allocation windows](../../../../output/apollo-square-transpose/integration/provider-graph/footprint-summary.json)
+match baseline counts, peak bytes, retained bytes and block lists. The same
+pool-warmup and worker-placement limits apply; other precisions and feature
+combinations are not covered by this footprint probe.
+
+The [collected gate record](../../../../output/apollo-square-transpose/integration/provider-graph/collection.json)
+also includes seven benchmark smokes under unchanged 60-second bounds, provider
+audit and RustSec checks. Cargo-deny passes its configured policy with 32
+duplicate warnings; this is not warning-free dependency evidence. Compiler
+inputs and the lock remain fixed throughout; ADR prose records the results.
+
+The rebuilt census remains 6,861,312 bytes. [PE inspection](../../../../output/apollo-square-transpose/integration/provider-graph/census/pe-code-identity.json)
+finds all 6,630 retained movement/review instruction rows unchanged. The whole
+code section differs at 691 bytes within prior-map debug-formatter regions;
+read-only differences are checkout paths, debug metadata and two code pointers.
+Whole-image instruction identity is not claimed. Performance acceptance still
+requires the unchanged complete comparison.
 
 **Revision 2026-09-01:** Leto Ops PR #135, merged as `060eb7eb`, added one
 public allocation-free batched-complex transpose. It selects the widest exact

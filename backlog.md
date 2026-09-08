@@ -29,15 +29,15 @@
 <a id="apollo-four-step-square-movement"></a>
 ## APOLLO-FOUR-STEP-SQUARE-MOVEMENT — Consolidate provider-owned FourStep movement [patch] — in-progress
 
-- **Integrator:** codex/01a07370; **last-update:** 2026-09-07; branch `codex/four-step-square-movement`.
-- **Lease:** none; current integration `7013ea96` has tree `cee1326e` and 1,102 unchanged captured compiler inputs.
-- **Build coordination:** verify outside the Atlas overlay with standalone lock `F9720DFD…2E90197`; immutable fixtures isolate committed-input gates from active edits. Live-tree timing still requires a stable source/lock and uncontended host.
+- **Integrator:** codex/01a07370; **last-update:** 2026-09-08; branch `codex/four-step-square-movement`.
+- **Lease:** none; integration of main `4c468c4c` selects Hermes `b51e873` while retaining Leto `633acb7`.
+- **Build coordination:** refreshed standalone gates are collected and the Cargo slot is released; the unchanged retained census awaits the coordinated compiler-free window.
 - **Scope:** all pure-copy FourStep transposes through Leto, removing Apollo's private copy kernels and scalar trait hook; Hermes owns register movement. No fused multiplication, decomposition, route, normalization, workspace or Apollo API change.
 - **Hypothesis:** square register exchange and a checked canonical dense-copy boundary remove duplicate movement without allocation or an additional full-volume pass. [ADR 0040](docs/adr/0040-leto-fft-layout-ownership.md) owns the design, measured candidate comparison and evidence limits.
 - **Acceptance:** retain production only with unchanged allocation bounds, no executable growth and supported complete-engine improvement without supported regression; preserve the accepted provider ownership decision.
 - **Verification:** generic bitwise tile/tail/offset/canary/special-value oracles, FFT analytical and exact/oversized-workspace cases, full affected gates, unchanged replicated census and matched footprint probe.
-- **Dependencies/closure:** [Leto draft PR 175](https://github.com/ryancinsight/leto/pull/175) contains provider source `633acb7`; [Hermes](../hermes/backlog.md#hermes-complex-permutation-inlining) merges as `9d68a9e` with the locked `07c5e5f` source unchanged. Provider-first adoption and the recorded retention criteria remain required; ADR 0040 owns rejected candidate history.
-- **Evidence:** `7013ea96` passes 126 focused debug/126 release cases, Clippy, private/hidden Rustdoc, seven smokes and dependency audits. Its census remains 512 bytes below baseline with identical mapped instructions; all 20 fresh allocation windows match baseline. Prior full-workspace/API evidence retains its revision scope in ADR 0040. The incomplete timing suite is rejected after Cargo appears at the third endpoint; no complete-engine performance acceptance yet.
+- **Dependencies/closure:** [Leto draft PR 175](https://github.com/ryancinsight/leto/pull/175) supplies candidate `633acb7`; the composed main integration adopts Hermes `b51e873` and removes eight duplicate Mnemosyne packages. Provider-first adoption and the recorded retention criteria remain required; ADR 0040 owns rejected candidate history.
+- **Evidence:** composed lock `D43E38E8` passes 1,458 workspace and 564 release FFT tests, Clippy, public docs, seven smokes and all 20 matched allocation windows. Provider/advisory checks pass; cargo-deny retains 32 configured duplicate warnings. The census is 512 bytes below baseline. [ADR 0040](docs/adr/0040-leto-fft-layout-ownership.md) records exclusions, instruction attribution and historical evidence scopes; no complete-engine performance acceptance yet.
 <a id="apollo-transpose-cache-geometry"></a>
 ## APOLLO-TRANSPOSE-CACHE-GEOMETRY — Model transpose cache-set pressure [patch] — todo
 - Outcome: establish whether power-of-two transpose strides cause cache-set conflicts before changing tile geometry.
@@ -977,6 +977,38 @@
       differences the artifact could account for. The n = 50 f32/f64 fused
       ratio of 0.68 is unaffected — that compares two fused arms, neither of
       which allocated scratch in the probe.
+    - **Re-measured 2026-09-07 on the fixed instrument, host at zero
+      concurrent compiler processes.** Both flagged conclusions move, and one
+      was badly understated. Ratios are split/fused; "tie" means the 96.5%
+      median intervals overlap.
+
+      | core | n | scalar | fused ps | split ps | ratio | verdict |
+      | --- | --- | --- | --- | --- | --- | --- |
+      | P | 50 | f64 | 176279 | 180146 | 1.022 | split loses |
+      | P | 50 | f32 | 122959 | 122664 | 0.998 | **tie** |
+      | P | 144 | f64 | 459258 | 358667 | **0.781** | **split wins 22%** |
+      | P | 144 | f32 | 358200 | 357788 | 0.999 | tie |
+      | E | 50 | f64 | 157903 | 144722 | **0.917** | **split wins 8%** |
+      | E | 50 | f32 | 114892 | 118835 | 1.034 | split loses |
+      | E | 144 | f64 | 407140 | 385383 | 0.947 | tie |
+      | E | 144 | f32 | 459576 | 468229 | 1.019 | tie |
+
+      - **The f32 conclusion survives, on narrower evidence.** The recorded
+        "~3% split loss at n = 50" was a performance-core figure and is now a
+        tie — the zero-fill was carrying it, exactly as the bias predicted. A
+        real 3.4% loss remains on the efficiency core. Split still helps `f32`
+        at no length on either core, so fused-body register pressure is still
+        not the `f32` defect; the supporting number just changed.
+      - **The f64 core-split lead was understated by more than half.** Recorded
+        as "10% faster on the perf core, 5.5% worse on efficiency". Measured:
+        `n = 144` runs **21.9% faster split on the performance core** with
+        disjoint intervals, and the efficiency-core penalty is **gone** (a
+        tie). A second win appears that the biased run hid entirely: `n = 50`
+        `f64` on the efficiency core, **8.3% faster split**, disjoint.
+      - **So `prefers_split_codelet` deserves a per-(length, core) decision for
+        `f64`** — 144 wins big on P, 50 wins on E and loses 2.2% on P — and
+        stays off for `f32` at both lengths. That is a routing item, not
+        another measurement.
     - Not measured at the time of writing because the host carried 45
       concurrent compiler processes; the measurement itself is unchanged and
       takes one pinned run.

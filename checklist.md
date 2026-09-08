@@ -2,7 +2,7 @@
 
 ## codex/root — current execution
 
-- [ ] [FourStep movement](backlog.md#apollo-four-step-square-movement): collect a complete unchanged census under the host-load guard, then apply retention criteria and provider-first delivery. The 2026-09-07 suite stops after three invocations because Cargo appears in the endpoint snapshot; its timing is excluded. Correctness, size and all 20 allocation windows pass at `7013ea96`.
+- [ ] [FourStep movement](backlog.md#apollo-four-step-square-movement): collect the unchanged census on refreshed lock `D43E38E8` under the coordinated host-load guard, apply retention criteria, then complete provider-first delivery.
 
 ## ATLAS-APOLLO-REAL-HALF-THROUGHPUT-2026-09-01 [perf] — Codex
 
