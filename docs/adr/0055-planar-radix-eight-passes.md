@@ -146,3 +146,30 @@ about 3.6 per cycle, so the remaining lever is the arithmetic itself: the
 first time-decimated pass, the last frequency-decimated pass and the `j = 0`
 row set of every pass multiply by `1` and `∓i` with full complex multiplies.
 Listings under `output/apollo-planar-radix8/asm_spec_*.s`.
+
+2026-09-08, third increment (rejected): exact unit rotations. The `j = 0`
+row set of every pass, which is the whole first time-decimated pass and
+the whole last frequency-decimated pass, multiplied by `1` and `∓i` from
+the table. An add-and-rotate form ran them instead, selected per pass by
+the plan's direction. The assembly confirms the pass at 37 instructions per
+quad with no multiply (16 add/subtract, 16 loads, 8 stores), and the
+whole transform did not move in either instrument (warm 65536 `f64` 212 /
+205 to 202 / 214; sections flat at 4096 through 65536). Retained as
+`candidate-unit-*.rs` beside its runs.
+
+What the three increments establish together is the bound. Blocking to
+L1 did not help, cutting the instruction count from 88 to 53 did not
+help, and removing the multiplies did not help: a radix-4 planar pass
+issues 16 vector loads and 8 vector stores per quad, and at the core's
+load and store port throughput that is about 9 cycles whether or not it
+computes. The planar stage set is bound by memory operations per element,
+which only more stages per pass can reduce, and on sixteen registers the
+planar layout cannot hold eight rows. The interleaved layout holds them:
+one vector per complex row, so a radix-8 butterfly is eight registers,
+8 loads and 8 stores per eight elements per three stages against the
+planar pair's 8 and 8 per four per two, a third of the memory operations
+per element-stage, with the complex multiply's shuffles landing on the
+port the loads do not use. That is the next design, filed as
+[APOLLO-PLANAR-INTERLEAVED-RADIX-EIGHT](../../backlog.md#apollo-planar-interleaved-radix-eight);
+the existing `batched::interleaved` oracle, measured slower at radix-2, is
+its starting point.

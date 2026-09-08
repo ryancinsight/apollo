@@ -10,7 +10,8 @@
 - [x] [Planar seam fusion](backlog.md#apollo-planar-seam-fusion): fused source/sink measured, ADR 0054 Accepted.
 - [ ] [Planar seam fusion](backlog.md#apollo-planar-seam-fusion): exact-tree gate green, PR enqueued, merged, lease discharged.
 - [x] [Planar radix depth](backlog.md#apollo-planar-radix-depth): radix-8 measured and rejected, shared driver accepted, ADR 0055 recorded.
-- [ ] [Planar radix depth](backlog.md#apollo-planar-radix-depth): exact-tree gate green, pushed onto PR 353, merged, lease discharged.
+- [x] [Planar radix depth](backlog.md#apollo-planar-radix-depth): driver specialized and pushed; unit rotations measured and rejected; bound recorded.
+- [ ] [Planar radix depth](backlog.md#apollo-planar-radix-depth): PR 353 merged, lease discharged.
 
 ## codex/root — current execution
 
