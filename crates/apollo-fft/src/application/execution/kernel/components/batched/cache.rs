@@ -70,7 +70,11 @@ pub(crate) trait BatchedPlanCache:
     MixedRadixScalar + LaneScalar + super::radix::Lane + eunomia::layout::Pod + Sized
 {
     fn cached_plan<const INVERSE: bool>(len: usize) -> Arc<BatchedPlan<Self>>;
-    fn cached_four_step_fold<const INVERSE: bool>(n: usize, m: usize) -> Arc<FourStepFold<Self>>;
+    fn cached_four_step_fold<const INVERSE: bool>(
+        n: usize,
+        rows: usize,
+        cols: usize,
+    ) -> Arc<FourStepFold<Self>>;
 }
 
 macro_rules! impl_plan_cache {
@@ -119,14 +123,16 @@ macro_rules! impl_plan_cache {
 
             fn cached_four_step_fold<const INVERSE: bool>(
                 n: usize,
-                m: usize,
+                rows: usize,
+                cols: usize,
             ) -> Arc<FourStepFold<Self>> {
                 #[cold]
                 #[inline(never)]
                 fn miss<const INVERSE: bool>(
                     key: (usize, bool),
                     n: usize,
-                    m: usize,
+                    rows: usize,
+                    cols: usize,
                 ) -> Arc<FourStepFold<$t>> {
                     let shared = $planes_global.read().get(&key).cloned();
                     if let Some(planes) = shared {
@@ -136,8 +142,9 @@ macro_rules! impl_plan_cache {
                     Arc::clone(guard.entry(key).or_insert_with(|| {
                         Arc::new(FourStepFold::<$t>::new::<INVERSE>(
                             n,
-                            m,
-                            super::LaneOrder::for_batch::<$t>(m),
+                            rows,
+                            cols,
+                            super::LaneOrder::for_batch::<$t>(cols),
                         ))
                     }))
                 }
@@ -147,7 +154,7 @@ macro_rules! impl_plan_cache {
                     if let Some(planes) = c.get::<INVERSE>(n) {
                         return planes;
                     }
-                    let planes = miss::<INVERSE>(key, n, m);
+                    let planes = miss::<INVERSE>(key, n, rows, cols);
                     c.insert::<INVERSE>(n, &planes);
                     planes
                 })

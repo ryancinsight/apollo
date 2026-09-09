@@ -6,9 +6,10 @@ pub(crate) const PARALLEL_ROW_THRESHOLD: usize = 65_536;
 
 /// Required complex elements for the complete four-step call tree.
 ///
-/// Planar kernels own padded planes. A generic square uses one transpose
-/// buffer. An unfused odd split holds its gathered input while its halves
-/// reuse a child workspace sequentially. No nested call acquires storage.
+/// Planar kernels own padded planes, two pairs for an odd power. A generic
+/// square uses one transpose buffer. An unfused odd split past the planar
+/// domain holds its gathered input while its halves reuse a child workspace
+/// sequentially. No nested call acquires storage.
 /// Invalid lengths or an unrepresentable combined capacity return `None`.
 pub(crate) fn scratch_len(n: usize) -> Option<usize> {
     use crate::application::execution::kernel::components::batched;
@@ -19,9 +20,6 @@ pub(crate) fn scratch_len(n: usize) -> Option<usize> {
     }
     if batched::planar_applies(n) {
         return Some(batched::scratch_len(n));
-    }
-    if batched::planar_split_applies(n) {
-        return Some(batched::split_scratch_len(n));
     }
     if n.trailing_zeros() % 2 == 1 && n >= 512 {
         return n.checked_add(scratch_len(n / 2)?);

@@ -150,11 +150,11 @@ fn stage_out<T: Copy>(
     rows: usize,
     base: usize,
     batch: usize,
+    row_bits: u32,
     block: Columns,
     pitch: usize,
 ) {
     let width = 2 * (block.end - block.start);
-    let row_bits = batch.trailing_zeros();
     for r in 0..rows {
         let at = reverse_row(base + r, row_bits) * batch * 2 + 2 * block.start;
         sink[at..at + width].copy_from_slice(&staging[r * pitch..r * pitch + width]);
@@ -422,7 +422,9 @@ pub(super) fn sweep_frequency<T, A>(
                     }
                 }
                 if let Some(sink) = sink.as_deref_mut().filter(|_| staged) {
-                    stage_out(sink, staging, tile_rows, base, batch, block, pitch);
+                    stage_out(
+                        sink, staging, tile_rows, base, batch, row_bits, block, pitch,
+                    );
                 }
                 start = block.end;
             }

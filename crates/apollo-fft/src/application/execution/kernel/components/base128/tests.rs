@@ -3,6 +3,7 @@
 
 use super::instance_major::{transform_128, Plan128};
 use super::instance_major::{transform_64, Plan64};
+use crate::application::execution::kernel::mixed_radix::MixedRadixScalar;
 use eunomia::{Complex32, Complex64};
 use std::f64::consts::TAU;
 
@@ -735,4 +736,68 @@ fn gather_matches_the_strided_reference_at_both_widths() {
     assert_gather_matches_reference::<f64>(4);
     assert_gather_matches_reference::<f32>(2);
     assert_gather_matches_reference::<f32>(4);
+}
+
+/// The dispatched level combine agrees with the scalar loop within the
+/// rounding of one complex multiply and one addition.
+fn level_combine_matches_the_scalar_loop<T>(unit_roundoff: f64)
+where
+    T: hermes_simd::LaneScalar
+        + MixedRadixScalar<Complex = eunomia::Complex<T>>
+        + eunomia::FloatElement
+        + Into<f64>,
+    eunomia::Complex<T>: eunomia::layout::Pod
+        + Copy
+        + core::ops::Mul<Output = eunomia::Complex<T>>
+        + core::ops::Add<Output = eunomia::Complex<T>>
+        + core::ops::Sub<Output = eunomia::Complex<T>>,
+{
+    let len = 512usize;
+    let twiddles: Vec<eunomia::Complex<T>> = (0..len)
+        .map(|j| {
+            let angle = -core::f64::consts::TAU * j as f64 / (2 * len) as f64;
+            let (sin, cos) = angle.sin_cos();
+            eunomia::Complex::new(T::from_f64(cos), T::from_f64(sin))
+        })
+        .collect();
+    let data: Vec<eunomia::Complex<T>> = (0..2 * len)
+        .map(|i| {
+            let x = i as f64;
+            eunomia::Complex::new(
+                T::from_f64((0.013 * x).sin()),
+                T::from_f64(0.5 * (0.029 * x).cos()),
+            )
+        })
+        .collect();
+    let mut expected = data.clone();
+    for j in 0..len {
+        let rotated = expected[len + j] * twiddles[j];
+        let even = expected[j];
+        expected[j] = even + rotated;
+        expected[len + j] = even - rotated;
+    }
+    let mut actual = data;
+    let handled = hermes_simd::vectorize(super::split_boundary::CombineLevel::<T> {
+        data: eunomia::layout::cast_slice_mut(&mut actual),
+        twiddles: eunomia::layout::cast_slice(&twiddles),
+        len,
+    });
+    assert!(
+        handled,
+        "a two-lane or wider backend handles a 512-sample level"
+    );
+    // One complex multiply (fused, two roundings) and one add or subtract
+    // against the scalar form's two-operation product: at most four
+    // roundings apart at the inputs' unit scale.
+    let bound = 4.0 * unit_roundoff;
+    for (j, (got, want)) in actual.iter().zip(&expected).enumerate() {
+        let error = (got.re.into() - want.re.into()).hypot(got.im.into() - want.im.into());
+        assert!(error <= bound, "sample {j}: {error:e} > {bound:e}");
+    }
+}
+
+#[test]
+fn level_combine_matches_the_scalar_loop_in_both_precisions() {
+    level_combine_matches_the_scalar_loop::<f32>(f64::from(f32::EPSILON));
+    level_combine_matches_the_scalar_loop::<f64>(f64::EPSILON);
 }

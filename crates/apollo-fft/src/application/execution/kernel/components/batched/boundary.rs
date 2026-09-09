@@ -1,14 +1,12 @@
-//! Vectorized transpose, decimation and half-combine boundaries for the
-//! batched driver.
+//! Vectorized transpose boundaries for the batched driver: in place for a
+//! square, into the second plane pair for a rectangle.
 //!
-//! The kernels dispatch through `vectorize`, as the stage sets do, so the
+//! Both kernels dispatch through `vectorize`, as the stage sets do, so the
 //! tile width and the plane column order ([`super::lane_order`]) are the one
 //! dispatched backend's, known at compile time inside each kernel: the
-//! transpose permutes its tile rows through the order to leave data rows
-//! natural, the decimation splits its input registers at complex and then
-//! sub-lane granularity so each half lands in that order, and the combine
-//! reads its planes and its interleaved twiddles in that order through the
-//! sub-lane unpacks, so no pass carries a cross-lane permute. A width
+//! tile rows are relabeled through the order on one side of the
+//! in-register transpose and through its inverse on the other, so data
+//! rows stay natural and no pass carries a cross-lane permute. A width
 //! without a native tile transpose, or a shape it does not divide, falls
 //! back to the scalar loops in the parent module, which remain the
 //! reference implementation.
@@ -58,94 +56,6 @@ where
     debug_assert!(at + <A as SimdStorage<T>>::LANE_COUNT <= data.len());
     // SAFETY: as `chunk` above.
     unsafe { v.store_unaligned(data.as_mut_ptr().add(at)) }
-}
-
-/// Combines two planar half-transforms and writes interleaved output.
-///
-/// Each vector covers `LANE_COUNT` consecutive complex outputs. The even and
-/// odd planes supply separate real/imaginary registers, while the cached
-/// twiddle and the two output halves use the public interleaved complex layout.
-/// The planes and the deinterleaved twiddle share the plane column order,
-/// and the row permutation rides the output address.
-pub(crate) struct CombinePlanarHalves<'a, T> {
-    /// Even-half real plane.
-    pub(crate) even_re: &'a [T],
-    /// Even-half imaginary plane.
-    pub(crate) even_im: &'a [T],
-    /// Odd-half real plane.
-    pub(crate) odd_re: &'a [T],
-    /// Odd-half imaginary plane.
-    pub(crate) odd_im: &'a [T],
-    /// Interleaved complex twiddles, represented as scalar lanes.
-    pub(crate) twiddles: &'a [T],
-    /// Interleaved low output half, represented as scalar lanes.
-    pub(crate) low: &'a mut [T],
-    /// Interleaved high output half, represented as scalar lanes.
-    pub(crate) high: &'a mut [T],
-    /// Live row length in complexes.
-    pub(crate) m: usize,
-    /// Padded plane row stride.
-    pub(crate) stride: usize,
-}
-
-impl<T: BatchedPlanCache> LaneKernel<T> for CombinePlanarHalves<'_, T> {
-    /// Whether the dispatched width handled the pass.
-    type Output = bool;
-
-    #[expect(
-        clippy::inline_always,
-        reason = "the body must inline into the dispatcher's target-feature frame"
-    )]
-    #[inline(always)]
-    fn call<A: SimdArch + SimdKernel<T>>(self, _capability: Simd<T, A>) -> bool {
-        let lanes = <A as SimdStorage<T>>::LANE_COUNT;
-        if lanes < 2 || self.m % lanes != 0 || self.stride % lanes != 0 {
-            return false;
-        }
-
-        let half = self.m * self.m;
-        let plane = self.m * self.stride;
-        assert!(
-            self.even_re.len() >= plane
-                && self.even_im.len() >= plane
-                && self.odd_re.len() >= plane
-                && self.odd_im.len() >= plane
-                && self.twiddles.len() >= 2 * half
-                && self.low.len() >= 2 * half
-                && self.high.len() >= 2 * half,
-            "invariant: combine inputs hold two padded planes, half twiddles, and both output halves"
-        );
-
-        let bits = self.m.trailing_zeros();
-        for row in 0..self.m {
-            let base = row * self.stride;
-            let dst = (row.reverse_bits() >> (usize::BITS - bits)) * self.m;
-            for column in (0..self.m).step_by(lanes) {
-                let plane_chunk = (base + column) / lanes;
-                let even_re = chunk::<T, A>(self.even_re, plane_chunk);
-                let even_im = chunk::<T, A>(self.even_im, plane_chunk);
-                let odd_re = chunk::<T, A>(self.odd_re, plane_chunk);
-                let odd_im = chunk::<T, A>(self.odd_im, plane_chunk);
-
-                let output_chunk = 2 * (dst + column) / lanes;
-                let twiddle_lo = chunk::<T, A>(self.twiddles, output_chunk);
-                let twiddle_hi = chunk::<T, A>(self.twiddles, output_chunk + 1);
-                let (twiddle_re, twiddle_im) = twiddle_lo.deinterleave_sublanes(twiddle_hi);
-                let rotated_re = twiddle_re.mul_add(odd_re, -(twiddle_im * odd_im));
-                let rotated_im = twiddle_re.mul_add(odd_im, twiddle_im * odd_re);
-
-                let (low_lo, low_hi) =
-                    (even_re + rotated_re).interleave_sublanes(even_im + rotated_im);
-                let (high_lo, high_hi) =
-                    (even_re - rotated_re).interleave_sublanes(even_im - rotated_im);
-                put_chunk(low_lo, self.low, output_chunk);
-                put_chunk(low_hi, self.low, output_chunk + 1);
-                put_chunk(high_lo, self.high, output_chunk);
-                put_chunk(high_hi, self.high, output_chunk + 1);
-            }
-        }
-        true
-    }
 }
 
 /// In-place square transpose of both padded planes through native in-register
@@ -250,33 +160,30 @@ where
     }
 }
 
-/// Decimates an odd power's interleaved input into its two half-planes.
-///
-/// Input row `row` holds `2 m` complexes, the even and odd halves' row `row`
-/// interleaved sample by sample. `deinterleave_pairs` splits each register
-/// pair at complex granularity, then the sub-lane unpack splits the reals
-/// from the imaginaries, which leaves each half's lanes in the plane column
-/// order exactly as [`super::load_interleaved`] leaves a contiguous row's;
-/// the bit-reversed row permutation rides the store address. The scalar
-/// form in the parent module is the reference.
-pub(crate) struct DeinterleaveDecimatedRows<'a, T> {
-    /// Interleaved input, represented as scalar lanes (`4 m` per row).
-    pub(crate) source: &'a [T],
-    /// Even-half real plane.
-    pub(crate) even_re: &'a mut [T],
-    /// Even-half imaginary plane.
-    pub(crate) even_im: &'a mut [T],
-    /// Odd-half real plane.
-    pub(crate) odd_re: &'a mut [T],
-    /// Odd-half imaginary plane.
-    pub(crate) odd_im: &'a mut [T],
-    /// Live row length of each half in complexes.
-    pub(crate) m: usize,
-    /// Padded plane row stride.
-    pub(crate) stride: usize,
+/// Out-of-place transpose of `rows × cols` padded planes into `cols × rows`
+/// padded planes through the same relabeled tile transpose as
+/// [`TransposePlanes`]: every source tile lands transposed at its mirrored
+/// position in the destination, and no tile is revisited.
+pub(crate) struct TransposePlanesInto<'a, T> {
+    /// Source real plane.
+    pub(crate) src_re: &'a [T],
+    /// Source imaginary plane.
+    pub(crate) src_im: &'a [T],
+    /// Source rows.
+    pub(crate) rows: usize,
+    /// Source columns, live.
+    pub(crate) cols: usize,
+    /// Source padded row stride.
+    pub(crate) src_stride: usize,
+    /// Destination real plane, `cols` rows of `rows` columns.
+    pub(crate) dst_re: &'a mut [T],
+    /// Destination imaginary plane.
+    pub(crate) dst_im: &'a mut [T],
+    /// Destination padded row stride.
+    pub(crate) dst_stride: usize,
 }
 
-impl<T: BatchedPlanCache> LaneKernel<T> for DeinterleaveDecimatedRows<'_, T> {
+impl<T: BatchedPlanCache> LaneKernel<T> for TransposePlanesInto<'_, T> {
     /// Whether the dispatched width handled the pass.
     type Output = bool;
 
@@ -287,45 +194,106 @@ impl<T: BatchedPlanCache> LaneKernel<T> for DeinterleaveDecimatedRows<'_, T> {
     #[inline(always)]
     fn call<A: SimdArch + SimdKernel<T>>(self, _capability: Simd<T, A>) -> bool {
         let lanes = <A as SimdStorage<T>>::LANE_COUNT;
-        // The pair split needs an even lane count; one lane is the scalar form.
-        if lanes < 2 || self.m % lanes != 0 || self.stride % lanes != 0 {
+        if !matches!(lanes, 2 | 4 | 8 | 16)
+            || self.rows % lanes != 0
+            || self.cols % lanes != 0
+            || self.src_stride % lanes != 0
+            || self.dst_stride % lanes != 0
+        {
             return false;
         }
-
-        let plane = self.m * self.stride;
-        let row_reals = 4 * self.m;
+        let Self {
+            src_re,
+            src_im,
+            rows,
+            cols,
+            src_stride,
+            dst_re,
+            dst_im,
+            dst_stride,
+        } = self;
         assert!(
-            self.source.len() >= self.m * row_reals
-                && self.even_re.len() >= plane
-                && self.even_im.len() >= plane
-                && self.odd_re.len() >= plane
-                && self.odd_im.len() >= plane,
-            "invariant: the decimation reads m rows of 2m complexes into four padded planes"
+            src_re.len() >= rows * src_stride
+                && src_im.len() >= rows * src_stride
+                && dst_re.len() >= cols * dst_stride
+                && dst_im.len() >= cols * dst_stride,
+            "invariant: the source holds rows padded rows and the destination cols"
         );
-
-        let bits = self.m.trailing_zeros();
-        for row in 0..self.m {
-            let source_row = row * row_reals;
-            let base = (row.reverse_bits() >> (usize::BITS - bits)) * self.stride;
-            for column in (0..self.m).step_by(lanes) {
-                // `lanes` even and `lanes` odd complexes: four registers.
-                let source_chunk = (source_row + 4 * column) / lanes;
-                let r0 = chunk::<T, A>(self.source, source_chunk);
-                let r1 = chunk::<T, A>(self.source, source_chunk + 1);
-                let r2 = chunk::<T, A>(self.source, source_chunk + 2);
-                let r3 = chunk::<T, A>(self.source, source_chunk + 3);
-                let (even_a, odd_a) = r0.deinterleave_pairs(r1);
-                let (even_b, odd_b) = r2.deinterleave_pairs(r3);
-                let (even_re, even_im) = even_a.deinterleave_sublanes(even_b);
-                let (odd_re, odd_im) = odd_a.deinterleave_sublanes(odd_b);
-
-                let plane_chunk = (base + column) / lanes;
-                put_chunk(even_re, self.even_re, plane_chunk);
-                put_chunk(even_im, self.even_im, plane_chunk);
-                put_chunk(odd_re, self.odd_re, plane_chunk);
-                put_chunk(odd_im, self.odd_im, plane_chunk);
+        for (src, dst) in [(src_re, dst_re), (src_im, dst_im)] {
+            match lanes {
+                2 => transpose_plane_into::<T, A, 2>(src, rows, cols, src_stride, dst, dst_stride),
+                4 => transpose_plane_into::<T, A, 4>(src, rows, cols, src_stride, dst, dst_stride),
+                8 => transpose_plane_into::<T, A, 8>(src, rows, cols, src_stride, dst, dst_stride),
+                16 => {
+                    transpose_plane_into::<T, A, 16>(src, rows, cols, src_stride, dst, dst_stride)
+                }
+                _ => unreachable!("lane width was validated above"),
             }
         }
         true
+    }
+}
+
+#[expect(
+    clippy::inline_always,
+    reason = "the tile width must remain constant inside the target-feature frame"
+)]
+#[inline(always)]
+fn transpose_plane_into<T, A, const LANES: usize>(
+    src: &[T],
+    rows: usize,
+    cols: usize,
+    src_stride: usize,
+    dst: &mut [T],
+    dst_stride: usize,
+) where
+    T: BatchedPlanCache,
+    A: SimdArch + SimdKernel<T>,
+{
+    // The same relabeling as `transpose_plane`: `out[k][l] =
+    // in[order(l)][inverse(k)]` within each tile, the tile itself moving
+    // from `(bi, bj)` to `(bj, bi)`.
+    let order: [usize; LANES] =
+        const { sublane_order::<LANES>(<A as SimdPermute<T>>::SUBLANE_LANES) };
+    let inverse: [usize; LANES] =
+        const { sublane_inverse::<LANES>(<A as SimdPermute<T>>::SUBLANE_LANES) };
+    // Two source tiles per step, so two independent shuffle chains are in
+    // flight as in the in-place kernel's tile pair; destination rows are
+    // written sequentially, each store extending a row the previous tile
+    // just wrote. A row count of one odd tile block keeps the single form.
+    let tile = |bi: usize, bj: usize, dst: &mut [T]| {
+        let mut ordered: [Vector<T, A>; LANES] = core::array::from_fn(|k| {
+            chunk::<T, A>(src, ((bi + order[k]) * src_stride + bj) / LANES)
+        });
+        Vector::transpose_square(&mut ordered);
+        for k in 0..LANES {
+            put_chunk(
+                ordered[inverse[k]],
+                dst,
+                ((bj + k) * dst_stride + bi) / LANES,
+            );
+        }
+    };
+    for bj in (0..cols).step_by(LANES) {
+        let mut bi = 0;
+        while bi + 2 * LANES <= rows {
+            let mut first: [Vector<T, A>; LANES] = core::array::from_fn(|k| {
+                chunk::<T, A>(src, ((bi + order[k]) * src_stride + bj) / LANES)
+            });
+            let mut second: [Vector<T, A>; LANES] = core::array::from_fn(|k| {
+                chunk::<T, A>(src, ((bi + LANES + order[k]) * src_stride + bj) / LANES)
+            });
+            Vector::transpose_square(&mut first);
+            Vector::transpose_square(&mut second);
+            for k in 0..LANES {
+                let row = (bj + k) * dst_stride;
+                put_chunk(first[inverse[k]], dst, (row + bi) / LANES);
+                put_chunk(second[inverse[k]], dst, (row + bi + LANES) / LANES);
+            }
+            bi += 2 * LANES;
+        }
+        if bi < rows {
+            tile(bi, bj, dst);
+        }
     }
 }

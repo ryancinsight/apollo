@@ -319,7 +319,9 @@ fn transpose_planes<T: Copy>(
 /// 3 MiB L2 sets the bound; re-measure before moving it.
 const COMPACT_FOLD_MIN_LEN: usize = 1 << 18;
 
-/// The four-step twiddle `W_N^(p k)` for data row `p` and plane column `k`,
+/// The four-step twiddle `W_N^(p k)` for data row `p` of `rows` and plane
+/// column `k` of `cols` (the second stage set's plane shape, `cols × rows`
+/// for an odd power),
 /// as two tables whose product is the entry, or as the full matrix below
 /// [`COMPACT_FOLD_MIN_LEN`] (the fine table one full row wide, the coarse
 /// table one).
@@ -340,35 +342,35 @@ pub(crate) struct FourStepFold<T> {
     /// `W_N^(p order(f))` for `f < F`, row-major by `p`.
     pub(crate) fine_re: Box<[T]>,
     pub(crate) fine_im: Box<[T]>,
-    /// `W_N^(p F G)` for `G < m / F`, row-major by `p`.
+    /// `W_N^(p F G)` for `G < cols / F`, row-major by `p`.
     pub(crate) coarse_re: Box<[T]>,
     pub(crate) coarse_im: Box<[T]>,
 }
 
 impl<T: MixedRadixScalar> FourStepFold<T> {
-    fn new<const INVERSE: bool>(n: usize, m: usize, order: LaneOrder) -> Self {
+    fn new<const INVERSE: bool>(n: usize, rows: usize, cols: usize, order: LaneOrder) -> Self {
         use crate::application::execution::kernel::twiddle_table::twiddle_components;
         let sign = if INVERSE { 1.0_f64 } else { -1.0_f64 };
         // The two levels pay a second complex multiply per element, which
         // wins only once the full matrix would stream from beyond L2; below
         // that the fine table is the full row and the coarse table is one.
         let lanes = if n >= COMPACT_FOLD_MIN_LEN {
-            order.lanes().min(m)
+            order.lanes().min(cols)
         } else {
-            m
+            cols
         };
-        let groups = m / lanes;
+        let groups = cols / lanes;
         // Direct evaluation per entry through the shared authority, as the
         // full matrix was built: mod-`n` reduction and one `sin_cos` each.
         let entry = |exponent: usize| {
             let (sin, cos) = twiddle_components(sign, exponent, n);
             (T::from_precise(cos), T::from_precise(sin))
         };
-        let (fine_re, fine_im): (Vec<T>, Vec<T>) = (0..m)
+        let (fine_re, fine_im): (Vec<T>, Vec<T>) = (0..rows)
             .flat_map(|p| (0..lanes).map(move |f| (p, f)))
             .map(|(p, f)| entry(p * order.column(f)))
             .unzip();
-        let (coarse_re, coarse_im): (Vec<T>, Vec<T>) = (0..m)
+        let (coarse_re, coarse_im): (Vec<T>, Vec<T>) = (0..rows)
             .flat_map(|p| (0..groups).map(move |g| (p, g)))
             .map(|(p, g)| entry(p * lanes * g))
             .unzip();
@@ -437,23 +439,21 @@ fn run_batched_dif<T>(
 }
 
 /// Scratch length, in complex elements, that [`four_step_batched`] requires
-/// for a transform of length `n`.
+/// for a transform of length `n`: the padded plane pair of the first stage
+/// set, the second pair an odd power transposes into, and the seam staging
+/// block.
 ///
 /// The single definition of the padded-plane requirement, so callers and the
 /// driver cannot disagree about it.
 pub(crate) fn scratch_len(n: usize) -> usize {
-    plane_len(n) + sweep::STAGING_LEN
+    let (n1, n2) = plane_geometry(n);
+    let second = if n1 == n2 { 0 } else { n2 * (n1 + ROW_PAD) };
+    n1 * (n2 + ROW_PAD) + second + sweep::STAGING_LEN
 }
 
-/// Complex elements both padded planes of a length-`n` transform occupy: the
-/// prefix of the scratch, before the seam staging block.
-fn plane_len(n: usize) -> usize {
-    let m = 1usize << (n.trailing_zeros() / 2);
-    m * (m + ROW_PAD)
-}
-
-/// Largest length the planar route serves; longer even powers fall to the
-/// generic four-step, whose rows thread through Moirai.
+/// Largest even power the planar route serves, and half the largest odd
+/// one; longer transforms fall to the generic four-step, whose rows thread
+/// through Moirai.
 ///
 /// The bound used to be the generic route's threading threshold (65536), on
 /// the premise that threaded rows beat a sequential SIMD pass from there.
@@ -474,49 +474,42 @@ pub(crate) const PLANAR_MAX_LEN: usize = 1 << 20;
 /// Whether [`four_step_batched`] covers a transform of length `n`.
 ///
 /// The single definition of the planar route's domain: an even power of two
-/// — the square split the driver is written for — up to [`PLANAR_MAX_LEN`].
+/// from 4 up to [`PLANAR_MAX_LEN`], run as a square, or an odd power of two
+/// from 512 whose longer side is within it, run as the rectangle
+/// `N1 × 2 N1` (ADR 0060). The odd lower bound is the one the decimated
+/// route carried: below it the plan hands these lengths to the base kernels
+/// and codelets, which never reach here.
 pub(crate) fn planar_applies(n: usize) -> bool {
-    n.is_power_of_two() && n.trailing_zeros() % 2 == 0 && n >= 4 && n <= PLANAR_MAX_LEN
-}
-
-/// Whether [`four_step_split_batched`] covers a transform of length `n`.
-///
-/// An odd power of two has no square split, so it decimates once; the route
-/// applies when both halves are then planar. The lower bound is the one the
-/// unfused decimation already carried — below it the plan hands these
-/// lengths to the base kernels and codelets, which never reach here, so
-/// widening the domain would change only what tests exercise.
-pub(crate) fn planar_split_applies(n: usize) -> bool {
-    n.is_power_of_two() && n.trailing_zeros() % 2 == 1 && n >= 512 && planar_applies(n / 2)
-}
-
-/// Scratch, in complex elements, that [`four_step_split_batched`] requires.
-///
-/// Both half-planes are live at once, which is what lets the combine read
-/// them together; against the unfused route — a full `n`-element decimation
-/// buffer plus one half-plane nested inside it — this is the smaller peak.
-pub(crate) fn split_scratch_len(n: usize) -> usize {
-    2 * scratch_len(n / 2)
+    if !n.is_power_of_two() {
+        return false;
+    }
+    if n.trailing_zeros() % 2 == 0 {
+        n >= 4 && n <= PLANAR_MAX_LEN
+    } else {
+        n >= 512 && n / 2 <= PLANAR_MAX_LEN
+    }
 }
 
 #[cfg(all(test, windows, target_arch = "x86_64"))]
 pub(crate) mod sections;
 
-/// Plane geometry for a length-`n` planar transform: the square edge `m` and
-/// the padded row stride. Element `j` of a transform lands at plane index
-/// `(j / m) * stride + j % m`.
+/// Plane geometry for a length-`n` planar transform: the first stage set's
+/// `n1` rows of `n2` columns, `n = n1 · n2` with `n2 = n1` for an even
+/// power and `n2 = 2 n1` for an odd one. Input index `n2 · r + c` sits at
+/// plane cell `(r, c)` of that set and output index `k1 + n1 · k2` at cell
+/// `(k2, k1)` of the second set's `n2 × n1` planes; each pair pads its rows
+/// by [`ROW_PAD`].
 ///
 /// # Panics
 ///
-/// Panics if `n` is not an even power of two of at least four.
+/// Panics if `n` is not a power of two of at least four.
 fn plane_geometry(n: usize) -> (usize, usize) {
     let k = n.trailing_zeros();
     assert!(
-        n.is_power_of_two() && k % 2 == 0 && n >= 4,
-        "requires an even power of two of at least 4"
+        n.is_power_of_two() && n >= 4,
+        "requires a power of two of at least 4"
     );
-    let m = 1usize << (k / 2);
-    (m, m + ROW_PAD)
+    (1usize << (k / 2), 1usize << (k - k / 2))
 }
 
 /// Splits a plane buffer into its real and imaginary halves.
@@ -541,142 +534,20 @@ where
     flat.split_at_mut(plane)
 }
 
-/// Splits a scratch region into its plane prefix and the seam staging block
-/// that follows it, the latter as reals.
+/// Four-step FFT over the padded planar layout.
+///
+/// Three steps and no more: the first stage set reads the caller's rows in
+/// bit-reversed row order straight out of `data`, one transpose moves the
+/// planes to the second axis (in place for a square, into the second plane
+/// pair for the rectangle an odd power runs as, ADR 0060), and the second
+/// stage set folds the four-step twiddle into its first loads and writes
+/// `data` back from its last. The per-element operation order is the same
+/// whatever the shape.
 ///
 /// # Panics
 ///
-/// Panics if `scratch` is shorter than [`scratch_len`].
-fn split_scratch<T>(scratch: &mut [Complex<T>], n: usize) -> (&mut [Complex<T>], &mut [T])
-where
-    T: eunomia::layout::Pod,
-    Complex<T>: eunomia::layout::Pod,
-{
-    let plane = plane_len(n);
-    assert!(
-        scratch.len() >= scratch_len(n),
-        "scratch must hold two padded planes and the staging block"
-    );
-    let (planes, rest) = scratch.split_at_mut(plane);
-    (
-        planes,
-        eunomia::layout::cast_slice_mut(&mut rest[..sweep::STAGING_LEN]),
-    )
-}
-
-/// Writes both halves of a radix-2 decimation into their planes in one pass.
-///
-/// The alternative is [`deinterleave_rows`] twice over a strided view, which
-/// reads every cache line of `src` once per half. Taking the adjacent pair
-/// together reads each line once for both, which is why this exists rather
-/// than a step parameter on the sequential form
-/// (`gap_audit.md#odd-power-fusion`). The reference form of
-/// [`boundary::DeinterleaveDecimatedRows`], and the pass for a width the
-/// vector kernel declines.
-fn deinterleave_decimated_rows<T: Copy>(
-    src: &[Complex<T>],
-    even: (&mut [T], &mut [T]),
-    odd: (&mut [T], &mut [T]),
-    m: usize,
-    stride: usize,
-    order: LaneOrder,
-) {
-    let (e_re, e_im) = even;
-    let (o_re, o_im) = odd;
-    let row_bits = m.trailing_zeros();
-    for (row, chunk) in src.chunks_exact(2 * m).enumerate().take(m) {
-        let dest = row.reverse_bits() >> (usize::BITS - row_bits);
-        let base = dest * stride;
-        for b in 0..m {
-            let e = chunk[2 * b];
-            let o = chunk[2 * b + 1];
-            // Memory column `b` lands in the plane column that holds it.
-            let at = base + order.plane(b);
-            e_re[at] = e.re;
-            e_im[at] = e.im;
-            o_re[at] = o.re;
-            o_im[at] = o.im;
-        }
-    }
-}
-
-/// Runs both four-step stage sets over the planes.
-///
-/// With `seams` the interleaved buffer is the input of the first stage set
-/// and the output of the second: the first pass reads it in bit-reversed row
-/// order and the last pass writes it back the same way, so neither a
-/// deinterleave nor a reinterleave pass exists. Without it the planes hold
-/// the input in bit-reversed rows on entry and the output on exit, which is
-/// what the odd-power split needs, since its input is decimated and its
-/// output combined by their own sinks.
-fn planar_stages<T, const INVERSE: bool>(
-    re: &mut [T],
-    im: &mut [T],
-    staging: &mut [T],
-    n: usize,
-    m: usize,
-    stride: usize,
-    seams: Option<&mut [Complex<T>]>,
-    order: LaneOrder,
-) where
-    T: BatchedPlanCache<Complex = Complex<T>>,
-{
-    let seams = seams.map(|data| -> &mut [T] { eunomia::layout::cast_slice_mut(data) });
-    // 1. The `m` transforms of length `m` along the first axis; the input is
-    //    already batch-major for this direction, so no transpose is needed.
-    let plan = T::cached_plan::<INVERSE>(m);
-    sect!("stages1", {
-        run_batched(re, im, plan.as_ref(), seams.as_deref(), m, stride)
-    });
-
-    // 2. Transpose so the second axis becomes batch-major. Pure exchange:
-    //    the four-step twiddle now rides stage-set-2's first loads below.
-    sect!("transpose", {
-        // The same selector as the stage sets, so the tile width and the
-        // plane column order are the one backend's.
-        let handled = hermes_simd::vectorize(boundary::TransposePlanes {
-            re: &mut *re,
-            im: &mut *im,
-            m,
-            stride,
-        });
-        if !handled {
-            transpose_planes(re, im, m, stride, order);
-        }
-    });
-
-    // 3. The `m` transforms along the second axis, with the four-step twiddle
-    //    W_N^{b·k1} folded into the first stage's loads — the matrix is
-    //    symmetric, so applying it after the transpose is identical, and its
-    //    planar planes are built once in the shared cache.
-    //
-    //    This set is decimated in frequency, and that is what deletes the
-    //    repair pass that used to sit here. The transpose leaves natural row
-    //    order, which is what DIF consumes; it leaves its output
-    //    bit-reversed, which the sink absorbs by reading `rev(row)` — the
-    //    mirror of the deinterleave's free permutation on the source side.
-    //    The result still lands at `k2 * m + k1` once the sink has read it.
-    let fold = T::cached_four_step_fold::<INVERSE>(n, m);
-    sect!("stages2", {
-        run_batched_dif(
-            re,
-            im,
-            plan.as_ref(),
-            Some(fold.as_ref()),
-            seams,
-            staging,
-            m,
-            stride,
-        )
-    });
-}
-
-/// In-place four-step FFT over the padded planar layout.
-///
-/// # Panics
-///
-/// Panics if `data.len()` is not an even power of two of at least four, or
-/// if `scratch` is shorter than [`scratch_len`].
+/// Panics if `data.len()` is not a length [`planar_applies`] admits, or if
+/// `scratch` is shorter than [`scratch_len`].
 pub(crate) fn four_step_batched<T, const INVERSE: bool>(
     data: &mut [Complex<T>],
     scratch: &mut [Complex<T>],
@@ -684,143 +555,137 @@ pub(crate) fn four_step_batched<T, const INVERSE: bool>(
     T: BatchedPlanCache<Complex = Complex<T>>,
 {
     let n = data.len();
-    let (m, stride) = plane_geometry(n);
-    let (planes, staging) = split_scratch(scratch, n);
-    let (re, im) = split_plane(planes, plane_len(n));
-    let order = LaneOrder::for_batch::<T>(m);
-    // The interleaved buffer is read by the first stage pass and written by
-    // the last, so the route is exactly two stage sets and one transpose.
-    planar_stages::<T, INVERSE>(re, im, staging, n, m, stride, Some(data), order);
-}
-
-pub(crate) fn four_step_split_batched<T, const INVERSE: bool>(
-    data: &mut [Complex<T>],
-    scratch: &mut [Complex<T>],
-) where
-    T: BatchedPlanCache<Complex = Complex<T>>,
-{
-    let n = data.len();
+    assert!(planar_applies(n), "requires a planar power of two");
+    let (n1, n2) = plane_geometry(n);
+    let (stride_a, stride_b) = (n2 + ROW_PAD, n1 + ROW_PAD);
+    let plane_a = n1 * stride_a;
+    let plane_b = if n1 == n2 { 0 } else { n2 * stride_b };
     assert!(
-        planar_split_applies(n),
-        "requires a planar odd power of two"
+        scratch.len() >= scratch_len(n),
+        "scratch must hold the padded planes and the staging block"
     );
-    let half = n / 2;
-    let region = scratch_len(half);
-    let plane = plane_len(half);
-    assert!(
-        scratch.len() >= 2 * region,
-        "scratch must hold both half-planes"
-    );
-    // The stage-major table ends with the length-`n` stage, whose `n / 2`
-    // entries are `W_N^j` in order; earlier stages occupy `n / 2 - 1` slots.
-    let twiddles = if INVERSE {
-        T::cached_twiddle_inv(n)
-    } else {
-        T::cached_twiddle_fwd(n)
-    };
-    let combine = &twiddles[half - 1..n - 1];
+    let (a, rest) = scratch.split_at_mut(plane_a);
+    let (b, rest) = rest.split_at_mut(plane_b);
+    let staging: &mut [T] = eunomia::layout::cast_slice_mut(&mut rest[..sweep::STAGING_LEN]);
+    let data: &mut [T] = eunomia::layout::cast_slice_mut(data);
+    // Both sets' batches are at least a register wide from 512 up, so one
+    // order serves both; below that the square's order is the identity.
+    let order = LaneOrder::for_batch::<T>(n1.min(n2));
+    let (a_re, a_im) = split_plane(a, plane_a);
 
-    let (m, stride) = plane_geometry(half);
-    let order = LaneOrder::for_batch::<T>(m);
-    let (even, odd) = scratch.split_at_mut(region);
-    sect!("deint", {
-        let (e_re, e_im) = split_plane(even, plane);
-        let (o_re, o_im) = split_plane(odd, plane);
-        let handled = hermes_simd::vectorize(boundary::DeinterleaveDecimatedRows {
-            source: eunomia::layout::cast_slice(&*data),
-            even_re: &mut *e_re,
-            even_im: &mut *e_im,
-            odd_re: &mut *o_re,
-            odd_im: &mut *o_im,
-            m,
-            stride,
-        });
-        if !handled {
-            deinterleave_decimated_rows(data, (e_re, e_im), (o_re, o_im), m, stride, order);
-        }
+    // 1. `n2` transforms of length `n1` along the first axis; the caller's
+    //    rows are batch-major for this direction, so the first pass reads
+    //    them in place and no transpose is needed.
+    let plan = T::cached_plan::<INVERSE>(n1);
+    sect!("stages1", {
+        run_batched(a_re, a_im, plan.as_ref(), Some(&*data), n2, stride_a)
     });
-    {
-        let (planes, staging) = split_scratch(even, half);
-        let (re, im) = split_plane(planes, plane);
-        planar_stages::<T, INVERSE>(re, im, staging, half, m, stride, None, order);
-    }
-    {
-        let (planes, staging) = split_scratch(odd, half);
-        let (re, im) = split_plane(planes, plane);
-        planar_stages::<T, INVERSE>(re, im, staging, half, m, stride, None, order);
-    }
-    combine_planar_halves(data, even, odd, m, stride, combine, order);
-}
 
-/// Combines two planar half-transforms into `data` in one pass.
-///
-/// `even` and `odd` hold the transforms of the even- and odd-indexed
-/// subsequences in the padded plane layout defined by [`plane_geometry`].
-/// This writes `X[j] = E[j] + W_N^j O[j]` and `X[j + N/2] = E[j] - W_N^j
-/// O[j]`, so the butterfly rides the pass that would have interleaved each
-/// half back on its own — the pass, and the half-sized buffers it would
-/// have written to, are what the fusion removes.
-///
-/// # Panics
-///
-/// Panics if `data` is not twice the half-transform length, or if
-/// `twiddles` is shorter than that half.
-pub(crate) fn combine_planar_halves<T>(
-    data: &mut [Complex<T>],
-    even: &[Complex<T>],
-    odd: &[Complex<T>],
-    m: usize,
-    stride: usize,
-    twiddles: &[Complex<T>],
-    order: LaneOrder,
-) where
-    T: BatchedPlanCache<Complex = Complex<T>>,
-{
-    let half = m * m;
-    assert_eq!(data.len(), 2 * half, "combine spans both halves");
-    assert!(twiddles.len() >= half, "one rotation per output pair");
-    let plane = m * stride;
-    let (e_re, e_im) = eunomia::layout::cast_slice::<_, T>(&even[..plane]).split_at(plane);
-    let (o_re, o_im) = eunomia::layout::cast_slice::<_, T>(&odd[..plane]).split_at(plane);
-    let (low, high) = data.split_at_mut(half);
-
-    // The stage set left bit-reversed rows, and the permutation rides the
-    // write side: plane row `p` holds output row `rev(p)`, bit reversal
-    // being an involution. Reading the planes in order keeps four streams
-    // sequential and leaves two scattered, where carrying it on the read
-    // side scattered four (gap_audit.md#sink-permutation).
-    let bits = m.trailing_zeros();
-    sect!("combine", {
-        let twiddle_lanes = eunomia::layout::cast_slice(twiddles);
-        // The same selector as the stage sets: the kernel reads the planes
-        // in the plane column order of the backend it runs on.
-        let handled = hermes_simd::vectorize(boundary::CombinePlanarHalves {
-            even_re: e_re,
-            even_im: e_im,
-            odd_re: o_re,
-            odd_im: o_im,
-            twiddles: twiddle_lanes,
-            low: eunomia::layout::cast_slice_mut(&mut *low),
-            high: eunomia::layout::cast_slice_mut(&mut *high),
-            m,
-            stride,
-        });
-
-        if !handled {
-            for row in 0..m {
-                let base = row * stride;
-                let dst = (row.reverse_bits() >> (usize::BITS - bits)) * m;
-                for b in 0..m {
-                    let j = dst + order.column(b);
-                    let e = Complex::new(e_re[base + b], e_im[base + b]);
-                    let o = Complex::new(o_re[base + b], o_im[base + b]);
-                    let rotated = o * twiddles[j];
-                    low[j] = e + rotated;
-                    high[j] = e - rotated;
-                }
+    // 2. Transpose so the second axis becomes batch-major. Pure exchange:
+    //    the four-step twiddle rides stage set 2's first loads below. The
+    //    same selector as the stage sets, so the tile width and the plane
+    //    column order are the one backend's.
+    let (re, im, stride) = if n1 == n2 {
+        sect!("transpose", {
+            let handled = hermes_simd::vectorize(boundary::TransposePlanes {
+                re: &mut *a_re,
+                im: &mut *a_im,
+                m: n1,
+                stride: stride_a,
+            });
+            if !handled {
+                transpose_planes(a_re, a_im, n1, stride_a, order);
             }
-        }
+        });
+        (a_re, a_im, stride_a)
+    } else {
+        let (b_re, b_im) = split_plane(b, plane_b);
+        sect!("transpose", {
+            let handled = hermes_simd::vectorize(boundary::TransposePlanesInto {
+                src_re: &*a_re,
+                src_im: &*a_im,
+                rows: n1,
+                cols: n2,
+                src_stride: stride_a,
+                dst_re: &mut *b_re,
+                dst_im: &mut *b_im,
+                dst_stride: stride_b,
+            });
+            if !handled {
+                transpose_planes_into(
+                    PlaneView {
+                        re: a_re,
+                        im: a_im,
+                        rows: n1,
+                        cols: n2,
+                        stride: stride_a,
+                    },
+                    b_re,
+                    b_im,
+                    stride_b,
+                    order,
+                );
+            }
+        });
+        (b_re, b_im, stride_b)
+    };
+
+    // 3. `n1` transforms of length `n2` along the second axis, with the
+    //    four-step twiddle `W_N^(n2 k1)` folded into the first stage's loads
+    //    from a table with the planes' own shape. This set is decimated in
+    //    frequency: the transpose leaves natural row order, which is what
+    //    DIF consumes, and it leaves its output bit-reversed, which the sink
+    //    absorbs by writing plane row `p` to row `rev(p)` — the mirror of
+    //    the source's free permutation. Output `k1 + n1 k2` lands at row
+    //    `k2`, column `k1`.
+    let plan = if n1 == n2 {
+        plan
+    } else {
+        T::cached_plan::<INVERSE>(n2)
+    };
+    let fold = T::cached_four_step_fold::<INVERSE>(n, n2, n1);
+    sect!("stages2", {
+        run_batched_dif(
+            re,
+            im,
+            plan.as_ref(),
+            Some(fold.as_ref()),
+            Some(data),
+            staging,
+            n1,
+            stride,
+        )
     });
+}
+
+/// One padded plane pair with its shape, as a transpose source.
+struct PlaneView<'a, T> {
+    re: &'a [T],
+    im: &'a [T],
+    rows: usize,
+    cols: usize,
+    stride: usize,
+}
+
+/// Reference form of [`boundary::TransposePlanesInto`]: `rows × cols` planes
+/// into `cols × rows` planes, plane cell `(r, c)` landing at `(order(c),
+/// plane(r))` as the in-place transpose moves it ([`transpose_planes`]).
+fn transpose_planes_into<T: Copy>(
+    src: PlaneView<'_, T>,
+    dst_re: &mut [T],
+    dst_im: &mut [T],
+    dst_stride: usize,
+    order: LaneOrder,
+) {
+    debug_assert!(src.stride >= src.cols && dst_stride >= src.rows);
+    for r in 0..src.rows {
+        for c in 0..src.cols {
+            let from = r * src.stride + c;
+            let to = order.column(c) * dst_stride + order.plane(r);
+            dst_re[to] = src.re[from];
+            dst_im[to] = src.im[from];
+        }
+    }
 }
 
 pub(crate) mod boundary;

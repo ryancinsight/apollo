@@ -12,13 +12,10 @@
 
 use std::cell::RefCell;
 
-const SECTION_LABELS: [&str; 12] = [
-    "deint",
+const SECTION_LABELS: [&str; 9] = [
     "stages1",
     "transpose",
     "stages2",
-    "reint",
-    "combine",
     "t1",
     "t2",
     "t3",
@@ -63,7 +60,7 @@ pub(crate) fn record(label: &'static str, cycles: u64) {
             let slot = totals
                 .iter_mut()
                 .find(|entry| entry.is_none())
-                .expect("invariant: the planar driver records at most twelve section labels");
+                .expect("invariant: the planar driver records at most nine section labels");
             *slot = Some(SectionTotal {
                 label,
                 cycles,
@@ -101,20 +98,17 @@ fn section_totals_preserve_order_and_reset() {
     assert_eq!(
         take(),
         vec![
-            ("deint", 1, 1),
-            ("stages1", 2, 1),
-            ("transpose", 14, 2),
-            ("stages2", 4, 1),
-            ("reint", 5, 1),
-            ("combine", 6, 1),
-            ("t1", 7, 1),
-            ("t2", 8, 1),
-            ("t3", 9, 1),
-            ("f1", 10, 1),
-            ("f2", 11, 1),
-            ("f3", 12, 1),
+            ("stages1", 1, 1),
+            ("transpose", 13, 2),
+            ("stages2", 3, 1),
+            ("t1", 4, 1),
+            ("t2", 5, 1),
+            ("t3", 6, 1),
+            ("f1", 7, 1),
+            ("f2", 8, 1),
+            ("f3", 9, 1),
         ]
     );
-    record("reint", 7);
-    assert_eq!(take(), vec![("reint", 7, 1)]);
+    record("stages2", 7);
+    assert_eq!(take(), vec![("stages2", 7, 1)]);
 }

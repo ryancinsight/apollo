@@ -200,6 +200,27 @@
 ## APOLLO-PLANAR-SPLIT-SEAM-FUSION — Fuse the odd-power decimation and combine into the stage passes [patch] [perf] — done 2026-09-09 (rejected)
 - **Outcome:** built (a decimated source seam per half, a direct two-row combine sink on the odd half) and rejected on measurement: outputs bitwise the split's, but section totals rose 9 to 19% at 8192 and 32768 in both precisions; the source seam gains 10% in `f64` and loses up to 13% in `f32` (each half re-splits every input register), the direct combine sink loses 10 to 40% against the combine pass; evidence `../../output/apollo-planar-split-deint/` (`fusion_*`, `sections_fusion3`). Superseded by [the rectangular route](#apollo-planar-rectangular-odd-powers).
 
+<a id="apollo-planar-rectangular-odd-powers"></a>
+## APOLLO-PLANAR-RECTANGULAR-ODD-POWERS — Run odd powers through a rectangular planar four-step [patch] [perf] — review
+- **Integrator:** claude/fable; **last-update:** 2026-09-09; branch `perf/apollo-planar-rectangular-odd` on lane `D:/atlas/worktrees/apollo-route`; parent [beat the references](#atlas-apollo-beat-the-references).
+- **Outcome:** [ADR 0060](docs/adr/0060-planar-rectangular-odd-powers.md) Accepted: `N1 × 2 N1` through the square driver with `(len, batch)` swapped between the sets, one two-tile out-of-place transpose, one rectangular fold table; the split, the decimation and the combine deleted, the odd-length scratch smaller. Section totals against the decimation build: `f64` 2048 16.1k to 12.1k cycles, 8192 53.6k to 57.1k (the one cell not below, flat within the reference's own 7% spread), 32768 316k to 273k; `f32` 2048 8.7k to 7.8k, 8192 flat, 32768 134k to 135k. `rustfft_comparison`: 2048 `f64` 4.8 to 3.85 µs (RustFFT 3.1), `f32` 2.5 to 2.2 (1.35); 32768 `f32` 44.5 to 40.8 (36), `f64` level. Evidence `../../output/apollo-planar-rectangular/`.
+- **Acceptance:** met on the totality (ADR 0060's revision records the one flat cell); the oracle suites, the workspace pins at every odd length, the rectangular transpose and fold tests green.
+- **Dependencies:** none. **Verification:** 611 tests; `pinned_sections`; `rustfft_comparison` counterbalanced on a quiet host.
+
+<a id="apollo-base128-level-combine-vector"></a>
+## APOLLO-BASE128-LEVEL-COMBINE-VECTOR — Vectorize the base-128 route's radix-2 level combine [patch] [perf] — review
+- **Integrator:** claude/fable; **last-update:** 2026-09-09; branch `perf/apollo-base128-level-combine` on lane `D:/atlas/worktrees/apollo-route`; parent [beat the references](#atlas-apollo-beat-the-references).
+- **Outcome:** `split_boundary::CombineLevel` through `vectorize` (dup-split interleaved complex multiply, one alternating fused multiply-add), the scalar loop kept as the reference and fallback. `rustfft_comparison`, quiet host, six runs counterbalanced (`../../output/apollo-base128-level/`): 1024 `f64` 1.8, 1.8, 1.8 to 1.5, 1.6, 1.6 µs (RustFFT 1.2 to 1.3), `f32` 0.8, 0.8, 0.8 to 0.8, 0.7, 0.7 (RustFFT 0.6 to 0.7); 512 unchanged at the instrument's resolution.
+- **Acceptance:** met: 1024 intervals below the base in both precisions (the `f32` cell at the instrument's 0.1 µs resolution); the dispatched and scalar forms agree within four roundings in both precisions; 612 tests.
+- **Dependencies:** none. **Verification:** base-128, dimension-1d and DFT-oracle suites; `rustfft_comparison` counterbalanced.
+
+<a id="apollo-planar-source-placement"></a>
+## APOLLO-PLANAR-SOURCE-PLACEMENT — Bound the planar source seam's placement swing at 2048 [patch] [perf] — todo
+- **Evidence:** `rustfft_comparison` at 2048 `f64` reads 3.9 µs on some runs and 4.4 to 4.7 on others of the same binary on a quiet host (`../../output/apollo-base128-level/level_rect2{1,4,5}.txt`: 3.9, 3.9, 4.4; `level_level{2,3,6}`: 4.4, 4.6, 4.7), a 20% swing the `f32` cell (2.3 to 2.4) does not show; the sink is staged and placement-independent (ADR 0058) while the source seam reads the caller's rows direct, and at 2048 `f64` a tile's sixteen bit-reversed source rows sit a power of two apart, one L1 set.
+- **Scope:** reproduce with `pinned_sections` under `APOLLO_PROBE_OFFSET` across a page of offsets at 2048 and 8192 in both precisions; if the source sweep `t1` carries the swing, decide between an offset-aware tile row order and a source staging form measured against the rejected ones in ADR 0058. Non-goals: lengths above 2^16, where the staging bound already differs.
+- **Acceptance:** the 2048 `f64` interval within 5% across offsets, or the swing attributed to something other than the seam and recorded.
+- **Dependencies:** none. **Verification:** `pinned_sections` by offset; `rustfft_comparison` counterbalanced.
+
 <a id="apollo-workspace-impulse-oracle-budget"></a>
 ## APOLLO-WORKSPACE-IMPULSE-ORACLE-BUDGET — Fit the workspace impulse oracle in the CI slow budget [patch] — todo
 - **Evidence:** `workspace_extents_preserve_the_impulse_spectrum` takes 3.6 s in the dev profile on the 285K host (2026-09-09, base of the 1M crossover), and the hosted runner is 13 to 17 times slower on compute-bound tests, so it sits past the 30 s slow bound in the `ci` profile; twelve transforms at 262144 dominate.
@@ -1463,6 +1484,18 @@
   level at 2097152; in `f32` ahead of both references at every measured
   length except 2097152 (PhastFT by 10%). Evidence in the closed items
   above and `../../output/apollo-n1m-crossover/`.
+- **Odd powers, 2026-09-09.** The rectangular route (ADR 0060) replaces the
+  split: 2048 `f64` 1.24 behind RustFFT (was 1.55), `f32` 1.7 (was 1.9);
+  32768 `f32` 1.13 (was 1.25), `f64` level. The remaining odd-power gap is
+  the seam sweeps' cost per element at 2048 (`t1` 1.8, `f2` 2.2 cycles
+  against the plain sweeps' 0.6 to 1.0), the same cost the even route pays
+  and the next lever for both. Evidence `../../output/apollo-planar-rectangular/`.
+
+- **1024, 2026-09-09.** The base-128 route's last level vectorized: `f64`
+  1.5 to 1.6 µs against RustFFT's 1.2 (was 1.8), `f32` 0.7 to 0.8 against
+  0.6 to 0.7 (was 0.8). What remains at 1024 is the gather and the two
+  four-block chains (`split_pieces_by_size`: at 512 the gather is 19% and
+  the combine 22% of the route).
 - **What the shape says.** Apollo is ahead exactly where it has a hand-tuned
   construction — n = 64 (`State64`) and n = 100 — and behind everywhere else,
   including at lengths where the tuned split applies (128 to 512 sit at
