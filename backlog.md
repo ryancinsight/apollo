@@ -1,15 +1,111 @@
 # Apollo Backlog
 
 <a id="apollo-codelet-schedule-controls"></a>
-## APOLLO-CODELET-SCHEDULE-CONTROLS — Share composite schedule controls [major] [arch] — in-progress
-- **Integrator:** codex/root; **contributors:** codex/main_integration, codex/api_evidence; **last-update:** 2026-09-08; branch `codex/composite-phase-schedules`.
+## APOLLO-CODELET-SCHEDULE-CONTROLS — Share composite schedule controls [major] [arch] — review
+- **Integrator:** claude-opus-5 (takeover; the claim went stale with the work uncommitted for 22 h); **contributors:** codex/root, codex/main_integration, codex/api_evidence; **last-update:** 2026-09-09; branch `codex/composite-phase-schedules`.
 - **Scope:** integrate explicit macro scheduling into current providers, preserving ordinary codelet signatures and deleting duplicate arithmetic/test helpers; no production split routing.
 - **Acceptance:** selected, forced-fused and forced-split values agree for lengths 50/144, both precisions and directions; independent DFT oracles pass; no added production scratch or attributed code-size growth.
 - **Decision:** [ADR 0051](docs/adr/0051-composite-phase-schedules.md); sealed zero-sized strategies share one arithmetic body; explicit opt-in preserves generated signatures.
+- **Source landed `fc34ca11`.** Net 299 insertions against 347 deletions; the
+  safety-ratchet baseline drops `cooley_tukey.rs` rather than being raised
+  (143 uncommented unsafe blocks against a baseline of 143). Gates re-run at
+  that revision: ratchet, `cargo fmt --check`, `clippy -D warnings` over
+  apollo-fft and apollo-fft-macros, 590/590 nextest.
+  - Its first check failed with `expected inline_attr, gt_pairs, ct_pairs, or
+    pp_pairs` — a keyword set absent from this tree, emitted by a stale
+    proc-macro in the shared target dir. `cargo clean -p apollo-fft-macros`
+    cleared it; the work was never broken. Recorded because the error names
+    source that does not exist, which reads as a defect in the tree.
 - **Evidence:** corrected source passes macro tests (14), focused debug tests (20), Clippy and independent source review. A stale release macro from a scratch checkout is replaced after content-preserving freshness invalidation; retained DLL `5816046B` identifies canonical source and the current parser. Runtime and size acceptance remain in progress.
 - **Verification:** generic debug/release tests, unchanged complete oracle sweep, private Rustdoc and linked code/size comparison against the retained current-provider executable.
 - **Dependencies:** [PR 338](https://github.com/ryancinsight/apollo/pull/338) lands as `2ac33b95`; preserve both original locks during source reconciliation.
-- **Lease:** codex/root CT/GT safety comments, composite tests, mixed-radix traits, split probe and ADR 0051; codex/api_evidence phase emission, macro parser/tests/docs, pair invocations and schedule; 2026-09-08T16:11Z.
+<a id="apollo-twiddless-fft-evaluation"></a>
+## APOLLO-TWIDDLESS-FFT-EVALUATION — Measure the twiddless FFT against its butterfly isomorph [patch] — done 2026-09-08
+- **Outcome:** [ADR 0052](docs/adr/0052-twiddless-fft-evaluation.md) Rejected: 2.4 to 10.7 times slower than the plan at every length but 65536; PR #349 merged 2026-09-08.
+
+<a id="apollo-planar-stage-sweeps"></a>
+## APOLLO-PLANAR-STAGE-SWEEPS — Run several stages per trip through the planes [patch] [perf] — review
+- **Integrator:** claude/fable; **last-update:** 2026-09-09; branch `perf/apollo-planar-interleaved-radix-eight` on lane `D:/atlas/worktrees/apollo-route`; parent [beat the references](#atlas-apollo-beat-the-references).
+- **Outcome:** [ADR 0056](docs/adr/0056-planar-stage-sweeps.md) Accepted: four stages per sweep over 16-row tiles blocked to 16 KiB, both stage sets; the plain sweep halves the pass cost (14.6 to 7.8 cycles per quad); whole transform 7 to 14% faster at 16384 and 65536 in both precisions, level with RustFFT at 16384 `f64`, ahead in `f32`, 1.07 to 1.15 behind at 65536 and 4096 `f64`. The per-sweep attribution (`t1..t3`, `f1..f3`) names the seam sweeps as most of both stage sets; evidence `../../output/apollo-planar-sweeps/`.
+- **Acceptance:** results bitwise those of the unswept sets (600 tests unchanged and passing); `pinned_sections` stage-set cycles below ADR 0055's at 16384 and 65536 in both precisions across three runs; whole-transform intervals below the previous state in both instruments.
+- **Dependencies:** none. **Verification:** batched, workspace, RustFFT-differential, dimension-1d and DFT-oracle suites; `pinned_sections`; `engine_census` and `twiddless_comparison` twice on the pinned core.
+
+<a id="apollo-planar-seam-lane-order"></a>
+## APOLLO-PLANAR-SEAM-LANE-ORDER — Store plane columns in the unpack lane order [minor] [perf] — todo
+- **Evidence:** ADR 0056's sink and source sweeps: each row's interleave is two `vpermpd` (port 5, cross-lane) and two unpacks per quad (`output/apollo-planar-sweeps/asm_sweep_dif_f64_avx2.s`), 8 port-5 permutes per quad on passes that otherwise run at the load-port rate; at 4096 `f64` the seam sweeps are 60% of the stage time.
+- **Scope:** the planes hold each aligned column group in the lane order the in-lane unpack produces (`0,2,1,3` per four `f64` lanes, `0,1,4,5,2,3,6,7` per eight `f32`), so `vunpcklpd`/`vunpckhpd` (`vunpcklps`/`vshufps`) alone are the interleave and deinterleave at both seams; the fold planes are built in that order, the transpose loads and stores its tile rows through the same permutation, the odd-power decimation writes it and the combine reads it. Upstream first: hermes-simd gains `interleave_in_lane`/`deinterleave_in_lane` on `SimdPermute` with the sublane width as a constant, native on AVX2 and AVX-512, the flat operation where the register is one sublane (NEON, scalar), with differential tests against the scalar model on every backend. Non-goals: the interleaved oracle, GPU.
+- **Acceptance:** no cross-lane permute in the source or sink pass listing; `t1` and `f2` at 16384 and 65536 below ADR 0056's in both precisions; results bitwise unchanged; hermes ops covered on every backend.
+- **Dependencies:** hermes-simd in-lane unpack (filed on the hermes board as the first increment). **Verification:** existing suites; `cargo asm`; `pinned_sections`.
+
+<a id="apollo-planar-seam-prefetch"></a>
+## APOLLO-PLANAR-SEAM-PREFETCH — Prefetch the seam streams ahead of the row loop [patch] [perf] — todo
+- **Evidence:** ADR 0056: the source sweep reads the caller's buffer in bit-reversed row order and costs 2 times the plain sweep at 65536 `f64` and 4.2 times at 262144 (1341k against 318k cycles); the fold sweep and the sink sweep carry the same shape. The sixteen row streams per tile block are one-kilobyte segments, short for the L2 streamer.
+- **Scope:** software prefetch of each seam row's next lines inside the row loop (source and fold rows, sink rows with the write hint), through a hermes-simd prefetch operation added upstream; distance derived from the block width and measured. Non-goals: non-temporal stores.
+- **Acceptance:** `t1`, `f1`, `f2` at 65536 and 262144 below ADR 0056's in both precisions; no change below 16384; results unchanged.
+- **Dependencies:** hermes-simd prefetch (filed on the hermes board). **Verification:** `pinned_sections` three runs; census once.
+
+<a id="apollo-four-step-compact-fold"></a>
+## APOLLO-FOUR-STEP-COMPACT-FOLD — Fold twiddles from a two-level table [patch] [perf] — todo
+- **Evidence:** ADR 0056: the fold sweep reads `FourStepPlanes` as large as the data (1 MiB at 65536 `f64`) and costs 135k cycles against the plain sweep's 64k; at 262144 the planes, the fold and the caller's buffer total 12 MiB against a 3 MiB L2.
+- **Scope:** `W_N^(p k)` as `W_N^(p k_hi F) · W_N^(p k_lo)` with `F` one column group, two planar tables of `m F` and `m (m / F)` entries, one extra complex multiply per element in the fold pass; the twiddle error bound gains one rounding (documented at the fold and in the RustFFT differential's bound). Non-goals: the interleaved oracle's table.
+- **Acceptance:** `f1` at 65536 and 262144 below ADR 0056's; footprint reported by the retained-footprint probe; differential tests within the re-derived bound.
+- **Dependencies:** none. **Verification:** batched and workspace suites, RustFFT differential, `pinned_sections`.
+
+<a id="apollo-n65536-four-step-scalar-loss"></a>
+## APOLLO-N65536-FOUR-STEP-SCALAR-LOSS — Remove the generic four-step loss from 65536 upward [patch] [perf] — done 2026-09-08
+- **Outcome:** [ADR 0053](docs/adr/0053-planar-four-step-domain.md) Accepted: planar route to `2^18`; 65536 `f64` 767 to 220 µs, `f32` 219 to 108 µs; PR #351 merged 2026-09-08.
+
+<a id="apollo-planar-seam-fusion"></a>
+## APOLLO-PLANAR-SEAM-FUSION — Delete the planar route's deinterleave and reinterleave passes [patch] [perf] — done 2026-09-08
+- **Outcome:** [ADR 0054](docs/adr/0054-planar-seam-fusion.md) Accepted: source and sink seams ride the stage passes, 3 to 12% in the census; one-line column blocking rejected; PR #353 merged 2026-09-08.
+
+<a id="apollo-planar-radix-depth"></a>
+## APOLLO-PLANAR-RADIX-DEPTH — Cut the planar stage sets' instructions per element [patch] [perf] — done 2026-09-08
+- **Outcome:** [ADR 0055](docs/adr/0055-planar-radix-eight-passes.md) Accepted: radix-8 rejected on AVX2, the shared seam-specialized driver kept (8 to 14% at 4096 and 16384 `f64` warm), unit rotations rejected; PR #353 merged 2026-09-08.
+
+<a id="apollo-planar-interleaved-radix-eight"></a>
+## APOLLO-PLANAR-INTERLEAVED-RADIX-EIGHT — Radix-8 butterflies on interleaved rows [minor] [perf] — done 2026-09-09 (rejected)
+- **Outcome:** closed on analysis in [ADR 0056](docs/adr/0056-planar-stage-sweeps.md): the sweep halves the bytes per element-stage without touching the arithmetic, the interleaved radix-8 would move a third fewer bytes at 1.7 times the vector operations, and the remaining cost is the seams, which the layout would not remove.
+
+<a id="apollo-n1m-planar-crossover"></a>
+## APOLLO-N1M-PLANAR-CROSSOVER — Decide the planar route at 1048576 [patch] [perf] — todo
+- **Evidence:** ADR 0053's three candidate runs at 1048576 are invalid: a tree-mate built and tested in the shared cache and the PhastFT control arm moved from 7748 to 11248–15772 µs between runs. Within-run ratios to PhastFT read 1.25, 1.45 and 1.62 (`f64`) against the generic route's 1.40, so no direction is supported.
+- **Scope:** replicated counterbalanced census at 1048576 and 2097152 on a quiet host (no concurrent cargo; record the process table), planar candidate against the generic route; move `PLANAR_MAX_LEN` only on disjoint intervals. Non-goals: kernel changes.
+- **Acceptance:** either `PLANAR_MAX_LEN` moves to `2^20` with the supported ratio recorded in ADR 0053's revision note, or the generic route is confirmed and the reason (L3 spill of the 16 MiB padded planes is the hypothesis) is recorded.
+- **Dependencies:** none. **Verification:** existing workspace and differential tests at the moved length.
+
+<a id="apollo-sft-sublinear-recovery"></a>
+## APOLLO-SFT-SUBLINEAR-RECOVERY — Deliver a sublinear sparse recovery route [minor] — todo
+- **Outcome:** `apollo-sft` offers a recovery whose cost scales with the sparsity `K` and `log N`, not with `N log N`.
+- **Evidence:** `crates/apollo-sft/src/application/execution/transform/sparse.rs:5-13` documents the current route as a dense `O(N log N)` FFT followed by an `O(N log K)` top-K heap; the README presents the crate as the sparse Fourier transform owner and cites Gilbert 2002 and Hassanieh 2012, whose algorithms are sublinear. Surveyed while adjudicating arXiv:2310.14462-adjacent literature (Shen 2024, CONF-MPCS, restates Hassanieh's `O(K log N)` bound; no new technique).
+- **Scope:** one additional plan kind implementing a published sublinear algorithm with its recovery guarantee stated (Hassanieh et al. 2012 "Simple and practical" or Hsieh–Lu–Pei 2015 downsampling); the exact top-K route stays as the oracle. Non-goals: GPU path, noisy-case guarantees beyond the chosen paper's.
+- **Acceptance:** exact recovery on `K`-sparse inputs at every published-guarantee parameter set; measured wall-clock scaling sublinear in `N` at fixed `K` on the pinned core class against the dense route; differential agreement with the dense top-K route within the paper's error bound.
+- **Risk/class:** [minor]; additive public contract, ADR required for the plan-kind seam.
+- **Dependencies:** none. **Verification:** generic instantiation over `f32`/`f64`, property tests over random supports, benchmark with committed budget.
+
+<a id="apollo-sdft-recurrence-stability"></a>
+## APOLLO-SDFT-RECURRENCE-STABILITY — Bound sliding-DFT rounding drift [patch] — todo
+- **Outcome:** the streaming update carries a stated, tested bound on accumulated rounding error over unbounded update counts.
+- **Evidence:** `crates/apollo-sdft/src/infrastructure/kernel/sliding.rs:4-6` applies `X_k <- (X_k + x_new - x_old) · exp(2πi k/N)` with no damping, reset or modulated form; the recurrence's pole sits on the unit circle, so rounding error accumulates without bound (Jacobsen and Lyons, "The sliding DFT", IEEE SP Mag 20(2), 2003, section on stability; Duda, "Accurate, guaranteed stable, sliding DFT", IEEE SP Mag 27(6), 2010). No stability test or recorded limitation exists in the crate.
+- **Scope:** a drift test driving at least `10^6` updates in `f32` against a direct-DFT oracle at the final window, then the stabilization the measurement justifies (modulated SDFT or damping with a derived bound), one implementation, documented. Non-goals: API change beyond a typed configuration where the bound requires it.
+- **Acceptance:** derived drift bound stated in Rustdoc and asserted by the long-run test in both precisions; direct-initialization and single-update fixtures unchanged.
+- **Risk/class:** [patch]. **Dependencies:** none. **Verification:** nextest under the committed budget (the long run sized to fit it), doctest, differential against direct initialization.
+
+<a id="apollo-ntt-circle-group-lengths"></a>
+## APOLLO-NTT-CIRCLE-GROUP-LENGTHS — Admit `n | p + 1` transform lengths [minor] — todo
+- **Outcome:** `apollo-ntt` supports power-of-two lengths over primes whose `p + 1` is smooth, such as Mersenne `2^31 − 1`, through the order-`(p + 1)` cyclic subgroup of `PGL₂(p)` (norm-one elements of `F_{p²}`).
+- **Evidence:** `crates/apollo-ntt/src/application/execution/plan/ntt/dimension_1d.rs:47-57` requires `n | modulus − 1` with a primitive root; `2^31 − 1` therefore admits only `n = 2`. Li and Xing, "Fast Fourier transform via automorphism groups of rational function fields", arXiv:2310.14462 (2023), Theorem 1.1 and section 4, give an `O(n log n)` evaluation map for `n | q + 1`; Haböck, Levit and Papini, "Circle STARKs", IACR ePrint 2024/278, give the practical circle-group FFT for the same case.
+- **Scope:** one plan kind over the circle group with its non-monomial basis stated in the contract (the transform is a multipoint evaluation, not the cyclic DFT), forward and inverse, convolution via pointwise product verified. Non-goals: GPU path, arbitrary `B`-smooth `n`.
+- **Acceptance:** inverse round trip exact for all inputs at `n ≤ 2^16` over `2^31 − 1`; polynomial product matches schoolbook modular multiplication; complexity measured `O(n log n)` on the pinned core class.
+- **Risk/class:** [minor] [arch]; ADR required for the basis and evaluation-set contract. **Dependencies:** none. **Verification:** property tests over random polynomials, published reference vectors from the cited papers.
+
+<a id="apollo-spectral-peak-estimation-spike"></a>
+## APOLLO-SPECTRAL-PEAK-ESTIMATION-SPIKE — Decide a sub-bin sinusoid parameter estimator [patch] — todo
+- **Question:** which published estimator of spectral peak frequency, amplitude and phase below bin resolution should Apollo own, given that no such surface exists (`apollo-stft` provides Hann analysis only)?
+- **Evidence:** Henry, "An ultra-precise fast Fourier transform", Measurement 220 (2023) 113372 and Science Talks 4 (2022) 100097, reports `1e-12`-order frequency, amplitude and phase errors at high SNR from two Prism-derived windows, a magnitude-ratio quadratic transform and Romberg-integrated windowing; the window definitions depend on Henry, IEEE TIM 69 (2020), which was not retrievable this session, so the method is not yet reproducible from resolved sources. Candan, IEEE SPL 18(6) 2011 and Jacobsen–Kootsookos, IEEE SP Mag 24(3) 2007 are the resolved three-bin interpolators with derived error terms.
+- **Method:** resolve and read Henry 2020 for the window construction; implement the Prism pair and the Candan interpolator as test-only candidates against a synthetic three-tone oracle at the paper's conditions (48 kHz, 48 000 samples, tones near 8950 Hz, `1e-6` V middle tone); compare frequency, amplitude and phase error and leakage floor.
+- **Evidence budget:** two sessions. **Decision deliverable:** an ADR selecting one estimator (or none) with the measured error table; the accepted one becomes a DoR item.
+- **Risk/class:** [patch] spike. **Dependencies:** access to the 2020 reference. **Verification:** oracle errors reported with derived uncertainty per numerical discipline.
 
 <a id="apollo-worker-hook-admission"></a>
 ## APOLLO-WORKER-HOOK-ADMISSION — Preserve reclamation under bounded registration [patch] [arch] — todo
@@ -341,43 +437,74 @@
 
 <a id="apollo-n64-lane-pass"></a>
 
-## APOLLO-N64-LANE-PASS-2026-09-08 — The N=64 lane pass is the stack's most-executed kernel and is unmeasured in its own regime [minor] [perf] — todo
+## APOLLO-N64-LANE-PASS-2026-09-08 — The N=64 lane pass is the stack's most-executed kernel and is unmeasured in its own regime [minor] [perf] — measured 2026-09-08: shipped arm confirmed; attribution corrected
 
+- **Integrator:** claude-fable-5.1; **branch:** `perf/apollo-n64-lane-pass`,
+  authored through the git API — both apollo trees were held by live peers.
+- **Last-update:** 2026-09-08.
 - **Finding.** Counting from the consumer rather than from the codelet: a 64³
   forward `FftPlan3D` runs three axis passes, each handing the whole volume to
   `lanes::contiguous` / `lanes::execute` with `lane_len = 64`, so it executes
   **3 x 4,096 = 12,288 length-64 codelet calls per transform** — and kwavers'
   PSTD runs a transform pair per timestep. That makes
   `small_pot_inplace_sized::<64>` the most-executed kernel apollo has in the
-  stack's dominant workload.
-- **It is unmeasured in the throughput regime.** `small_pot_arms`
-  (`components/base128/pinned_probe`) covers N = 8, 16 and 32, and its lane
-  arms cover only 8 and 16. The N = 64 arm has a round-trip (latency) reading
-  and no lane reading at all — precisely the gap that let the N = 8 note stand
-  unexamined, now applied to the size that actually runs.
-- **First increment is measurement, not change.** Extend the probe's lane arms
-  to N = 32 and N = 64: `lanes-per-call`, `lanes-framed` and `lanes-scalar` at
-  both core types, with the lane count sized to keep the pass L1-resident and
-  the loop structure matched across arms — a forward pass over every lane, then
-  an inverse pass. Interleaving the two directions per lane gives one arm a
-  serial dependency the others do not have, which invalidated a first attempt
-  at N = 8.
-- **Then the questions it can answer.** Whether the shipped N = 64 arm is the
-  fastest available in the regime it runs; whether the four-step split inside
-  it is sized for throughput rather than latency; and whether the
-  `#[target_feature]` crossing — priced at 41 ps on the performance core and
-  674 ps on the efficiency core by
-  [`#apollo-target-feature-boundary`](#apollo-target-feature-boundary) — is
-  still negligible when it is paid 12,288 times per transform instead of 62
-  times per pass. At the efficiency-core figure that is 8.3 µs per transform,
-  the first shape in this investigation where the crossing might pay for the
-  hoist that item declined.
-- **Acceptance.** N = 32 and N = 64 lane readings recorded at both core types
-  on a quiet host; then either a faster arm or frame placement lands with the
-  value oracles unchanged, or the shipped arm is confirmed optimal in its own
-  regime and that is recorded with the numbers.
-- **Risk / change class:** [minor] [perf]; **dependencies:** an apollo tree —
-  both were held by live peers when this was filed.
+  stack's dominant workload, and until this item it had a round-trip (latency)
+  reading only.
+- **Delivered: `small_pot_arms` lane arms at N = 32 and N = 64.** The per-lane
+  arm is now the dispatch itself — `small_pot_inplace_sized` once per lane, the
+  call `dimension_2d`/`dimension_3d` make — so it covers every size without a
+  per-size entry. The pass is a fixed 1,024 elements (16 KB) rather than a fixed
+  lane count, so no size is charged L2 traffic: a fixed 32 lanes would have put
+  N = 64 at exactly the efficiency core's 32 KB L1D. N = 32 gained a framed
+  entry; N = 64's vector arm is a function nested inside its dispatch arm in
+  `precise.rs` and cannot be reached, so that size has no framed row.
+- **Result at N = 64: the shipped arm wins in its own regime on both cores.**
+  Per lane transform (pass / 32), intervals under 0.5%:
+
+  | core | scalar `dft64_impl` | shipped vector arm | verdict | latency (round trip / 2) |
+  | --- | --- | --- | --- | --- |
+  | performance | 111 ns | **61.6 ns** | vector by 1.80x | 57.8 ns |
+  | efficiency | 158 ns | **132 ns** | vector by 1.20x | 131.6 ns |
+
+  Throughput equals latency at this size on both cores — 61.6 against 57.8,
+  132 against 131.6 — so unlike N = 8 there is no overlap to recover across
+  lanes: a 64-point body already fills the out-of-order window on its own.
+  The regime question that inverted N = 8 does not arise here, and the arm
+  decision stands as made.
+- **The number that matters most is not the verdict but the per-transform
+  cost, because it corrects an attribution made the same day.** kwavers
+  `#kw-fft3d-baseline` measured a 64³ forward at 1.70 ms and extrapolated the
+  codelet share from a length-32 *latency* reading as `N log N` — 43.6 ns,
+  hence "about a third, movement at least two thirds". The direct figure is
+  **61.6 ns on a performance core: 12,288 x 61.6 ns = 0.76 ms, 45% of the
+  transform.** On an efficiency core it is 132 ns, 1.62 ms — essentially the
+  whole 1.70 ms, which cannot be literally true for a pass moirai spreads across
+  both core types, but says the efficiency-core lanes are the tail. The honest
+  statement replaces the old one: **the codelet share is 45% or more depending
+  on the core mix, and the axis-pass transposes are not unambiguously the larger
+  lever.** The extrapolation was wrong in the direction the kwavers entry
+  warned it might be, only more so. Corrected there in the same delivery.
+- **The efficiency core at N = 64 is 2.1x slower than the performance core**
+  (132 against 61.6 ns) — a wider gap than at 8, 16 or 32. In a 64³ pass that
+  moirai distributes across core types, the efficiency-core lanes finish last,
+  and that ratio, not the codelet, may be what bounds the pass. Worth its own
+  measurement of `moirai`'s lane assignment against core type; filed as a
+  question inside this entry rather than an item, since a pass-level profile is
+  the instrument it needs and none exists yet.
+- **Rows not reported.** The performance-core lane rows at N = 8, 16 and 32
+  ran under a peer's concurrent build in the same tree and carry 10–30%
+  intervals; discarded. The N = 8 and 16 performance-core readings from
+  2026-09-06 stand (`#apollo-n8-regime-split`). The efficiency-core rows are
+  tight throughout and agree with the earlier ones: N = 8 scalar leads by 1.37x
+  at throughput (was 1.11x at 32 lanes), N = 16 vector by 1.03x, N = 32 vector
+  by 1.21x; the frame crossing at N = 32 on the efficiency core is at the noise
+  floor (framed 0.3% *slower*), and at N = 16 reads 619 ps, matching the 674 ps
+  recorded by `#apollo-target-feature-boundary`.
+- **Acceptance.** Lane readings at N = 32 and N = 64 recorded at both core
+  types: met. A faster arm or frame placement: not warranted — the shipped arm
+  is confirmed faster than its scalar fallback in both regimes on both cores,
+  and the crossing is negligible at these sizes. Recorded with the numbers.
+- **Risk / change class:** [minor] [perf]; **dependencies:** none.
 - **Parent:** [`#atlas-apollo-beat-the-references`](#atlas-apollo-beat-the-references).
 
 <a id="apollo-n16-f64-gap"></a>

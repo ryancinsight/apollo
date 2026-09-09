@@ -1,5 +1,11 @@
 # Apollo Checklist
 
+## claude/fable — current execution
+
+- [x] [Stage sweeps](backlog.md#apollo-planar-stage-sweeps): sweep driver measured three times, ADR 0056 Accepted, board updated.
+- [ ] [Stage sweeps](backlog.md#apollo-planar-stage-sweeps): PR enqueued, merged, lease discharged.
+- [ ] [Seam lane order](backlog.md#apollo-planar-seam-lane-order): hermes in-lane unpack landed, then the plane layout and both seams.
+
 ## codex/root — current execution
 
 - [ ] [FourStep movement](backlog.md#apollo-four-step-square-movement): verify current Leto/Moirai 0.6 adoption against the accepted `3f1c0db7` evidence, then complete provider-first delivery.

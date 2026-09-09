@@ -186,6 +186,31 @@ unsafe fn vector_arm<const INVERSE: bool, const NORMALIZE: bool>(data: &mut [Com
     unsafe { store_output_half::<INVERSE, NORMALIZE, 4>(ptr, output1) };
 }
 
+/// A whole lane pass inside one `#[target_feature]` frame.
+///
+/// The `small_pot_arms` probe pairs this against the per-lane dispatch to price
+/// the frame crossing at N = 32 without the shared-buffer confound its fused
+/// entries carry: every lane is different data, so the only thing the frame
+/// removes is one crossing per lane.
+///
+/// # Safety
+///
+/// Requires the caller to have established AVX and FMA, and `data.len()` to be
+/// a multiple of 32.
+#[cfg(all(test, windows, target_arch = "x86_64"))]
+#[target_feature(enable = "avx,fma")]
+pub(crate) unsafe fn framed_lane_pass<const INVERSE: bool, const NORMALIZE: bool>(
+    data: &mut [Complex64],
+) {
+    // SAFETY: each chunk is exactly 32 samples, which the array cast covers,
+    // and this frame supplies the target features `vector_arm` needs.
+    unsafe {
+        for lane in data.chunks_exact_mut(32) {
+            vector_arm::<INVERSE, NORMALIZE>(&mut *lane.as_mut_ptr().cast::<[Complex64; 32]>());
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::Complex64;

@@ -6,7 +6,7 @@
 use super::{
     combine_planar_halves, four_step_batched, scratch_len, transpose_planes, BatchedPlanCache,
 };
-use eunomia::{Complex32, Complex64};
+use eunomia::{Complex, Complex32, Complex64};
 use std::f64::consts::TAU;
 
 #[test]
@@ -349,65 +349,6 @@ fn f32_planar_half_combine_matches_the_scalar_formula() {
 /// output compared. The pass moves data and computes nothing, so the
 /// comparison is bit-exact rather than bounded.
 #[test]
-fn f32_reinterleave_takes_the_native_width_and_matches_the_scalar_sink() {
-    // `plane_geometry(256)`: sixteen live columns on a stride of `m + ROW_PAD`.
-    let (m, stride) = (16usize, 24usize);
-    let plane = m * stride;
-    let mut re = vec![0.0f32; plane];
-    let mut im = vec![0.0f32; plane];
-    // The pad keeps its sentinel: reading it would land a value the scalar
-    // reference never writes, so a pad touch fails the comparison below.
-    for row in 0..m {
-        for column in 0..m {
-            let index = row * stride + column;
-            let logical = (row * m + column) as f32;
-            re[index] = 0.25 + logical * 0.003;
-            im[index] = -0.5 + logical * 0.002;
-        }
-    }
-    for slot in re.iter_mut().chain(im.iter_mut()) {
-        if *slot == 0.0 {
-            *slot = f32::from_bits(0x7f80_0001);
-        }
-    }
-
-    let bits = m.trailing_zeros();
-    let mut expected = vec![Complex32::default(); m * m];
-    for row in 0..m {
-        let src = row * stride;
-        let dst = (row.reverse_bits() >> (usize::BITS - bits)) * m;
-        for column in 0..m {
-            expected[dst + column] = Complex32::new(re[src + column], im[src + column]);
-        }
-    }
-
-    let mut actual = vec![Complex32::default(); m * m];
-    let handled = hermes_simd::vectorize_lanes::<8, f32, _>(super::boundary::InterleaveRows {
-        re: &re,
-        im: &im,
-        data: eunomia::layout::cast_slice_mut(&mut actual),
-        m,
-        stride,
-    });
-    let available = super::super::lane_capability::native_lanes_supported::<8, f32>();
-    assert_eq!(
-        handled,
-        available.then_some(true),
-        "the sink must take exactly the eight f32 lanes the dispatcher reports"
-    );
-    if !available {
-        return;
-    }
-    for (index, (got, want)) in actual.iter().zip(&expected).enumerate() {
-        assert_eq!(
-            (got.re.to_bits(), got.im.to_bits()),
-            (want.re.to_bits(), want.im.to_bits()),
-            "eight-lane sink differs from the scalar sink at output {index}"
-        );
-    }
-}
-
-#[test]
 fn plans_are_cached_per_length_and_direction() {
     let a = <f64 as BatchedPlanCache>::cached_plan::<false>(64);
     let b = <f64 as BatchedPlanCache>::cached_plan::<false>(64);
@@ -465,4 +406,64 @@ fn batched_plans_and_planes_are_shared_across_threads() {
         "each thread built its own {LEN}-point four-step planes, duplicating          {} bytes of plane storage per thread",
         2 * HALF * HALF * core::mem::size_of::<f64>()
     );
+}
+
+/// Differential check at the lengths the planar domain gained: RustFFT is an
+/// independent implementation whose forward error carries the same
+/// `O(log N · u)` bound, so the distance between the two is at most twice
+/// [`tolerance`] scaled to the precision under test.
+fn large_lengths_agree_with_rustfft<F>(unit_roundoff: f64)
+where
+    F: crate::application::execution::kernel::mixed_radix::MixedRadixScalar<Complex = Complex<F>>
+        + crate::application::orchestration::cache::plans::PlanCacheProvider<PlanScalar = F>
+        + eunomia::FloatElement
+        + rustfft::FftNum,
+{
+    for k in [16u32, 18] {
+        let n = 1usize << k;
+        assert!(
+            super::planar_applies(n),
+            "n = {n} is inside the planar domain"
+        );
+        let source = signal(n);
+        let input: Vec<Complex<F>> = source
+            .iter()
+            .map(|z| {
+                Complex::new(
+                    <F as eunomia::FloatElement>::from_f64(z.re),
+                    <F as eunomia::FloatElement>::from_f64(z.im),
+                )
+            })
+            .collect();
+
+        let mut actual = input.clone();
+        crate::FftPlan1D::<F>::new(
+            crate::Shape1D::new(n).expect("invariant: shape lengths are non-zero"),
+        )
+        .forward_complex_slice_inplace(&mut actual);
+
+        let mut expected: Vec<rustfft::num_complex::Complex<F>> = input
+            .iter()
+            .map(|z| rustfft::num_complex::Complex::new(z.re, z.im))
+            .collect();
+        rustfft::FftPlanner::<F>::new()
+            .plan_fft_forward(n)
+            .process(&mut expected);
+
+        let l1: f64 = source.iter().map(|v| v.re.hypot(v.im)).sum();
+        let stages = f64::from(k);
+        let bound = 2.0 * 16.0 * stages * unit_roundoff * l1;
+        for (bin, (a, e)) in actual.iter().zip(&expected).enumerate() {
+            let error = (Complex64::new(a.re.to_f64(), a.im.to_f64())
+                - Complex64::new(e.re.to_f64(), e.im.to_f64()))
+            .norm();
+            assert!(error <= bound, "n={n}, bin={bin}: {error:e} > {bound:e}");
+        }
+    }
+}
+
+#[test]
+fn large_planar_lengths_agree_with_rustfft_in_both_precisions() {
+    large_lengths_agree_with_rustfft::<f32>(f64::from(f32::EPSILON) / 2.0);
+    large_lengths_agree_with_rustfft::<f64>(f64::EPSILON / 2.0);
 }

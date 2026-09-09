@@ -56,12 +56,12 @@
 //! type closes the corresponding item as falsified.
 
 use crate::application::execution::kernel::components::winograd::{
-    dft16_impl, dft32_impl, dft8_array_impl,
+    dft16_impl, dft32_impl, dft64_impl, dft8_array_impl,
 };
 use crate::application::execution::kernel::measurement_cores;
 use crate::application::execution::kernel::mixed_radix::scalar::{
-    n16_framed_lane_pass, n16_fused_round_trip, n16_per_lane_pass, n16_vector_arm_unchecked,
-    n8_framed_lane_pass, n8_fused_round_trip, n8_per_lane_pass, n8_vector_arm_unchecked,
+    n16_framed_lane_pass, n16_fused_round_trip, n16_vector_arm_unchecked, n32_framed_lane_pass,
+    n8_framed_lane_pass, n8_fused_round_trip, n8_vector_arm_unchecked,
 };
 use crate::application::execution::kernel::mixed_radix::MixedRadixScalar;
 use apollo_bench::{BenchmarkCase, BenchmarkConfig, BenchmarkSuite};
@@ -123,7 +123,17 @@ fn scalar_transform<const N: usize, const INVERSE: bool, const NORMALIZE: bool>(
                     }
                 }
             }
-            _ => unreachable!("invariant: the probe measures N in 8, 16 or 32"),
+            64 => {
+                let data = &mut *ptr.cast::<[Complex64; 64]>();
+                dft64_impl::<f64, INVERSE>(data);
+                if INVERSE && NORMALIZE {
+                    let scale = Complex64::new(1.0 / 64.0, 0.0);
+                    for value in data.iter_mut() {
+                        *value *= scale;
+                    }
+                }
+            }
+            _ => unreachable!("invariant: the probe measures N in 8, 16, 32 or 64"),
         }
     }
 }
@@ -182,22 +192,40 @@ fn fused_round_trip<const N: usize>(work: &mut [Complex64]) {
 /// Sized so the whole pass stays L1-resident — 32 lanes is 4 KB at N = 8 and
 /// 8 KB at N = 16 — while giving the crossing count enough weight to resolve:
 /// a round trip over 32 lanes is 64 crossings per-lane against one framed.
-const LANES: usize = 32;
+/// Elements per lane pass, fixed across sizes so the pass stays L1-resident.
+///
+/// 1,024 complex f64 is 16 KB — inside the 32 KB efficiency-core L1D with room
+/// to spare — so N = 8 runs 128 lanes, N = 16 runs 64, N = 32 runs 32 and
+/// N = 64 runs 16. A fixed *lane* count would have put N = 64 at 32 KB, exactly
+/// the efficiency core's L1 size, and charged L2 traffic to the largest codelet
+/// only. Readings are per pass, so compare sizes per lane transform: divide by
+/// `2 * LANE_ELEMENTS / N`.
+const LANE_ELEMENTS: usize = 1_024;
 
-/// A forward pass then a normalized inverse pass over `LANES` lanes, crossing
-/// into the vector frame once per lane — what `dimension_2d` does today.
+/// A forward pass then a normalized inverse pass over every lane, crossing
+/// into the vector frame once per lane — what `dimension_2d` and
+/// `dimension_3d` do today: one plan, called per lane, through the same
+/// `small_pot_inplace_sized` the round-trip arms measure.
 fn per_lane_pass<const N: usize>(work: &mut [Complex64]) {
-    match N {
-        8 => {
-            n8_per_lane_pass::<false, false>(work);
-            n8_per_lane_pass::<true, true>(work);
+    // SAFETY: `chunks_exact_mut(N)` hands out exactly `N` samples per lane,
+    // which is `small_pot_inplace_sized`'s length contract.
+    unsafe {
+        for lane in work.chunks_exact_mut(N) {
+            <f64 as MixedRadixScalar>::small_pot_inplace_sized::<N, false, false>(lane);
         }
-        16 => {
-            n16_per_lane_pass::<false, false>(work);
-            n16_per_lane_pass::<true, true>(work);
+        for lane in work.chunks_exact_mut(N) {
+            <f64 as MixedRadixScalar>::small_pot_inplace_sized::<N, true, true>(lane);
         }
-        _ => unreachable!("invariant: the lane arms cover N in 8 or 16"),
     }
+}
+
+/// Whether `N` has a vector body the probe can run inside one frame.
+///
+/// N = 64's vector arm is a function nested inside its dispatch arm in
+/// `precise.rs`, so nothing outside can call it; that size is measured only
+/// through the dispatch.
+const fn has_framed_arm<const N: usize>() -> bool {
+    matches!(N, 8 | 16 | 32)
 }
 
 /// The same two passes with the frame hoisted around each lane loop.
@@ -218,7 +246,11 @@ fn framed_lane_pass<const N: usize>(work: &mut [Complex64]) {
                 n16_framed_lane_pass::<false, false>(work);
                 n16_framed_lane_pass::<true, true>(work);
             }
-            _ => unreachable!("invariant: the lane arms cover N in 8 or 16"),
+            32 => {
+                n32_framed_lane_pass::<false, false>(work);
+                n32_framed_lane_pass::<true, true>(work);
+            }
+            _ => unreachable!("invariant: `has_framed_arm` gates this to 8, 16 or 32"),
         }
     }
 }
@@ -272,13 +304,16 @@ fn assert_arms_agree<const N: usize>() {
 
     // The lane arms carry their own agreement check: they run over a longer
     // buffer, so they cannot join the list above.
-    if N == 8 || N == 16 {
-        let lanes = source(N * LANES);
-        for (label, pass) in [
+    {
+        let lanes = source(LANE_ELEMENTS);
+        let mut passes = vec![
             ("lanes-per-call", per_lane_pass::<N> as fn(&mut [Complex64])),
-            ("lanes-framed", framed_lane_pass::<N>),
             ("lanes-scalar", scalar_lane_pass::<N>),
-        ] {
+        ];
+        if has_framed_arm::<N>() {
+            passes.push(("lanes-framed", framed_lane_pass::<N>));
+        }
+        for (label, pass) in passes {
             let mut result = lanes.clone();
             pass(&mut result);
             let error = result
@@ -329,22 +364,25 @@ fn arms_for_size<const N: usize>(suite: &mut BenchmarkSuite, core: &str) {
         suite.run(BenchmarkCase::new(core, "vector-fused", N), || {
             fused_round_trip::<N>(std::hint::black_box(&mut work));
         });
+    }
 
-        // The lane arms time a whole pass, so their reading is `LANES` round
-        // trips and is not comparable to the rows above; the quantity is the
-        // difference between the two of them.
-        let lanes = source(N * LANES);
-        let mut work = lanes.clone();
-        suite.run(BenchmarkCase::new(core, "lanes-per-call", N), || {
-            per_lane_pass::<N>(std::hint::black_box(&mut work));
-        });
+    // The lane arms time a whole pass of `LANE_ELEMENTS / N` round trips, so
+    // their reading is not comparable to the rows above and not directly
+    // comparable across sizes either; the quantity is the ratio between arms
+    // at one size, or the per-lane figure after dividing by `2 * lanes`.
+    let lanes = source(LANE_ELEMENTS);
+    let mut work = lanes.clone();
+    suite.run(BenchmarkCase::new(core, "lanes-per-call", N), || {
+        per_lane_pass::<N>(std::hint::black_box(&mut work));
+    });
+    let mut work = lanes.clone();
+    suite.run(BenchmarkCase::new(core, "lanes-scalar", N), || {
+        scalar_lane_pass::<N>(std::hint::black_box(&mut work));
+    });
+    if has_framed_arm::<N>() {
         let mut work = lanes.clone();
         suite.run(BenchmarkCase::new(core, "lanes-framed", N), || {
             framed_lane_pass::<N>(std::hint::black_box(&mut work));
-        });
-        let mut work = lanes.clone();
-        suite.run(BenchmarkCase::new(core, "lanes-scalar", N), || {
-            scalar_lane_pass::<N>(std::hint::black_box(&mut work));
         });
     }
 }
@@ -364,6 +402,7 @@ fn small_pot_arms_by_core_type() {
     assert_arms_agree::<8>();
     assert_arms_agree::<16>();
     assert_arms_agree::<32>();
+    assert_arms_agree::<64>();
 
     let Some(selection) = measurement_cores::selected() else {
         eprintln!("host reports no processor class information; probe not measurable");
@@ -387,13 +426,18 @@ fn small_pot_arms_by_core_type() {
         arms_for_size::<8>(&mut warmup, label);
         arms_for_size::<16>(&mut warmup, label);
         arms_for_size::<32>(&mut warmup, label);
+        arms_for_size::<64>(&mut warmup, label);
         drop(warmup);
 
         let mut suite = BenchmarkSuite::new(BenchmarkConfig::regression());
         arms_for_size::<8>(&mut suite, label);
         arms_for_size::<16>(&mut suite, label);
         arms_for_size::<32>(&mut suite, label);
-        println!("ARMS cpu={landed} ({label}) forward+normalized-inverse round trip");
+        arms_for_size::<64>(&mut suite, label);
+        println!(
+            "ARMS cpu={landed} ({label}) forward+normalized-inverse round trip; \
+             lane rows are one pass of {LANE_ELEMENTS} elements"
+        );
         // `median_ps` is already per-iteration; it is the number as printed.
         print!("{}", suite.report());
     }

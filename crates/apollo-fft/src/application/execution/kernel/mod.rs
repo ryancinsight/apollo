@@ -10,6 +10,7 @@
 //! | `radix_composite` | Mixed-radix Stockham autosort FFT for 2/3/5/7-smooth composite lengths. |
 //! | `stockham`        | Radix-2 Stockham autosort FFT for all power-of-two lengths. |
 //! | `mixed_radix`     | Dispatch facade: Stockham for PoT, composite/PFA for smooth, Rader for primes. |
+//! | `twiddless`       | Measurement instrument: Queiroz's twiddless FFT beside its butterfly isomorph (ADR 0052). |
 
 // ── Module declarations ──────────────────────────────────────────────────────
 
@@ -28,6 +29,11 @@ pub(crate) mod twiddle_table;
 #[cfg(any(test, debug_assertions, feature = "kernel-strategy-bench"))]
 #[doc(hidden)]
 pub mod benchmark_kernels;
+
+// The twiddless instrument shares the benchmark-kernel boundary: it is an
+// evaluated claim, not a production route.
+#[cfg(any(test, debug_assertions, feature = "kernel-strategy-bench"))]
+pub mod twiddless;
 
 // Owns the test binary's global allocator; allocation attribution needs no
 // pinning, so unlike the pinned probes this is not Windows-gated.

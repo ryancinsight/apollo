@@ -68,7 +68,7 @@ thread_local! {
 
 /// Scalars whose batched plans are cached per thread.
 pub(crate) trait BatchedPlanCache:
-    MixedRadixScalar + LaneScalar + eunomia::layout::Pod + Sized
+    MixedRadixScalar + LaneScalar + super::radix::Lane + eunomia::layout::Pod + Sized
 {
     /// Preferred exact lane width for the in-register boundary passes: the
     /// planar transpose, the half combine, and the reinterleave sink. Eight

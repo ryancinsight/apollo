@@ -33,8 +33,39 @@
 //! [`FftPlanarMut`]: crate::domain::storage::FftPlanarMut
 
 use crate::application::execution::kernel::mixed_radix::MixedRadixScalar;
+
+#[cfg(all(test, windows, target_arch = "x86_64"))]
+macro_rules! sect {
+    ($label:expr, $body:block) => {{
+        let t0 = unsafe { core::arch::x86_64::_rdtsc() };
+        let out = $body;
+        let t1 = unsafe { core::arch::x86_64::_rdtsc() };
+        crate::application::execution::kernel::components::batched::sections::record(
+            $label,
+            t1 - t0,
+        );
+        out
+    }};
+}
+#[cfg(not(all(test, windows, target_arch = "x86_64")))]
+macro_rules! sect {
+    ($label:expr, $body:block) => {{
+        let _label: &str = $label;
+        $body
+    }};
+}
+
 mod cache;
+mod radix;
+mod sweep;
 pub(crate) use cache::BatchedPlanCache;
+
+/// Section labels of the time-decimated stage set's sweeps, by sweep index;
+/// the attribution probe reports them beneath `stages1`.
+const TIME_SWEEPS: [&str; 3] = ["t1", "t2", "t3"];
+/// Section labels of the frequency-decimated stage set's sweeps, by sweep
+/// index; reported beneath `stages2`.
+const FREQUENCY_SWEEPS: [&str; 3] = ["f1", "f2", "f3"];
 
 use eunomia::Complex;
 use hermes_simd::{LaneKernel, LaneScalar, Simd, SimdArch, SimdKernel, SimdStorage, Vector};
@@ -86,10 +117,14 @@ struct BatchedStages<'a, T> {
     re: &'a mut [T],
     im: &'a mut [T],
     tw: &'a [(T, T)],
-    /// Planar four-step twiddle planes multiplied into the first stage's
-    /// loads, or `None` for a plain stage set. Row-major with row stride
-    /// `batch`, rows in the same bit-reversed order the data rows carry.
-    fold: Option<(&'a [T], &'a [T])>,
+    /// Interleaved input read by the first pass in place of the planes, or
+    /// `None` when the planes already hold it. Rows of `batch` complexes as
+    /// `2 * batch` reals in natural order; plane row `p` reads source row
+    /// `rev(p)`, which is the row map the deinterleave pass used to apply.
+    /// Reading here deletes that pass: the first stage pair is the one that
+    /// loads every element exactly once, and two interleaved vector loads
+    /// plus one register deinterleave replace the two plane loads.
+    source: Option<&'a [T]>,
     /// Live columns per row — the loop bound.
     batch: usize,
     /// Elements per row including [`ROW_PAD`] — the index multiplier.
@@ -99,7 +134,7 @@ struct BatchedStages<'a, T> {
 
 impl<T> LaneKernel<T> for BatchedStages<'_, T>
 where
-    T: LaneScalar + MixedRadixScalar,
+    T: LaneScalar + MixedRadixScalar + radix::Lane,
 {
     type Output = ();
 
@@ -109,222 +144,29 @@ where
     )]
     #[inline(always)]
     fn call<A: SimdArch + SimdKernel<T>>(self, simd: Simd<T, A>) {
-        let lanes = <A as SimdStorage<T>>::LANE_COUNT;
-        let b = self.batch;
-        let s = self.stride;
-        let mut twx = 0usize;
-        let mut l = 2usize;
-
-        // Two stages per pass over the data.
-        //
-        // A stage-per-pass loop re-streams the whole `len * batch` array
-        // `log2(len)` times, and at these sizes that traffic binds rather than
-        // the arithmetic: RustFFT runs six stages in two passes by holding a
-        // column in registers, and PhastFT fuses four into one codelet. Fusing
-        // stage `l` with stage `2l` loads each of the four operands once and
-        // writes each once, halving the passes.
-        //
-        // Four is the width rather than eight, and that follows from the planar
-        // layout rather than being a conservative choice: real and imaginary
-        // parts occupy separate registers here, so a radix-8 step would need
-        // sixteen vector registers for operands alone and would spill on AVX2.
-        // The three twiddles are invariant in `g` and hoist out of the inner
-        // loops.
-        while l * 2 <= self.len {
-            let half = l >> 1;
-            let groups = self.len / (2 * l);
-            for j in 0..half {
-                // Stage `l` occupies `half` table entries and stage `2l` the
-                // `l` that follow, so the second stage's two twiddles are read
-                // straight from the table rather than derived by rotation:
-                // exact stored values, and no sign case for the inverse
-                // direction.
-                let (w1r, w1i) = self.tw[twx + j];
-                let (w2r, w2i) = self.tw[twx + half + j];
-                let (w3r, w3i) = self.tw[twx + half + j + half];
-                let (v1r, v1i) = (simd.splat(w1r), simd.splat(w1i));
-                let (v2r, v2i) = (simd.splat(w2r), simd.splat(w2i));
-                let (v3r, v3i) = (simd.splat(w3r), simd.splat(w3i));
-
-                // The four-step twiddle rides the first stage's loads:
-                // `l == 2` is the pass that reads every element exactly once,
-                // so multiplying there deletes the standalone pass the scalar
-                // transpose multiply used to be.
-                let fold = if l == 2 { self.fold } else { None };
-                for g in 0..groups {
-                    let row_a = g * 2 * l + j;
-                    let ia = row_a * s;
-                    let ib = ia + half * s;
-                    let ic = ia + l * s;
-                    let id = ic + half * s;
-                    let ta = row_a * b;
-                    let tb = ta + half * b;
-                    let tc = ta + l * b;
-                    let td = tc + half * b;
-                    let mut k = 0;
-                    while k + lanes <= b {
-                        let mut ar = load::<T, A>(self.re, ia + k);
-                        let mut ai = load::<T, A>(self.im, ia + k);
-                        let mut br = load::<T, A>(self.re, ib + k);
-                        let mut bi = load::<T, A>(self.im, ib + k);
-                        let mut cr = load::<T, A>(self.re, ic + k);
-                        let mut ci = load::<T, A>(self.im, ic + k);
-                        let mut dr = load::<T, A>(self.re, id + k);
-                        let mut di = load::<T, A>(self.im, id + k);
-                        if let Some((pr, pi)) = fold {
-                            let tw = |r: hermes_simd::Vector<T, A>,
-                                      i: hermes_simd::Vector<T, A>,
-                                      at: usize| {
-                                let wr = load::<T, A>(pr, at + k);
-                                let wi = load::<T, A>(pi, at + k);
-                                (wr.mul_add(r, -(wi * i)), wr.mul_add(i, wi * r))
-                            };
-                            (ar, ai) = tw(ar, ai, ta);
-                            (br, bi) = tw(br, bi, tb);
-                            (cr, ci) = tw(cr, ci, tc);
-                            (dr, di) = tw(dr, di, td);
-                        }
-
-                        // Stage `l`: (a,b) and (c,d), both against W_l^j.
-                        let tbr = v1r.mul_add(br, -(v1i * bi));
-                        let tbi = v1r.mul_add(bi, v1i * br);
-                        let (uar, uai) = (ar + tbr, ai + tbi);
-                        let (ubr, ubi) = (ar - tbr, ai - tbi);
-
-                        let tdr = v1r.mul_add(dr, -(v1i * di));
-                        let tdi = v1r.mul_add(di, v1i * dr);
-                        let (ucr, uci) = (cr + tdr, ci + tdi);
-                        let (udr, udi) = (cr - tdr, ci - tdi);
-
-                        // Stage `2l`: (a,c) against W_2l^j and (b,d) against
-                        // W_2l^(j + l/2). Neither operand has left a register.
-                        let vcr = v2r.mul_add(ucr, -(v2i * uci));
-                        let vci = v2r.mul_add(uci, v2i * ucr);
-                        let vdr = v3r.mul_add(udr, -(v3i * udi));
-                        let vdi = v3r.mul_add(udi, v3i * udr);
-
-                        store::<T, A>(uar + vcr, self.re, ia + k);
-                        store::<T, A>(uai + vci, self.im, ia + k);
-                        store::<T, A>(ubr + vdr, self.re, ib + k);
-                        store::<T, A>(ubi + vdi, self.im, ib + k);
-                        store::<T, A>(uar - vcr, self.re, ic + k);
-                        store::<T, A>(uai - vci, self.im, ic + k);
-                        store::<T, A>(ubr - vdr, self.re, id + k);
-                        store::<T, A>(ubi - vdi, self.im, id + k);
-                        k += lanes;
-                    }
-                    // Scalar remainder when the batch is not a lane multiple.
-                    for k in k..b {
-                        let (mut ar, mut ai) = (self.re[ia + k], self.im[ia + k]);
-                        let (mut br, mut bi) = (self.re[ib + k], self.im[ib + k]);
-                        let (mut cr, mut ci) = (self.re[ic + k], self.im[ic + k]);
-                        let (mut dr, mut di) = (self.re[id + k], self.im[id + k]);
-                        if let Some((pr, pi)) = fold {
-                            let tw = |r: T, i: T, at: usize| {
-                                let (wr, wi) = (pr[at + k], pi[at + k]);
-                                (wr * r - wi * i, wr * i + wi * r)
-                            };
-                            (ar, ai) = tw(ar, ai, ta);
-                            (br, bi) = tw(br, bi, tb);
-                            (cr, ci) = tw(cr, ci, tc);
-                            (dr, di) = tw(dr, di, td);
-                        }
-
-                        let tbr = w1r * br - w1i * bi;
-                        let tbi = w1r * bi + w1i * br;
-                        let (uar, uai) = (ar + tbr, ai + tbi);
-                        let (ubr, ubi) = (ar - tbr, ai - tbi);
-
-                        let tdr = w1r * dr - w1i * di;
-                        let tdi = w1r * di + w1i * dr;
-                        let (ucr, uci) = (cr + tdr, ci + tdi);
-                        let (udr, udi) = (cr - tdr, ci - tdi);
-
-                        let vcr = w2r * ucr - w2i * uci;
-                        let vci = w2r * uci + w2i * ucr;
-                        let vdr = w3r * udr - w3i * udi;
-                        let vdi = w3r * udi + w3i * udr;
-
-                        self.re[ia + k] = uar + vcr;
-                        self.im[ia + k] = uai + vci;
-                        self.re[ib + k] = ubr + vdr;
-                        self.im[ib + k] = ubi + vdi;
-                        self.re[ic + k] = uar - vcr;
-                        self.im[ic + k] = uai - vci;
-                        self.re[id + k] = ubr - vdr;
-                        self.im[id + k] = ubi - vdi;
-                    }
-                }
-            }
-            twx += half + l;
-            l <<= 2;
-        }
-
-        // One radix-2 stage remains when `log2(len)` is odd; when the whole
-        // transform is that single stage, the first-stage fold applies here.
-        if l <= self.len {
-            let half = l >> 1;
-            let groups = self.len / l;
-            let fold = if l == 2 { self.fold } else { None };
-            for j in 0..half {
-                let (twr, twi) = self.tw[twx + j];
-                let wr = simd.splat(twr);
-                let wi = simd.splat(twi);
-                for g in 0..groups {
-                    let row_lo = g * l + j;
-                    let lo = row_lo * s;
-                    let hi = lo + half * s;
-                    let tlo = row_lo * b;
-                    let thi = tlo + half * b;
-                    let mut k = 0;
-                    while k + lanes <= b {
-                        let (lo_s, hi_s) = (lo + k, hi + k);
-                        let mut ar = load::<T, A>(self.re, lo_s);
-                        let mut ai = load::<T, A>(self.im, lo_s);
-                        let mut br = load::<T, A>(self.re, hi_s);
-                        let mut bi = load::<T, A>(self.im, hi_s);
-                        if let Some((pr, pi)) = fold {
-                            let tw = |r: hermes_simd::Vector<T, A>,
-                                      i: hermes_simd::Vector<T, A>,
-                                      at: usize| {
-                                let vr = load::<T, A>(pr, at + k);
-                                let vi = load::<T, A>(pi, at + k);
-                                (vr.mul_add(r, -(vi * i)), vr.mul_add(i, vi * r))
-                            };
-                            (ar, ai) = tw(ar, ai, tlo);
-                            (br, bi) = tw(br, bi, thi);
-                        }
-
-                        let tr = wr.mul_add(br, -(wi * bi));
-                        let ti = wr.mul_add(bi, wi * br);
-
-                        store::<T, A>(ar + tr, self.re, lo_s);
-                        store::<T, A>(ai + ti, self.im, lo_s);
-                        store::<T, A>(ar - tr, self.re, hi_s);
-                        store::<T, A>(ai - ti, self.im, hi_s);
-                        k += lanes;
-                    }
-                    for k in k..b {
-                        let (lo_s, hi_s) = (lo + k, hi + k);
-                        let (mut ar, mut ai) = (self.re[lo_s], self.im[lo_s]);
-                        let (mut br, mut bi) = (self.re[hi_s], self.im[hi_s]);
-                        if let Some((pr, pi)) = fold {
-                            let tw = |r: T, i: T, at: usize| {
-                                let (vr, vi) = (pr[at + k], pi[at + k]);
-                                (vr * r - vi * i, vr * i + vi * r)
-                            };
-                            (ar, ai) = tw(ar, ai, tlo);
-                            (br, bi) = tw(br, bi, thi);
-                        }
-                        let tr = twr * br - twi * bi;
-                        let ti = twr * bi + twi * br;
-                        self.re[lo_s] = ar + tr;
-                        self.im[lo_s] = ai + ti;
-                        self.re[hi_s] = ar - tr;
-                        self.im[hi_s] = ai - ti;
-                    }
-                }
-            }
+        let Self {
+            re,
+            im,
+            tw,
+            source,
+            batch: b,
+            stride: s,
+            len,
+        } = self;
+        // Stages ascend from 2; each sweep applies up to `SWEEP_STAGES` of
+        // them per trip through the planes, two per pass while two remain
+        // and then one, over tiles that stay in L1 between its passes
+        // (see [`sweep`]). The four-step twiddle and the interleaved source
+        // both ride the pass over stage 2, the one pass that loads every
+        // element exactly once. The per-element operation order is the
+        // single-stage one, so results are bitwise those of any other
+        // grouping.
+        let mut l0 = 2usize;
+        for (index, stages) in sweep::sweep_lengths(len.trailing_zeros()).enumerate() {
+            sect!(TIME_SWEEPS[index], {
+                sweep::sweep_time(re, im, tw, source, b, s, len, l0, stages, simd);
+            });
+            l0 <<= stages;
         }
     }
 }
@@ -363,6 +205,51 @@ where
     debug_assert!(at + <A as SimdStorage<T>>::LANE_COUNT <= data.len());
     // SAFETY: as `load` above.
     unsafe { v.store_unaligned(data.as_mut_ptr().add(at)) }
+}
+
+/// Two adjacent vectors of interleaved complexes at `at` (in reals), split
+/// into their real and imaginary lanes.
+#[expect(
+    clippy::inline_always,
+    reason = "must fold into the caller's target-feature scope, as `load`"
+)]
+#[inline(always)]
+pub(super) fn load_interleaved<T, A>(data: &[T], at: usize) -> (Vector<T, A>, Vector<T, A>)
+where
+    T: LaneScalar,
+    A: SimdArch + SimdKernel<T>,
+{
+    let lanes = <A as SimdStorage<T>>::LANE_COUNT;
+    load::<T, A>(data, at).deinterleave(load::<T, A>(data, at + lanes))
+}
+
+/// The counterpart of [`load_interleaved`]: real and imaginary lanes stored
+/// as two adjacent vectors of interleaved complexes at `at` (in reals).
+#[expect(
+    clippy::inline_always,
+    reason = "must fold into the caller's target-feature scope, as `store`"
+)]
+#[inline(always)]
+pub(super) fn store_interleaved<T, A>(re: Vector<T, A>, im: Vector<T, A>, data: &mut [T], at: usize)
+where
+    T: LaneScalar,
+    A: SimdArch + SimdKernel<T>,
+{
+    let lanes = <A as SimdStorage<T>>::LANE_COUNT;
+    let (lo, hi) = re.interleave(im);
+    store::<T, A>(lo, data, at);
+    store::<T, A>(hi, data, at + lanes);
+}
+
+/// Bit-reverses a row index within `bits` bits; the map between plane rows
+/// and interleaved rows on both sides of the stage sets.
+#[inline]
+pub(super) fn reverse_row(row: usize, bits: u32) -> usize {
+    if bits == 0 {
+        0
+    } else {
+        row.reverse_bits() >> (usize::BITS - bits)
+    }
 }
 
 /// Square in-place transpose of an `m x m` plane, tiled for locality.
@@ -464,17 +351,17 @@ fn run_batched<T>(
     re: &mut [T],
     im: &mut [T],
     plan: &BatchedPlan<T>,
-    fold: Option<(&[T], &[T])>,
+    source: Option<&[T]>,
     batch: usize,
     stride: usize,
 ) where
-    T: LaneScalar + MixedRadixScalar,
+    T: LaneScalar + MixedRadixScalar + radix::Lane,
 {
     hermes_simd::vectorize(BatchedStages {
         re,
         im,
         tw: &plan.tw,
-        fold,
+        source,
         batch,
         stride,
         len: plan.len,
@@ -490,16 +377,18 @@ fn run_batched_dif<T>(
     im: &mut [T],
     plan: &BatchedPlan<T>,
     fold: Option<(&[T], &[T])>,
+    sink: Option<&mut [T]>,
     batch: usize,
     stride: usize,
 ) where
-    T: LaneScalar + MixedRadixScalar,
+    T: LaneScalar + MixedRadixScalar + radix::Lane,
 {
     hermes_simd::vectorize(dif::BatchedStagesDif {
         re,
         im,
         tw: &plan.tw,
         fold,
+        sink,
         batch,
         stride,
         len: plan.len,
@@ -516,16 +405,28 @@ pub(crate) fn scratch_len(n: usize) -> usize {
     m * (m + ROW_PAD)
 }
 
+/// Largest length the planar route serves; longer even powers fall to the
+/// generic four-step, whose rows thread through Moirai.
+///
+/// The bound used to be the generic route's threading threshold (65536), on
+/// the premise that threaded rows beat a sequential SIMD pass from there.
+/// Measured on the pinned performance core against that premise (ADR 0053),
+/// the generic route at 65536 cost 2.7 to 4.5 times RustFFT while this route
+/// one length below sat at 1.25 times; at 65536 this route measured 208 to
+/// 228 µs against the generic route's 466 to 767 across four runs, and at
+/// 262144 it halved `f32` while leaving `f64` level. The next even power,
+/// 1048576, was measured only under host contention and stays on the
+/// generic route until a quiet replicated census decides it. The value binds
+/// to one host's cache hierarchy and Moirai's dispatch cost; re-measure
+/// before moving it in either direction.
+pub(crate) const PLANAR_MAX_LEN: usize = 1 << 18;
+
 /// Whether [`four_step_batched`] covers a transform of length `n`.
 ///
 /// The single definition of the planar route's domain: an even power of two
-/// — the square split the driver is written for — below the point where the
-/// row transforms are worth threading.
+/// — the square split the driver is written for — up to [`PLANAR_MAX_LEN`].
 pub(crate) fn planar_applies(n: usize) -> bool {
-    n.is_power_of_two()
-        && n.trailing_zeros() % 2 == 0
-        && n >= 4
-        && n < crate::application::execution::kernel::components::four_step::PARALLEL_ROW_THRESHOLD
+    n.is_power_of_two() && n.trailing_zeros() % 2 == 0 && n >= 4 && n <= PLANAR_MAX_LEN
 }
 
 /// Whether [`four_step_split_batched`] covers a transform of length `n`.
@@ -550,23 +451,6 @@ pub(crate) fn split_scratch_len(n: usize) -> usize {
 
 #[cfg(all(test, windows, target_arch = "x86_64"))]
 pub(crate) mod sections;
-
-#[cfg(all(test, windows, target_arch = "x86_64"))]
-macro_rules! sect {
-    ($label:literal, $body:block) => {{
-        let t0 = unsafe { core::arch::x86_64::_rdtsc() };
-        let out = $body;
-        let t1 = unsafe { core::arch::x86_64::_rdtsc() };
-        sections::record($label, t1 - t0);
-        out
-    }};
-}
-#[cfg(not(all(test, windows, target_arch = "x86_64")))]
-macro_rules! sect {
-    ($label:literal, $body:block) => {
-        $body
-    };
-}
 
 /// Plane geometry for a length-`n` planar transform: the square edge `m` and
 /// the padded row stride. Element `j` of a transform lands at plane index
@@ -607,33 +491,6 @@ where
     flat.split_at_mut(plane)
 }
 
-/// Writes `src` into the padded planes in bit-reversed row order.
-///
-/// The stage set wants bit-reversed rows, so the deinterleave writes each row
-/// at its reversed position and the separate permutation pass this replaces
-/// is deleted: bit reversal is an involution, so writing to `rev(row)` is
-/// exactly the swap list the plan would have applied.
-///
-/// The scalar loop stays deliberately: a vectorized sibling built on the
-/// native deinterleave network measured slower (1431 -> 1520 TSC pinned) —
-/// LLVM already auto-vectorizes this loop well (see [`boundary`]).
-fn deinterleave_rows<T: Copy>(
-    src: &[Complex<T>],
-    re: &mut [T],
-    im: &mut [T],
-    m: usize,
-    stride: usize,
-) {
-    let row_bits = m.trailing_zeros();
-    for (row, chunk) in src.chunks_exact(m).enumerate().take(m) {
-        let dest = row.reverse_bits() >> (usize::BITS - row_bits);
-        for (b, c) in chunk.iter().enumerate() {
-            re[dest * stride + b] = c.re;
-            im[dest * stride + b] = c.im;
-        }
-    }
-}
-
 /// Writes both halves of a radix-2 decimation into their planes in one pass.
 ///
 /// The alternative is [`deinterleave_rows`] twice over a strided view, which
@@ -665,21 +522,31 @@ fn deinterleave_decimated_rows<T: Copy>(
     }
 }
 
-/// Runs both four-step stage sets over planes already in bit-reversed rows.
+/// Runs both four-step stage sets over the planes.
+///
+/// With `seams` the interleaved buffer is the input of the first stage set
+/// and the output of the second: the first pass reads it in bit-reversed row
+/// order and the last pass writes it back the same way, so neither a
+/// deinterleave nor a reinterleave pass exists. Without it the planes hold
+/// the input in bit-reversed rows on entry and the output on exit, which is
+/// what the odd-power split needs, since its input is decimated and its
+/// output combined by their own sinks.
 fn planar_stages<T, const INVERSE: bool>(
     re: &mut [T],
     im: &mut [T],
     n: usize,
     m: usize,
     stride: usize,
+    seams: Option<&mut [Complex<T>]>,
 ) where
     T: BatchedPlanCache<Complex = Complex<T>>,
 {
+    let seams = seams.map(|data| -> &mut [T] { eunomia::layout::cast_slice_mut(data) });
     // 1. The `m` transforms of length `m` along the first axis; the input is
     //    already batch-major for this direction, so no transpose is needed.
     let plan = T::cached_plan::<INVERSE>(m);
     sect!("stages1", {
-        run_batched(re, im, plan.as_ref(), None, m, stride)
+        run_batched(re, im, plan.as_ref(), seams.as_deref(), m, stride)
     });
 
     // 2. Transpose so the second axis becomes batch-major. Pure exchange:
@@ -725,6 +592,7 @@ fn planar_stages<T, const INVERSE: bool>(
             im,
             plan.as_ref(),
             Some((&planes.re, &planes.im)),
+            seams,
             m,
             stride,
         )
@@ -747,63 +615,11 @@ pub(crate) fn four_step_batched<T, const INVERSE: bool>(
     let (m, stride) = plane_geometry(n);
     let plane = scratch_len(n);
     let (re, im) = split_plane(scratch, plane);
-    sect!("deint", { deinterleave_rows(data, re, im, m, stride) });
-    planar_stages::<T, INVERSE>(re, im, n, m, stride);
-
-    // The stage set left its rows bit-reversed, so the sink absorbs that
-    // permutation — the one the route used to spend a whole pass on — as an
-    // index computation on a pass that had to happen anyway.
-    let bits = m.trailing_zeros();
-    sect!("reint", {
-        let handled = if T::BOUNDARY_LANES == 8 {
-            hermes_simd::vectorize_lanes::<8, T, _>(boundary::InterleaveRows {
-                re: &*re,
-                im: &*im,
-                data: eunomia::layout::cast_slice_mut(&mut *data),
-                m,
-                stride,
-            })
-            .unwrap_or(false)
-        } else {
-            false
-        } || hermes_simd::vectorize_lanes::<4, T, _>(boundary::InterleaveRows {
-            re,
-            im,
-            data: eunomia::layout::cast_slice_mut(data),
-            m,
-            stride,
-        })
-        .unwrap_or(false);
-        if !handled {
-            for row in 0..m {
-                let src = row * stride;
-                let dst = (row.reverse_bits() >> (usize::BITS - bits)) * m;
-                for b in 0..m {
-                    data[dst + b] = Complex::new(re[src + b], im[src + b]);
-                }
-            }
-        }
-    });
+    // The interleaved buffer is read by the first stage pass and written by
+    // the last, so the route is exactly two stage sets and one transpose.
+    planar_stages::<T, INVERSE>(re, im, n, m, stride, Some(data));
 }
 
-/// In-place four-step FFT for an odd power of two, decimated once.
-///
-/// `X[j] = E[j] + W_N^j O[j]` and `X[j + N/2] = E[j] - W_N^j O[j]`, with `E`
-/// and `O` the transforms of the even- and odd-indexed samples. Both halves
-/// are even powers, so each takes the planar route — and each takes it
-/// *from `data` directly*, at stride two, so the decimation never
-/// materializes. The combine then rides the pass that would have
-/// interleaved the halves back.
-///
-/// That fusion is the whole point of the route. Transforming the halves as
-/// free-standing inputs costs three extra passes over `n`, which at
-/// n = 8192 measured as the entire deficit against the reference
-/// (`gap_audit.md#reference-standing`).
-///
-/// # Panics
-///
-/// Panics unless [`planar_split_applies`] accepts `data.len()`, or if
-/// `scratch` is shorter than [`split_scratch_len`].
 pub(crate) fn four_step_split_batched<T, const INVERSE: bool>(
     data: &mut [Complex<T>],
     scratch: &mut [Complex<T>],
@@ -839,11 +655,11 @@ pub(crate) fn four_step_split_batched<T, const INVERSE: bool>(
     });
     {
         let (re, im) = split_plane(even, plane);
-        planar_stages::<T, INVERSE>(re, im, half, m, stride);
+        planar_stages::<T, INVERSE>(re, im, half, m, stride, None);
     }
     {
         let (re, im) = split_plane(odd, plane);
-        planar_stages::<T, INVERSE>(re, im, half, m, stride);
+        planar_stages::<T, INVERSE>(re, im, half, m, stride, None);
     }
     combine_planar_halves(data, even, odd, m, stride, combine);
 }
