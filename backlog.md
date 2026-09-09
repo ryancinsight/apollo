@@ -233,6 +233,14 @@
 - **Acceptance:** the transpose tests report the vector path handling every shape at every dispatched width; a sixteen-lane landing run green.
 - **Dependencies:** none. **Verification:** the transpose tests; the CI landing run on a sixteen-lane host.
 
+<a id="apollo-planar-sink-row-copy"></a>
+## APOLLO-PLANAR-SINK-ROW-COPY — Copy the staged sink rows register-wide [patch] [perf] — in-progress
+- **Integrator:** claude/fable; **last-update:** 2026-09-09; branch `perf/apollo-planar-sink-row-copy` on lane `D:/atlas/worktrees/apollo-route`, stacked on PR #371; lease: claude/fable `components/batched/sweep.rs` 2026-09-09T23:55Z; parent [beat the references](#atlas-apollo-beat-the-references).
+- **Evidence:** at 2048 `f32` the sink sweep `f2` is 2.5k of 7.5k cycles and at 2048 `f64` 4.3k of 12.4k (`../../output/apollo-planar-rectangular/gap_*.txt`), twice the plain sweeps' rate per element; the staged form copies each of a tile block's sixteen rows to the caller with one `copy_from_slice`, a 256-byte row at 2048 `f32`, so the memcpy call and its setup are paid per short row.
+- **Scope:** `stage_out` copies rows with register loads and stores inside the dispatched frame, a scalar tail for a width no lane count divides. Non-goals: the direct sink (rejected under the alignment item), the staging geometry.
+- **Acceptance:** `pinned_sections` `f2` below the staged-memcpy form with disjoint intervals at 2048 and 4096 in both precisions and no length above worse; `rustfft_comparison` 2048 apollo intervals below the base in both precisions.
+- **Dependencies:** none. **Verification:** batched, workspace and oracle suites (results bitwise unchanged, the copy is a move); `pinned_sections`; `rustfft_comparison` counterbalanced.
+
 <a id="apollo-workspace-impulse-oracle-budget"></a>
 ## APOLLO-WORKSPACE-IMPULSE-ORACLE-BUDGET — Fit the workspace impulse oracle in the CI slow budget [patch] — todo
 - **Evidence:** `workspace_extents_preserve_the_impulse_spectrum` takes 3.6 s in the dev profile on the 285K host (2026-09-09, base of the 1M crossover), and the hosted runner is 13 to 17 times slower on compute-bound tests, so it sits past the 30 s slow bound in the `ci` profile; twelve transforms at 262144 dominate.

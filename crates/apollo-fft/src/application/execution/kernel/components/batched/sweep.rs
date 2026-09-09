@@ -62,7 +62,7 @@ use hermes_simd::{LaneScalar, Simd, SimdArch, SimdKernel, SimdStorage};
 use super::radix::{
     butterfly_rows, Columns, Dif2, Dif4, Dit2, Dit4, Lane, Pair, Rows, Seams, SinkRows,
 };
-use super::{reverse_row, FourStepFold};
+use super::{load, reverse_row, store, FourStepFold};
 
 /// Stages a sweep fuses, so the tile is `2^SWEEP_STAGES` rows.
 ///
@@ -144,7 +144,7 @@ fn spread(q: usize, at: u32, width: u32) -> usize {
     reason = "must fold into the stage set's target-feature scope with the sweep that calls it"
 )]
 #[inline(always)]
-fn stage_out<T: Copy>(
+fn stage_out<T, A>(
     sink: &mut [T],
     staging: &[T],
     rows: usize,
@@ -153,11 +153,24 @@ fn stage_out<T: Copy>(
     row_bits: u32,
     block: Columns,
     pitch: usize,
-) {
+) where
+    T: LaneScalar,
+    A: SimdArch + SimdKernel<T>,
+{
+    // Register-wide copies inside the dispatched frame: a staged row is a
+    // few hundred bytes at the small lengths, where one memcpy call per row
+    // was most of the sink sweep (backlog.md#apollo-planar-sink-row-copy).
+    let lanes = <A as SimdStorage<T>>::LANE_COUNT;
     let width = 2 * (block.end - block.start);
     for r in 0..rows {
         let at = reverse_row(base + r, row_bits) * batch * 2 + 2 * block.start;
-        sink[at..at + width].copy_from_slice(&staging[r * pitch..r * pitch + width]);
+        let from = r * pitch;
+        let mut k = 0;
+        while k + lanes <= width {
+            store::<T, A>(load::<T, A>(staging, from + k), sink, at + k);
+            k += lanes;
+        }
+        sink[at + k..at + width].copy_from_slice(&staging[from + k..from + width]);
     }
 }
 
@@ -422,7 +435,7 @@ pub(super) fn sweep_frequency<T, A>(
                     }
                 }
                 if let Some(sink) = sink.as_deref_mut().filter(|_| staged) {
-                    stage_out(
+                    stage_out::<T, A>(
                         sink, staging, tile_rows, base, batch, row_bits, block, pitch,
                     );
                 }
