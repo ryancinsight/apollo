@@ -215,7 +215,8 @@
 - **Dependencies:** none. **Verification:** base-128, dimension-1d and DFT-oracle suites; `rustfft_comparison` counterbalanced.
 
 <a id="apollo-planar-source-placement"></a>
-## APOLLO-PLANAR-SOURCE-PLACEMENT — Bound the planar source seam's placement swing at 2048 [patch] [perf] — todo
+## APOLLO-PLANAR-SOURCE-PLACEMENT — Bound the planar source seam's placement swing at 2048 [patch] [perf] — in-progress
+- **Integrator:** claude/fable; **last-update:** 2026-09-09; branch `perf/apollo-planar-source-placement` on lane `D:/atlas/worktrees/apollo-route`, stacked on PR #367; lease: claude/fable `components/batched/{sweep,radix,pinned_sections}.rs` 2026-09-09T22:20Z; parent [beat the references](#atlas-apollo-beat-the-references).
 - **Evidence:** `rustfft_comparison` at 2048 `f64` reads 3.9 µs on some runs and 4.4 to 4.7 on others of the same binary on a quiet host (`../../output/apollo-base128-level/level_rect2{1,4,5}.txt`: 3.9, 3.9, 4.4; `level_level{2,3,6}`: 4.4, 4.6, 4.7), a 20% swing the `f32` cell (2.3 to 2.4) does not show; the sink is staged and placement-independent (ADR 0058) while the source seam reads the caller's rows direct, and at 2048 `f64` a tile's sixteen bit-reversed source rows sit a power of two apart, one L1 set.
 - **Scope:** reproduce with `pinned_sections` under `APOLLO_PROBE_OFFSET` across a page of offsets at 2048 and 8192 in both precisions; if the source sweep `t1` carries the swing, decide between an offset-aware tile row order and a source staging form measured against the rejected ones in ADR 0058. Non-goals: lengths above 2^16, where the staging bound already differs.
 - **Acceptance:** the 2048 `f64` interval within 5% across offsets, or the swing attributed to something other than the seam and recorded.
