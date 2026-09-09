@@ -4,8 +4,8 @@
 //! assembled transform, so a failure localizes.
 
 use super::{
-    combine_planar_halves, four_step_batched, four_step_split_batched, scratch_len,
-    split_scratch_len, transpose_planes, BatchedPlanCache, LaneOrder,
+    combine_planar_halves, deinterleave_decimated_rows, four_step_batched, four_step_split_batched,
+    scratch_len, split_scratch_len, transpose_planes, BatchedPlanCache, LaneOrder,
 };
 use eunomia::{Complex, Complex32, Complex64};
 use std::f64::consts::TAU;
@@ -545,4 +545,55 @@ where
 fn large_planar_lengths_agree_with_rustfft_in_both_precisions() {
     large_lengths_agree_with_rustfft::<f32>(f64::from(f32::EPSILON) / 2.0);
     large_lengths_agree_with_rustfft::<f64>(f64::EPSILON / 2.0);
+}
+
+/// The dispatched decimation moves every sample where the scalar form does.
+fn decimation_matches_the_scalar_form<T>()
+where
+    T: BatchedPlanCache<Complex = Complex<T>>
+        + eunomia::FloatElement
+        + PartialEq
+        + core::fmt::Debug,
+{
+    // Sixteen-lane widths divide 32; the pad keeps the stride off the row.
+    let (m, stride) = (32usize, 40usize);
+    let plane = m * stride;
+    let order = LaneOrder::for_batch::<T>(m);
+    let data: Vec<Complex<T>> = (0..2 * m * m)
+        .map(|index| {
+            let x = index as f64;
+            Complex::new(T::from_f64(x + 0.25), T::from_f64(-x - 0.5))
+        })
+        .collect();
+    let sentinel = T::from_f64(-1.0);
+    let mut expected = vec![sentinel; 4 * plane];
+    let mut actual = expected.clone();
+    {
+        let (even, odd) = expected.split_at_mut(2 * plane);
+        let (e_re, e_im) = even.split_at_mut(plane);
+        let (o_re, o_im) = odd.split_at_mut(plane);
+        deinterleave_decimated_rows(&data, (e_re, e_im), (o_re, o_im), m, stride, order);
+    }
+    let handled = {
+        let (even, odd) = actual.split_at_mut(2 * plane);
+        let (e_re, e_im) = even.split_at_mut(plane);
+        let (o_re, o_im) = odd.split_at_mut(plane);
+        hermes_simd::vectorize(super::boundary::DeinterleaveDecimatedRows {
+            source: eunomia::layout::cast_slice(&data),
+            even_re: e_re,
+            even_im: e_im,
+            odd_re: o_re,
+            odd_im: o_im,
+            m,
+            stride,
+        })
+    };
+    assert!(handled, "a two-lane or wider backend handles m = 32");
+    assert_eq!(actual, expected);
+}
+
+#[test]
+fn decimation_matches_the_scalar_form_in_both_precisions() {
+    decimation_matches_the_scalar_form::<f32>();
+    decimation_matches_the_scalar_form::<f64>();
 }

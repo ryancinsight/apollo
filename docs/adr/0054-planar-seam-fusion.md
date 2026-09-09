@@ -55,7 +55,11 @@ kernels take the buffer as an optional `source` or `sink` beside the
 existing twiddle `fold`, which is the same mechanism; the odd-power split
 route passes neither, since its decimated input and combined output have
 sinks of their own. The scalar deinterleave and the vectorized reinterleave
-kernel are deleted with their only callers.
+kernel are deleted with their only callers. The split's own decimation is
+vectorized in the same shape (revision below): `deinterleave_pairs` splits
+each register pair at complex granularity and the sub-lane unpack then
+splits the reals, so both halves land in the plane column order with
+natural stores and the scalar loop stays as the reference.
 
 Per-element arithmetic and its order are unchanged, so results are bitwise
 those of the unfused route.
@@ -120,3 +124,13 @@ cross-machine claim.
 ## Revision
 
 2026-09-08: changed Proposed to Accepted after the replicated census above.
+
+2026-09-09: `boundary::DeinterleaveDecimatedRows` replaces the scalar
+decimation on the odd-power split's entry
+([APOLLO-PLANAR-SPLIT-VECTOR-DEINT](../../backlog.md#apollo-planar-split-vector-deint)):
+`pinned_sections` `deint` halves in `f64` (2048 4.4k to 2.4k cycles, 32768
+81k to 50k) and falls 3.6 times in `f32` (3.5k to 1.0k, 66k to 25k);
+`rustfft_comparison` `f32` 2048 3.0 to 2.35 µs, `f64` 32768 level with
+RustFFT at 77.5 against 78 to 82. The combine is now the split's largest
+seam, and fusing both seams into the stage passes as this ADR did for the
+square route is the next item.

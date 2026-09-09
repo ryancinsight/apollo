@@ -1,14 +1,17 @@
-//! Vectorized transpose and half-combine boundaries for the batched driver.
+//! Vectorized transpose, decimation and half-combine boundaries for the
+//! batched driver.
 //!
-//! Both kernels dispatch through `vectorize`, as the stage sets do, so the
+//! The kernels dispatch through `vectorize`, as the stage sets do, so the
 //! tile width and the plane column order ([`super::lane_order`]) are the one
 //! dispatched backend's, known at compile time inside each kernel: the
 //! transpose permutes its tile rows through the order to leave data rows
-//! natural, and the combine reads its planes and its interleaved twiddles in
-//! that order through the sub-lane unpacks, so neither pass carries a
-//! cross-lane permute. A width without a native tile
-//! transpose, or a shape it does not divide, falls back to the scalar loops
-//! in the parent module, which remain the reference implementation.
+//! natural, the decimation splits its input registers at complex and then
+//! sub-lane granularity so each half lands in that order, and the combine
+//! reads its planes and its interleaved twiddles in that order through the
+//! sub-lane unpacks, so no pass carries a cross-lane permute. A width
+//! without a native tile transpose, or a shape it does not divide, falls
+//! back to the scalar loops in the parent module, which remain the
+//! reference implementation.
 
 use super::lane_order::{sublane_inverse, sublane_order};
 use super::BatchedPlanCache;
@@ -244,5 +247,85 @@ where
                 put_chunk(row, plane, base(bj + r, bi));
             }
         }
+    }
+}
+
+/// Decimates an odd power's interleaved input into its two half-planes.
+///
+/// Input row `row` holds `2 m` complexes, the even and odd halves' row `row`
+/// interleaved sample by sample. `deinterleave_pairs` splits each register
+/// pair at complex granularity, then the sub-lane unpack splits the reals
+/// from the imaginaries, which leaves each half's lanes in the plane column
+/// order exactly as [`super::load_interleaved`] leaves a contiguous row's;
+/// the bit-reversed row permutation rides the store address. The scalar
+/// form in the parent module is the reference.
+pub(crate) struct DeinterleaveDecimatedRows<'a, T> {
+    /// Interleaved input, represented as scalar lanes (`4 m` per row).
+    pub(crate) source: &'a [T],
+    /// Even-half real plane.
+    pub(crate) even_re: &'a mut [T],
+    /// Even-half imaginary plane.
+    pub(crate) even_im: &'a mut [T],
+    /// Odd-half real plane.
+    pub(crate) odd_re: &'a mut [T],
+    /// Odd-half imaginary plane.
+    pub(crate) odd_im: &'a mut [T],
+    /// Live row length of each half in complexes.
+    pub(crate) m: usize,
+    /// Padded plane row stride.
+    pub(crate) stride: usize,
+}
+
+impl<T: BatchedPlanCache> LaneKernel<T> for DeinterleaveDecimatedRows<'_, T> {
+    /// Whether the dispatched width handled the pass.
+    type Output = bool;
+
+    #[expect(
+        clippy::inline_always,
+        reason = "the body must inline into the dispatcher's target-feature frame"
+    )]
+    #[inline(always)]
+    fn call<A: SimdArch + SimdKernel<T>>(self, _capability: Simd<T, A>) -> bool {
+        let lanes = <A as SimdStorage<T>>::LANE_COUNT;
+        // The pair split needs an even lane count; one lane is the scalar form.
+        if lanes < 2 || self.m % lanes != 0 || self.stride % lanes != 0 {
+            return false;
+        }
+
+        let plane = self.m * self.stride;
+        let row_reals = 4 * self.m;
+        assert!(
+            self.source.len() >= self.m * row_reals
+                && self.even_re.len() >= plane
+                && self.even_im.len() >= plane
+                && self.odd_re.len() >= plane
+                && self.odd_im.len() >= plane,
+            "invariant: the decimation reads m rows of 2m complexes into four padded planes"
+        );
+
+        let bits = self.m.trailing_zeros();
+        for row in 0..self.m {
+            let source_row = row * row_reals;
+            let base = (row.reverse_bits() >> (usize::BITS - bits)) * self.stride;
+            for column in (0..self.m).step_by(lanes) {
+                // `lanes` even and `lanes` odd complexes: four registers.
+                let source_chunk = (source_row + 4 * column) / lanes;
+                let r0 = chunk::<T, A>(self.source, source_chunk);
+                let r1 = chunk::<T, A>(self.source, source_chunk + 1);
+                let r2 = chunk::<T, A>(self.source, source_chunk + 2);
+                let r3 = chunk::<T, A>(self.source, source_chunk + 3);
+                let (even_a, odd_a) = r0.deinterleave_pairs(r1);
+                let (even_b, odd_b) = r2.deinterleave_pairs(r3);
+                let (even_re, even_im) = even_a.deinterleave_sublanes(even_b);
+                let (odd_re, odd_im) = odd_a.deinterleave_sublanes(odd_b);
+
+                let plane_chunk = (base + column) / lanes;
+                put_chunk(even_re, self.even_re, plane_chunk);
+                put_chunk(even_im, self.even_im, plane_chunk);
+                put_chunk(odd_re, self.odd_re, plane_chunk);
+                put_chunk(odd_im, self.odd_im, plane_chunk);
+            }
+        }
+        true
     }
 }
