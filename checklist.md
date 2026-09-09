@@ -3,8 +3,9 @@
 ## claude/fable — current execution
 
 - [x] [Stage sweeps](backlog.md#apollo-planar-stage-sweeps): sweep driver measured three times, ADR 0056 Accepted, board updated.
-- [ ] [Stage sweeps](backlog.md#apollo-planar-stage-sweeps): PR enqueued, merged, lease discharged.
-- [ ] [Seam lane order](backlog.md#apollo-planar-seam-lane-order): hermes in-lane unpack landed, then the plane layout and both seams.
+- [x] [Stage sweeps](backlog.md#apollo-planar-stage-sweeps): PR 354 merged; lease discharged.
+- [x] [Seam lane order](backlog.md#apollo-planar-seam-lane-order): hermes in-lane unpack landed (PR 161); plane layout, seams, transpose and combine on the lane (`3adf12b1`).
+- [ ] [Seam lane order](backlog.md#apollo-planar-seam-lane-order): paired measurement on a quiet host, ADR 0057, PR enqueued, merged, lease discharged.
 
 ## codex/root — current execution
 
