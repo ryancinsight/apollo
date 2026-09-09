@@ -30,13 +30,11 @@
 - **Dependencies:** hermes-simd prefetch (filed on the hermes board). **Verification:** `pinned_sections` three runs; census once.
 
 <a id="apollo-four-step-compact-fold"></a>
-## APOLLO-FOUR-STEP-COMPACT-FOLD — Fold twiddles from a two-level table [patch] [perf] — in-progress
-- **Integrator:** claude/fable; **last-update:** 2026-09-09 16:40; branch `perf/apollo-four-step-compact-fold` on lane `D:/atlas/worktrees/apollo-route`, stacked on `perf/apollo-planar-seam-staging` (PR 360 enqueued).
-- lease: claude/fable crates/apollo-fft/src/application/execution/kernel/components/batched/ docs/adr/ backlog.md checklist.md 2026-09-09T16:40-04:00
-- **Evidence:** ADR 0056: the fold sweep reads `FourStepPlanes` as large as the data (1 MiB at 65536 `f64`) and costs 135k cycles against the plain sweep's 64k; at 262144 the planes, the fold and the caller's buffer total 12 MiB against a 3 MiB L2.
-- **Scope:** `W_N^(p k)` as `W_N^(p k_hi F) · W_N^(p k_lo)` with `F` one column group, two planar tables of `m F` and `m (m / F)` entries, one extra complex multiply per element in the fold pass; the twiddle error bound gains one rounding (documented at the fold and in the RustFFT differential's bound). Non-goals: the interleaved oracle's table.
-- **Acceptance:** `f1` at 65536 and 262144 below ADR 0056's; footprint reported by the retained-footprint probe; differential tests within the re-derived bound.
-- **Dependencies:** none. **Verification:** batched and workspace suites, RustFFT differential, `pinned_sections`.
+## APOLLO-FOUR-STEP-COMPACT-FOLD — Fold twiddles from a two-level table [patch] [perf] — review
+- **Integrator:** claude/fable; **last-update:** 2026-09-09; branch `perf/apollo-four-step-compact-fold` on lane `D:/atlas/worktrees/apollo-route`, stacked on `perf/apollo-planar-seam-staging` (PR 360).
+- **Outcome:** [ADR 0059](docs/adr/0059-compact-four-step-fold.md) Accepted: `FourStepFold` holds a coarse table per row and lane group and a fine table of one register per row, `m (F + m / F)` entries for `m^2`, two-level from `2^18` and the full row below it; the fold sweep at 262144 fell from 635k to 369k cycles (`f64`) and 217k to 156k (`f32`), the whole transform 6% and 3%; below the bound the pass is unchanged. Entries within `4 EPSILON` of the matrix, pinned at 256 and 262144; the full-matrix builder is deleted.
+- **Acceptance:** `f1` at 262144 below ADR 0058's in both precisions (met); footprint `m (F + m / F)` pairs above the bound; differential tests within their bounds (met, unchanged).
+- **Dependencies:** none. **Verification:** batched and workspace suites, RustFFT differential, DFT oracle sweep; `pinned_sections` against the staged build.
 
 <a id="apollo-n65536-four-step-scalar-loss"></a>
 ## APOLLO-N65536-FOUR-STEP-SCALAR-LOSS — Remove the generic four-step loss from 65536 upward [patch] [perf] — done 2026-09-08

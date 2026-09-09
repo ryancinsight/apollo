@@ -62,7 +62,7 @@ use hermes_simd::{LaneScalar, Simd, SimdArch, SimdKernel, SimdStorage};
 use super::radix::{
     butterfly_rows, Columns, Dif2, Dif4, Dit2, Dit4, Lane, Pair, Rows, Seams, SinkRows,
 };
-use super::reverse_row;
+use super::{reverse_row, FourStepFold};
 
 /// Stages a sweep fuses, so the tile is `2^SWEEP_STAGES` rows.
 ///
@@ -234,6 +234,7 @@ pub(super) fn sweep_time<T, A>(
                             block,
                             &tws,
                             &twv,
+                            simd,
                             Seams::time(source.filter(|_| l == 2)),
                         );
                     }
@@ -261,6 +262,7 @@ pub(super) fn sweep_time<T, A>(
                             block,
                             &tws,
                             &twv,
+                            simd,
                             Seams::time(source.filter(|_| l == 2)),
                         );
                     }
@@ -289,7 +291,7 @@ pub(super) fn sweep_frequency<T, A>(
     re: &mut [T],
     im: &mut [T],
     tw: &[Pair<T>],
-    fold: Option<(&[T], &[T])>,
+    fold: Option<&FourStepFold<T>>,
     sink: Option<&mut [T]>,
     staging: &mut [T],
     batch: usize,
@@ -373,6 +375,7 @@ pub(super) fn sweep_frequency<T, A>(
                             block,
                             &tws,
                             &twv,
+                            simd,
                             Seams::frequency(pass_fold, pass_sink),
                         );
                     }
@@ -413,6 +416,7 @@ pub(super) fn sweep_frequency<T, A>(
                             block,
                             &tws,
                             &twv,
+                            simd,
                             Seams::frequency(pass_fold, pass_sink),
                         );
                     }
