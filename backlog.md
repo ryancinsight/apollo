@@ -5,29 +5,20 @@
 - **Outcome:** [ADR 0052](docs/adr/0052-twiddless-fft-evaluation.md) Rejected: 2.4 to 10.7 times slower than the plan at every length but 65536; PR #349 merged 2026-09-08.
 
 <a id="apollo-planar-stage-sweeps"></a>
-## APOLLO-PLANAR-STAGE-SWEEPS — Run several stages per trip through the planes [patch] [perf] — review
-- **Integrator:** claude/fable; **last-update:** 2026-09-09; branch `perf/apollo-planar-interleaved-radix-eight` on lane `D:/atlas/worktrees/apollo-route`; parent [beat the references](#atlas-apollo-beat-the-references).
-- **Outcome:** [ADR 0056](docs/adr/0056-planar-stage-sweeps.md) Accepted: four stages per sweep over 16-row tiles blocked to 16 KiB, both stage sets; the plain sweep halves the pass cost (14.6 to 7.8 cycles per quad); whole transform 7 to 14% faster at 16384 and 65536 in both precisions, level with RustFFT at 16384 `f64`, ahead in `f32`, 1.07 to 1.15 behind at 65536 and 4096 `f64`. The per-sweep attribution (`t1..t3`, `f1..f3`) names the seam sweeps as most of both stage sets; evidence `../../output/apollo-planar-sweeps/`.
-- **Acceptance:** results bitwise those of the unswept sets (600 tests unchanged and passing); `pinned_sections` stage-set cycles below ADR 0055's at 16384 and 65536 in both precisions across three runs; whole-transform intervals below the previous state in both instruments.
-- **Dependencies:** none. **Verification:** batched, workspace, RustFFT-differential, dimension-1d and DFT-oracle suites; `pinned_sections`; `engine_census` and `twiddless_comparison` twice on the pinned core.
+## APOLLO-PLANAR-STAGE-SWEEPS — Run several stages per trip through the planes [patch] [perf] — done 2026-09-09
+- **Outcome:** [ADR 0056](docs/adr/0056-planar-stage-sweeps.md) Accepted: four stages per sweep over 16-row tiles blocked to 16 KiB, both stage sets; the plain sweep halves the pass cost (14.6 to 7.8 cycles per quad); whole transform 7 to 14% faster at 16384 and 65536 in both precisions; per-sweep attribution `t1..t3`, `f1..f3`; evidence `../../output/apollo-planar-sweeps/`; PR #354 merged 2026-09-09.
 
 <a id="apollo-planar-seam-lane-order"></a>
 ## APOLLO-PLANAR-SEAM-LANE-ORDER — Store plane columns in the unpack lane order [minor] [perf] — done 2026-09-09
 - **Outcome:** [ADR 0057](docs/adr/0057-planar-columns-in-sublane-order.md) Accepted: planes in the dispatched backend's sub-lane order, seams reduced to the unpacks, one selector for every planar kernel; neutral at 65536, and the pairs exposed the sink sweep's placement lottery, filed as [seam staging](#apollo-planar-seam-staging); PR #357 merged 2026-09-09.
 
 <a id="apollo-planar-seam-staging"></a>
-## APOLLO-PLANAR-SEAM-STAGING — Stage each seam block through a contiguous buffer [patch] [perf] — review
-- **Integrator:** claude/fable; **last-update:** 2026-09-09; branch `perf/apollo-planar-seam-staging` on lane `D:/atlas/worktrees/apollo-route`.
-- **Outcome:** [ADR 0058](docs/adr/0058-planar-sink-staging.md) Accepted: the sink writes one tile block into a contiguous staging block and copies its rows out once the tile is dead; the frequency set takes its odd stage remainder first so the sink rides a full tile. The sink sweep is placement-independent (spread under 5% across offsets) and at or below its best offset: 16384 `f64` 30k from 30k to 82k cycles, 65536 `f64` 183k to 188k from 200k to 250k, 65536 `f32` 76k to 81k from 124k to 150k. Census `f64`: 4096 8.8 to 7.8 µs, 16384 37.7 to 33.8, 65536 185.9 to 175.8 (RustFFT 8.2, 34.6, 171 to 172). The source stays direct: every staged form of it measured slower (memcpy rows serialise the row latency, abreast vector moves alias through the page-offset check).
-- **Acceptance:** `f2` at 16384 and 65536 independent of the probe offset and at or below the best offset's value (met; `t1` unchanged, its milder placement dependence recorded); whole-transform intervals below ADR 0057's in the census at 4096 through 65536 (met) and in the warm instrument at 4096 and 65536 (met; 16384 `f32` warm reads slower while the attribution reads faster, recorded); results bitwise unchanged (607 tests, a new direct-transform test on the split route).
-- **Dependencies:** none. **Verification:** existing suites plus `split_lengths_match_the_direct_transform`; `pinned_sections` with `APOLLO_PROBE_OFFSET`; census and warm instruments alternating with main.
+## APOLLO-PLANAR-SEAM-STAGING — Stage each seam block through a contiguous buffer [patch] [perf] — done 2026-09-09
+- **Outcome:** [ADR 0058](docs/adr/0058-planar-sink-staging.md) Accepted: the sink staged through a contiguous block up to `2^16`, placement-independent (16384 `f64` 30k from 30k to 82k cycles, 65536 `f32` 76k to 81k from 124k to 150k); census `f64` 4096 8.8 to 7.8 µs, 16384 37.7 to 33.8, 65536 185.9 to 175.8; the source kept direct on measurement; PR #360 merged 2026-09-09.
 
 <a id="apollo-planar-seam-prefetch"></a>
-## APOLLO-PLANAR-SEAM-PREFETCH — Prefetch the seam streams ahead of the row loop [patch] [perf] — todo
-- **Evidence:** ADR 0056: the source sweep reads the caller's buffer in bit-reversed row order and costs 2 times the plain sweep at 65536 `f64` and 4.2 times at 262144 (1341k against 318k cycles); the fold sweep carries the same shape. ADR 0058 staged the sink and left the source direct, since every staged form of it measured slower; the source keeps a milder placement dependence (`f32` 16384 `t1` 15k to 19k across offsets) and the warm instrument reads `f32` 16384 12% slower while the attribution reads it 10% faster, which names the source as the remaining placement-sensitive seam.
-- **Scope:** software prefetch of each seam row's next lines inside the row loop (source and fold rows, sink rows with the write hint), through a hermes-simd prefetch operation added upstream; distance derived from the block width and measured. Non-goals: non-temporal stores.
-- **Acceptance:** `t1`, `f1`, `f2` at 65536 and 262144 below ADR 0056's in both precisions; no change below 16384; results unchanged.
-- **Dependencies:** hermes-simd prefetch (filed on the hermes board). **Verification:** `pinned_sections` three runs; census once.
+## APOLLO-PLANAR-SEAM-PREFETCH — Prefetch the seam streams ahead of the row loop [patch] [perf] — done 2026-09-09 (rejected)
+- **Outcome:** closed on a spike (`../../output/apollo-compact-fold/pf_*.txt`, sandbox only): prefetching the next tile block's sixteen source rows (256 `T0` prefetches per block) slowed the source sweep 12 to 25% at 16384 and 65536 in both precisions and left 262144 within noise; the source sweep is fill-bound from L2, not latency-bound, and the hermes prefetch operation is not filed. Re-open only with a finer-grained schedule and a measured hypothesis.
 
 <a id="apollo-four-step-compact-fold"></a>
 ## APOLLO-FOUR-STEP-COMPACT-FOLD — Fold twiddles from a two-level table [patch] [perf] — review
