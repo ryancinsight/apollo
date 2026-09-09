@@ -133,17 +133,30 @@ impl Parse for ThreeByPrimeDispatchInput {
     }
 }
 
-/// Generate compact Good-Thomas `3*p` route kernels.
-///
-/// The generated code keeps one authoritative prime list for support
-/// detection, monomorphized kernel selection, CRT gather, short-codelet
-/// execution, and CRT scatter.
 /// Generate all Winograd composite codelets from one canonical specification.
 ///
 /// Accepts `gt_pairs` (coprime factors → Good-Thomas PFA, no twiddles),
 /// `ct_pairs` (non-coprime factors → Cooley-Tukey DIT, twiddle constants),
 /// and `pp_pairs` (prime-power p² → Winograd-Rader, twiddle-free Rader convolution)
 /// and emits every `dftN_impl` function.
+///
+/// Generated codelets default to `dftN_impl::<F, INVERSE>` with inline phases.
+/// Optional `scheduled_pairs: [(2, 25), (12, 12)]` adds a third type parameter
+/// `S` only to the listed codelets. Each listed pair must occur exactly once in
+/// its corresponding `gt_pairs` or `ct_pairs` list. Only these two pairs admit
+/// scheduling; omitted pairs retain the default signature.
+///
+/// Scheduled expansion requires the invoking crate's
+/// `crate::application::execution::kernel::components::winograd::composite::schedule::Schedule`
+/// trait, with `const SPLIT_PHASES: bool`. A true value selects a generated
+/// non-inlined phase executor; false invokes the same closure directly.
+/// Generated code owns both call paths: each invokes its phase synchronously
+/// exactly once and propagates a panic before any subsequent scratch read.
+/// The policy receives no callback and cannot alter phase completion.
+/// Apollo seals this trait to its fused and test-only split schedules.
+///
+/// Separate test-only `dftN_rows` and `dftN_cols` helpers are no longer emitted.
+/// Tests comparing phase boundaries use the scheduled codelet instead.
 #[proc_macro]
 pub fn generate_winograd_composites(input: TokenStream) -> TokenStream {
     winograd_composites::generate_winograd_composites(input)

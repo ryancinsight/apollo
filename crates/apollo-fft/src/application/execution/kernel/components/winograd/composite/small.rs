@@ -39,6 +39,7 @@ apollo_fft_macros::generate_winograd_composites! {
 // 37 ≤ N ≤ 63 → hint-inline only; scratch 592–1008 bytes for f64.
 apollo_fft_macros::generate_winograd_composites! {
     inline_attr: hint,
+    scheduled_pairs: [(2, 25)],
     gt_pairs: [
         // 37 ≤ N ≤ 48 (coprime)
         (13, 3),  // dft39_impl

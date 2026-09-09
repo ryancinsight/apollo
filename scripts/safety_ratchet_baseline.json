@@ -1,5 +1,4 @@
 {
-  "crates/apollo-fft-macros/src/cooley_tukey.rs": 3,
   "crates/apollo-fft-macros/src/good_thomas.rs": 10,
   "crates/apollo-fft/src/application/execution/kernel/auto_dispatch.rs": 3,
   "crates/apollo-fft/src/application/execution/kernel/components/batched/mod.rs": 2,

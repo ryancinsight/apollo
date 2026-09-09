@@ -2,6 +2,7 @@
 
 apollo_fft_macros::generate_winograd_composites! {
     inline_attr: hint,
+    scheduled_pairs: [(12, 12)],
     gt_pairs: [
         (8, 9), // dft72_impl
         (3, 32), // dft96_impl
