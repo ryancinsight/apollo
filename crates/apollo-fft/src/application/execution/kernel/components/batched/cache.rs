@@ -70,13 +70,6 @@ thread_local! {
 pub(crate) trait BatchedPlanCache:
     MixedRadixScalar + LaneScalar + super::radix::Lane + eunomia::layout::Pod + Sized
 {
-    /// Preferred exact lane width for the in-register boundary passes: the
-    /// planar transpose, the half combine, and the reinterleave sink. Eight
-    /// for `f32` and four for `f64`, which is the native AVX2 width of each.
-    /// Every site tries this width first and falls back to four lanes, then
-    /// to the scalar reference loop.
-    const BOUNDARY_LANES: usize;
-
     fn cached_plan<const INVERSE: bool>(len: usize) -> Arc<BatchedPlan<Self>>;
     fn cached_four_step_planes<const INVERSE: bool>(
         n: usize,
@@ -85,10 +78,8 @@ pub(crate) trait BatchedPlanCache:
 }
 
 macro_rules! impl_plan_cache {
-    ($t:ty, $cache:ident, $planes:ident, $plan_global:ident, $planes_global:ident, $boundary_lanes:expr) => {
+    ($t:ty, $cache:ident, $planes:ident, $plan_global:ident, $planes_global:ident) => {
         impl BatchedPlanCache for $t {
-            const BOUNDARY_LANES: usize = $boundary_lanes;
-
             fn cached_plan<const INVERSE: bool>(len: usize) -> Arc<BatchedPlan<Self>> {
                 // The miss path is outlined and cold so the thread-local hit --
                 // the path repeated same-length transforms take -- stays small enough to
@@ -146,11 +137,13 @@ macro_rules! impl_plan_cache {
                         return planes;
                     }
                     let mut guard = $planes_global.write();
-                    Arc::clone(
-                        guard.entry(key).or_insert_with(|| {
-                            Arc::new(FourStepPlanes::<$t>::new::<INVERSE>(n, m))
-                        }),
-                    )
+                    Arc::clone(guard.entry(key).or_insert_with(|| {
+                        Arc::new(FourStepPlanes::<$t>::new::<INVERSE>(
+                            n,
+                            m,
+                            super::LaneOrder::for_batch::<$t>(m),
+                        ))
+                    }))
                 }
 
                 $planes.with(|c| {
@@ -172,14 +165,12 @@ impl_plan_cache!(
     PLAN_CACHE_F64,
     PLANES_CACHE_F64,
     PLAN_GLOBAL_F64,
-    PLANES_GLOBAL_F64,
-    4
+    PLANES_GLOBAL_F64
 );
 impl_plan_cache!(
     f32,
     PLAN_CACHE_F32,
     PLANES_CACHE_F32,
     PLAN_GLOBAL_F32,
-    PLANES_GLOBAL_F32,
-    8
+    PLANES_GLOBAL_F32
 );

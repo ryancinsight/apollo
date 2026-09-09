@@ -1,24 +1,18 @@
-//! Vectorized interleaved↔planar boundaries for the batched driver.
+//! Vectorized transpose and half-combine boundaries for the batched driver.
 //!
-//! The per-pass attribution (`RESIDENT_SECTIONS=1`) put 45% of the batched
-//! route's budget in data movement. With the native AVX2 interleave network
-//! (hermes `HS-AVX2-INTERLEAVE-OVERRIDES`) and capability-hoisted view-chunk
-//! access, the reinterleave pass measured 1252 -> 900 TSC at N = 1024 pinned
-//! and is kept. The mirrored deinterleave kernel measured *slower* than its
-//! scalar loop (1431 -> 1520) — LLVM already auto-vectorizes that loop well,
-//! and the earlier "boundary vectorization loses" verdict still holds on the
-//! load side — so only the store-side kernel exists here.
-//!
-//! The driver requests the scalar-selected preferred width explicitly: eight
-//! lanes for f32, four for f64, then four as the portable SIMD fallback. A host
-//! without either width, or a shape not divisible by it, falls back to the
-//! scalar loop, which remains the reference implementation. All three boundary
-//! kernels here — transpose, half combine, and reinterleave — take that width
-//! from `BatchedPlanCache::BOUNDARY_LANES`; one const-generic body serves both
-//! widths and dispatch stays outside the tile loops.
+//! Both kernels dispatch through `vectorize`, as the stage sets do, so the
+//! tile width and the plane column order ([`super::lane_order`]) are the one
+//! dispatched backend's, known at compile time inside each kernel: the
+//! transpose permutes its tile rows through the order to leave data rows
+//! natural, and the combine reads its planes and its interleaved twiddles in
+//! that order through the sub-lane unpacks, so neither pass carries a
+//! cross-lane permute. A width without a native tile
+//! transpose, or a shape it does not divide, falls back to the scalar loops
+//! in the parent module, which remain the reference implementation.
 
+use super::lane_order::sublane_order;
 use super::BatchedPlanCache;
-use hermes_simd::{LaneKernel, Simd, SimdArch, SimdKernel, SimdStorage, Vector};
+use hermes_simd::{LaneKernel, Simd, SimdArch, SimdKernel, SimdPermute, SimdStorage, Vector};
 
 /// Loads chunk `index` (a `LANE_COUNT`-lane group) from `data`.
 ///
@@ -68,8 +62,8 @@ where
 /// Each vector covers `LANE_COUNT` consecutive complex outputs. The even and
 /// odd planes supply separate real/imaginary registers, while the cached
 /// twiddle and the two output halves use the public interleaved complex layout.
-/// The row permutation rides the output address exactly as in
-/// [`InterleaveRows`].
+/// The planes and the deinterleaved twiddle share the plane column order,
+/// and the row permutation rides the output address.
 pub(crate) struct CombinePlanarHalves<'a, T> {
     /// Even-half real plane.
     pub(crate) even_re: &'a [T],
@@ -102,7 +96,7 @@ impl<T: BatchedPlanCache> LaneKernel<T> for CombinePlanarHalves<'_, T> {
     #[inline(always)]
     fn call<A: SimdArch + SimdKernel<T>>(self, _capability: Simd<T, A>) -> bool {
         let lanes = <A as SimdStorage<T>>::LANE_COUNT;
-        if !matches!(lanes, 4 | 8) || self.m % lanes != 0 || self.stride % lanes != 0 {
+        if lanes < 2 || self.m % lanes != 0 || self.stride % lanes != 0 {
             return false;
         }
 
@@ -133,12 +127,14 @@ impl<T: BatchedPlanCache> LaneKernel<T> for CombinePlanarHalves<'_, T> {
                 let output_chunk = 2 * (dst + column) / lanes;
                 let twiddle_lo = chunk::<T, A>(self.twiddles, output_chunk);
                 let twiddle_hi = chunk::<T, A>(self.twiddles, output_chunk + 1);
-                let (twiddle_re, twiddle_im) = twiddle_lo.deinterleave(twiddle_hi);
+                let (twiddle_re, twiddle_im) = twiddle_lo.deinterleave_sublanes(twiddle_hi);
                 let rotated_re = twiddle_re.mul_add(odd_re, -(twiddle_im * odd_im));
                 let rotated_im = twiddle_re.mul_add(odd_im, twiddle_im * odd_re);
 
-                let (low_lo, low_hi) = (even_re + rotated_re).interleave(even_im + rotated_im);
-                let (high_lo, high_hi) = (even_re - rotated_re).interleave(even_im - rotated_im);
+                let (low_lo, low_hi) =
+                    (even_re + rotated_re).interleave_sublanes(even_im + rotated_im);
+                let (high_lo, high_hi) =
+                    (even_re - rotated_re).interleave_sublanes(even_im - rotated_im);
                 put_chunk(low_lo, self.low, output_chunk);
                 put_chunk(low_hi, self.low, output_chunk + 1);
                 put_chunk(high_lo, self.high, output_chunk);
@@ -152,7 +148,9 @@ impl<T: BatchedPlanCache> LaneKernel<T> for CombinePlanarHalves<'_, T> {
 /// In-place square transpose of both padded planes through native in-register
 /// tiles (`Vector::transpose_square`): each off-diagonal tile pair loads two
 /// tiles, transposes both in registers, and stores them exchanged; diagonal
-/// tiles transpose in place.
+/// tiles transpose in place. Tile rows are loaded and stored through the
+/// plane column order, which keeps the data rows natural and the columns in
+/// plane order at no cost: the order rides the row index of a tile load.
 pub(crate) struct TransposePlanes<'a, T> {
     /// Padded real plane.
     pub(crate) re: &'a mut [T],
@@ -175,7 +173,7 @@ impl<T: BatchedPlanCache> LaneKernel<T> for TransposePlanes<'_, T> {
     #[inline(always)]
     fn call<A: SimdArch + SimdKernel<T>>(self, _capability: Simd<T, A>) -> bool {
         let lanes = <A as SimdStorage<T>>::LANE_COUNT;
-        if !matches!(lanes, 4 | 8) || self.m % lanes != 0 || self.stride % lanes != 0 {
+        if !matches!(lanes, 2 | 4 | 8 | 16) || self.m % lanes != 0 || self.stride % lanes != 0 {
             return false;
         }
         let (m, stride) = (self.m, self.stride);
@@ -183,18 +181,14 @@ impl<T: BatchedPlanCache> LaneKernel<T> for TransposePlanes<'_, T> {
             self.re.len() >= m * stride && self.im.len() >= m * stride && m * stride % lanes == 0,
             "invariant: both planes hold m padded rows"
         );
-        match lanes {
-            4 => {
-                for plane in [self.re, self.im] {
-                    transpose_plane::<T, A, 4>(plane, m, stride);
-                }
+        for plane in [self.re, self.im] {
+            match lanes {
+                2 => transpose_plane::<T, A, 2>(plane, m, stride),
+                4 => transpose_plane::<T, A, 4>(plane, m, stride),
+                8 => transpose_plane::<T, A, 8>(plane, m, stride),
+                16 => transpose_plane::<T, A, 16>(plane, m, stride),
+                _ => unreachable!("lane width was validated above"),
             }
-            8 => {
-                for plane in [self.re, self.im] {
-                    transpose_plane::<T, A, 8>(plane, m, stride);
-                }
-            }
-            _ => unreachable!("lane width was validated above"),
         }
         true
     }
@@ -210,26 +204,33 @@ where
     T: BatchedPlanCache,
     A: SimdArch + SimdKernel<T>,
 {
+    // Tile row `r` is plane row `order(r)` of its block on both the load and
+    // the store side: register `k` of the transposed tile holds plane column
+    // `k` of the loaded rows, which is logical column `order(k)`, so it is
+    // logical row `order(k)` of the output block, at plane row `order(k)`.
+    // The order is the backend's, so the table folds into constant offsets.
+    let rows: [usize; LANES] =
+        const { sublane_order::<LANES>(<A as SimdPermute<T>>::SUBLANE_LANES) };
     for bi in (0..m).step_by(LANES) {
         let base = |r: usize, c: usize| (r * stride + c) / LANES;
         let mut tile: [Vector<T, A>; LANES] =
-            core::array::from_fn(|r| chunk::<T, A>(plane, base(bi + r, bi)));
+            core::array::from_fn(|r| chunk::<T, A>(plane, base(bi + rows[r], bi)));
         Vector::transpose_square(&mut tile);
-        for (r, row) in tile.into_iter().enumerate() {
+        for (row, &r) in tile.into_iter().zip(&rows) {
             put_chunk(row, plane, base(bi + r, bi));
         }
 
         for bj in (bi + LANES..m).step_by(LANES) {
             let mut upper: [Vector<T, A>; LANES] =
-                core::array::from_fn(|r| chunk::<T, A>(plane, base(bi + r, bj)));
+                core::array::from_fn(|r| chunk::<T, A>(plane, base(bi + rows[r], bj)));
             let mut lower: [Vector<T, A>; LANES] =
-                core::array::from_fn(|r| chunk::<T, A>(plane, base(bj + r, bi)));
+                core::array::from_fn(|r| chunk::<T, A>(plane, base(bj + rows[r], bi)));
             Vector::transpose_square(&mut upper);
             Vector::transpose_square(&mut lower);
-            for (r, row) in lower.into_iter().enumerate() {
+            for (row, &r) in lower.into_iter().zip(&rows) {
                 put_chunk(row, plane, base(bi + r, bj));
             }
-            for (r, row) in upper.into_iter().enumerate() {
+            for (row, &r) in upper.into_iter().zip(&rows) {
                 put_chunk(row, plane, base(bj + r, bi));
             }
         }
