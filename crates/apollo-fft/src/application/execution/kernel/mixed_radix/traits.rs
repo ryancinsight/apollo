@@ -10,6 +10,7 @@
 
 use crate::application::execution::kernel::mixed_radix::MixedRadixScalar;
 
+use crate::application::execution::kernel::components::winograd::composite::schedule::Fused;
 use crate::application::execution::kernel::components::winograd::ShortWinogradScalar;
 
 /// Canonical catalog of sizes with dedicated Winograd short-DFT codelets.
@@ -134,7 +135,7 @@ macro_rules! impl_short_dft {
             }
         }
     };
-    ($n:expr, winograd_impl, $func:ident) => {
+    ($n:expr, winograd_impl, $func:ident $(, $schedule:ty)?) => {
         impl<F: ShortWinogradScalar> ShortDft<$n> for F {
             #[inline]
             #[allow(unused_unsafe)]
@@ -143,6 +144,7 @@ macro_rules! impl_short_dft {
                     crate::application::execution::kernel::components::butterflies::dft::$func::<
                         Self,
                         INVERSE,
+                        $($schedule,)?
                     >(data);
                 }
             }
@@ -206,7 +208,7 @@ impl_short_dft!(46, winograd_impl, dft46_impl);
 impl_short_dft!(47, dft47);
 impl_short_dft!(48, winograd_impl, dft48_impl);
 impl_short_dft!(49, winograd_impl, dft49_impl);
-impl_short_dft!(50, winograd_impl, dft50_impl);
+impl_short_dft!(50, winograd_impl, dft50_impl, Fused);
 impl_short_dft!(51, winograd_impl, dft51_impl);
 impl_short_dft!(52, winograd_impl, dft52_impl);
 impl_short_dft!(53, dft53);
@@ -228,7 +230,7 @@ impl_short_dft!(120, winograd_impl, dft120_impl);
 impl_short_dft!(121, winograd_impl, dft121_impl);
 impl_short_dft!(126, winograd_impl, dft126_impl);
 impl_short_dft!(128, winograd_impl, dft128_impl);
-impl_short_dft!(144, winograd_impl, dft144_impl);
+impl_short_dft!(144, winograd_impl, dft144_impl, Fused);
 impl_short_dft!(154, winograd_impl, dft154_impl);
 impl_short_dft!(168, winograd_impl, dft168_impl);
 impl_short_dft!(180, winograd_impl, dft180_impl);

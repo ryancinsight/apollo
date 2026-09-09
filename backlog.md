@@ -1,14 +1,15 @@
 # Apollo Backlog
 
 <a id="apollo-codelet-schedule-controls"></a>
-## APOLLO-CODELET-SCHEDULE-CONTROLS — Share composite schedule controls [patch] [arch] — in-progress
-- **Integrator:** codex/root; **contributor:** codex/main_integration; **last-update:** 2026-09-08; branch `codex/composite-phase-schedules`.
-- **Scope:** integrate the preserved lane's private schedule dimension into current providers, deleting duplicate arithmetic and obsolete emission modes; no production split routing.
+## APOLLO-CODELET-SCHEDULE-CONTROLS — Share composite schedule controls [major] [arch] — in-progress
+- **Integrator:** codex/root; **contributors:** codex/main_integration, codex/api_evidence; **last-update:** 2026-09-08; branch `codex/composite-phase-schedules`.
+- **Scope:** integrate explicit macro scheduling into current providers, preserving ordinary codelet signatures and deleting duplicate arithmetic/test helpers; no production split routing.
 - **Acceptance:** selected, forced-fused and forced-split values agree for lengths 50/144, both precisions and directions; independent DFT oracles pass; no added production scratch or attributed code-size growth.
-- **Decision:** ADR 0051 is reserved for composite phase schedules; sealed zero-sized strategies share one generated arithmetic body.
-- **Evidence:** lane format, strict Clippy and 20 focused debug tests pass; release and full oracle collection remains active against the lane's original lock. This does not verify current-provider integration.
+- **Decision:** [ADR 0051](docs/adr/0051-composite-phase-schedules.md); sealed zero-sized strategies share one arithmetic body; explicit opt-in preserves generated signatures.
+- **Evidence:** corrected source passes macro tests (14), focused debug tests (20), Clippy and independent source review. A stale release macro from a scratch checkout is replaced after content-preserving freshness invalidation; retained DLL `5816046B` identifies canonical source and the current parser. Runtime and size acceptance remain in progress.
 - **Verification:** generic debug/release tests, unchanged complete oracle sweep, private Rustdoc and linked code/size comparison against the retained current-provider executable.
 - **Dependencies:** [PR 338](https://github.com/ryancinsight/apollo/pull/338) lands as `2ac33b95`; preserve both original locks during source reconciliation.
+- **Lease:** codex/root CT/GT safety comments, composite tests, mixed-radix traits, split probe and ADR 0051; codex/api_evidence phase emission, macro parser/tests/docs, pair invocations and schedule; 2026-09-08T16:11Z.
 
 <a id="apollo-worker-hook-admission"></a>
 ## APOLLO-WORKER-HOOK-ADMISSION — Preserve reclamation under bounded registration [patch] [arch] — todo
@@ -16,7 +17,7 @@
 - **Scope:** Moirai idle-hook provider and Apollo registration/reclamation boundary; no kernel arithmetic, workload reduction or silent loss of cleanup.
 - **Evidence:** pinned `83aa411` has 16 non-deduplicating slots; Apollo's `ensure_thread_local_scratch_hook_registered` expects capacity without reserving it. The observer also assumes hook order that the provider documentation disclaims.
 - **Acceptance:** full registration rejects without mutation or panic in fallible consumer paths; ordered snapshot semantics or order-independent observation; every participating owner releases idle scratch while active borrows and later reuse remain valid.
-- **Dependencies:** complete current layout adoption; implement the missing hook in current Moirai before removing Apollo's direct pin. Reconcile Moirai's landed Mnemosyne quarantine separately.
+- **Dependencies:** current Moirai `3eb9f3ce` has hooks, but accepts unlimited registrations while executing only the first 16. Correct upstream admission before removing Apollo's direct pin; retain the current worker-loop ownership. Reconcile Moirai's landed Mnemosyne quarantine separately.
 - **Decision:** specify publication, reentrant registration, panic, wake and shutdown behavior in the owning runtime ADR; synchronize Apollo's lifecycle contract.
 - **Verification:** bounded registry/admission tests, owner-thread and wake/shutdown tests, existing Loom suites, unchanged Apollo worker and 20-window footprint oracles, locked API and controlled performance checks.
 

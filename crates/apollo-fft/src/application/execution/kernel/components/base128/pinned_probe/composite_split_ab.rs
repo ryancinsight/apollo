@@ -1,19 +1,17 @@
-//! Same-run A/B: fused composite codelet body vs its split variant, per
-//! scalar, per length.
+//! Same-run comparison of fused and split composite schedules per scalar and length.
+//!
+//! Both controls call the same generated arithmetic with a compile-time
+//! schedule. Production selects the fused schedule; the split schedule
+//! exists only in tests. The generic composite test compares both controls
+//! and production dispatch for lengths 50 and 144 in both directions.
+//!
+//! This forward-only probe measures all four arms inside one pinned run per
+//! core. Its results apply to that machine and workload, not other machines
+//! or inverse transforms.
 #![cfg(test)]
-//!
-//! Test-only phase helpers preserve the fused codelet's arithmetic while
-//! changing its inlining boundaries. Production retains the fused body.
-//! All four arms (f64/fused, f64/split, f32/fused, f32/split) run inside one
-//! pinned run per core, so comparisons use the same run's measurements.
-//!
-//! Each split arm replicates the exact phase order and buffer roles of the
-//! equivalence test in `composite::tests`: Good–Thomas
-//! (n=50) runs rows → cols through scratch, Cooley–Tukey (n=144) runs
-//! cols → rows. A divergence there would invalidate the phase comparison.
 
-use crate::application::execution::kernel::components::winograd::composite::split::{
-    dft144_cols, dft144_rows, dft50_cols, dft50_rows,
+use crate::application::execution::kernel::components::winograd::composite::schedule::{
+    Fused, Split,
 };
 use crate::application::execution::kernel::components::winograd::composite::{
     dft144_impl, dft50_impl,
@@ -45,68 +43,39 @@ fn source_f32(n: usize) -> Vec<Complex32> {
 
 #[cfg(test)]
 macro_rules! ab_arm {
-    ($fused:ident, $rows:ident, $cols:ident, $F:ty, $n:literal, rows_cols) => {
+    ($codelet:ident, $F:ty, $n:literal) => {
         #[inline(never)]
         pub(crate) fn fused(data: &mut [Complex<$F>]) {
-            $fused::<$F, false>(data.try_into().expect("A/B arm length"));
+            let data: &mut [Complex<$F>; $n] = data.try_into().expect("A/B arm length");
+            $codelet::<$F, false, Fused>(data);
         }
         #[inline(never)]
         pub(crate) fn split(data: &mut [Complex<$F>]) {
             let data: &mut [Complex<$F>; $n] = data.try_into().expect("A/B arm length");
-            // Uninit, exactly as the production split path allocates it. A
-            // zero-filled array here would charge this arm for a pass the
-            // fused arm never pays, biasing the comparison this probe exists
-            // to make.
-            let mut scratch = core::mem::MaybeUninit::<[Complex<$F>; $n]>::uninit();
-            $rows::<$F, false>(data, &mut scratch);
-            // SAFETY: the row phase gathers into every one of the $n slots
-            // before returning, which is the same order the fused body uses.
-            let scratch = unsafe { scratch.assume_init_mut() };
-            $cols::<$F, false>(scratch, data);
-        }
-    };
-    ($fused:ident, $rows:ident, $cols:ident, $F:ty, $n:literal, cols_rows) => {
-        #[inline(never)]
-        pub(crate) fn fused(data: &mut [Complex<$F>]) {
-            $fused::<$F, false>(data.try_into().expect("A/B arm length"));
-        }
-        #[inline(never)]
-        pub(crate) fn split(data: &mut [Complex<$F>]) {
-            let data: &mut [Complex<$F>; $n] = data.try_into().expect("A/B arm length");
-            // Uninit, matching the production split path — see the rows_cols
-            // arm for why a zero fill would bias this comparison.
-            let mut scratch = core::mem::MaybeUninit::<[Complex<$F>; $n]>::uninit();
-            $cols::<$F, false>(data, &mut scratch);
-            // SAFETY: the column phase writes every one of the $n slots
-            // before returning, which is the same order the fused body uses.
-            let scratch = unsafe { scratch.assume_init_mut() };
-            $rows::<$F, false>(scratch, data);
+            $codelet::<$F, false, Split>(data);
         }
     };
 }
 
-// One arm module per (length, family); each exposes `fused` and `split` for
-// that scalar. Good–Thomas (n=50) runs rows → cols, Cooley–Tukey (n=144)
-// runs cols → rows, matching the equivalence test.
 #[cfg(test)]
 mod ab50_f64 {
     use super::*;
-    ab_arm!(dft50_impl, dft50_rows, dft50_cols, f64, 50, rows_cols);
+    ab_arm!(dft50_impl, f64, 50);
 }
 #[cfg(test)]
 mod ab50_f32 {
     use super::*;
-    ab_arm!(dft50_impl, dft50_rows, dft50_cols, f32, 50, rows_cols);
+    ab_arm!(dft50_impl, f32, 50);
 }
 #[cfg(test)]
 mod ab144_f64 {
     use super::*;
-    ab_arm!(dft144_impl, dft144_rows, dft144_cols, f64, 144, cols_rows);
+    ab_arm!(dft144_impl, f64, 144);
 }
 #[cfg(test)]
 mod ab144_f32 {
     use super::*;
-    ab_arm!(dft144_impl, dft144_rows, dft144_cols, f32, 144, cols_rows);
+    ab_arm!(dft144_impl, f32, 144);
 }
 
 #[test]

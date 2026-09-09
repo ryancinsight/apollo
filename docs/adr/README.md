@@ -56,3 +56,4 @@
 | [0048](0048-worker-scratch-lifetime.md) | Worker scratch lifetime across submissions | Accepted |
 | [0049](0049-fused-twiddle-transpose.md) | Fused twiddle multiplication and register transpose | Rejected |
 | [0050](0050-cache-line-fused-traversal.md) | Cache-line traversal for fused twiddle multiplication | Rejected |
+| [0051](0051-composite-phase-schedules.md) | Composite phase schedules | Accepted |

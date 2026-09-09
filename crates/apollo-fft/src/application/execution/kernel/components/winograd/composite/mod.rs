@@ -1,15 +1,8 @@
 mod medium;
 pub(crate) mod power;
 mod radix_four_eight;
+pub(crate) mod schedule;
 mod small;
-
-/// Experimental transform phases for the 50- and 144-point comparison probes.
-/// Production codelets retain the fused arithmetic body.
-#[cfg(test)]
-pub(crate) mod split {
-    pub(crate) use super::medium::{dft144_cols, dft144_rows};
-    pub(crate) use super::small::{dft50_cols, dft50_rows};
-}
 
 pub(crate) use medium::{
     dft108_impl, dft112_impl, dft120_impl, dft121_impl, dft126_impl, dft144_impl, dft154_impl,
@@ -22,49 +15,11 @@ pub(crate) use radix_four_eight::{
     try_dft16_hardware, try_dft32_hardware, try_dft32_rows_hardware,
 };
 pub(crate) use small::{
-    dft10_impl,
-    dft12_impl,
-    dft14_impl,
-    dft18_impl,
-    // Phase 3: coprime composites
-    dft20_impl,
-    dft21_impl,
-    dft22_impl,
-    dft24_impl,
-    dft25_impl,
-    // Phase 2: 2×prime twiddle-free WGT codelets (primes 13–23, N ≤ 46)
-    dft26_impl,
-    dft27_impl,
-    dft28_impl,
-    dft30_impl,
-    dft33_impl,
-    dft34_impl,
-    dft35_impl,
-    dft36_impl,
-    dft38_impl,
-    dft39_impl,
-    dft40_impl,
-    dft42_impl,
-    dft44_impl,
-    dft45_impl,
-    dft46_impl,
-    dft48_impl,
-    // N 49–63: coprime WGT + 49=7² Cooley-Tukey
-    dft49_impl,
-    dft50_impl,
-    dft51_impl,
-    dft52_impl,
-    dft54_impl,
-    dft55_impl,
-    dft56_impl,
-    dft58_impl,
-    dft60_impl,
-    dft62_impl,
-    dft63_impl,
-    // Original composites
-    dft6_impl,
-    dft81_impl,
-    dft9_impl,
+    dft10_impl, dft12_impl, dft14_impl, dft18_impl, dft20_impl, dft21_impl, dft22_impl, dft24_impl,
+    dft25_impl, dft26_impl, dft27_impl, dft28_impl, dft30_impl, dft33_impl, dft34_impl, dft35_impl,
+    dft36_impl, dft38_impl, dft39_impl, dft40_impl, dft42_impl, dft44_impl, dft45_impl, dft46_impl,
+    dft48_impl, dft49_impl, dft50_impl, dft51_impl, dft52_impl, dft54_impl, dft55_impl, dft56_impl,
+    dft58_impl, dft60_impl, dft62_impl, dft63_impl, dft6_impl, dft81_impl, dft9_impl,
 };
 
 #[cfg(test)]
