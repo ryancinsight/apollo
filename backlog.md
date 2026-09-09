@@ -222,12 +222,8 @@
 - **Dependencies:** none. **Verification:** the pinned ladder (fixed against unfixed), `pinned_sections` in page mode, the workspace pins and the oracle suites.
 
 <a id="apollo-table-alignment"></a>
-## APOLLO-TABLE-ALIGNMENT — Allocate the vector-read twiddle tables on a cache line [patch] [perf] — in-progress
-- **Integrator:** claude/fable; **last-update:** 2026-09-09; branch `perf/apollo-table-alignment` on lane `D:/atlas/worktrees/apollo-route`, stacked on PR #369; lease: claude/fable `components/batched/{mod,cache,pinned_sections}.rs` 2026-09-09T23:30Z; parent [beat the references](#atlas-apollo-beat-the-references).
-- **Evidence:** the planar fold tables (`FourStepFold`, `Box<[T]>`), the cached twiddle rows (`Arc<[Complex<T>]>`) read by `load_interleaved` in the sink combine and the level combine, and the base-128 plan tables are sixteen-byte allocations read with 32-byte register loads, so three allocations in four straddle a line on half their loads; the same exposure cost the planar scratch half again before [the alignment item](#apollo-planar-source-placement) led it to a line. The fold sweep `f1` is 20% of a planar transform and reads one fine register per row.
-- **Scope:** measure the fold sweep with the tables led to a line against the allocator's alignment (in one process, re-slicing one allocation); if it moves, allocate the tables through an aligned vector (hermes `AlignedVec<T, Aligned<64>>`, which the stack already routes through mnemosyne's allocator) and re-measure. Non-goals: scalar-read tables (`BatchedPlan::tw`).
-- **Acceptance:** either the tables on a line with the fold sweep's interval below the misaligned one at 16384 and 65536 in both precisions, or the effect measured below 2% and recorded.
-- **Dependencies:** none. **Verification:** `pinned_sections` with a table-lead mode; the fold table tests.
+## APOLLO-TABLE-ALIGNMENT — Allocate the vector-read twiddle tables on a cache line [patch] [perf] — done 2026-09-09 (no effect)
+- **Outcome:** eight process runs of the section probe printing the fold tables' line offsets (`../../output/apollo-planar-rectangular/tables_*.txt`): the fold sweep at 16384 reads 24.9k to 25.4k cycles `f64` and 13.2k to 13.5k `f32` with the tables at 0, 16 or 48 bytes into a line, and the 65536 spread (126k to 138k) has no correlation with the offsets; one register load per row is too few to pay the split. The tables stay as allocated.
 
 <a id="apollo-planar-transpose-sixteen-lanes"></a>
 ## APOLLO-PLANAR-TRANSPOSE-SIXTEEN-LANES — Let the planar transposes take the eight-wide pad at sixteen lanes [patch] [perf] — todo
