@@ -10,6 +10,15 @@ Change-class tags: [patch] backward-compatible fix, [minor] additive non-breakin
 
 ### Breaking
 
+- [major] `apollo-fft-macros` replaces the duplicated split codelet family
+  with a compile-time schedule parameter. `generate_winograd_composites!`
+  gains an optional `scheduled_pairs` input, accepted only for Good-Thomas
+  `(2, 25)` and Cooley-Tukey `(12, 12)`; the codelets generated for those
+  two pairs take a third generic parameter, and the separately generated
+  `dftN_rows`/`dftN_cols` phase helpers are removed. Apollo's production
+  `ShortDft` implementations pass `Fused`, so transform behaviour and
+  ordinary codelet call signatures are unchanged
+  ([ADR 0051](docs/adr/0051-composite-phase-schedules.md)).
 - [major] `apollo-fft` shape descriptors validate at construction and nowhere
   else: `Shape1D`, `Shape2D` and `Shape3D` make their length fields private,
   gain `const fn` accessors (`n()`, `nx()`, `ny()`, `nz()`), carry

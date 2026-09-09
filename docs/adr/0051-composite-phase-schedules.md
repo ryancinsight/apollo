@@ -15,8 +15,11 @@ over the same scalar and direction as its enclosing codelet. Production
 `ShortDft` implementations select `Fused` explicitly.
 
 Existing macro pair inputs retain their generated function signatures and
-inline phases. An explicit per-pair option admits scheduling; Apollo uses
-it only for these two lengths. This adds a macro capability without
+inline phases. Scheduling is opt-in per pair through `scheduled_pairs`, and
+the macro accepts only the two measured factorisations there — Good-Thomas
+`(2, 25)` and Cooley-Tukey `(12, 12)` — rejecting any other pair at
+expansion. Admitting a third length is a macro-crate edit, not a caller
+choice. This adds a macro capability without
 changing ordinary codelet call signatures. The test-only phase helpers are
 removed as described below; this is a breaking macro expansion change.
 
@@ -42,9 +45,11 @@ dead-code allowances. Runtime scalar selection adds a policy to arithmetic
 traits despite the absence of accepted production routing evidence.
 
 Automatically scheduling the two existing pair inputs was rejected during
-review: it changes generated generic arity and requires an additional
-consumer-root trait path. Existing Apollo-specific paths do not exempt an
-exported macro from source compatibility. Explicit opt-in retains the old
+review: it changes generated generic arity for callers that never asked for
+scheduling. The consumer-root trait path is not a discriminator — the
+accepted design emits the same path whenever the opt-in is used — so source
+compatibility for unscheduled pairs is the whole of the argument. Existing
+Apollo-specific paths do not exempt an exported macro from it. Explicit opt-in retains the old
 expansion without a forwarding wrapper or a second arithmetic body.
 
 A callback-bearing schedule trait was rejected as unsound at the exported
