@@ -215,8 +215,12 @@
 - **Dependencies:** none. **Verification:** base-128, dimension-1d and DFT-oracle suites; `rustfft_comparison` counterbalanced.
 
 <a id="apollo-planar-source-placement"></a>
-## APOLLO-PLANAR-SOURCE-PLACEMENT — Bound the planar source seam's placement swing at 2048 [patch] [perf] — done 2026-09-09 (attributed away)
-- **Outcome:** `pinned_sections` across six buffer offsets (`../../output/apollo-planar-rectangular/offset_*.txt`) holds 2048 `f64` within 12.0k to 12.8k cycles and 8192 within 56.6k to 58.1k, `t1` and `f2` within 5%: the route carries no placement swing, so the `rustfft_comparison` bimodality (3.9 against 4.4 to 4.7 µs) sits in that instrument's per-iteration clone or timer, not the seam. A direct-sink spike below a page of row stride (`sink*`, `sections_*_t*`) was rejected: `f64` 2048 flat, `f32` 4096 sink sweep 5.7k against 4.1k.
+## APOLLO-PLANAR-SOURCE-PLACEMENT — Bound the planar route's placement swing against its scratch [patch] [perf] — in-progress
+- **Integrator:** claude/fable; **last-update:** 2026-09-09; branch `perf/apollo-planar-source-placement` on lane `D:/atlas/worktrees/apollo-route`; lease: claude/fable `components/batched/{mod,sweep,pinned_sections,pinned_ladder}.rs` 2026-09-09T22:45Z; parent [beat the references](#atlas-apollo-beat-the-references).
+- **Evidence:** the pinned ladder's new direct-driver arm (`../../output/apollo-planar-rectangular/ladder1.txt`) runs 35 to 47% slower than the plan arm on the same route at 4096 and 8192 `f64` (10.8 against 8.0 µs, 25.6 against 17.3) and level at 2048, 16384 and 32768, the two arms differing only in where the scratch planes sit against the caller's buffer; the first offset sweep (`offset_*.txt`) shifted the caller's buffer alone by up to 3 KiB and saw nothing, so the pathological relative page offset lies outside those samples. A direct-sink spike below a page of row stride (`sink*`, `sections_*_t*`) was built and rejected: `f64` 2048 flat, `f32` 4096 sink sweep 5.7k against 4.1k.
+- **Scope:** the section probe gains a gap mode (the driver called direct with its scratch in the caller's allocation, `APOLLO_PROBE_GAP` complexes apart) and sweeps the relative page offset at 2048 to 8192 in both precisions; then place the planes inside the scratch at an offset chosen from the caller's page offset so the pathological alignment cannot occur, with the slack added to `scratch_len`, and re-measure. Non-goals: the sink, which stages.
+- **Acceptance:** the driver's `pinned_sections` total within 5% across every relative page offset at 2048, 4096 and 8192 in both precisions; the ladder's driver and plan arms level at every planar length.
+- **Dependencies:** none. **Verification:** `pinned_sections` by gap; the pinned ladder; the workspace pins and the oracle suites.
 
 <a id="apollo-workspace-impulse-oracle-budget"></a>
 ## APOLLO-WORKSPACE-IMPULSE-ORACLE-BUDGET — Fit the workspace impulse oracle in the CI slow budget [patch] — todo
