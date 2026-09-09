@@ -1503,6 +1503,32 @@
   against the plain sweeps' 0.6 to 1.0), the same cost the even route pays
   and the next lever for both. Evidence `../../output/apollo-planar-rectangular/`.
 
+- **Standing, 2026-09-09, main `52c84126`.** `engine_census` (cache flushed,
+  `f64`), `rustfft_comparison` and `twiddless_comparison` (clone-inclusive,
+  both precisions), pinned performance core, two runs each
+  (`../../output/apollo-scoreboard-2026-09-09/`). Apollo against RustFFT,
+  the two runs' medians; below 1 is ahead.
+
+  | n | f64 | f32 | route |
+  | --- | --- | --- | --- |
+  | 512 | 1.2 | 1.0 | base-128 |
+  | 1024 | 1.25 | 1.17 | base-128, level vs PhastFT |
+  | 2048 | 1.27 | 1.6 | planar rectangle |
+  | 4096 | 0.95 to 1.05 | 1.0 | planar square |
+  | 16384 | 1.03 to 1.07 | 1.0 | planar square |
+  | 32768 | 1.04 | 1.09 | planar rectangle |
+  | 65536 | 1.03 | 0.9 | planar square |
+  | 262144 | 0.9 | (see item) | planar square |
+  | 640 | 1.3 | 1.4 | composite |
+  | 5120 | 1.2 | 1.3 | composite |
+  | 12288 | 1.3 | 1.7 | composite |
+  | 67, 121 | 1.3 to 1.7 | 2 to 3 | prime, `#atlas-apollo-f32-nonpot-width` |
+
+  The even planar lengths are level or ahead; what remains is the odd
+  powers' seam cost at 2048 and 32768 (both sweeps at twice the plain
+  sweeps' rate per element, largest in `f32`), the base-128 route below
+  2048 (gather and four-block chains), and the composite and prime `f32`
+  routes under their own items. The September table below is superseded.
 - **Alignment, 2026-09-09.** The planar route ran half again slower whenever
   its scratch landed part way into a cache line, three allocations in four;
   the planes now start on a line (item below), which is what the bimodal
