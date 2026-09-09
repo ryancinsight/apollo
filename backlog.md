@@ -19,7 +19,9 @@
 - **Dependencies:** hermes-simd `e85b019` (consumed). **Verification:** batched, workspace, RustFFT-differential, dimension-1d and DFT-oracle suites; `cargo asm`; paired `pinned_sections`; warm instrument.
 
 <a id="apollo-planar-seam-staging"></a>
-## APOLLO-PLANAR-SEAM-STAGING — Stage each seam block through a contiguous buffer [patch] [perf] — todo
+## APOLLO-PLANAR-SEAM-STAGING — Stage each seam block through a contiguous buffer [patch] [perf] — in-progress
+- **Integrator:** claude/fable; **last-update:** 2026-09-09 13:20; branch `perf/apollo-planar-seam-staging` on lane `D:/atlas/worktrees/apollo-route`, stacked on `perf/apollo-planar-seam-lane-order` (PR open).
+- lease: claude/fable crates/apollo-fft/src/application/execution/kernel/components/batched/ crates/apollo-fft/src/application/execution/kernel/components/four_step/ docs/adr/ backlog.md checklist.md 2026-09-09T13:20-04:00
 - **Evidence:** ADR 0057's offset probe: the sink sweep at 16384 `f64` costs 30k, 45k or 82k cycles per call as the caller's buffer moves 64, 0 or 256 bytes modulo the page against the scratch planes, and 11k or 24k in `f32`; at 65536 `f64` 216k to 253k. The sixteen destination rows of a sink block are `n` bytes apart, a multiple of 4 KiB from 4096 up, so their lines share L1 sets and evict the tile between the sweep's passes; the source sweep reads sixteen rows with the same spacing and costs twice the plain sweep.
 - **Scope:** in the sink sweep, pass B writes its interleaved block into a contiguous staging buffer of one block (16 KiB, in the scratch), and the block's sixteen rows copy out afterwards as sequential lines; in the source sweep, the sixteen row segments copy into staging first and pass A deinterleaves from it. Copies are plain vector moves; the staging area lives in the existing scratch allocation (workspace extent updated and pinned). Non-goals: non-temporal stores, prefetch.
 - **Acceptance:** `f2` and `t1` at 16384 and 65536 independent of the probe offset (spread below 10% across the eight offsets) and at or below the best offset's value; whole-transform intervals below ADR 0057's in both instruments; results bitwise unchanged.
