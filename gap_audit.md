@@ -2135,6 +2135,24 @@ recorded against [the standing measurement](#reference-standing) as the
 follow-on and still blocked on re-deriving the symmetric-twiddle identity
 the driver folds into stage set two.
 
+## Alignment is the hidden variable of a placement measurement (2026-09-09) <a id="alignment-hidden-variable"></a>
+
+The planar route read 3.9 or 4.4 to 4.7 µs at 2048 `f64` across runs of one
+binary, and the pinned ladder's direct-driver arm ran 36 to 48% slower
+than the plan arm on the same route. Two page-offset sweeps contradicted
+each other until the buffers' addresses were tabulated: every fast case
+had the scratch at 0 mod 64 and every slow case at 16 or 48, whatever the
+page offset. The allocator returns sixteen-byte alignment, so a per-process
+allocation is one alignment sample and the pattern reads as placement.
+
+The check: print `ptr % 64` for every buffer a kernel touches before
+sweeping page offsets, and sweep alignment inside one allocation. The cure
+in the code: kernel-owned buffers lead to a line inside their scratch with
+a line of slack (`batched::PLANE_ALIGN_SLACK`); caller buffers stay
+arbitrarily aligned and cost at most 5% here. Open: the base-128 route's
+gather and the generic four-step's transpose buffer are thread-local
+allocations with the same exposure, unmeasured.
+
 ## A green landing proves the ISA it ran on (2026-09-09) <a id="runner-isa-varies"></a>
 
 The hosted runner has AVX-512 on some runs and not others. PR 357 landed
