@@ -4,8 +4,8 @@
 //! assembled transform, so a failure localizes.
 
 use super::{
-    combine_planar_halves, four_step_batched, scratch_len, transpose_planes, BatchedPlanCache,
-    LaneOrder,
+    combine_planar_halves, four_step_batched, four_step_split_batched, scratch_len,
+    split_scratch_len, transpose_planes, BatchedPlanCache, LaneOrder,
 };
 use eunomia::{Complex, Complex32, Complex64};
 use std::f64::consts::TAU;
@@ -230,6 +230,31 @@ fn f32_forward_matches_the_direct_transform() {
             worst <= bound,
             "N={n} f32: differs by {worst:.3e} > {bound:.3e}"
         );
+    }
+}
+
+/// The odd-power split route runs both stage sets without seams, and a
+/// seam that reads its staged source whenever stage 2 is present, rather
+/// than when a source exists, escaped the impulse and round-trip checks:
+/// the output was a consistent permutation, which an impulse cannot see and
+/// an inverse undoes. The split lengths are therefore held to the direct
+/// transform, 2048 with two sweeps per half and 8192, the Bluestein padding
+/// of the prime squares that first exposed it.
+#[test]
+fn split_lengths_match_the_direct_transform() {
+    for n in [2048usize, 8192] {
+        let input = signal(n);
+        let mut data = input.clone();
+        let mut scratch = vec![Complex64::default(); split_scratch_len(n)];
+        four_step_split_batched::<f64, false>(&mut data, &mut scratch);
+        let expected = dft(&input, false);
+        let err = data
+            .iter()
+            .zip(&expected)
+            .map(|(a, b)| (a.re - b.re).hypot(a.im - b.im))
+            .fold(0.0_f64, f64::max);
+        let bound = tolerance(n, &input);
+        assert!(err <= bound, "n={n}: {err:.3e} > {bound:.3e}");
     }
 }
 

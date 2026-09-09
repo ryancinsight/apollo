@@ -25,6 +25,21 @@
 //! set, and consecutive blocks continue the same row streams, which is what
 //! the prefetchers follow.
 //!
+//! ## Seam staging
+//!
+//! The two seams read and write the caller's interleaved buffer in
+//! bit-reversed row order, and the sixteen rows of one tile are then `n`
+//! bytes apart, a multiple of 4 KiB from 4096 up: their lines fill the same
+//! L1 sets and evict the tile between the sweep's passes whenever those
+//! sets hold it, which made the sink sweep's cost a function of where the
+//! caller's buffer sits against the planes (ADR 0057, 30k to 82k cycles at
+//! 16384 `f64`). Each seam therefore moves one tile block at a time through
+//! a contiguous staging buffer of [`STAGING_LEN`] complexes at the end of the
+//! scratch: the source rows copy in before the first pass reads them, and
+//! the last pass writes the sink rows there for a copy out afterwards. The
+//! copies are sequential moves, the staged block spreads over every set,
+//! and the seam pass addresses rows by their tile-local index.
+//!
 //! ## Tile geometry
 //!
 //! For the time-decimated set the sweep over stages `l0, 2 l0, ..., l0
@@ -36,13 +51,18 @@
 //! its row step is `step0 2^o`, and its twiddle exponent is `j` plus
 //! `step0` times the bits of `i0` below `o`. The frequency-decimated set is
 //! the mirror: stages descend from `l_top`, tiles are spaced by the bottom
-//! stage's half length, and each pass takes the high bits first.
+//! stage's half length, and each pass takes the high bits first. The seams
+//! ride the sweeps whose tiles are consecutive rows (`step0 = 1`), so a
+//! row's tile-local index is its distance from the tile base.
 
 use core::mem::size_of;
 
 use hermes_simd::{LaneScalar, Simd, SimdArch, SimdKernel, SimdStorage};
 
-use super::radix::{butterfly_rows, Columns, Dif2, Dif4, Dit2, Dit4, Lane, Pair, Rows, Seams};
+use super::radix::{
+    butterfly_rows, Columns, Dif2, Dif4, Dit2, Dit4, Lane, Pair, Rows, Seams, Staging,
+};
+use super::reverse_row;
 
 /// Stages a sweep fuses, so the tile is `2^SWEEP_STAGES` rows.
 ///
@@ -55,6 +75,12 @@ pub(super) const SWEEP_STAGES: u32 = 4;
 /// and the streams around it share a 48 KiB L1 without conflict: 16 KiB is
 /// a third of it.
 const TILE_BYTES: usize = 16 * 1024;
+
+/// Complex elements the seam staging buffer holds: one tile block of
+/// interleaved samples, which is [`TILE_BYTES`] whatever the scalar, so
+/// `TILE_BYTES` over the narrowest complex this route dispatches (8 bytes);
+/// wider scalars use a prefix.
+pub(crate) const STAGING_LEN: usize = TILE_BYTES / 8;
 
 /// Columns per tile block: [`TILE_BYTES`] over the tile's rows and both
 /// planes, rounded down to whole vectors and up to at least one, and never
@@ -80,10 +106,69 @@ fn spread(q: usize, at: u32, width: u32) -> usize {
     low | (high << (at + width))
 }
 
+/// The caller's row and the staging offset of tile row `r` of one block:
+/// tile row `r` is caller row `rev(base + r)`, whose `batch` complexes start
+/// `row * batch * 2` reals in, and the block spans batch columns `block`.
+fn block_rows(
+    rows: usize,
+    base: usize,
+    batch: usize,
+    block: Columns,
+    pitch: usize,
+) -> impl Iterator<Item = (usize, usize, usize)> {
+    let width = 2 * (block.end - block.start);
+    let row_bits = batch.trailing_zeros();
+    (0..rows).map(move |r| {
+        let at = reverse_row(base + r, row_bits) * batch * 2 + 2 * block.start;
+        (r * pitch, at, width)
+    })
+}
+
+/// Copies one block of source rows into the staging buffer.
+#[expect(
+    clippy::inline_always,
+    reason = "must fold into the stage set's target-feature scope with the sweep that calls it"
+)]
+#[inline(always)]
+fn stage_in<T: Copy>(
+    source: &[T],
+    staging: &mut [T],
+    rows: usize,
+    base: usize,
+    batch: usize,
+    block: Columns,
+    pitch: usize,
+) {
+    for (staged, at, width) in block_rows(rows, base, batch, block, pitch) {
+        staging[staged..staged + width].copy_from_slice(&source[at..at + width]);
+    }
+}
+
+/// Copies one block of staged rows out to the sink.
+#[expect(
+    clippy::inline_always,
+    reason = "must fold into the stage set's target-feature scope with the sweep that calls it"
+)]
+#[inline(always)]
+fn stage_out<T: Copy>(
+    sink: &mut [T],
+    staging: &[T],
+    rows: usize,
+    base: usize,
+    batch: usize,
+    block: Columns,
+    pitch: usize,
+) {
+    for (staged, at, width) in block_rows(rows, base, batch, block, pitch) {
+        sink[at..at + width].copy_from_slice(&staging[staged..staged + width]);
+    }
+}
+
 /// One time-decimated sweep over stages `l0 << p` for `p < stages`.
 ///
 /// `source` is read by the pass over stage 2 when that stage is in this
-/// sweep, which is the one pass that loads every element exactly once.
+/// sweep, which is the one pass that loads every element exactly once; its
+/// rows stage through `staging` one block at a time.
 #[expect(
     clippy::inline_always,
     reason = "must fold into the stage set's target-feature scope with the driver it calls"
@@ -98,6 +183,7 @@ pub(super) fn sweep_time<T, A>(
     im: &mut [T],
     tw: &[Pair<T>],
     source: Option<&[T]>,
+    staging: &mut [T],
     batch: usize,
     stride: usize,
     len: usize,
@@ -109,13 +195,22 @@ pub(super) fn sweep_time<T, A>(
     A: SimdArch + SimdKernel<T>,
 {
     let lanes = <A as SimdStorage<T>>::LANE_COUNT;
-    let row_bits = len.trailing_zeros();
     let step0 = l0 >> 1;
     let tile_rows = 1usize << stages;
     let span = tile_rows * step0;
     let groups = len / span;
     let cols = block_columns::<T>(tile_rows, lanes, batch);
+    let pitch = 2 * cols;
     let splat = |(wr, wi): Pair<T>| (simd.splat(wr), simd.splat(wi));
+    // The source rides the sweep over stage 2, whose tiles are consecutive
+    // rows: a row's tile-local index is its distance from the base.
+    let source = source.filter(|_| l0 == 2);
+    if source.is_some() {
+        assert!(
+            staging.len() >= tile_rows * pitch,
+            "invariant: the staging buffer holds one tile block"
+        );
+    }
 
     for j in 0..step0 {
         for g in 0..groups {
@@ -126,12 +221,14 @@ pub(super) fn sweep_time<T, A>(
                     start,
                     end: (start + cols).min(batch),
                 };
+                if let Some(source) = source {
+                    stage_in(source, staging, tile_rows, base, batch, block, pitch);
+                }
                 let mut o = 0;
                 while o + 2 <= stages {
                     let l = l0 << o;
                     let half = l >> 1;
                     let twx = half - 1;
-                    let pass_source = if l == 2 { source } else { None };
                     for q in 0..tile_rows >> 2 {
                         let i0 = spread(q, o, 2);
                         let e = j + (i0 & ((1 << o) - 1)) * step0;
@@ -141,6 +238,11 @@ pub(super) fn sweep_time<T, A>(
                             first: base + i0 * step0,
                             step: step0 << o,
                         };
+                        let staged = Staging {
+                            first: i0,
+                            pitch,
+                            first_column: block.start,
+                        };
                         butterfly_rows::<T, A, Dit4, 4, 3>(
                             re,
                             im,
@@ -148,10 +250,11 @@ pub(super) fn sweep_time<T, A>(
                             stride,
                             batch,
                             block,
-                            row_bits,
                             &tws,
                             &twv,
-                            Seams::time(pass_source),
+                            Seams::time(
+                                (source.is_some() && l == 2).then_some((&*staging, staged)),
+                            ),
                         );
                     }
                     o += 2;
@@ -160,7 +263,6 @@ pub(super) fn sweep_time<T, A>(
                     let l = l0 << o;
                     let half = l >> 1;
                     let twx = half - 1;
-                    let pass_source = if l == 2 { source } else { None };
                     for q in 0..tile_rows >> 1 {
                         let i0 = spread(q, o, 1);
                         let e = j + (i0 & ((1 << o) - 1)) * step0;
@@ -170,6 +272,11 @@ pub(super) fn sweep_time<T, A>(
                             first: base + i0 * step0,
                             step: step0 << o,
                         };
+                        let staged = Staging {
+                            first: i0,
+                            pitch,
+                            first_column: block.start,
+                        };
                         butterfly_rows::<T, A, Dit2, 2, 1>(
                             re,
                             im,
@@ -177,10 +284,11 @@ pub(super) fn sweep_time<T, A>(
                             stride,
                             batch,
                             block,
-                            row_bits,
                             &tws,
                             &twv,
-                            Seams::time(pass_source),
+                            Seams::time(
+                                (source.is_some() && l == 2).then_some((&*staging, staged)),
+                            ),
                         );
                     }
                 }
@@ -193,7 +301,8 @@ pub(super) fn sweep_time<T, A>(
 /// One frequency-decimated sweep over stages `l_top >> p` for `p < stages`.
 ///
 /// `fold` rides the pass over stage `len` and `sink` the pass over stage 2,
-/// each when that stage is in this sweep.
+/// each when that stage is in this sweep; the sink rows stage through
+/// `staging` one block at a time.
 #[expect(
     clippy::inline_always,
     reason = "must fold into the stage set's target-feature scope with the driver it calls"
@@ -208,7 +317,8 @@ pub(super) fn sweep_frequency<T, A>(
     im: &mut [T],
     tw: &[Pair<T>],
     fold: Option<(&[T], &[T])>,
-    mut sink: Option<&mut [T]>,
+    sink: Option<&mut [T]>,
+    staging: &mut [T],
     batch: usize,
     stride: usize,
     len: usize,
@@ -220,13 +330,23 @@ pub(super) fn sweep_frequency<T, A>(
     A: SimdArch + SimdKernel<T>,
 {
     let lanes = <A as SimdStorage<T>>::LANE_COUNT;
-    let row_bits = len.trailing_zeros();
     let tile_rows = 1usize << stages;
-    let step_bottom = (l_top >> (stages - 1)) >> 1;
+    let l_bottom = l_top >> (stages - 1);
+    let step_bottom = l_bottom >> 1;
     let span = l_top;
     let groups = len / span;
     let cols = block_columns::<T>(tile_rows, lanes, batch);
+    let pitch = 2 * cols;
     let splat = |(wr, wi): Pair<T>| (simd.splat(wr), simd.splat(wi));
+    // The sink rides the sweep over stage 2, whose tiles are consecutive
+    // rows, as the source does.
+    let mut sink = sink.filter(|_| l_bottom == 2);
+    if sink.is_some() {
+        assert!(
+            staging.len() >= tile_rows * pitch,
+            "invariant: the staging buffer holds one tile block"
+        );
+    }
 
     for j in 0..step_bottom {
         for g in 0..groups {
@@ -257,6 +377,16 @@ pub(super) fn sweep_frequency<T, A>(
                             first: base + i0 * step_bottom,
                             step: step_bottom << at,
                         };
+                        let staged = Staging {
+                            first: i0,
+                            pitch,
+                            first_column: block.start,
+                        };
+                        let pass_sink = if last && sink.is_some() {
+                            Some((&mut *staging, staged))
+                        } else {
+                            None
+                        };
                         butterfly_rows::<T, A, Dif4, 4, 3>(
                             re,
                             im,
@@ -264,13 +394,9 @@ pub(super) fn sweep_frequency<T, A>(
                             stride,
                             batch,
                             block,
-                            row_bits,
                             &tws,
                             &twv,
-                            Seams::frequency(
-                                pass_fold,
-                                if last { sink.as_deref_mut() } else { None },
-                            ),
+                            Seams::frequency(pass_fold, pass_sink),
                         );
                     }
                     o += 2;
@@ -289,6 +415,16 @@ pub(super) fn sweep_frequency<T, A>(
                             first: base + i0 * step_bottom,
                             step: step_bottom,
                         };
+                        let staged = Staging {
+                            first: i0,
+                            pitch,
+                            first_column: block.start,
+                        };
+                        let pass_sink = if last && sink.is_some() {
+                            Some((&mut *staging, staged))
+                        } else {
+                            None
+                        };
                         butterfly_rows::<T, A, Dif2, 2, 1>(
                             re,
                             im,
@@ -296,15 +432,14 @@ pub(super) fn sweep_frequency<T, A>(
                             stride,
                             batch,
                             block,
-                            row_bits,
                             &tws,
                             &twv,
-                            Seams::frequency(
-                                pass_fold,
-                                if last { sink.as_deref_mut() } else { None },
-                            ),
+                            Seams::frequency(pass_fold, pass_sink),
                         );
                     }
+                }
+                if let Some(sink) = sink.as_deref_mut() {
+                    stage_out(sink, staging, tile_rows, base, batch, block, pitch);
                 }
                 start = block.end;
             }
@@ -314,7 +449,7 @@ pub(super) fn sweep_frequency<T, A>(
 
 #[cfg(test)]
 mod tests {
-    use super::{block_columns, spread, sweep_lengths};
+    use super::{block_columns, spread, sweep_lengths, STAGING_LEN};
 
     #[test]
     fn sweeps_take_full_lengths_first_then_the_remainder() {
@@ -340,5 +475,14 @@ mod tests {
         assert_eq!(block_columns::<f64>(64, 4, 256), 16);
         assert_eq!(block_columns::<f64>(16, 4, 32), 32);
         assert_eq!(block_columns::<f32>(2, 8, 2), 2);
+    }
+
+    #[test]
+    fn a_tile_block_of_either_scalar_fits_the_staging_buffer() {
+        for stages in 1..=4u32 {
+            let rows = 1usize << stages;
+            assert!(rows * block_columns::<f64>(rows, 4, 1 << 20) <= STAGING_LEN);
+            assert!(rows * block_columns::<f32>(rows, 8, 1 << 20) <= STAGING_LEN);
+        }
     }
 }

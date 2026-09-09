@@ -127,6 +127,9 @@ struct BatchedStages<'a, T> {
     /// loads every element exactly once, and two interleaved vector loads
     /// plus one register deinterleave replace the two plane loads.
     source: Option<&'a [T]>,
+    /// One tile block of interleaved rows for the source, as reals:
+    /// [`sweep::STAGING_LEN`] complexes at the end of the scratch.
+    staging: &'a mut [T],
     /// Live columns per row — the loop bound.
     batch: usize,
     /// Elements per row including [`ROW_PAD`] — the index multiplier.
@@ -151,6 +154,7 @@ where
             im,
             tw,
             source,
+            staging,
             batch: b,
             stride: s,
             len,
@@ -166,7 +170,7 @@ where
         let mut l0 = 2usize;
         for (index, stages) in sweep::sweep_lengths(len.trailing_zeros()).enumerate() {
             sect!(TIME_SWEEPS[index], {
-                sweep::sweep_time(re, im, tw, source, b, s, len, l0, stages, simd);
+                sweep::sweep_time(re, im, tw, source, staging, b, s, len, l0, stages, simd);
             });
             l0 <<= stages;
         }
@@ -389,6 +393,7 @@ fn run_batched<T>(
     im: &mut [T],
     plan: &BatchedPlan<T>,
     source: Option<&[T]>,
+    staging: &mut [T],
     batch: usize,
     stride: usize,
 ) where
@@ -399,6 +404,7 @@ fn run_batched<T>(
         im,
         tw: &plan.tw,
         source,
+        staging,
         batch,
         stride,
         len: plan.len,
@@ -415,6 +421,7 @@ fn run_batched_dif<T>(
     plan: &BatchedPlan<T>,
     fold: Option<(&[T], &[T])>,
     sink: Option<&mut [T]>,
+    staging: &mut [T],
     batch: usize,
     stride: usize,
 ) where
@@ -426,6 +433,7 @@ fn run_batched_dif<T>(
         tw: &plan.tw,
         fold,
         sink,
+        staging,
         batch,
         stride,
         len: plan.len,
@@ -438,6 +446,12 @@ fn run_batched_dif<T>(
 /// The single definition of the padded-plane requirement, so callers and the
 /// driver cannot disagree about it.
 pub(crate) fn scratch_len(n: usize) -> usize {
+    plane_len(n) + sweep::STAGING_LEN
+}
+
+/// Complex elements both padded planes of a length-`n` transform occupy: the
+/// prefix of the scratch, before the seam staging block.
+fn plane_len(n: usize) -> usize {
     let m = 1usize << (n.trailing_zeros() / 2);
     m * (m + ROW_PAD)
 }
@@ -528,6 +542,29 @@ where
     flat.split_at_mut(plane)
 }
 
+/// Splits a scratch region into its plane prefix and the seam staging block
+/// that follows it, the latter as reals.
+///
+/// # Panics
+///
+/// Panics if `scratch` is shorter than [`scratch_len`].
+fn split_scratch<T>(scratch: &mut [Complex<T>], n: usize) -> (&mut [Complex<T>], &mut [T])
+where
+    T: eunomia::layout::Pod,
+    Complex<T>: eunomia::layout::Pod,
+{
+    let plane = plane_len(n);
+    assert!(
+        scratch.len() >= scratch_len(n),
+        "scratch must hold two padded planes and the staging block"
+    );
+    let (planes, rest) = scratch.split_at_mut(plane);
+    (
+        planes,
+        eunomia::layout::cast_slice_mut(&mut rest[..sweep::STAGING_LEN]),
+    )
+}
+
 /// Writes both halves of a radix-2 decimation into their planes in one pass.
 ///
 /// The alternative is [`deinterleave_rows`] twice over a strided view, which
@@ -573,6 +610,7 @@ fn deinterleave_decimated_rows<T: Copy>(
 fn planar_stages<T, const INVERSE: bool>(
     re: &mut [T],
     im: &mut [T],
+    staging: &mut [T],
     n: usize,
     m: usize,
     stride: usize,
@@ -586,7 +624,7 @@ fn planar_stages<T, const INVERSE: bool>(
     //    already batch-major for this direction, so no transpose is needed.
     let plan = T::cached_plan::<INVERSE>(m);
     sect!("stages1", {
-        run_batched(re, im, plan.as_ref(), seams.as_deref(), m, stride)
+        run_batched(re, im, plan.as_ref(), seams.as_deref(), staging, m, stride)
     });
 
     // 2. Transpose so the second axis becomes batch-major. Pure exchange:
@@ -624,6 +662,7 @@ fn planar_stages<T, const INVERSE: bool>(
             plan.as_ref(),
             Some((&planes.re, &planes.im)),
             seams,
+            staging,
             m,
             stride,
         )
@@ -644,12 +683,12 @@ pub(crate) fn four_step_batched<T, const INVERSE: bool>(
 {
     let n = data.len();
     let (m, stride) = plane_geometry(n);
-    let plane = scratch_len(n);
-    let (re, im) = split_plane(scratch, plane);
+    let (planes, staging) = split_scratch(scratch, n);
+    let (re, im) = split_plane(planes, plane_len(n));
     let order = LaneOrder::for_batch::<T>(m);
     // The interleaved buffer is read by the first stage pass and written by
     // the last, so the route is exactly two stage sets and one transpose.
-    planar_stages::<T, INVERSE>(re, im, n, m, stride, Some(data), order);
+    planar_stages::<T, INVERSE>(re, im, staging, n, m, stride, Some(data), order);
 }
 
 pub(crate) fn four_step_split_batched<T, const INVERSE: bool>(
@@ -664,9 +703,10 @@ pub(crate) fn four_step_split_batched<T, const INVERSE: bool>(
         "requires a planar odd power of two"
     );
     let half = n / 2;
-    let plane = scratch_len(half);
+    let region = scratch_len(half);
+    let plane = plane_len(half);
     assert!(
-        scratch.len() >= 2 * plane,
+        scratch.len() >= 2 * region,
         "scratch must hold both half-planes"
     );
     // The stage-major table ends with the length-`n` stage, whose `n / 2`
@@ -680,19 +720,21 @@ pub(crate) fn four_step_split_batched<T, const INVERSE: bool>(
 
     let (m, stride) = plane_geometry(half);
     let order = LaneOrder::for_batch::<T>(m);
-    let (even, odd) = scratch.split_at_mut(plane);
+    let (even, odd) = scratch.split_at_mut(region);
     sect!("deint", {
         let (e_re, e_im) = split_plane(even, plane);
         let (o_re, o_im) = split_plane(odd, plane);
         deinterleave_decimated_rows(data, (e_re, e_im), (o_re, o_im), m, stride, order);
     });
     {
-        let (re, im) = split_plane(even, plane);
-        planar_stages::<T, INVERSE>(re, im, half, m, stride, None, order);
+        let (planes, staging) = split_scratch(even, half);
+        let (re, im) = split_plane(planes, plane);
+        planar_stages::<T, INVERSE>(re, im, staging, half, m, stride, None, order);
     }
     {
-        let (re, im) = split_plane(odd, plane);
-        planar_stages::<T, INVERSE>(re, im, half, m, stride, None, order);
+        let (planes, staging) = split_scratch(odd, half);
+        let (re, im) = split_plane(planes, plane);
+        planar_stages::<T, INVERSE>(re, im, staging, half, m, stride, None, order);
     }
     combine_planar_halves(data, even, odd, m, stride, combine, order);
 }
