@@ -46,3 +46,6 @@ nul
 /*.log
 /artifacts/
 gap_audit.pdf
+
+# Agent-private state (subagent memory, local settings), not repository content.
+.claude/
