@@ -44,7 +44,8 @@
 - **Outcome:** closed on analysis in [ADR 0056](docs/adr/0056-planar-stage-sweeps.md): the sweep halves the bytes per element-stage without touching the arithmetic, the interleaved radix-8 would move a third fewer bytes at 1.7 times the vector operations, and the remaining cost is the seams, which the layout would not remove.
 
 <a id="apollo-n1m-planar-crossover"></a>
-## APOLLO-N1M-PLANAR-CROSSOVER — Decide the planar route at 1048576 [patch] [perf] — todo
+## APOLLO-N1M-PLANAR-CROSSOVER — Decide the planar route at 1048576 [patch] [perf] — in-progress
+- **Integrator:** claude/fable; **last-update:** 2026-09-09; branch `perf/apollo-n1m-planar-crossover` on lane `D:/atlas/worktrees/apollo-route`, stacked on PR #361; lease: claude/fable `components/batched/mod.rs` (`PLANAR_MAX_LEN`), `four_step/tests/workspace.rs`, `docs/adr/0053-*` 2026-09-09T20:05Z.
 - **Evidence:** ADR 0053's three candidate runs at 1048576 are invalid: a tree-mate built and tested in the shared cache and the PhastFT control arm moved from 7748 to 11248–15772 µs between runs. Within-run ratios to PhastFT read 1.25, 1.45 and 1.62 (`f64`) against the generic route's 1.40, so no direction is supported.
 - **Scope:** replicated counterbalanced census at 1048576 and 2097152 on a quiet host (no concurrent cargo; record the process table), planar candidate against the generic route; move `PLANAR_MAX_LEN` only on disjoint intervals. Non-goals: kernel changes.
 - **Acceptance:** either `PLANAR_MAX_LEN` moves to `2^20` with the supported ratio recorded in ADR 0053's revision note, or the generic route is confirmed and the reason (L3 spill of the 16 MiB padded planes is the hypothesis) is recorded.
