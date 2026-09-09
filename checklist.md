@@ -7,7 +7,8 @@
 - [x] [Seam lane order](backlog.md#apollo-planar-seam-lane-order): hermes in-lane unpack landed (PR 161); plane layout, seams, transpose and combine on the lane (`3adf12b1`).
 - [x] [Seam lane order](backlog.md#apollo-planar-seam-lane-order): paired measurement, ADR 0057 Accepted, board updated.
 - [x] [Seam lane order](backlog.md#apollo-planar-seam-lane-order): PR 357 merged; lease discharged.
-- [ ] [Seam staging](backlog.md#apollo-planar-seam-staging): staging buffers for the sink and source blocks, offset-independent `f2`/`t1`.
+- [x] [Seam staging](backlog.md#apollo-planar-seam-staging): sink staged, source kept direct on measurement, ADR 0058 Accepted.
+- [ ] [Seam staging](backlog.md#apollo-planar-seam-staging): PR enqueued, merged, lease discharged.
 
 ## codex/root — current execution
 
