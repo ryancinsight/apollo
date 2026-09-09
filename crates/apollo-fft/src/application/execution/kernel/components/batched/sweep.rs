@@ -90,12 +90,26 @@ fn block_columns<T>(tile_rows: usize, lanes: usize, batch: usize) -> usize {
     (cols / lanes * lanes).max(lanes).min(batch)
 }
 
-/// The stage counts of consecutive sweeps over `stages` stages: full sweeps
-/// first, then whatever remains.
+/// The stage counts of consecutive sweeps over `stages` stages for the
+/// time-decimated set: full sweeps first, then whatever remains, so the
+/// source rides a full tile.
 pub(super) fn sweep_lengths(stages: u32) -> impl Iterator<Item = u32> {
     let full = stages / SWEEP_STAGES;
     let rest = stages % SWEEP_STAGES;
     core::iter::repeat_n(SWEEP_STAGES, full as usize).chain((rest > 0).then_some(rest))
+}
+
+/// The stage counts for the frequency-decimated set: whatever remains first,
+/// then full sweeps, so the sink rides a full tile. A two-row tile at the
+/// end of nine stages has nothing for the staging to spread, and its copy
+/// costs a third of the sweep (ADR 0058).
+pub(super) fn sweep_lengths_descending(stages: u32) -> impl Iterator<Item = u32> {
+    let full = stages / SWEEP_STAGES;
+    let rest = stages % SWEEP_STAGES;
+    (rest > 0)
+        .then_some(rest)
+        .into_iter()
+        .chain(core::iter::repeat_n(SWEEP_STAGES, full as usize))
 }
 
 /// Inserts `width` zero bits into `q` at bit `at`: the tile index of a row
@@ -406,6 +420,16 @@ mod tests {
         assert_eq!(sweep_lengths(7).collect::<Vec<_>>(), [4, 3]);
         assert_eq!(sweep_lengths(8).collect::<Vec<_>>(), [4, 4]);
         assert_eq!(sweep_lengths(9).collect::<Vec<_>>(), [4, 4, 1]);
+    }
+
+    #[test]
+    fn descending_sweeps_take_the_remainder_first() {
+        use super::sweep_lengths_descending as descending;
+        assert_eq!(descending(1).collect::<Vec<_>>(), [1]);
+        assert_eq!(descending(4).collect::<Vec<_>>(), [4]);
+        assert_eq!(descending(7).collect::<Vec<_>>(), [3, 4]);
+        assert_eq!(descending(8).collect::<Vec<_>>(), [4, 4]);
+        assert_eq!(descending(9).collect::<Vec<_>>(), [1, 4, 4]);
     }
 
     #[test]
