@@ -15,9 +15,5 @@ where
         batched::four_step_batched::<T, INVERSE>(data, scratch);
         return true;
     }
-    if batched::planar_split_applies(n) {
-        batched::four_step_split_batched::<T, INVERSE>(data, scratch);
-        return true;
-    }
     false
 }

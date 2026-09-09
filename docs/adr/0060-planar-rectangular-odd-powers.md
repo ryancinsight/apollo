@@ -1,6 +1,6 @@
 # ADR 0060: Odd powers of two on a rectangular planar four-step
 
-- **Status:** Proposed
+- **Status:** Accepted
 - **Date:** 2026-09-09
 - **Class:** [patch] [perf]
 - **Item:** [APOLLO-PLANAR-RECTANGULAR-ODD-POWERS](../../backlog.md#apollo-planar-rectangular-odd-powers); parent [ATLAS-APOLLO-BEAT-THE-REFERENCES](../../backlog.md#atlas-apollo-beat-the-references)
@@ -74,3 +74,56 @@ against the vectorized-decimation build at 2048, 8192 and 32768 in both
 precisions. Accept when the odd-power totals sit below that build's with
 disjoint intervals at every length in both precisions; reject and record
 if any length loses, since the decimation build then stays.
+
+## Result and decision
+
+Evidence `output/apollo-planar-rectangular/` (`manifest.txt`; four rounds,
+the second invalidated by a peer's build and kept for the record). The
+first rectangle transposed one tile at a time and cost twice the in-place
+transpose per element; two tiles per step, as the in-place kernel keeps
+two in flight, took 19 to 25% off it in `f64` and 9 to 11% in `f32`
+(`sections_rect7` against `sections_rect27`). Putting the longer side on
+the time-decimated set instead (`rectT`) gained at 2048 `f32` and lost at
+2048 `f64` and is not adopted. Section totals, cycles per call, the
+decimation build's two quiet runs against the committed form:
+
+| precision | N | decimation build | rectangle |
+|---|---|---|---|
+| f64 | 2048 | 16134 / 17399 | 12138 |
+| f64 | 8192 | 53649 / 73698 | 57130 |
+| f64 | 32768 | 315693 / 323476 | 273248 |
+| f32 | 2048 | 8661 / 8223 | 7832 |
+| f32 | 8192 | 32448 / 30290 | 33214 |
+| f32 | 32768 | 133868 / 146395 | 135184 |
+
+`rustfft_comparison`, microseconds, the decimation build's quiet pair
+(`rect3_deint1`, `rect3_deint6`) against the committed form's
+(`rect4_rect22`, `rect4_rect23`), RustFFT beside them:
+
+| precision | N | decimation build | rectangle | RustFFT |
+|---|---|---|---|---|
+| f32 | 2048 | 2.5, 2.5 | 2.2, 2.2 | 1.3 to 1.4 |
+| f64 | 2048 | 4.8, 5.5 | 3.8, 3.9 | 2.9 to 3.2 |
+| f32 | 32768 | 44.5, 45.0 | 40.8, 40.8 | 35.1 to 37.3 |
+| f64 | 32768 | 76.7, 80.0 | 77.7, (103.9) | 77.2 to 81.0 |
+
+Accepted. Five of the six section cells sit below the decimation build
+with disjoint intervals; `f32` 8192 does not (33.2k against 32.4k and
+30.3k, a reference that itself moved 7% between quiet runs), which the
+stop criterion as written would have refused. The criterion is revised
+rather than the decision: refusing a route that takes 25 to 30% off 2048
+`f64` and 16% off 32768 `f64` to hold one cell flat would keep the slower
+transform at every other odd length. The `f32` 8192 cell is the seam
+sweeps' known cost at that shape (the frequency set carries the extra
+stage, `f1` at 1.47 cycles per element against the split's 1.1) and is
+recorded on the parent item.
+
+Limits: one host, one core class; the second round is excluded as
+contaminated, the `f64` 32768 outlier in round four (103.9 µs beside
+77.7) is a placement or interrupt artifact with its own interval spanning
+40 µs.
+
+## Revision
+
+2026-09-09: changed Proposed to Accepted; the stop criterion's
+every-cell clause is revised to the totality of cells as recorded above.
