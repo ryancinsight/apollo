@@ -2149,9 +2149,11 @@ The check: print `ptr % 64` for every buffer a kernel touches before
 sweeping page offsets, and sweep alignment inside one allocation. The cure
 in the code: kernel-owned buffers lead to a line inside their scratch with
 a line of slack (`batched::PLANE_ALIGN_SLACK`); caller buffers stay
-arbitrarily aligned and cost at most 5% here. Open: the base-128 route's
-gather and the generic four-step's transpose buffer are thread-local
-allocations with the same exposure, unmeasured.
+arbitrarily aligned and cost at most 5% here. The thread-local scratch
+bank (mnemosyne) already allocates on a line, so the routes that borrow
+it were aligned; scratch lent by callers and the cached tables (`Box` and
+`Arc` slices, sixteen bytes) were and are the exposure, the tables filed
+as `backlog.md#apollo-table-alignment`.
 
 ## A green landing proves the ISA it ran on (2026-09-09) <a id="runner-isa-varies"></a>
 
