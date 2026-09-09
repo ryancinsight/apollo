@@ -1,5 +1,33 @@
 # Apollo Backlog
 
+<a id="apollo-miri-schedule-split-coverage"></a>
+## APOLLO-MIRI-SCHEDULE-SPLIT-COVERAGE — Put the split schedule's scratch under a UB checker [patch] — todo
+
+- **Finding.** ADR 0051's soundness argument for the scheduled codelets is that
+  both branches invoke the phase closure exactly once and neither catches
+  unwind, so normal return implies scratch initialization completed before
+  `assume_init_mut`. That argument is structural and is pinned token-for-token
+  by `generated_phase_owns_callback_invocation`, but no UB checker executes the
+  `Split` path — and `Split` is `#[cfg(test)]`, so it exists precisely where a
+  checker would run.
+- **Why it matters here.** This codebase has already shipped one
+  reference-to-uninitialised-memory defect in these same generators, caught by
+  the safety ratchet rather than by a checker. A structural argument is the
+  weaker evidence tier for a claim about uninitialised memory.
+- **Scope.** Run `cargo +nightly miri nextest run -p apollo-fft` filtered to
+  the composite schedule tests (`split_variant_*`, `schedule_controls_*`), so
+  both `Fused` and `Split` execute under the interpreter. Non-goals: a
+  repository-wide miri job, and any change to the generators.
+- **Known obstacle, already recorded.** The worker-scratch item measured a
+  nightly Miri run exceeding the committed 60-second budget on a different
+  workload. These codelets are n = 50 and n = 144, orders of magnitude smaller,
+  so the budget is likely not the binding constraint — but attribute before
+  assuming, per that item's own conclusion.
+- **Acceptance.** Both schedules execute under miri with no UB reported, or a
+  reported budget breach is attributed and filed rather than absorbed. Result
+  recorded on this item either way; a clean pass is a valid outcome.
+- **Risk / change class:** [patch]. **Parent:** [schedule controls](#apollo-codelet-schedule-controls).
+
 <a id="apollo-codelet-schedule-controls"></a>
 ## APOLLO-CODELET-SCHEDULE-CONTROLS — Share composite schedule controls [major] [arch] — review
 - **Integrator:** claude-opus-5 (takeover; the claim went stale with the work uncommitted for 22 h); **contributors:** codex/root, codex/main_integration, codex/api_evidence; **last-update:** 2026-09-09; branch `codex/composite-phase-schedules`.
@@ -66,10 +94,14 @@
     live `if S::SPLIT_PHASES`. Measuring `dft50_impl`/`dft144_impl` at
     `fc34ca11` against its parent, which isolates the refactor from the twelve
     commits of `main` merged after it.
-  - **Recorded, not fixed here:** the repository has no miri job at all, so the
-    `Split` path's `assume_init_mut` has no UB-checker coverage — structural
-    argument and an exact-token test, not a checker. Filed as its own gap given
-    this codebase already shipped one reference-to-uninitialised-memory defect.
+  - **Judge finding corrected before recording.** It reported "no miri anywhere
+    in the repo". Miri has been run here — `#atlas-apollo-compose-arena-miri`
+    closed on miri evidence, and the worker-scratch item records a nightly Miri
+    run exceeding the 60-second budget. What is absent is a *committed* miri
+    job: `.github/workflows` contains none, so coverage is ad hoc. The
+    accurate residue is that the `Split` path's `assume_init_mut` has no
+    UB-checker coverage — structural argument plus an exact-token test, not a
+    checker. Filed as `#apollo-miri-schedule-split-coverage`.
 - **Symbol-grep note for the next reader:** searching the release PE for
   `run_phase` or `dft144_impl` proves nothing either way — MSVC images carry no
   internal symbol table, so absence is not evidence. Attribute from emitted asm
