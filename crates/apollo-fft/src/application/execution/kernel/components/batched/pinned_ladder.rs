@@ -109,6 +109,19 @@ fn batched_against_the_references_across_the_ladder() {
                     );
                 },
             );
+            // The planar driver called direct with its scratch already owned:
+            // the distance to the plan arm is the plan call's own cost
+            // (route selection, the cache lookups, the scratch borrow).
+            let driver_ns = super::planar_applies(n).then(|| {
+                let mut scratch = vec![Complex64::default(); super::scratch_len(n)];
+                best_block(calls, || {
+                    work.copy_from_slice(&src);
+                    super::four_step_batched::<f64, false>(
+                        std::hint::black_box(&mut work),
+                        &mut scratch,
+                    );
+                })
+            });
             let (mut re, mut im) = (re_src.clone(), im_src.clone());
             let phast_ns = best_block(calls, || {
                 re.copy_from_slice(&re_src);
@@ -121,8 +134,9 @@ fn batched_against_the_references_across_the_ladder() {
                 );
             });
             println!(
-                "LAD cpu={landed:<2} ({}) n={n:<5} batched={batched_ns:>9.1} rustfft={rust_ns:>9.1} phastft={phast_ns:>9.1} vs_rust={:>5.2} vs_phast={:>5.2}",
+                "LAD cpu={landed:<2} ({}) n={n:<5} batched={batched_ns:>9.1} driver={:>9.1} rustfft={rust_ns:>9.1} phastft={phast_ns:>9.1} vs_rust={:>5.2} vs_phast={:>5.2}",
                 core.label(),
+                driver_ns.unwrap_or(f64::NAN),
                 batched_ns / rust_ns,
                 batched_ns / phast_ns,
             );
