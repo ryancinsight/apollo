@@ -158,3 +158,59 @@ impl<T: LaneScalar + MixedRadixScalar, const BLOCKS: usize> LaneKernel<T>
         true
     }
 }
+
+/// One radix-2 combine level over pairs of `len`-sample blocks, in place:
+/// `low[j] + W^j high[j]` and `low[j] - W^j high[j]` for every pair.
+///
+/// The interleaved complex multiply is the dup-split form both base kernels
+/// use: the twiddle register duplicated into its real and imaginary lanes,
+/// one adjacent swap, one multiply and one alternating fused multiply-add.
+/// The scalar loop in the parent module is the reference form and the pass
+/// for a width that does not divide the block.
+pub(crate) struct CombineLevel<'a, T> {
+    /// The whole array as interleaved reals: pairs of two `len`-sample blocks.
+    pub(crate) data: &'a mut [T],
+    /// `W^j` for `j < len`, interleaved reals.
+    pub(crate) twiddles: &'a [T],
+    /// Block length in complex samples.
+    pub(crate) len: usize,
+}
+
+impl<T: LaneScalar + MixedRadixScalar> LaneKernel<T> for CombineLevel<'_, T> {
+    /// Whether the dispatched width handled the pass.
+    type Output = bool;
+
+    #[expect(
+        clippy::inline_always,
+        reason = "the body must inline into the dispatcher's target-feature \
+                  frame (hermes LaneKernel contract)"
+    )]
+    #[inline(always)]
+    fn call<A: SimdArch + SimdKernel<T>>(self, simd: Simd<T, A>) -> bool {
+        let _ = simd;
+        let lanes = <A as SimdStorage<T>>::LANE_COUNT;
+        let reals = 2 * self.len;
+        if lanes < 2 || reals % lanes != 0 {
+            return false;
+        }
+        assert!(
+            self.data.len() % (2 * reals) == 0 && self.twiddles.len() >= reals,
+            "invariant: whole block pairs and one twiddle per block sample"
+        );
+        let chunks = reals / lanes;
+        for pair in 0..self.data.len() / (2 * reals) {
+            let low = pair * 2 * chunks;
+            let high = low + chunks;
+            for c in 0..chunks {
+                let w = chunk::<T, A>(self.twiddles, c);
+                let (wr, wi) = (w.dup_even(), w.dup_odd());
+                let h = chunk::<T, A>(self.data, high + c);
+                let rotated = h.fmaddsub(wr, h.swap_adjacent() * wi);
+                let l = chunk::<T, A>(self.data, low + c);
+                put_chunk(l + rotated, self.data, low + c);
+                put_chunk(l - rotated, self.data, high + c);
+            }
+        }
+        true
+    }
+}

@@ -402,8 +402,17 @@ where
     F: crate::application::execution::kernel::mixed_radix::MixedRadixScalar<
         Complex = eunomia::Complex<F>,
     >,
+    eunomia::Complex<F>: eunomia::layout::Pod,
 {
     let combine = &twiddles[len - 1..2 * len - 1];
+    // The dispatched width first; the scalar loop is the reference form.
+    if hermes_simd::vectorize(split_boundary::CombineLevel::<F> {
+        data: eunomia::layout::cast_slice_mut(&mut *data),
+        twiddles: eunomia::layout::cast_slice(combine),
+        len,
+    }) {
+        return;
+    }
     for pair in data.chunks_exact_mut(2 * len) {
         let (low, high) = pair.split_at_mut(len);
         for j in 0..len {
