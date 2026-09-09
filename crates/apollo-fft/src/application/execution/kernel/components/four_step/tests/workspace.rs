@@ -6,22 +6,23 @@ use eunomia::{Complex, Complex64};
 
 #[test]
 fn workspace_covers_padded_planes_and_nested_gathers() {
-    // Planar rows carry eight padding elements; an odd power holds both
+    // Planar scratch leads with a line of alignment slack; rows carry eight
+    // padding elements; an odd power holds both
     // plane pairs of its rectangle. Past the planar domain the generic square
     // uses one transpose buffer and an unfused odd split holds n gathered
     // inputs plus one reusable half-transform transpose buffer.
     for (n, expected) in [
-        (4, 2 * (2 + 8) + 2048),
+        (4, 8 + 2 * (2 + 8) + 2048),
         (128, 128),
-        (512, 16 * (32 + 8) + 32 * (16 + 8) + 2048),
-        (4096, 64 * (64 + 8) + 2048),
-        (32_768, 128 * (256 + 8) + 256 * (128 + 8) + 2048),
-        (65_536, 256 * (256 + 8) + 2048),
-        (131_072, 256 * (512 + 8) + 512 * (256 + 8) + 2048),
-        (262_144, 512 * (512 + 8) + 2048),
-        (524_288, 512 * (1024 + 8) + 1024 * (512 + 8) + 2048),
-        (1_048_576, 1024 * (1024 + 8) + 2048),
-        (2_097_152, 1024 * (2048 + 8) + 2048 * (1024 + 8) + 2048),
+        (512, 8 + 16 * (32 + 8) + 32 * (16 + 8) + 2048),
+        (4096, 8 + 64 * (64 + 8) + 2048),
+        (32_768, 8 + 128 * (256 + 8) + 256 * (128 + 8) + 2048),
+        (65_536, 8 + 256 * (256 + 8) + 2048),
+        (131_072, 8 + 256 * (512 + 8) + 512 * (256 + 8) + 2048),
+        (262_144, 8 + 512 * (512 + 8) + 2048),
+        (524_288, 8 + 512 * (1024 + 8) + 1024 * (512 + 8) + 2048),
+        (1_048_576, 8 + 1024 * (1024 + 8) + 2048),
+        (2_097_152, 8 + 1024 * (2048 + 8) + 2048 * (1024 + 8) + 2048),
         (4_194_304, 4_194_304),
         (8_388_608, 8_388_608 + 4_194_304),
     ] {

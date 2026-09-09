@@ -448,8 +448,21 @@ fn run_batched_dif<T>(
 pub(crate) fn scratch_len(n: usize) -> usize {
     let (n1, n2) = plane_geometry(n);
     let second = if n1 == n2 { 0 } else { n2 * (n1 + ROW_PAD) };
-    n1 * (n2 + ROW_PAD) + second + sweep::STAGING_LEN
+    PLANE_ALIGN_SLACK + n1 * (n2 + ROW_PAD) + second + sweep::STAGING_LEN
 }
+
+/// Complexes of slack that let the planes start on a cache line whatever
+/// the scratch's own alignment: one line of the narrowest complex.
+///
+/// The allocator aligns to sixteen bytes, so three allocations in four put
+/// the planes part way into a line, where every register load and store
+/// whose row offset lands in that part straddles two lines. Measured on
+/// the pinned performance core with the scratch stepped through a line
+/// (`output/apollo-planar-rectangular/gapsweep.txt`, `pagesweep.txt`), the
+/// transform cost half again at 2048 to 8192 `f64` when it did (19.1k
+/// against 12.4k cycles at 2048, 86k against 56k at 8192) and nothing
+/// when the scratch sat on a line, whatever its page offset.
+pub(crate) const PLANE_ALIGN_SLACK: usize = 64 / 8;
 
 /// Largest even power the planar route serves, and half the largest odd
 /// one; longer transforms fall to the generic four-step, whose rows thread
@@ -564,6 +577,10 @@ pub(crate) fn four_step_batched<T, const INVERSE: bool>(
         scratch.len() >= scratch_len(n),
         "scratch must hold the padded planes and the staging block"
     );
+    // The planes start on a cache line; the slack in `scratch_len` absorbs
+    // the shift (`PLANE_ALIGN_SLACK`).
+    let lead = (64 - (scratch.as_ptr() as usize) % 64) % 64 / core::mem::size_of::<Complex<T>>();
+    let scratch = &mut scratch[lead..];
     let (a, rest) = scratch.split_at_mut(plane_a);
     let (b, rest) = rest.split_at_mut(plane_b);
     let staging: &mut [T] = eunomia::layout::cast_slice_mut(&mut rest[..sweep::STAGING_LEN]);
