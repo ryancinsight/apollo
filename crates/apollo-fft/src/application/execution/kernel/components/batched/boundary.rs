@@ -10,7 +10,7 @@
 //! transpose, or a shape it does not divide, falls back to the scalar loops
 //! in the parent module, which remain the reference implementation.
 
-use super::lane_order::sublane_order;
+use super::lane_order::{sublane_inverse, sublane_order};
 use super::BatchedPlanCache;
 use hermes_simd::{LaneKernel, Simd, SimdArch, SimdKernel, SimdPermute, SimdStorage, Vector};
 
@@ -206,17 +206,20 @@ where
     A: SimdArch + SimdKernel<T>,
 {
     // Plane cell `(r, c)` holds logical column `order(c)` of row `r`, so the
-    // transposed block must satisfy `out[k][l] = in[order(l)][order(k)]`.
+    // transposed block must satisfy `out[k][l] = in[order(l)][inverse(k)]`.
     // Feeding the tile transpose the loaded rows in `order` and reading its
-    // result rows back in `order` is exactly that, and both are register
-    // relabelings at compile time: every load and store keeps its natural
-    // row, which is what lets the eight-row `f32` tile keep its addressing.
+    // result rows back in the inverse is exactly that (the order is no
+    // involution at the AVX-512 widths), and both are register relabelings
+    // at compile time: every load and store keeps its natural row, which is
+    // what lets the eight-row `f32` tile keep its addressing.
     let order: [usize; LANES] =
         const { sublane_order::<LANES>(<A as SimdPermute<T>>::SUBLANE_LANES) };
+    let inverse: [usize; LANES] =
+        const { sublane_inverse::<LANES>(<A as SimdPermute<T>>::SUBLANE_LANES) };
     let transpose = |tile: [Vector<T, A>; LANES]| -> [Vector<T, A>; LANES] {
         let mut ordered: [Vector<T, A>; LANES] = core::array::from_fn(|k| tile[order[k]]);
         Vector::transpose_square(&mut ordered);
-        core::array::from_fn(|k| ordered[order[k]])
+        core::array::from_fn(|k| ordered[inverse[k]])
     };
     for bi in (0..m).step_by(LANES) {
         let base = |r: usize, c: usize| (r * stride + c) / LANES;

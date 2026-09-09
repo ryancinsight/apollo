@@ -18,17 +18,22 @@ column a lane holds, since every column is an independent transform.
 
 The planes hold each aligned group of `lanes` columns in the order the
 sub-lane deinterleave produces (`0, 2, 1, 3` for four `f64` lanes,
-`0, 1, 4, 5, 2, 3, 6, 7` for eight `f32` lanes), so both seams are the
-sub-lane unpacks alone. hermes-simd gained the pair
+`0, 1, 4, 5, 2, 3, 6, 7` for eight `f32` lanes, `0, 4, 1, 5, 2, 6, 3, 7`
+for eight `f64` lanes and `0, 1, 8, 9, 2, 3, 10, 11, 4, 5, 12, 13, 6, 7,
+14, 15` for sixteen `f32` lanes), so both seams are the sub-lane unpacks
+alone. hermes-simd gained the pair
 (`interleave_sublanes`, `deinterleave_sublanes`) and the sub-lane width
 (`SimdPermute::SUBLANE_LANES`) in PR 161, native on AVX2 and AVX-512 and
 the flat operation where the register is one sub-lane. In apollo,
-`LaneOrder` is the one map between memory and plane columns, an
-involution: the fold planes are built through it, the odd-power
-decimation writes through it, the combine reads through it and its
-scalar fallback indexes through it. The transpose applies it as a
-register relabeling on both sides of the in-register tile transpose, so
-every load and store keeps its natural row.
+`LaneOrder` is the one map between memory and plane columns, carried in
+both directions (`column`, plane to memory, and `plane`, its inverse):
+the fold planes are built through the forward map, the odd-power
+decimation writes through the inverse, the combine reads through the
+forward map. The transpose applies the forward map as a register
+relabeling on one side of the in-register tile transpose and the inverse
+on the other, so every load and store keeps its natural row. The AVX2
+orders are involutions and the AVX-512 orders are not (revision below),
+which is why the two maps are distinct.
 
 Every planar kernel dispatches through `vectorize`, the stage sets'
 selector, so the order the probe reports and the order the seams produce
@@ -41,9 +46,12 @@ the vector path never runs and the order is the identity.
 The batched suite, the four-step workspace suite, the RustFFT differential
 at 65536 and 262144, the dimension-1d plan suite, the crate's API tests
 and the DFT oracle sweep: 604 tests passing, results bitwise those of
-memory order. `lane_order` pins the documented orders, the involution,
-the constant tables against the runtime map, and the dispatched
-deinterleave itself against `LaneOrder`. The stage-set listings
+memory order. `lane_order` pins the documented orders at every width,
+the inverse against the forward map, the constant tables against the
+runtime map, the register relabeling of the transpose on a scalar model
+of the tile at every width, and the dispatched deinterleave itself
+against `LaneOrder`; the scalar transpose runs under the AVX-512 orders
+on every host. The stage-set listings
 (`output/apollo-planar-lane-order/asm_order_*_f64_avx2.s`) carry no
 `vpermpd` or `vperm2f128`; the sink loop is two unpacks and two stores per
 row.
@@ -97,3 +105,16 @@ prefetch and the compact fold follow it.
 Limits: one host, one core class; a peer session's builds contaminated
 several runs, which the plain sweep `t2` (64k `f64`, 33k `f32` at 65536)
 identifies and which the pairs above exclude.
+
+## Revision
+
+2026-09-09: the first form carried one map and assumed an involution,
+which holds at the AVX2 widths and not at the AVX-512 ones (`0, 4, 1, 5,
+2, 6, 3, 7` cycles 1, 4, 2). Both transposes and the decimation's scalar
+form then computed wrong answers on AVX-512 hosts, which the hosted
+runner is on some runs and not others: the landing runs of PR 357
+passed on one without it and the whole planar suite failed on main at
+`beecdfad` and `f3cfb8c1`
+([APOLLO-PLANAR-LANE-ORDER-INVERSE](../../backlog.md#apollo-planar-lane-order-inverse)).
+`LaneOrder` now carries the inverse map, the transposes use one map per
+side, and the tests run the AVX-512 orders on every host.
