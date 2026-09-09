@@ -31,6 +31,11 @@ impl PhaseEmission {
                     if S::SPLIT_PHASES {
                         run_phase(operation);
                     } else {
+                        // The closure writes scratch, so it is `FnMut`, and
+                        // calling it through the binding would need `let mut`.
+                        // The block moves it into a temporary place instead —
+                        // the same by-value move `run_phase` performs — so the
+                        // two branches consume the closure identically.
                         ({ operation })();
                     }
                 }

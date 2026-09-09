@@ -18,6 +18,62 @@
     source that does not exist, which reads as a defect in the tree.
 - **Evidence:** corrected source passes macro tests (14), focused debug tests (20), Clippy and independent source review. A stale release macro from a scratch checkout is replaced after content-preserving freshness invalidation; retained DLL `5816046B` identifies canonical source and the current parser. Runtime and size acceptance remain in progress.
 - **Verification:** generic debug/release tests, unchanged complete oracle sweep, private Rustdoc and linked code/size comparison against the retained current-provider executable.
+- **Independent judge, 2026-09-09 — verdict FAIL, four findings fixed, one open.**
+  Judged against this item's acceptance oracle without the author's reasoning.
+  It re-ran the gates itself rather than reading them off the commit.
+  - **Confirmed independently:** `Split` is genuinely unreachable in production
+    (`#[cfg(test)]` on the type, its `Schedule` impl and its `Sealed` impl; the
+    only two instantiation sites pass `Fused`); the trait is genuinely sealed
+    through a private `Sealed` supertrait; no test was weakened — the
+    equivalence test *gained* a third control and still asserts exact equality;
+    and the ratchet drop is legitimate, `cooley_tukey.rs` measuring 0 sites
+    because three real `// SAFETY:` comments were added, not comment-shaped
+    noise. No scratch-initialization escape exists: both branches invoke the
+    closure exactly once and neither catches unwind, and the emission is pinned
+    token-for-token by `generated_phase_owns_callback_invocation`.
+  - **Fixed (`480eb862`):** the breaking change touched no CHANGELOG against
+    this repo's same-commit convention; ADR 0051 described scheduling as a
+    caller-restricted general option when the macro hard-rejects anything but
+    `(2, 25)` and `(12, 12)`; and its rejection rationale cited a consumer-root
+    trait path that the accepted design also emits, so it discriminated nothing.
+  - **Judge finding rejected on evidence.** It called the fused branch's
+    `({ operation })();` an unexplained form equivalent to `operation();`.
+    It is not: the closure writes scratch, so it is `FnMut`, and calling it
+    through the binding fails to compile (`E0596`, "cannot borrow as mutable").
+    The block moves it into a temporary place — the same by-value move
+    `run_phase` performs — so both branches consume the closure identically.
+    Tried the simplification, took the compile error, reverted it, and recorded
+    the reason at the site instead.
+  - **Closed — the size clause, measured.** Release assembly for the library
+    at `fc34ca11` against its parent, which isolates the refactor from the
+    twelve `main` commits merged after it: `dft50_impl` 566 instructions
+    either side, `dft144_impl` 718 either side, whole library 372,711
+    instructions in 1,524 functions either side — **delta 0 (+0.0000%)**. All
+    four scheduled monomorphizations have **byte-identical emitted bodies**,
+    so the fused specialization is unchanged code rather than merely
+    same-sized code. That discharges "no attributed code-size growth" and
+    "no added production scratch", and substantiates ADR 0051's
+    constant-propagation claim, which was previously asserted. Repeated
+    against the shipped emission with the same result; recorded in ADR 0051
+    under Evidence. Limits: one host, one toolchain, x86-64 MSVC, release —
+    emitted code, not throughput.
+  - **Superseded note on the original open finding.** "No attributed code-size growth" and "no added
+    production scratch" are unestablished, as this item already recorded. ADR
+    0051 names the instrument and no committed gate supplies it: CI carries no
+    `cargo bloat`, no `cargo-llvm-lines` and no linked-image comparison. The
+    ADR's "constant propagation removes the unselected boundary" is asserted,
+    not substantiated, and the fused source *did* change — a closure plus a
+    live `if S::SPLIT_PHASES`. Measuring `dft50_impl`/`dft144_impl` at
+    `fc34ca11` against its parent, which isolates the refactor from the twelve
+    commits of `main` merged after it.
+  - **Recorded, not fixed here:** the repository has no miri job at all, so the
+    `Split` path's `assume_init_mut` has no UB-checker coverage — structural
+    argument and an exact-token test, not a checker. Filed as its own gap given
+    this codebase already shipped one reference-to-uninitialised-memory defect.
+- **Symbol-grep note for the next reader:** searching the release PE for
+  `run_phase` or `dft144_impl` proves nothing either way — MSVC images carry no
+  internal symbol table, so absence is not evidence. Attribute from emitted asm
+  or an attributed-size tool instead.
 - **Dependencies:** [PR 338](https://github.com/ryancinsight/apollo/pull/338) lands as `2ac33b95`; preserve both original locks during source reconciliation.
 <a id="apollo-twiddless-fft-evaluation"></a>
 ## APOLLO-TWIDDLESS-FFT-EVALUATION — Measure the twiddless FFT against its butterfly isomorph [patch] — done 2026-09-08

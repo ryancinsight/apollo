@@ -28,7 +28,8 @@ only `SPLIT_PHASES`. Generated code owns the arithmetic closure and invokes
 it synchronously exactly once, either directly or through its own generic
 non-inlined function. A schedule never receives the closure. Both branches
 propagate panics, so normal return implies scratch initialization completed.
-Constant propagation removes the unselected boundary per specialization.
+Constant propagation removes the unselected boundary per specialization —
+measured, not assumed: see Evidence below.
 
 The outer codelet owns one uninitialized scratch array. Scheduling changes
 the phase call boundaries only: initialization, arithmetic order, twiddle
@@ -98,6 +99,34 @@ independent transform tests still provide the mathematical oracle.
 The probe retains its source values, batches, case order, timed closures
 and measurement configuration. Its control wrappers call the generated
 codelet; scratch allocation and phase ordering no longer live in the probe.
-Generated code and linked-image comparison must establish that the fused
-schedule adds no scratch work or attributed size regression. Formatting
+Generated code comparison establishes that the fused schedule adds no scratch
+work or attributed size regression; the measurement is recorded under Evidence.
+Formatting
 and source comparison alone cannot establish those compiler properties.
+
+## Evidence
+
+Release assembly for `apollo-fft`'s library, emitted with `--emit=asm` at
+`fc34ca11` and at its parent so the twelve `main` commits merged afterwards
+are excluded, on x86-64 MSVC with the pinned toolchain. Both revisions were
+built from clean exports with `apollo-fft-macros` cleaned between them,
+because a stale proc-macro in the shared target directory otherwise reports
+the previous revision's parser.
+
+| measure | before | after | delta |
+| --- | --- | --- | --- |
+| `dft50_impl` (both directions) | 566 instructions | 566 | **0** |
+| `dft144_impl` (both directions) | 718 instructions | 718 | **0** |
+| whole library | 372,711 instructions in 1,524 functions | 372,711 in 1,524 | **0** |
+
+Stronger than the counts: all four scheduled monomorphizations — both
+codelets in both directions — have **byte-identical emitted bodies** between
+the two revisions. The fused specialization is therefore unchanged code, not
+merely code of the same size, which is what substantiates the
+constant-propagation claim and discharges both the "no attributed code-size
+growth" and "no added production scratch" clauses.
+
+Limits: one host, one toolchain, release profile, x86-64 MSVC. It establishes
+emitted code, not throughput; no timing claim is made here. The measurement
+was repeated against the shipped emission after the `run_phase` call form
+gained its explanatory comment, with the same zero delta.
