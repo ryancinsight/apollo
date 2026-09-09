@@ -93,6 +93,17 @@ pub(crate) const STAGING_LEN: usize = TILE_BYTES / 8;
 /// plus the caller's buffer; re-measure before moving it.
 pub(super) const STAGED_SINK_MAX_LEN: usize = 1 << 16;
 
+/// Largest plane, in bytes, whose sink is written direct when the caller's
+/// rows sit on a cache line.
+///
+/// Measured, not modelled: with the caller on a line the direct sink read
+/// its sweep 33% below the staged one at 8 KiB planes (2048 `f32`: 1.6k to
+/// 1.7k cycles against 2.4k to 2.7k, the transform 12% shorter) and level
+/// at 16 KiB planes (2048 `f64`, 4096 `f32`), so the bound stops at two
+/// pages (`output/apollo-planar-rectangular/sinkdir_*`,
+/// backlog.md#apollo-planar-sink-aligned-direct).
+pub(super) const DIRECT_SINK_MAX_PLANE_BYTES: usize = 2 * 4096;
+
 /// Columns per tile block: [`TILE_BYTES`] over the tile's rows and both
 /// planes, rounded down to whole vectors and up to at least one, and never
 /// wider than the batch.
@@ -316,7 +327,18 @@ pub(super) fn sweep_frequency<T, A>(
     // The sink rides the sweep over stage 2, whose tiles are consecutive
     // rows, as the source does; it is staged up to `STAGED_SINK_MAX_LEN`.
     let mut sink = sink.filter(|_| l_bottom == 2);
-    let staged = len * batch <= STAGED_SINK_MAX_LEN;
+    // The sink writes direct only where that is safe and measured cheaper:
+    // the caller's rows on a cache line, so no register store straddles
+    // two lines (a memcpy handles a misaligned row better than split
+    // stores), and the plane within `DIRECT_SINK_MAX_PLANE_BYTES`, where
+    // the staged form's extra pass over the tile is the larger cost.
+    // Otherwise the rows stage through one copy each up to
+    // `STAGED_SINK_MAX_LEN`.
+    let aligned = sink
+        .as_deref()
+        .is_some_and(|rows| (rows.as_ptr() as usize) % 64 == 0);
+    let staged = len * batch <= STAGED_SINK_MAX_LEN
+        && !(aligned && len * batch * size_of::<T>() <= DIRECT_SINK_MAX_PLANE_BYTES);
     let row_bits = len.trailing_zeros();
     if staged && sink.is_some() {
         assert!(
