@@ -15,46 +15,37 @@ use super::lane_order::{sublane_inverse, sublane_order};
 use super::BatchedPlanCache;
 use hermes_simd::{LaneKernel, Simd, SimdArch, SimdKernel, SimdPermute, SimdStorage, Vector};
 
-/// Loads chunk `index` (a `LANE_COUNT`-lane group) from `data`.
-///
-/// The checked `SimdView` accessor asserts `offset + LANE_COUNT <= len()`
-/// on every touch, and these planes arrive as runtime-sized slices, so no
-/// such check can fold: the transpose and reinterleave passes carried a
-/// compare and a branch to a panic block around each vector moved
-/// (gap_audit.md#base128-bounds). Every caller below derives its chunk index
-/// from `m` and `stride` with the plane's own extent, which the wrapping
-/// kernel asserts once on entry.
+/// Loads `LANE_COUNT` lanes at element offset `at` of `data`: the tile
+/// form, whose rows start wherever a padded stride puts them.
 #[expect(
     clippy::inline_always,
     reason = "must fold into the caller's target-feature scope"
 )]
 #[inline(always)]
-fn chunk<T, A>(data: &[T], index: usize) -> Vector<T, A>
+fn lanes_at<T, A>(data: &[T], at: usize) -> Vector<T, A>
 where
     T: BatchedPlanCache,
     A: SimdArch + SimdKernel<T>,
 {
-    let at = index * <A as SimdStorage<T>>::LANE_COUNT;
     debug_assert!(at + <A as SimdStorage<T>>::LANE_COUNT <= data.len());
-    // SAFETY: the kernel asserted the plane holds every chunk its loops
+    // SAFETY: the kernel asserted the plane holds every tile its loops
     // address before entering them, and `A` is proven by the dispatch token.
     unsafe { Vector::<T, A>::load_unaligned(data.as_ptr().add(at)) }
 }
 
-/// Stores `v` into chunk `index` of `data`; the counterpart of [`chunk`].
+/// Stores `v` at element offset `at` of `data`; the counterpart of [`lanes_at`].
 #[expect(
     clippy::inline_always,
     reason = "must fold into the caller's target-feature scope"
 )]
 #[inline(always)]
-fn put_chunk<T, A>(v: Vector<T, A>, data: &mut [T], index: usize)
+fn put_lanes_at<T, A>(v: Vector<T, A>, data: &mut [T], at: usize)
 where
     T: BatchedPlanCache,
     A: SimdArch + SimdKernel<T>,
 {
-    let at = index * <A as SimdStorage<T>>::LANE_COUNT;
     debug_assert!(at + <A as SimdStorage<T>>::LANE_COUNT <= data.len());
-    // SAFETY: as `chunk` above.
+    // SAFETY: as `lanes_at` above.
     unsafe { v.store_unaligned(data.as_mut_ptr().add(at)) }
 }
 
@@ -87,7 +78,7 @@ impl<T: BatchedPlanCache> LaneKernel<T> for TransposePlanes<'_, T> {
     #[inline(always)]
     fn call<A: SimdArch + SimdKernel<T>>(self, _capability: Simd<T, A>) -> bool {
         let lanes = <A as SimdStorage<T>>::LANE_COUNT;
-        if !matches!(lanes, 2 | 4 | 8 | 16) || self.m % lanes != 0 || self.stride % lanes != 0 {
+        if !matches!(lanes, 2 | 4 | 8 | 16) || self.m % lanes != 0 {
             return false;
         }
         let (m, stride) = (self.m, self.stride);
@@ -134,27 +125,29 @@ where
         Vector::transpose_square(&mut ordered);
         core::array::from_fn(|k| ordered[inverse[k]])
     };
+    // Tiles are addressed by element offset: the padded stride need not
+    // be a lane multiple, which the eight-wide pad is not at sixteen lanes.
     for bi in (0..m).step_by(LANES) {
-        let base = |r: usize, c: usize| (r * stride + c) / LANES;
+        let base = |r: usize, c: usize| r * stride + c;
         let tile = transpose(core::array::from_fn(|r| {
-            chunk::<T, A>(plane, base(bi + r, bi))
+            lanes_at::<T, A>(plane, base(bi + r, bi))
         }));
         for (r, row) in tile.into_iter().enumerate() {
-            put_chunk(row, plane, base(bi + r, bi));
+            put_lanes_at(row, plane, base(bi + r, bi));
         }
 
         for bj in (bi + LANES..m).step_by(LANES) {
             let upper = transpose(core::array::from_fn(|r| {
-                chunk::<T, A>(plane, base(bi + r, bj))
+                lanes_at::<T, A>(plane, base(bi + r, bj))
             }));
             let lower = transpose(core::array::from_fn(|r| {
-                chunk::<T, A>(plane, base(bj + r, bi))
+                lanes_at::<T, A>(plane, base(bj + r, bi))
             }));
             for (r, row) in lower.into_iter().enumerate() {
-                put_chunk(row, plane, base(bi + r, bj));
+                put_lanes_at(row, plane, base(bi + r, bj));
             }
             for (r, row) in upper.into_iter().enumerate() {
-                put_chunk(row, plane, base(bj + r, bi));
+                put_lanes_at(row, plane, base(bj + r, bi));
             }
         }
     }
@@ -194,12 +187,7 @@ impl<T: BatchedPlanCache> LaneKernel<T> for TransposePlanesInto<'_, T> {
     #[inline(always)]
     fn call<A: SimdArch + SimdKernel<T>>(self, _capability: Simd<T, A>) -> bool {
         let lanes = <A as SimdStorage<T>>::LANE_COUNT;
-        if !matches!(lanes, 2 | 4 | 8 | 16)
-            || self.rows % lanes != 0
-            || self.cols % lanes != 0
-            || self.src_stride % lanes != 0
-            || self.dst_stride % lanes != 0
-        {
+        if !matches!(lanes, 2 | 4 | 8 | 16) || self.rows % lanes != 0 || self.cols % lanes != 0 {
             return false;
         }
         let Self {
@@ -262,33 +250,27 @@ fn transpose_plane_into<T, A, const LANES: usize>(
     // written sequentially, each store extending a row the previous tile
     // just wrote. A row count of one odd tile block keeps the single form.
     let tile = |bi: usize, bj: usize, dst: &mut [T]| {
-        let mut ordered: [Vector<T, A>; LANES] = core::array::from_fn(|k| {
-            chunk::<T, A>(src, ((bi + order[k]) * src_stride + bj) / LANES)
-        });
+        let mut ordered: [Vector<T, A>; LANES] =
+            core::array::from_fn(|k| lanes_at::<T, A>(src, (bi + order[k]) * src_stride + bj));
         Vector::transpose_square(&mut ordered);
         for k in 0..LANES {
-            put_chunk(
-                ordered[inverse[k]],
-                dst,
-                ((bj + k) * dst_stride + bi) / LANES,
-            );
+            put_lanes_at(ordered[inverse[k]], dst, (bj + k) * dst_stride + bi);
         }
     };
     for bj in (0..cols).step_by(LANES) {
         let mut bi = 0;
         while bi + 2 * LANES <= rows {
-            let mut first: [Vector<T, A>; LANES] = core::array::from_fn(|k| {
-                chunk::<T, A>(src, ((bi + order[k]) * src_stride + bj) / LANES)
-            });
+            let mut first: [Vector<T, A>; LANES] =
+                core::array::from_fn(|k| lanes_at::<T, A>(src, (bi + order[k]) * src_stride + bj));
             let mut second: [Vector<T, A>; LANES] = core::array::from_fn(|k| {
-                chunk::<T, A>(src, ((bi + LANES + order[k]) * src_stride + bj) / LANES)
+                lanes_at::<T, A>(src, (bi + LANES + order[k]) * src_stride + bj)
             });
             Vector::transpose_square(&mut first);
             Vector::transpose_square(&mut second);
             for k in 0..LANES {
                 let row = (bj + k) * dst_stride;
-                put_chunk(first[inverse[k]], dst, (row + bi) / LANES);
-                put_chunk(second[inverse[k]], dst, (row + bi + LANES) / LANES);
+                put_lanes_at(first[inverse[k]], dst, row + bi);
+                put_lanes_at(second[inverse[k]], dst, row + bi + LANES);
             }
             bi += 2 * LANES;
         }
