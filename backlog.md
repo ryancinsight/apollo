@@ -167,11 +167,8 @@
 - **Dependencies:** none. **Verification:** the vector and scalar decimations agree bitwise on 32-row planes in both precisions; 610 tests.
 
 <a id="apollo-planar-split-seam-fusion"></a>
-## APOLLO-PLANAR-SPLIT-SEAM-FUSION — Fuse the odd-power decimation and combine into the stage passes [patch] [perf] — todo
-- **Evidence:** with the decimation vectorized, `pinned_sections` puts `deint` at 14 to 18% and `combine` at 18 to 30% of the split at 2048 to 32768 in both precisions (`../../output/apollo-planar-split-deint/sections_deint2.txt`); the even powers beside them carry neither pass, their seams riding the first and last stage passes (ADR 0054). Odd powers still trail RustFFT by 40 to 75% at 2048 and 25% in `f32` at 32768.
-- **Scope:** a decimated `Source` seam on the time-decimated set's first pass (stride-two rows, `deinterleave_pairs` then the sub-lane unpack, as `DeinterleaveDecimatedRows`) run once per half, and a `CombineSink` seam on the odd half's last frequency pass that reads the even half's planes, rotates and writes both output halves through the staged sink, deleting both boundary passes; the row map and the fold stay as they are. Non-goals: the rectangular four-step.
-- **Acceptance:** results bitwise those of the two-pass split; `pinned_sections` split totals below the vectorized-decimation build with disjoint intervals at 2048, 8192 and 32768 in both precisions; `rustfft_comparison` 2048 and 32768 apollo intervals below it in both precisions.
-- **Dependencies:** [APOLLO-PLANAR-SPLIT-VECTOR-DEINT](#apollo-planar-split-vector-deint) landed. **Verification:** split, Bluestein, real-half and workspace suites; `pinned_sections`; `rustfft_comparison` counterbalanced.
+## APOLLO-PLANAR-SPLIT-SEAM-FUSION — Fuse the odd-power decimation and combine into the stage passes [patch] [perf] — done 2026-09-09 (rejected)
+- **Outcome:** built (a decimated source seam per half, a direct two-row combine sink on the odd half) and rejected on measurement: outputs bitwise the split's, but section totals rose 9 to 19% at 8192 and 32768 in both precisions; the source seam gains 10% in `f64` and loses up to 13% in `f32` (each half re-splits every input register), the direct combine sink loses 10 to 40% against the combine pass; evidence `../../output/apollo-planar-split-deint/` (`fusion_*`, `sections_fusion3`). Superseded by [the rectangular route](#apollo-planar-rectangular-odd-powers).
 
 <a id="apollo-workspace-impulse-oracle-budget"></a>
 ## APOLLO-WORKSPACE-IMPULSE-ORACLE-BUDGET — Fit the workspace impulse oracle in the CI slow budget [patch] — todo

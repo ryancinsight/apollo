@@ -8,7 +8,6 @@
 - [x] [Seam lane order](backlog.md#apollo-planar-seam-lane-order): paired measurement, ADR 0057 Accepted, board updated.
 - [x] [Seam lane order](backlog.md#apollo-planar-seam-lane-order): PR 357 merged; lease discharged.
 - [ ] [Split decimation](backlog.md#apollo-planar-split-vector-deint): PR enqueued; merged, lease discharged.
-- [ ] [Split seam fusion](backlog.md#apollo-planar-split-seam-fusion): claim after the decimation lands; decimated source seam first, combine sink second, each measured against the decimation build.
 
 ## codex/root — current execution
 
