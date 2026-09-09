@@ -1,8 +1,8 @@
 # Apollo Checklist
 
 ## claude/fable — current execution
+- [ ] [Table alignment](backlog.md#apollo-table-alignment): fold-table alignment sampled across processes; tables on a line if it moves; PR.
 - [ ] [Plane alignment](backlog.md#apollo-planar-source-placement): PR 369 enqueued; merged, lease discharged; then re-measure the standing cells.
-- [ ] [Level combine](backlog.md#apollo-base128-level-combine-vector): PR enqueued; merged, lease discharged.
 - [ ] [Lane order inverse](backlog.md#apollo-planar-lane-order-inverse): PR enqueued; merged; PR 363 rebased and re-verified.
 - [ ] [Rectangular odd powers](backlog.md#apollo-planar-rectangular-odd-powers): ADR 0060 Accepted; PR enqueued; merged, lease discharged.
 
@@ -10,7 +10,6 @@
 - [x] [Seam lane order](backlog.md#apollo-planar-seam-lane-order): hermes in-lane unpack landed (PR 161); plane layout, seams, transpose and combine on the lane (`3adf12b1`).
 - [x] [Seam lane order](backlog.md#apollo-planar-seam-lane-order): paired measurement, ADR 0057 Accepted, board updated.
 - [x] [Seam lane order](backlog.md#apollo-planar-seam-lane-order): PR 357 merged; lease discharged.
-- [ ] [Split decimation](backlog.md#apollo-planar-split-vector-deint): PR enqueued; merged, lease discharged.
 
 ## codex/root — current execution
 

@@ -222,7 +222,8 @@
 - **Dependencies:** none. **Verification:** the pinned ladder (fixed against unfixed), `pinned_sections` in page mode, the workspace pins and the oracle suites.
 
 <a id="apollo-table-alignment"></a>
-## APOLLO-TABLE-ALIGNMENT — Allocate the vector-read twiddle tables on a cache line [patch] [perf] — todo
+## APOLLO-TABLE-ALIGNMENT — Allocate the vector-read twiddle tables on a cache line [patch] [perf] — in-progress
+- **Integrator:** claude/fable; **last-update:** 2026-09-09; branch `perf/apollo-table-alignment` on lane `D:/atlas/worktrees/apollo-route`, stacked on PR #369; lease: claude/fable `components/batched/{mod,cache,pinned_sections}.rs` 2026-09-09T23:30Z; parent [beat the references](#atlas-apollo-beat-the-references).
 - **Evidence:** the planar fold tables (`FourStepFold`, `Box<[T]>`), the cached twiddle rows (`Arc<[Complex<T>]>`) read by `load_interleaved` in the sink combine and the level combine, and the base-128 plan tables are sixteen-byte allocations read with 32-byte register loads, so three allocations in four straddle a line on half their loads; the same exposure cost the planar scratch half again before [the alignment item](#apollo-planar-source-placement) led it to a line. The fold sweep `f1` is 20% of a planar transform and reads one fine register per row.
 - **Scope:** measure the fold sweep with the tables led to a line against the allocator's alignment (in one process, re-slicing one allocation); if it moves, allocate the tables through an aligned vector (hermes `AlignedVec<T, Aligned<64>>`, which the stack already routes through mnemosyne's allocator) and re-measure. Non-goals: scalar-read tables (`BatchedPlan::tw`).
 - **Acceptance:** either the tables on a line with the fold sweep's interval below the misaligned one at 16384 and 65536 in both precisions, or the effect measured below 2% and recorded.
