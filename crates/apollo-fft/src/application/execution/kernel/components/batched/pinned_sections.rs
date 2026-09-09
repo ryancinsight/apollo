@@ -21,6 +21,17 @@ const SIZES: [usize; 8] = [1024, 2048, 4096, 8192, 16384, 32768, 65536, 262_144]
 /// the whole probe stays inside the suite's runtime budget.
 const CALLS: u32 = 200;
 
+/// Complex elements the transform buffer is shifted by inside its allocation
+/// (`APOLLO_PROBE_OFFSET`, default 0): the seam sweeps' cost once depended on
+/// where the caller's buffer sat against the scratch planes modulo the page
+/// (ADR 0057), and the probe reports that offset so a run states its placement.
+fn probe_offset() -> usize {
+    std::env::var("APOLLO_PROBE_OFFSET")
+        .ok()
+        .and_then(|value| value.parse().ok())
+        .unwrap_or(0)
+}
+
 #[test]
 #[ignore = "measurement instrument for the planar route's pass attribution"]
 fn planar_passes_by_size() {
@@ -72,16 +83,22 @@ fn measure_precision<F>(
         let plan = crate::FftPlan1D::<F>::new(
             crate::Shape1D::new(n).expect("invariant: shape lengths are non-zero"),
         );
-        let mut work = src.clone();
+        let offset = probe_offset();
+        let mut backing = vec![Complex::<F>::default(); n + offset];
+        let work = &mut backing[offset..];
+        println!(
+            "BPASS offset={offset} work_page_offset={}",
+            (work.as_ptr() as usize) % 4096
+        );
 
         // One untimed call so plan and twiddle caches are warm, then drain
         // whatever it recorded so the totals below are steady-state.
-        plan.forward_complex_slice_inplace(&mut work);
+        plan.forward_complex_slice_inplace(work);
         let _ = super::sections::take();
 
         for _ in 0..CALLS {
             work.copy_from_slice(&src);
-            plan.forward_complex_slice_inplace(std::hint::black_box(&mut work));
+            plan.forward_complex_slice_inplace(std::hint::black_box(&mut *work));
         }
 
         let totals = super::sections::take();

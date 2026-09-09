@@ -48,11 +48,12 @@ microsecond each.
 
 Bound the planar domain by its own constant, `batched::PLANAR_MAX_LEN`,
 rather than by the generic route's threading threshold, and set it from
-measurement. The candidate value was `2^20`; the accepted value is `2^18`:
-even powers through 262144 take the planar driver, odd powers through
-524288 take the fused split, and the generic route serves lengths past
-that. `PARALLEL_ROW_THRESHOLD` keeps its meaning for the generic route it
-still governs.
+measurement. The candidate value was `2^20`; the first accepted value was
+`2^18`, and the candidate was accepted in full on the 2026-09-09
+re-measurement below: even powers through 1048576 take the planar driver,
+odd powers through 2097152 take the fused split, and the generic route
+serves lengths past that. `PARALLEL_ROW_THRESHOLD` keeps its meaning for
+the generic route it still governs.
 
 The change is one predicate and one constant; no kernel, layout, table or
 normalization changes. Scratch requirements at the newly planar lengths
@@ -61,10 +62,13 @@ follow the existing padded-plane formula and the workspace test pins them.
 ## Verification
 
 - `workspace_covers_padded_planes_and_nested_gathers` pins the scratch extent
-  at 65536, 131072, 262144, 1048576, 2097152 and the first generic lengths.
+  at 65536, 131072, 262144, 1048576, 2097152 and the first generic lengths
+  4194304 and 8388608.
 - `workspace_extents_preserve_the_impulse_spectrum` runs the exact impulse
   oracle through the selected route at 65536, 131072 and 262144 in both
-  precisions and directions.
+  precisions and directions;
+  `planar_domain_boundary_preserves_the_impulse_spectrum` runs it forward
+  at `PLANAR_MAX_LEN` in both precisions.
 - `large_planar_lengths_agree_with_rustfft_in_both_precisions` compares the
   public plan against RustFFT at 65536 and 262144 within twice the
   `O(log N · u)` per-bin bound the file already derives.
@@ -115,11 +119,40 @@ each run it reads 1.22, 0.98 and 1.37 against the baseline's 1.35, so the
 planar route is not worse there and the length follows its precision twin.
 
 At 1048576 the reference arms moved 45 to 100% between runs while a
-tree-mate compiled and tested in the shared cache, so the wall-clock rows
-are invalid evidence and the length stays on the generic route. Deciding it
-is filed as
+tree-mate compiled and tested in the shared cache, so those wall-clock rows
+were invalid evidence and the length stayed on the generic route until
 [APOLLO-N1M-PLANAR-CROSSOVER](../../backlog.md#apollo-n1m-planar-crossover)
-with a quiet-host replicated census as its instrument.
+re-measured it on a quiet host (below).
+
+### 1048576 and 2097152, re-measured 2026-09-09
+
+Evidence `output/apollo-n1m-crossover/` (`manifest.txt`): the same two
+instruments, both pinned to the performance core, no cargo or rustc process
+on the host during any run, six runs counterbalanced base, candidate,
+candidate, base, base, candidate against the tree at PR 361 (staged seams,
+two-level fold). Medians in microseconds; base is `2^18`, candidate `2^20`.
+
+| N | arm | base 1 | base 4 | base 5 | cand 2 | cand 3 | cand 6 |
+|---|---|---|---|---|---|---|---|
+| 1048576 | apollo f64 (census) | 10161 | 10128 | 9993 | 5619 | 5713 | 5821 |
+| 1048576 | rustfft f64 (census) | 6388 | 6801 | 7072 | 6551 | 6824 | 6966 |
+| 1048576 | phastft f64 (census) | 6905 | 7072 | 7139 | 7073 | 7417 | 7484 |
+| 1048576 | apollo f32 (comparison) | 5981 | 5612 | 5078 | 2762 | 2821 | 2648 |
+| 1048576 | phastft f32 (comparison) | 3149 | 3235 | 3267 | 3149 | 3318 | 3386 |
+| 2097152 | apollo f64 (census) | 26575 | 26434 | 26971 | 16960 | 15889 | 17570 |
+| 2097152 | rustfft f64 (census) | 17453 | 15462 | 17437 | 16805 | 15405 | 16395 |
+| 2097152 | phastft f64 (census) | 18100 | 16702 | 17587 | 17069 | 16537 | 16737 |
+| 2097152 | apollo f32 (comparison) | 14617 | 14265 | 14840 | 8275 | 8491 | 8443 |
+| 2097152 | phastft f32 (comparison) | 7494 | 7513 | 7381 | 7543 | 7585 | 7729 |
+
+Every candidate interval sits below every base interval at both lengths and
+precisions, with the reference arms within 10% across the six runs:
+accepted at `2^20`. At 1048576 apollo now leads RustFFT and PhastFT in
+`f64` and PhastFT in `f32`; at 2097152 it is level with both in `f64` and
+trails PhastFT by about 10% in `f32`, down from 1.9 times. The planes at
+1048576 `f64` (16 MiB padded) and the caller's buffer fit the 36 MiB L3,
+the regime the earlier hypothesis (an L3 spill) put outside it; the staged
+seams and the two-level fold are what moved since the first measurement.
 
 Limits: one host, one core class, contention recorded rather than excluded;
 no cross-machine claim; the remaining 1.2 times gap to RustFFT in `f64` at
@@ -130,3 +163,7 @@ increment under the parent item.
 
 2026-09-08: changed Proposed to Accepted at `2^18` after the replicated
 measurement above; the `2^20` candidate is reduced to the supported lengths.
+
+2026-09-09: `PLANAR_MAX_LEN` moved to `2^20` on the quiet-host census under
+APOLLO-N1M-PLANAR-CROSSOVER; the decision and verification sections carry
+the new domain, the measurement section the six-run table.
