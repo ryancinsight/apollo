@@ -293,7 +293,11 @@ fn transpose_planes<T: Copy>(
     debug_assert!(stride >= m && re.len() >= m * stride);
     for r in 0..m {
         for c in 0..m {
-            let partner = (order.column(c), order.column(r));
+            // Plane cell `(r, c)` holds memory `(r, order(c))`, which the
+            // transpose puts at memory `(order(c), r)`: plane cell
+            // `(order(c), plane(r))`. The map is an involution on cells,
+            // so each pair swaps once.
+            let partner = (order.column(c), order.plane(r));
             if partner > (r, c) {
                 let (pr, pc) = partner;
                 re.swap(r * stride + c, pr * stride + pc);
@@ -584,7 +588,8 @@ fn deinterleave_decimated_rows<T: Copy>(
         for b in 0..m {
             let e = chunk[2 * b];
             let o = chunk[2 * b + 1];
-            let at = base + order.column(b);
+            // Memory column `b` lands in the plane column that holds it.
+            let at = base + order.plane(b);
             e_re[at] = e.re;
             e_im[at] = e.im;
             o_re[at] = o.re;

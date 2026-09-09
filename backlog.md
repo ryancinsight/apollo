@@ -157,6 +157,14 @@
 - **Acceptance:** met, candidate intervals disjoint below base at both lengths and precisions across three replicates each; workspace pins extended to 1048576 and 2097152 and the impulse oracle run forward at `PLANAR_MAX_LEN`.
 - **Dependencies:** none. **Verification:** batched, workspace, RustFFT-differential, dimension-1d and DFT-oracle suites.
 
+<a id="apollo-planar-lane-order-inverse"></a>
+## APOLLO-PLANAR-LANE-ORDER-INVERSE — Carry the plane column order in both directions [patch] — review
+- **Integrator:** claude/fable; **last-update:** 2026-09-09; branch `fix/apollo-planar-lane-order-inverse` on lane `D:/atlas/worktrees/apollo-route`; parent [beat the references](#atlas-apollo-beat-the-references).
+- **Evidence:** escaped defect of [APOLLO-PLANAR-SEAM-LANE-ORDER](#apollo-planar-seam-lane-order): main red at `beecdfad` and `f3cfb8c1` (runs 34401043142, 34402180278) with every planar-route test failing, `lane_order` reporting `involution at 1: left 2, right 1`, the AVX-512 eight-lane `f64` order `0, 4, 1, 5, 2, 6, 3, 7`, which is no involution; the hosted runner has AVX-512 on some runs and not others, and PR 357 landed on one without it.
+- **Outcome:** `LaneOrder` carries the inverse map (`plane`) beside the forward one (`column`); the scalar transpose swaps `(r, c)` with `(column(c), plane(r))`, the vector transpose relabels registers by the order on one side and the inverse on the other, the decimation's scalar form writes through the inverse; [ADR 0057](docs/adr/0057-planar-columns-in-sublane-order.md) revised. Tests run the AVX-512 orders on every host: the scalar transpose under `from_geometry(8, 2)` and `(16, 4)`, and the register relabeling on a scalar model of the tile at every width.
+- **Acceptance:** the batched, lane-order, split, Bluestein and four-step suites green locally with the AVX-512 orders exercised; main green on the next AVX-512 landing run.
+- **Dependencies:** none. **Verification:** `cargo nextest run -p apollo-fft`; the CI landing run.
+
 <a id="apollo-workspace-impulse-oracle-budget"></a>
 ## APOLLO-WORKSPACE-IMPULSE-ORACLE-BUDGET — Fit the workspace impulse oracle in the CI slow budget [patch] — todo
 - **Evidence:** `workspace_extents_preserve_the_impulse_spectrum` takes 3.6 s in the dev profile on the 285K host (2026-09-09, base of the 1M crossover), and the hosted runner is 13 to 17 times slower on compute-bound tests, so it sits past the 30 s slow bound in the `ci` profile; twelve transforms at 262144 dominate.

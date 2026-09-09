@@ -13,11 +13,20 @@ use std::f64::consts::TAU;
 #[test]
 fn transpose_is_its_own_inverse_and_never_touches_the_pad() {
     for m in [1usize, 2, 4, 8, 16, 33, 64] {
-        for (pad, order) in [
+        // The dispatched order, and the AVX-512 orders whatever the host,
+        // where the order is no involution; a group must fit the row.
+        let mut orders = vec![
             (0usize, LaneOrder::IDENTITY),
             (8, LaneOrder::IDENTITY),
             (8, LaneOrder::for_batch::<f64>(m)),
-        ] {
+        ];
+        if m % 8 == 0 {
+            orders.push((8, LaneOrder::from_geometry(8, 2)));
+        }
+        if m % 16 == 0 {
+            orders.push((8, LaneOrder::from_geometry(16, 4)));
+        }
+        for (pad, order) in orders {
             let stride = m + pad;
             let sentinel = f64::NAN;
             let re0: Vec<f64> = (0..m * m).map(|i| 0.5 + i as f64).collect();
@@ -31,10 +40,10 @@ fn transpose_is_its_own_inverse_and_never_touches_the_pad() {
             transpose_planes(&mut re, &mut im, m, stride, order);
             for r in 0..m {
                 for c in 0..m {
-                    // Plane cell (r, c) holds logical column order(c) of
-                    // row r: the transpose of logical (order(c), row
-                    // order(r)), which sits at plane cell (order(c), order(r)).
-                    let from = order.column(c) * m + order.column(r);
+                    // Plane cell (r, c) holds memory (r, order(c)), the
+                    // transpose of memory (order(c), r), which sat at plane
+                    // cell (order(c), plane(r)).
+                    let from = order.column(c) * m + order.plane(r);
                     assert_eq!(
                         re[r * stride + c],
                         re0[from],

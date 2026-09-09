@@ -2132,6 +2132,23 @@ recorded against [the standing measurement](#reference-standing) as the
 follow-on and still blocked on re-deriving the symmetric-twiddle identity
 the driver folds into stage set two.
 
+## A green landing proves the ISA it ran on (2026-09-09) <a id="runner-isa-varies"></a>
+
+The hosted runner has AVX-512 on some runs and not others. PR 357 landed
+green on a run without it; the next two landings drew AVX-512 hosts and
+every planar-route test failed, because the plane column order is an
+involution at the AVX2 widths and not at the AVX-512 ones, and one map
+had served both directions. The pattern: a width-dependent property
+verified only under the dispatched backend is verified on one width.
+
+The check that catches it, now in place: every width's order runs
+through the scalar reference on every host (`from_geometry(8, 2)` and
+`(16, 4)` in the transpose test), and the register relabeling is checked
+on a scalar model of the tile at every width. Open: no local host has
+AVX-512, so the vector kernels at eight `f64` and sixteen `f32` lanes are
+verified only by the runs that draw such a host; re-open if hermes gains
+a backend override that lets a test force each width.
+
 ## Fusing the odd-power decimation into the planar boundary (2026-08-28) <a id="odd-power-fusion"></a>
 
 The [standing measurement](#reference-standing) isolated the odd-power

@@ -1,6 +1,7 @@
 # Apollo Checklist
 
 ## claude/fable — current execution
+- [ ] [Lane order inverse](backlog.md#apollo-planar-lane-order-inverse): PR enqueued; merged; PR 363 rebased and re-verified.
 
 - [x] [Stage sweeps](backlog.md#apollo-planar-stage-sweeps): PR 354 merged; lease discharged.
 - [x] [Seam lane order](backlog.md#apollo-planar-seam-lane-order): hermes in-lane unpack landed (PR 161); plane layout, seams, transpose and combine on the lane (`3adf12b1`).
