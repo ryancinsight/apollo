@@ -570,7 +570,9 @@ where
 /// reads every cache line of `src` once per half. Taking the adjacent pair
 /// together reads each line once for both, which is why this exists rather
 /// than a step parameter on the sequential form
-/// (`gap_audit.md#odd-power-fusion`).
+/// (`gap_audit.md#odd-power-fusion`). The reference form of
+/// [`boundary::DeinterleaveDecimatedRows`], and the pass for a width the
+/// vector kernel declines.
 fn deinterleave_decimated_rows<T: Copy>(
     src: &[Complex<T>],
     even: (&mut [T], &mut [T]),
@@ -724,7 +726,18 @@ pub(crate) fn four_step_split_batched<T, const INVERSE: bool>(
     sect!("deint", {
         let (e_re, e_im) = split_plane(even, plane);
         let (o_re, o_im) = split_plane(odd, plane);
-        deinterleave_decimated_rows(data, (e_re, e_im), (o_re, o_im), m, stride, order);
+        let handled = hermes_simd::vectorize(boundary::DeinterleaveDecimatedRows {
+            source: eunomia::layout::cast_slice(&*data),
+            even_re: &mut *e_re,
+            even_im: &mut *e_im,
+            odd_re: &mut *o_re,
+            odd_im: &mut *o_im,
+            m,
+            stride,
+        });
+        if !handled {
+            deinterleave_decimated_rows(data, (e_re, e_im), (o_re, o_im), m, stride, order);
+        }
     });
     {
         let (planes, staging) = split_scratch(even, half);

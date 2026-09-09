@@ -128,11 +128,8 @@
 - **Outcome:** closed on a spike (`../../output/apollo-compact-fold/pf_*.txt`, sandbox only): prefetching the next tile block's sixteen source rows (256 `T0` prefetches per block) slowed the source sweep 12 to 25% at 16384 and 65536 in both precisions and left 262144 within noise; the source sweep is fill-bound from L2, not latency-bound, and the hermes prefetch operation is not filed. Re-open only with a finer-grained schedule and a measured hypothesis.
 
 <a id="apollo-four-step-compact-fold"></a>
-## APOLLO-FOUR-STEP-COMPACT-FOLD — Fold twiddles from a two-level table [patch] [perf] — review
-- **Integrator:** claude/fable; **last-update:** 2026-09-09; branch `perf/apollo-four-step-compact-fold` on lane `D:/atlas/worktrees/apollo-route`, stacked on `perf/apollo-planar-seam-staging` (PR 360).
-- **Outcome:** [ADR 0059](docs/adr/0059-compact-four-step-fold.md) Accepted: `FourStepFold` holds a coarse table per row and lane group and a fine table of one register per row, `m (F + m / F)` entries for `m^2`, two-level from `2^18` and the full row below it; the fold sweep at 262144 fell from 635k to 369k cycles (`f64`) and 217k to 156k (`f32`), the whole transform 6% and 3%; below the bound the pass is unchanged. Entries within `4 EPSILON` of the matrix, pinned at 256 and 262144; the full-matrix builder is deleted.
-- **Acceptance:** `f1` at 262144 below ADR 0058's in both precisions (met); footprint `m (F + m / F)` pairs above the bound; differential tests within their bounds (met, unchanged).
-- **Dependencies:** none. **Verification:** batched and workspace suites, RustFFT differential, DFT oracle sweep; `pinned_sections` against the staged build.
+## APOLLO-FOUR-STEP-COMPACT-FOLD — Fold twiddles from a two-level table [patch] [perf] — done 2026-09-09
+- **Outcome:** [ADR 0059](docs/adr/0059-compact-four-step-fold.md) Accepted: `m (F + m / F)` entries from `2^18`, the fold sweep at 262144 halved (`f64` 713k to 363k cycles, `f32` 222k to 142k), whole transform 6% and 3% faster there, neutral below; evidence `../../output/apollo-compact-fold/`; PR #361 merged 2026-09-09.
 
 <a id="apollo-n65536-four-step-scalar-loss"></a>
 ## APOLLO-N65536-FOUR-STEP-SCALAR-LOSS — Remove the generic four-step loss from 65536 upward [patch] [perf] — done 2026-09-08
@@ -151,11 +148,8 @@
 - **Outcome:** closed on analysis in [ADR 0056](docs/adr/0056-planar-stage-sweeps.md): the sweep halves the bytes per element-stage without touching the arithmetic, the interleaved radix-8 would move a third fewer bytes at 1.7 times the vector operations, and the remaining cost is the seams, which the layout would not remove.
 
 <a id="apollo-n1m-planar-crossover"></a>
-## APOLLO-N1M-PLANAR-CROSSOVER — Decide the planar route at 1048576 [patch] [perf] — review
-- **Integrator:** claude/fable; **last-update:** 2026-09-09; branch `perf/apollo-n1m-planar-crossover` on lane `D:/atlas/worktrees/apollo-route`, stacked on PR #361.
-- **Outcome:** `PLANAR_MAX_LEN` moved to `2^20` ([ADR 0053](docs/adr/0053-planar-four-step-domain.md) revised in place): quiet-host six-run counterbalanced census, `f64` 1048576 10.0 to 10.2 ms to 5.6 to 5.8 (RustFFT 6.4 to 7.1, PhastFT 6.9 to 7.5), `f32` 5.1 to 6.0 to 2.6 to 2.8 (PhastFT 3.1 to 3.4); 2097152 halves in both precisions, level with the references in `f64`, 10% behind PhastFT in `f32`; evidence `../../output/apollo-n1m-crossover/`. The PhastFT comparison bench is pinned to the measurement processor like the other three.
-- **Acceptance:** met, candidate intervals disjoint below base at both lengths and precisions across three replicates each; workspace pins extended to 1048576 and 2097152 and the impulse oracle run forward at `PLANAR_MAX_LEN`.
-- **Dependencies:** none. **Verification:** batched, workspace, RustFFT-differential, dimension-1d and DFT-oracle suites.
+## APOLLO-N1M-PLANAR-CROSSOVER — Decide the planar route at 1048576 [patch] [perf] — done 2026-09-09
+- **Outcome:** `PLANAR_MAX_LEN` moved to `2^20` ([ADR 0053](docs/adr/0053-planar-four-step-domain.md) revised): six-run quiet-host census, `f64` 1048576 10.0 to 5.7 ms (RustFFT 6.4 to 7.1, PhastFT 6.9 to 7.5), `f32` 5.1 to 6.0 to 2.7 (PhastFT 3.1 to 3.4); 2097152 halves, level in `f64`, 10% behind PhastFT in `f32`; the PhastFT comparison pinned; evidence `../../output/apollo-n1m-crossover/`; PR #362 merged 2026-09-09.
 
 <a id="apollo-planar-lane-order-inverse"></a>
 ## APOLLO-PLANAR-LANE-ORDER-INVERSE — Carry the plane column order in both directions [patch] — review
@@ -164,6 +158,17 @@
 - **Outcome:** `LaneOrder` carries the inverse map (`plane`) beside the forward one (`column`); the scalar transpose swaps `(r, c)` with `(column(c), plane(r))`, the vector transpose relabels registers by the order on one side and the inverse on the other, the decimation's scalar form writes through the inverse; [ADR 0057](docs/adr/0057-planar-columns-in-sublane-order.md) revised. Tests run the AVX-512 orders on every host: the scalar transpose under `from_geometry(8, 2)` and `(16, 4)`, and the register relabeling on a scalar model of the tile at every width.
 - **Acceptance:** the batched, lane-order, split, Bluestein and four-step suites green locally with the AVX-512 orders exercised; main green on the next AVX-512 landing run.
 - **Dependencies:** none. **Verification:** `cargo nextest run -p apollo-fft`; the CI landing run.
+
+<a id="apollo-planar-split-vector-deint"></a>
+## APOLLO-PLANAR-SPLIT-VECTOR-DEINT — Vectorize the odd-power decimation into the planes [patch] [perf] — review
+- **Integrator:** claude/fable; **last-update:** 2026-09-09; branch `perf/apollo-planar-split-deint` on lane `D:/atlas/worktrees/apollo-route`; parent [beat the references](#atlas-apollo-beat-the-references).
+- **Outcome:** `boundary::DeinterleaveDecimatedRows` through `deinterleave_pairs` then `deinterleave_sublanes`, the scalar form kept as the reference and the fallback below two lanes ([ADR 0054](docs/adr/0054-planar-seam-fusion.md) revision note). `pinned_sections` `deint`: `f64` 2048 4.4k to 2.4k cycles, 32768 81k to 50k; `f32` 2048 3.5k to 1.0k, 32768 66k to 25k. `rustfft_comparison` pinned: `f32` 2048 3.0 to 2.35 µs (RustFFT 1.35), 32768 56.2 to 44.8 (RustFFT 35.5 to 45.4); `f64` 32768 85 to 86 to 77.5 (RustFFT 78 to 82, level), 2048 4.4 against 4.4 to 4.6 (within the instrument's 0.1 µs resolution; the section total 17.1k to 16.8k). Evidence `../../output/apollo-planar-split-deint/`.
+- **Acceptance:** met on the `deint` sweep and on `rustfft_comparison` at every cell but `f64` 2048, which is flat rather than below; the combine now leads the seams (27 to 30% at `f64`), filed as [the seam fusion item](#apollo-planar-split-seam-fusion).
+- **Dependencies:** none. **Verification:** the vector and scalar decimations agree bitwise on 32-row planes in both precisions; 610 tests.
+
+<a id="apollo-planar-split-seam-fusion"></a>
+## APOLLO-PLANAR-SPLIT-SEAM-FUSION — Fuse the odd-power decimation and combine into the stage passes [patch] [perf] — done 2026-09-09 (rejected)
+- **Outcome:** built (a decimated source seam per half, a direct two-row combine sink on the odd half) and rejected on measurement: outputs bitwise the split's, but section totals rose 9 to 19% at 8192 and 32768 in both precisions; the source seam gains 10% in `f64` and loses up to 13% in `f32` (each half re-splits every input register), the direct combine sink loses 10 to 40% against the combine pass; evidence `../../output/apollo-planar-split-deint/` (`fusion_*`, `sections_fusion3`). Superseded by [the rectangular route](#apollo-planar-rectangular-odd-powers).
 
 <a id="apollo-workspace-impulse-oracle-budget"></a>
 ## APOLLO-WORKSPACE-IMPULSE-ORACLE-BUDGET — Fit the workspace impulse oracle in the CI slow budget [patch] — todo
