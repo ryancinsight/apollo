@@ -1,5 +1,35 @@
 # Apollo Backlog
 
+<a id="apollo-batched-files-past-target"></a>
+
+## APOLLO-BATCHED-FILES-PAST-TARGET — Split the two batched files that crossed the 500-line target [patch] — blocked
+
+- **Ratchet regression.** The fleet scan reports `apollo/oversized_files:
+  38 -> 40`. The two additions are
+  `application/execution/kernel/components/batched/radix.rs` (643) and
+  `.../batched/tests.rs` (599); no file left the class, so the delta is exactly
+  these two.
+- **Provenance.** Both crossed through the four-step planar work —
+  `323ccfc5`, `7720e3ef`, `c20fec4a`, `ba762b2c`, `982eb84e` — which is a
+  legitimate increment, not accreted debt. The class is a size target, so it
+  fires on growth regardless of the growth's quality; the answer is the split,
+  not an absorbed baseline.
+- **Blocked on region, not on judgment.** `worktrees/apollo-route` holds
+  `batched/**` under a live lease and committed to `tests.rs` within the last
+  quarter hour. Splitting under a live editor of the same files is the
+  collision the lease exists to prevent.
+- **Re-open trigger:** the apollo-route lane's item completes or its lease goes
+  stale (one hour without a commit touching `batched/**` and without a board
+  update).
+- **Shape when it runs.** `radix.rs` carries the radix selection beside the
+  staged four-step body; `tests.rs` carries both the schedule cases and the
+  lane-order cases. Each splits along that seam into leaf modules under
+  `batched/`, leaving `radix.rs` and the test module as manifests. No behaviour
+  moves.
+- **Acceptance:** `atlas-conformance.py check --repo apollo` reports no
+  `oversized_files` regression against the committed baseline of 38, with the
+  batched suite unchanged.
+
 <a id="apollo-miri-schedule-split-coverage"></a>
 ## APOLLO-MIRI-SCHEDULE-SPLIT-COVERAGE — Put the split schedule's scratch under a UB checker [patch] — todo
 
