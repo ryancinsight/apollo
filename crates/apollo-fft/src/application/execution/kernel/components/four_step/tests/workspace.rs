@@ -117,7 +117,25 @@ fn short_workspace_rejects_before_mutating_input() {
         let outcome = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
             four_step_fft::<f64, false, false>(&mut data, &mut scratch);
         }));
-        assert!(outcome.is_err(), "undersized workspace must be rejected");
+        // A bare `is_err` accepts any panic, including one raised past the
+        // size check by the very mutation the next assertion forbids. The
+        // payload has to name the workspace contract for the rejection to be
+        // the one under test.
+        let panic = outcome.expect_err("undersized workspace must be rejected");
+        let reason = panic
+            .downcast_ref::<String>()
+            .map(String::as_str)
+            .or_else(|| panic.downcast_ref::<&str>().copied())
+            .expect("invariant: a formatted assert! payload is a String");
+        assert_eq!(
+            reason,
+            format!(
+                "four-step workspace requires {} elements, received {}",
+                scratch.len() + 1,
+                scratch.len()
+            ),
+            "the panic must be the workspace-size rejection, not a later failure"
+        );
         // Rejection preserves representation, including signed zero and NaN
         // payloads. Floating-point equality cannot express that contract.
         assert_eq!(
