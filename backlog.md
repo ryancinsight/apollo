@@ -1,49 +1,52 @@
 # Apollo Backlog
 
 <a id="apollo-twiddless-fft-evaluation"></a>
-## APOLLO-TWIDDLESS-FFT-EVALUATION — Measure the twiddless FFT against its butterfly isomorph [patch] — review
-- **Integrator:** claude/fable; **last-update:** 2026-09-08; branch `feat/apollo-twiddless-fft-evaluation` (committed from lane `D:/atlas/worktrees/apollo-route`, HEAD untouched).
-- **Scope:** `kernel/twiddless` instrument under the `benchmark_kernels` boundary, its tests, `benches/twiddless_comparison`, CI smoke registration, [ADR 0052](docs/adr/0052-twiddless-fft-evaluation.md); no production route, public API, dependency or workload change.
-- **Evidence:** Queiroz arXiv:2505.23718v2 Algorithm 1 is the Gentleman–Sande DIF split (`x[n] ± x[n+N/2]`, odd half times `W_N^n`) with a bit-reversal gather; the paper counts `7N·log₂N` against `5N·log₂N` and reports no measurement.
-- **Acceptance:** three schedules with one arithmetic body agree bitwise at every admitted length; forward error within `8u(t+2)‖X‖₂` against a Dot2 oracle and within the summed bound against the production plan; Parseval under proptest; the five-arm benchmark completes inside its 30 s budget and ADR 0052 records the measured verdict.
-- **Verification:** all-target Clippy with the bench feature, focused nextest, doctest of the crate, warning-denied rustdoc, one local measurement run on the pinned core class; no cross-machine claim.
-- **Outcome:** [ADR 0052](docs/adr/0052-twiddless-fft-evaluation.md) Rejected: the published schedule is 2.4 to 10.7 times slower than Apollo's plan at every measured length except 65536 and slower than its in-place isomorph wherever intervals separate; evidence `../../output/apollo-twiddless/`.
+## APOLLO-TWIDDLESS-FFT-EVALUATION — Measure the twiddless FFT against its butterfly isomorph [patch] — done 2026-09-08
+- **Outcome:** [ADR 0052](docs/adr/0052-twiddless-fft-evaluation.md) Rejected: 2.4 to 10.7 times slower than the plan at every length but 65536; PR #349 merged 2026-09-08.
+
+<a id="apollo-planar-stage-sweeps"></a>
+## APOLLO-PLANAR-STAGE-SWEEPS — Run several stages per trip through the planes [patch] [perf] — review
+- **Integrator:** claude/fable; **last-update:** 2026-09-09; branch `perf/apollo-planar-interleaved-radix-eight` on lane `D:/atlas/worktrees/apollo-route`; parent [beat the references](#atlas-apollo-beat-the-references).
+- **Outcome:** [ADR 0056](docs/adr/0056-planar-stage-sweeps.md) Accepted: four stages per sweep over 16-row tiles blocked to 16 KiB, both stage sets; the plain sweep halves the pass cost (14.6 to 7.8 cycles per quad); whole transform 7 to 14% faster at 16384 and 65536 in both precisions, level with RustFFT at 16384 `f64`, ahead in `f32`, 1.07 to 1.15 behind at 65536 and 4096 `f64`. The per-sweep attribution (`t1..t3`, `f1..f3`) names the seam sweeps as most of both stage sets; evidence `../../output/apollo-planar-sweeps/`.
+- **Acceptance:** results bitwise those of the unswept sets (600 tests unchanged and passing); `pinned_sections` stage-set cycles below ADR 0055's at 16384 and 65536 in both precisions across three runs; whole-transform intervals below the previous state in both instruments.
+- **Dependencies:** none. **Verification:** batched, workspace, RustFFT-differential, dimension-1d and DFT-oracle suites; `pinned_sections`; `engine_census` and `twiddless_comparison` twice on the pinned core.
+
+<a id="apollo-planar-seam-lane-order"></a>
+## APOLLO-PLANAR-SEAM-LANE-ORDER — Store plane columns in the unpack lane order [minor] [perf] — todo
+- **Evidence:** ADR 0056's sink and source sweeps: each row's interleave is two `vpermpd` (port 5, cross-lane) and two unpacks per quad (`output/apollo-planar-sweeps/asm_sweep_dif_f64_avx2.s`), 8 port-5 permutes per quad on passes that otherwise run at the load-port rate; at 4096 `f64` the seam sweeps are 60% of the stage time.
+- **Scope:** the planes hold each aligned column group in the lane order the in-lane unpack produces (`0,2,1,3` per four `f64` lanes, `0,1,4,5,2,3,6,7` per eight `f32`), so `vunpcklpd`/`vunpckhpd` (`vunpcklps`/`vshufps`) alone are the interleave and deinterleave at both seams; the fold planes are built in that order, the transpose loads and stores its tile rows through the same permutation, the odd-power decimation writes it and the combine reads it. Upstream first: hermes-simd gains `interleave_in_lane`/`deinterleave_in_lane` on `SimdPermute` with the sublane width as a constant, native on AVX2 and AVX-512, the flat operation where the register is one sublane (NEON, scalar), with differential tests against the scalar model on every backend. Non-goals: the interleaved oracle, GPU.
+- **Acceptance:** no cross-lane permute in the source or sink pass listing; `t1` and `f2` at 16384 and 65536 below ADR 0056's in both precisions; results bitwise unchanged; hermes ops covered on every backend.
+- **Dependencies:** hermes-simd in-lane unpack (filed on the hermes board as the first increment). **Verification:** existing suites; `cargo asm`; `pinned_sections`.
+
+<a id="apollo-planar-seam-prefetch"></a>
+## APOLLO-PLANAR-SEAM-PREFETCH — Prefetch the seam streams ahead of the row loop [patch] [perf] — todo
+- **Evidence:** ADR 0056: the source sweep reads the caller's buffer in bit-reversed row order and costs 2 times the plain sweep at 65536 `f64` and 4.2 times at 262144 (1341k against 318k cycles); the fold sweep and the sink sweep carry the same shape. The sixteen row streams per tile block are one-kilobyte segments, short for the L2 streamer.
+- **Scope:** software prefetch of each seam row's next lines inside the row loop (source and fold rows, sink rows with the write hint), through a hermes-simd prefetch operation added upstream; distance derived from the block width and measured. Non-goals: non-temporal stores.
+- **Acceptance:** `t1`, `f1`, `f2` at 65536 and 262144 below ADR 0056's in both precisions; no change below 16384; results unchanged.
+- **Dependencies:** hermes-simd prefetch (filed on the hermes board). **Verification:** `pinned_sections` three runs; census once.
+
+<a id="apollo-four-step-compact-fold"></a>
+## APOLLO-FOUR-STEP-COMPACT-FOLD — Fold twiddles from a two-level table [patch] [perf] — todo
+- **Evidence:** ADR 0056: the fold sweep reads `FourStepPlanes` as large as the data (1 MiB at 65536 `f64`) and costs 135k cycles against the plain sweep's 64k; at 262144 the planes, the fold and the caller's buffer total 12 MiB against a 3 MiB L2.
+- **Scope:** `W_N^(p k)` as `W_N^(p k_hi F) · W_N^(p k_lo)` with `F` one column group, two planar tables of `m F` and `m (m / F)` entries, one extra complex multiply per element in the fold pass; the twiddle error bound gains one rounding (documented at the fold and in the RustFFT differential's bound). Non-goals: the interleaved oracle's table.
+- **Acceptance:** `f1` at 65536 and 262144 below ADR 0056's; footprint reported by the retained-footprint probe; differential tests within the re-derived bound.
+- **Dependencies:** none. **Verification:** batched and workspace suites, RustFFT differential, `pinned_sections`.
 
 <a id="apollo-n65536-four-step-scalar-loss"></a>
-## APOLLO-N65536-FOUR-STEP-SCALAR-LOSS — Remove the generic four-step loss from 65536 upward [patch] [perf] — review
-- **Integrator:** claude/fable; **last-update:** 2026-09-08; branch `perf/apollo-four-step-large` on lane `D:/atlas/worktrees/apollo-route`; parent [beat the references](#atlas-apollo-beat-the-references).
-- **Cause:** the batched planar driver stopped at `PARALLEL_ROW_THRESHOLD` (65536) on the unmeasured premise that Moirai-threaded scalar rows beat a sequential SIMD pass from there; baseline shows the generic route at 2.7 to 4.5 times RustFFT at 65536 against 1.25 times one length below.
-- **Decision:** [ADR 0053](docs/adr/0053-planar-four-step-domain.md) bounds the planar domain by its own measured constant `PLANAR_MAX_LEN`.
-- **Outcome:** [ADR 0053](docs/adr/0053-planar-four-step-domain.md) Accepted at `PLANAR_MAX_LEN = 2^18`: 65536 falls from 767 to 220 µs (`f64`) and 219 to 108 µs (`f32`); apollo leads PhastFT there at both precisions and RustFFT in `f32`; evidence `../../output/apollo-planar-domain/`.
-- **Evidence:** `benches/twiddless_comparison` run 1 (`../../output/apollo-twiddless/measurement-run1.csv`): Apollo `f64` 1556 µs (interval 1369 to 1741) and `f32` 885 µs against RustFFT 348 µs and 90 µs; the scalar out-of-place radix-2 instrument measures 799 µs `f64` with disjoint intervals. At 16384 Apollo holds 52 µs against 155 µs, so the loss enters with the generic four-step route.
-- **Scope:** re-measure 65536 under the engine census supervisor with replicated counterbalanced runs, then attribute with the retained four-step phase instrument; production change only through its own item.
-- **Acceptance:** either a supported ratio with phase attribution filed as the next vertical item, or the run-1 figure recorded as unsupported with the census evidence.
-- **Dependencies:** [four-step square movement](#apollo-four-step-square-movement). **Verification:** census manifest, comparator intervals, unchanged workload.
+## APOLLO-N65536-FOUR-STEP-SCALAR-LOSS — Remove the generic four-step loss from 65536 upward [patch] [perf] — done 2026-09-08
+- **Outcome:** [ADR 0053](docs/adr/0053-planar-four-step-domain.md) Accepted: planar route to `2^18`; 65536 `f64` 767 to 220 µs, `f32` 219 to 108 µs; PR #351 merged 2026-09-08.
 
 <a id="apollo-planar-seam-fusion"></a>
-## APOLLO-PLANAR-SEAM-FUSION — Delete the planar route's deinterleave and reinterleave passes [patch] [perf] — review
-- **Integrator:** claude/fable; **last-update:** 2026-09-08; branch `perf/apollo-four-step-large` (stacked on PR 351); parent [beat the references](#atlas-apollo-beat-the-references).
-- **Cause:** per-pass attribution puts the deinterleave and reinterleave at 26 to 38% of the planar route while the stage sets are instruction-issue-bound (an L1 column-blocking arm slowed them 1.4 to 2.4 times and is rejected in [ADR 0054](docs/adr/0054-planar-seam-fusion.md)).
-- **Decision:** the first time-decimated pass reads the caller's interleaved buffer and the last frequency-decimated pass writes it, through `source`/`sink` beside the existing twiddle `fold`; per-element arithmetic unchanged.
-- **Acceptance:** whole-transform intervals at 16384, 65536 and 262144 below ADR 0053's; batched, four-step workspace, RustFFT-differential and dimension-1d suites green.
-- **Outcome:** [ADR 0054](docs/adr/0054-planar-seam-fusion.md) Accepted: census `f64` 3 to 12% faster at 4096 through 65536, warm instrument neutral; L1 column blocking rejected as evidence the stage sets are issue-bound; evidence `../../output/apollo-planar-seams/`.
+## APOLLO-PLANAR-SEAM-FUSION — Delete the planar route's deinterleave and reinterleave passes [patch] [perf] — done 2026-09-08
+- **Outcome:** [ADR 0054](docs/adr/0054-planar-seam-fusion.md) Accepted: source and sink seams ride the stage passes, 3 to 12% in the census; one-line column blocking rejected; PR #353 merged 2026-09-08.
 
 <a id="apollo-planar-radix-depth"></a>
-## APOLLO-PLANAR-RADIX-DEPTH — Cut the planar stage sets' instructions per element [patch] [perf] — review
-- **Integrator:** claude/fable; **last-update:** 2026-09-08; branch `perf/apollo-planar-seams` (stacked on PR 353).
-- **Outcome:** [ADR 0055](docs/adr/0055-planar-radix-eight-passes.md) Accepted: the radix-8 grouping is rejected on AVX2 (spills; 11 to 27% slower at 65536 `f64`), the shared `Lane`/`Radix`/`butterfly_rows` driver it was built on is retained at radix-4 and measures 8 to 14% faster at 4096 and 16384 `f64` warm, neutral at 65536; six hand-written butterfly bodies deleted. The row-pointer reloads and the in-loop seam branches are gone (plain pass 53 instructions per quad from 88 to 114, no reloads) and the exact unit rotations were tried and rejected (37 instructions, no multiply, no change): the pass is bound by its 16 loads and 8 stores per quad at the load/store ports, not by instructions or arithmetic. Only more stages per pass reduce memory operations per element, and on sixteen registers that needs the interleaved layout; filed as [interleaved radix-8](#apollo-planar-interleaved-radix-eight).
-- **Evidence:** ADR 0054's two arms: L1 blocking slowed the stage sets 1.4 to 2.4 times and deleting two memory passes returned 3 to 12%, so the fused radix-4 pass is bound by instruction issue (about 4.4 cycles per four-lane quad, roughly 36 vector operations). Apollo `f64` trails RustFFT by 1.2 times at 16384 and 65536 after both changes; RustFFT's AVX path runs radix-8 butterflies on interleaved data with in-register transposes.
-- **Scope:** one design spike then one implementation: a radix-8 planar pass (three stages per pass, one third fewer passes, sixteen live vector registers on AVX2 so the register schedule is the design), measured against the current radix-4 pair on `pinned_sections` and the census; alternatives to evaluate in the spike are a radix-8 pass over half-width lanes and a mixed 8/4 schedule.
-- **Acceptance:** whole-transform intervals at 16384 and 65536 below ADR 0054's in the census, no regression in the warm instrument, bitwise or bounded agreement per the existing suites; an ADR records the register schedule and the codegen inspection (spills counted).
-- **Codegen (2026-09-08, `cargo asm` on `dispatch_backend_avx2_fma::<f64, BatchedStages<f64>>` and the DIF twin, listings under `../../output/apollo-planar-seams/asm_*_f64_avx2.s`):** the innermost steady-state loop issues 88 to 114 instructions per fused radix-4 quad of four lanes, of which 40 to 48 are vector arithmetic (16 FMA, 16 multiply, 16 add/subtract in the DIF pair), 28 to 40 are vector loads and stores including the fold twiddles, 19 to 34 are scalar address and loop instructions, and 4 to 5 are spill reloads of the six hoisted twiddle registers (six twiddles plus eight data vectors exceed AVX2's sixteen). The design must halve the non-arithmetic share: pointer-stepped rows instead of recomputed row bases, twiddles as memory operands of the FMA rather than hoisted vectors, and only then the radix-8 pass.
-- **Dependencies:** none. **Verification:** existing batched, workspace, RustFFT-differential and dimension-1d suites; `cargo asm` on the pass.
+## APOLLO-PLANAR-RADIX-DEPTH — Cut the planar stage sets' instructions per element [patch] [perf] — done 2026-09-08
+- **Outcome:** [ADR 0055](docs/adr/0055-planar-radix-eight-passes.md) Accepted: radix-8 rejected on AVX2, the shared seam-specialized driver kept (8 to 14% at 4096 and 16384 `f64` warm), unit rotations rejected; PR #353 merged 2026-09-08.
 
 <a id="apollo-planar-interleaved-radix-eight"></a>
-## APOLLO-PLANAR-INTERLEAVED-RADIX-EIGHT — Radix-8 butterflies on interleaved rows [minor] [perf] — todo
-- **Evidence:** ADR 0055's three increments: a radix-4 planar pass issues 16 vector loads and 8 stores per four-lane quad and costs about 9 cycles whether it multiplies or not; blocking, instruction cuts and multiply removal all measured neutral, so the stage sets are bound by memory operations per element. Radix-8 on planar rows needs sixteen data vectors and spilled. RustFFT, at 1.2 times ahead in `f64`, runs radix-8 on interleaved AVX rows.
-- **Scope:** a stage set over interleaved rows (one vector per complex row) with radix-8 butterflies held in eight registers, complex multiplies through `hermes_simd::ComplexReg` (three shuffles and one alternating FMA), the four-step fold as an elementwise interleaved multiply, and no plane conversion at either seam; the existing `batched::interleaved` module (radix-2, measured 16 to 37% slower than planar at that radix) is the starting point and the differential oracle. Non-goals: odd-power routing changes, GPU.
-- **Acceptance:** memory operations per element-stage a third of the planar pair's, verified in the listing; whole-transform intervals at 16384 and 65536 below ADR 0055's in both instruments in both precisions; bounded agreement per the existing suites and the RustFFT differential; an ADR records the register schedule.
-- **Dependencies:** none. **Verification:** batched, workspace, RustFFT-differential and dimension-1d suites; `pinned_sections`; `cargo asm` on the pass.
+## APOLLO-PLANAR-INTERLEAVED-RADIX-EIGHT — Radix-8 butterflies on interleaved rows [minor] [perf] — done 2026-09-09 (rejected)
+- **Outcome:** closed on analysis in [ADR 0056](docs/adr/0056-planar-stage-sweeps.md): the sweep halves the bytes per element-stage without touching the arithmetic, the interleaved radix-8 would move a third fewer bytes at 1.7 times the vector operations, and the remaining cost is the seams, which the layout would not remove.
 
 <a id="apollo-n1m-planar-crossover"></a>
 ## APOLLO-N1M-PLANAR-CROSSOVER — Decide the planar route at 1048576 [patch] [perf] — todo

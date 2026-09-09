@@ -227,6 +227,17 @@ pub(super) struct Rows {
     pub(super) step: usize,
 }
 
+/// The columns of one row set a pass covers: batch indices `start..end`.
+///
+/// A sweep ([`super::sweep`]) runs its passes over one column block of a
+/// tile at a time so the block stays in L1 between them; the block is the
+/// whole batch only when the tile fits.
+#[derive(Clone, Copy)]
+pub(super) struct Columns {
+    pub(super) start: usize,
+    pub(super) end: usize,
+}
+
 /// Where a pass reads its rows and where it writes them.
 ///
 /// Exactly the combinations the two stage sets produce: the time-decimated
@@ -266,13 +277,13 @@ impl<'a, 'b, T> Seams<'a, 'b, T> {
     }
 }
 
-/// Runs radix `R` over one row set across the whole batch: the vector loop
-/// over `LANE_COUNT` columns at a time and the scalar remainder.
+/// Runs radix `R` over one row set across `cols`: the vector loop over
+/// `LANE_COUNT` columns at a time and the scalar remainder.
 ///
 /// `tw` holds the scalar twiddles for the remainder and `twv` their lane
 /// splats for the vector loop. The caller has bounded every row of `rows` by
-/// the plane extent and the batch by the row length, which is what the
-/// unchecked loads and stores rely on.
+/// the plane extent and `cols` by the batch, which is what the unchecked
+/// loads and stores rely on.
 #[expect(
     clippy::inline_always,
     reason = "the driver must fold into the dispatcher's target-feature scope with the kernel that calls it"
@@ -284,6 +295,7 @@ pub(super) fn butterfly_rows<T, A, R, const N: usize, const NT: usize>(
     rows: Rows,
     stride: usize,
     batch: usize,
+    cols: Columns,
     row_bits: u32,
     tw: &[Pair<T>; NT],
     twv: &[Pair<Vector<T, A>>; NT],
@@ -301,6 +313,7 @@ pub(super) fn butterfly_rows<T, A, R, const N: usize, const NT: usize>(
             rows,
             stride,
             batch,
+            cols,
             row_bits,
             tw,
             twv,
@@ -314,6 +327,7 @@ pub(super) fn butterfly_rows<T, A, R, const N: usize, const NT: usize>(
             rows,
             stride,
             batch,
+            cols,
             row_bits,
             tw,
             twv,
@@ -327,6 +341,7 @@ pub(super) fn butterfly_rows<T, A, R, const N: usize, const NT: usize>(
             rows,
             stride,
             batch,
+            cols,
             row_bits,
             tw,
             twv,
@@ -340,6 +355,7 @@ pub(super) fn butterfly_rows<T, A, R, const N: usize, const NT: usize>(
             rows,
             stride,
             batch,
+            cols,
             row_bits,
             tw,
             twv,
@@ -353,6 +369,7 @@ pub(super) fn butterfly_rows<T, A, R, const N: usize, const NT: usize>(
             rows,
             stride,
             batch,
+            cols,
             row_bits,
             tw,
             twv,
@@ -389,6 +406,7 @@ fn pass<
     rows: Rows,
     stride: usize,
     batch: usize,
+    cols: Columns,
     row_bits: u32,
     tw: &[Pair<T>; NT],
     twv: &[Pair<Vector<T, A>>; NT],
@@ -410,8 +428,8 @@ fn pass<
     let interleaved: [usize; N] =
         core::array::from_fn(|i| reverse_row(rows.first + i * rows.step, row_bits) * batch * 2);
 
-    let mut k = 0;
-    while k + lanes <= batch {
+    let mut k = cols.start;
+    while k + lanes <= cols.end {
         let mut x: [Pair<Vector<T, A>>; N] = core::array::from_fn(|i| {
             if SOURCE {
                 load_interleaved::<T, A>(source, interleaved[i] + 2 * k)
@@ -442,8 +460,8 @@ fn pass<
         k += lanes;
     }
 
-    // Scalar remainder when the batch is not a lane multiple.
-    for k in k..batch {
+    // Scalar remainder when the block is not a lane multiple.
+    for k in k..cols.end {
         let mut x: [Pair<T>; N] = core::array::from_fn(|i| {
             if SOURCE {
                 (

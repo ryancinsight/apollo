@@ -85,7 +85,13 @@ fn measure_precision<F>(
         }
 
         let totals = super::sections::take();
-        let all: u64 = totals.iter().map(|&(_, cycles, _)| cycles).sum();
+        // Sweeps nest inside their stage set's section, so the whole is
+        // the top-level sections alone.
+        let all: u64 = totals
+            .iter()
+            .filter(|&&(label, _, _)| !super::sections::is_sweep(label))
+            .map(|&(_, cycles, _)| cycles)
+            .sum();
         for (label, cycles, passes) in totals {
             let per_call = cycles as f64 / f64::from(CALLS);
             let share = 100.0 * cycles as f64 / all as f64;

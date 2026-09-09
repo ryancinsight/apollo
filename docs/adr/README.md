@@ -60,3 +60,4 @@
 | [0053](0053-planar-four-step-domain.md) | Planar four-step domain above the threading threshold | Accepted |
 | [0054](0054-planar-seam-fusion.md) | Planar seams fused into the stage passes | Accepted |
 | [0055](0055-planar-radix-eight-passes.md) | Planar stage-set driver and the radix-8 trial | Accepted |
+| [0056](0056-planar-stage-sweeps.md) | Planar stage sweeps over L1-resident tiles | Accepted |
