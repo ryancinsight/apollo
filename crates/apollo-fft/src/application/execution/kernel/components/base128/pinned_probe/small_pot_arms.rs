@@ -199,7 +199,7 @@ fn fused_round_trip<const N: usize>(work: &mut [Complex64]) {
 /// N = 64 runs 16. A fixed *lane* count would have put N = 64 at 32 KB, exactly
 /// the efficiency core's L1 size, and charged L2 traffic to the largest codelet
 /// only. Readings are per pass, so compare sizes per lane transform: divide by
-/// `2 * LANE_ELEMENTS / N`.
+/// `2 * (LANE_ELEMENTS / N)`.
 const LANE_ELEMENTS: usize = 1_024;
 
 /// A forward pass then a normalized inverse pass over every lane, crossing

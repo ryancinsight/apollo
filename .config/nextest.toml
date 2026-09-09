@@ -20,6 +20,13 @@ path = "junit.xml"
 
 [test-groups]
 gpu-device = { max-threads = 1 }
+# The pinned probes bind threads to named processors and, in the schedule
+# instruments, apply a process-wide affinity mask. Run concurrently they
+# measure each other: two regimes pinned to overlapping core sets contend for
+# the same silicon, which moved one 64-cubed reading 8.4% between runs while
+# its own confidence interval spanned 2.6%. The host CPU is the shared device
+# here exactly as the GPU is above.
+pinned-probe = { max-threads = 1 }
 
 [[profile.default.overrides]]
 filter = 'test(/infrastructure::transport::gpu/)'
@@ -32,3 +39,7 @@ test-group = "gpu-device"
 [[profile.default.overrides]]
 filter = 'test(/gpu_fft/)'
 test-group = "gpu-device"
+
+[[profile.default.overrides]]
+filter = 'test(/pinned_probe/)'
+test-group = "pinned-probe"

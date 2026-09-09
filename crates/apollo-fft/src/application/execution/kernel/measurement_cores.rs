@@ -125,6 +125,44 @@ impl Selection {
         }
         out
     }
+
+    /// Every processor the platform assigned to `class`, from the census.
+    ///
+    /// Windows-only with the schedule instruments that consume it: the
+    /// process-affinity regime they impose has no counterpart on the other
+    /// hosts, so elsewhere this and its two companions below have no caller.
+    ///
+    /// The probes that bind one representative core need one processor; the
+    /// schedule instruments need the whole set, and this is the structured
+    /// answer — the census itself, not a re-parse of the printed form.
+    #[cfg(target_os = "windows")]
+    pub(crate) fn processors_in_class(
+        &self,
+        class: EfficiencyClass,
+    ) -> impl Iterator<Item = u32> + '_ {
+        self.census
+            .iter()
+            .filter(move |(_, candidate)| *candidate == class)
+            .map(|(processor, _)| *processor)
+    }
+
+    /// The class of the selected performance representative, for probes that
+    /// must enumerate that class' full membership.
+    #[cfg(target_os = "windows")]
+    pub(crate) fn performance_class(&self) -> Option<EfficiencyClass> {
+        self.performance().map(|core| core.class())
+    }
+
+    /// The most efficient class on a host reporting more than one, so the
+    /// schedule instruments can enumerate it. `None` on a uniform host —
+    /// there is no second set to restrict to.
+    #[cfg(target_os = "windows")]
+    pub(crate) fn efficiency_class(&self) -> Option<EfficiencyClass> {
+        if self.class_count <= 1 {
+            return None;
+        }
+        self.census.iter().map(|(_, class)| *class).min()
+    }
 }
 
 /// The cached selection for this test binary.
