@@ -233,6 +233,10 @@
 - **Acceptance:** the transpose tests report the vector path handling every shape at every dispatched width; a sixteen-lane landing run green.
 - **Dependencies:** none. **Verification:** the transpose tests; the CI landing run on a sixteen-lane host.
 
+<a id="apollo-planar-sink-row-copy"></a>
+## APOLLO-PLANAR-SINK-ROW-COPY — Copy the staged sink rows register-wide [patch] [perf] — done 2026-09-09 (rejected)
+- **Outcome:** the staged rows copied with register loads and stores in place of one memcpy per row: no measurable effect. On a quiet host the sink sweep of the unchanged tree moves by up to 20% between its own two runs at 2048 to 16384 (`f64` 2048 5.1k and 4.2k cycles), the candidate sits inside that spread (4.4k and 4.8k), 4096 `f64` reads above it, and `rustfft_comparison` is flat at 2048 in both precisions; a 256-byte memcpy is not the cost. Evidence `../../output/apollo-planar-rectangular/` (`rowcopy_*`, `sections_*_r*`). The sink sweep's cost per element stays open on the parent item; the next instrument is the seam sweep measured alone against a plain sweep of the same stages, since the section probe's run-to-run spread now exceeds the effects left.
+
 <a id="apollo-workspace-impulse-oracle-budget"></a>
 ## APOLLO-WORKSPACE-IMPULSE-ORACLE-BUDGET — Fit the workspace impulse oracle in the CI slow budget [patch] — todo
 - **Evidence:** `workspace_extents_preserve_the_impulse_spectrum` takes 3.6 s in the dev profile on the 285K host (2026-09-09, base of the 1M crossover), and the hosted runner is 13 to 17 times slower on compute-bound tests, so it sits past the 30 s slow bound in the `ci` profile; twelve transforms at 262144 dominate.
