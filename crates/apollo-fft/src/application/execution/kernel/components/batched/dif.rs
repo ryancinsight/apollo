@@ -55,6 +55,8 @@ pub(super) struct BatchedStagesDif<'a, T> {
     /// exactly once, and one register interleave plus two interleaved stores
     /// replace the two plane stores.
     pub(super) sink: Option<&'a mut [T]>,
+    /// One tile block of interleaved rows for the sink, as reals.
+    pub(super) staging: &'a mut [T],
     pub(super) batch: usize,
     pub(super) stride: usize,
     pub(super) len: usize,
@@ -78,6 +80,7 @@ where
             tw,
             fold,
             mut sink,
+            staging,
             batch: b,
             stride: s,
             len,
@@ -97,6 +100,7 @@ where
                     tw,
                     fold,
                     sink.as_deref_mut(),
+                    staging,
                     b,
                     s,
                     len,

@@ -22,7 +22,7 @@ use core::ops::{Add, Mul, Sub};
 
 use hermes_simd::{LaneScalar, SimdArch, SimdKernel, SimdStorage, Vector};
 
-use super::{load, load_interleaved, reverse_row, store, store_interleaved};
+use super::{load, load_interleaved, store, store_interleaved};
 
 /// One lane of butterfly arithmetic: a SIMD vector or a scalar element.
 pub(crate) trait Lane:
@@ -238,42 +238,71 @@ pub(super) struct Columns {
     pub(super) end: usize,
 }
 
+/// A staged seam block addressed by tile-local row.
+///
+/// The interleaved source and sink of the seam sweeps move one tile block
+/// at a time through a contiguous buffer (see [`super::sweep`]): tile row
+/// `r` starts `r * pitch` reals in, and batch column `k` sits
+/// `2 * (k - first_column)` reals further. The row set's first row is tile
+/// row `first`, and its rows are [`Rows::step`] tile rows apart, the same
+/// step as in the planes.
+#[derive(Clone, Copy)]
+pub(super) struct Staging {
+    pub(super) first: usize,
+    pub(super) pitch: usize,
+    pub(super) first_column: usize,
+}
+
+impl Staging {
+    /// The staging of a pass without a seam: never addressed.
+    const NONE: Self = Self {
+        first: 0,
+        pitch: 0,
+        first_column: 0,
+    };
+}
+
 /// Where a pass reads its rows and where it writes them.
 ///
 /// Exactly the combinations the two stage sets produce: the time-decimated
-/// set reads the caller's interleaved buffer on its first pass and the planes
+/// set reads the staged source block on its first pass and the planes
 /// otherwise; the frequency-decimated set folds the four-step twiddle on its
-/// first pass, writes the caller's buffer on its last, and both when the two
-/// coincide. Each variant selects a monomorphized pass whose row loop carries
-/// no seam it does not use, which is what keeps the pass's addressing in
-/// registers.
+/// first pass, writes the staged sink block on its last, and both when the
+/// two coincide. Each variant selects a monomorphized pass whose row loop
+/// carries no seam it does not use, which is what keeps the pass's
+/// addressing in registers.
 pub(super) enum Seams<'a, 'b, T> {
     /// Planes in, planes out.
     Planes,
-    /// Interleaved rows in; plane row `p` reads row `rev(p)`.
-    Source(&'a [T]),
+    /// Staged interleaved rows in.
+    Source(&'a [T], Staging),
     /// Planes in with the four-step twiddle planes multiplied into the loads.
     Fold((&'a [T], &'a [T])),
-    /// Planes in, interleaved rows out; plane row `p` writes row `rev(p)`.
-    Sink(&'b mut [T]),
-    /// Folded loads and interleaved stores in one pass.
-    FoldSink((&'a [T], &'a [T]), &'b mut [T]),
+    /// Planes in, staged interleaved rows out.
+    Sink(&'b mut [T], Staging),
+    /// Folded loads and staged stores in one pass.
+    FoldSink((&'a [T], &'a [T]), &'b mut [T], Staging),
 }
 
 impl<'a, 'b, T> Seams<'a, 'b, T> {
     /// The frequency-decimated set's seams for one pass.
-    pub(super) fn frequency(fold: Option<(&'a [T], &'a [T])>, sink: Option<&'b mut [T]>) -> Self {
+    pub(super) fn frequency(
+        fold: Option<(&'a [T], &'a [T])>,
+        sink: Option<(&'b mut [T], Staging)>,
+    ) -> Self {
         match (fold, sink) {
-            (Some(fold), Some(sink)) => Self::FoldSink(fold, sink),
+            (Some(fold), Some((sink, staging))) => Self::FoldSink(fold, sink, staging),
             (Some(fold), None) => Self::Fold(fold),
-            (None, Some(sink)) => Self::Sink(sink),
+            (None, Some((sink, staging))) => Self::Sink(sink, staging),
             (None, None) => Self::Planes,
         }
     }
 
     /// The time-decimated set's seams for one pass.
-    pub(super) fn time(source: Option<&'a [T]>) -> Self {
-        source.map_or(Self::Planes, Self::Source)
+    pub(super) fn time(source: Option<(&'a [T], Staging)>) -> Self {
+        source.map_or(Self::Planes, |(source, staging)| {
+            Self::Source(source, staging)
+        })
     }
 }
 
@@ -282,11 +311,15 @@ impl<'a, 'b, T> Seams<'a, 'b, T> {
 ///
 /// `tw` holds the scalar twiddles for the remainder and `twv` their lane
 /// splats for the vector loop. The caller has bounded every row of `rows` by
-/// the plane extent and `cols` by the batch, which is what the unchecked
-/// loads and stores rely on.
+/// the plane extent, `cols` by the batch and the staged rows by the staging
+/// buffer, which is what the unchecked loads and stores rely on.
 #[expect(
     clippy::inline_always,
     reason = "the driver must fold into the dispatcher's target-feature scope with the kernel that calls it"
+)]
+#[expect(
+    clippy::too_many_arguments,
+    reason = "the driver is the inner function of both stage sets; its arguments are the pass's operands"
 )]
 #[inline(always)]
 pub(super) fn butterfly_rows<T, A, R, const N: usize, const NT: usize>(
@@ -296,7 +329,6 @@ pub(super) fn butterfly_rows<T, A, R, const N: usize, const NT: usize>(
     stride: usize,
     batch: usize,
     cols: Columns,
-    row_bits: u32,
     tw: &[Pair<T>; NT],
     twv: &[Pair<Vector<T, A>>; NT],
     seams: Seams<'_, '_, T>,
@@ -314,26 +346,26 @@ pub(super) fn butterfly_rows<T, A, R, const N: usize, const NT: usize>(
             stride,
             batch,
             cols,
-            row_bits,
             tw,
             twv,
             none,
             &[],
             &mut [],
+            Staging::NONE,
         ),
-        Seams::Source(source) => pass::<T, A, R, N, NT, true, false, false>(
+        Seams::Source(source, staging) => pass::<T, A, R, N, NT, true, false, false>(
             re,
             im,
             rows,
             stride,
             batch,
             cols,
-            row_bits,
             tw,
             twv,
             none,
             source,
             &mut [],
+            staging,
         ),
         Seams::Fold(fold) => pass::<T, A, R, N, NT, false, true, false>(
             re,
@@ -342,40 +374,40 @@ pub(super) fn butterfly_rows<T, A, R, const N: usize, const NT: usize>(
             stride,
             batch,
             cols,
-            row_bits,
             tw,
             twv,
             fold,
             &[],
             &mut [],
+            Staging::NONE,
         ),
-        Seams::Sink(sink) => pass::<T, A, R, N, NT, false, false, true>(
+        Seams::Sink(sink, staging) => pass::<T, A, R, N, NT, false, false, true>(
             re,
             im,
             rows,
             stride,
             batch,
             cols,
-            row_bits,
             tw,
             twv,
             none,
             &[],
             sink,
+            staging,
         ),
-        Seams::FoldSink(fold, sink) => pass::<T, A, R, N, NT, false, true, true>(
+        Seams::FoldSink(fold, sink, staging) => pass::<T, A, R, N, NT, false, true, true>(
             re,
             im,
             rows,
             stride,
             batch,
             cols,
-            row_bits,
             tw,
             twv,
             fold,
             &[],
             sink,
+            staging,
         ),
     }
 }
@@ -407,12 +439,12 @@ fn pass<
     stride: usize,
     batch: usize,
     cols: Columns,
-    row_bits: u32,
     tw: &[Pair<T>; NT],
     twv: &[Pair<Vector<T, A>>; NT],
     fold: (&[T], &[T]),
     source: &[T],
     sink: &mut [T],
+    staging: Staging,
 ) where
     T: LaneScalar + Lane,
     A: SimdArch + SimdKernel<T>,
@@ -423,16 +455,17 @@ fn pass<
     let plane_step = rows.step * stride;
     let fold_first = rows.first * batch;
     let fold_step = rows.step * batch;
-    // The bit-reversed row map is not affine, so the interleaved rows keep a
-    // table; it is dead, and so unmaterialized, in the passes without a seam.
-    let interleaved: [usize; N] =
-        core::array::from_fn(|i| reverse_row(rows.first + i * rows.step, row_bits) * batch * 2);
+    // Staged rows are tile-local and affine like the plane rows; dead, and
+    // so unmaterialized, in the passes without a seam.
+    let staged_first = staging.first * staging.pitch;
+    let staged_step = rows.step * staging.pitch;
 
     let mut k = cols.start;
     while k + lanes <= cols.end {
         let mut x: [Pair<Vector<T, A>>; N] = core::array::from_fn(|i| {
             if SOURCE {
-                load_interleaved::<T, A>(source, interleaved[i] + 2 * k)
+                let at = staged_first + i * staged_step + 2 * (k - staging.first_column);
+                load_interleaved::<T, A>(source, at)
             } else {
                 let at = plane_first + i * plane_step + k;
                 (load::<T, A>(re, at), load::<T, A>(im, at))
@@ -447,8 +480,9 @@ fn pass<
         }
         let y = R::apply(x, twv);
         if SINK {
-            for (value, at) in y.into_iter().zip(interleaved) {
-                store_interleaved::<T, A>(value.0, value.1, sink, at + 2 * k);
+            for (i, value) in y.into_iter().enumerate() {
+                let at = staged_first + i * staged_step + 2 * (k - staging.first_column);
+                store_interleaved::<T, A>(value.0, value.1, sink, at);
             }
         } else {
             for (i, value) in y.into_iter().enumerate() {
@@ -466,10 +500,8 @@ fn pass<
     for k in k..cols.end {
         let mut x: [Pair<T>; N] = core::array::from_fn(|i| {
             if SOURCE {
-                (
-                    source[interleaved[i] + 2 * k],
-                    source[interleaved[i] + 2 * k + 1],
-                )
+                let at = staged_first + i * staged_step + 2 * (k - staging.first_column);
+                (source[at], source[at + 1])
             } else {
                 let at = plane_first + i * plane_step + k;
                 (re[at], im[at])
@@ -483,9 +515,10 @@ fn pass<
         }
         let y = R::apply(x, tw);
         if SINK {
-            for (value, at) in y.into_iter().zip(interleaved) {
-                sink[at + 2 * k] = value.0;
-                sink[at + 2 * k + 1] = value.1;
+            for (i, value) in y.into_iter().enumerate() {
+                let at = staged_first + i * staged_step + 2 * (k - staging.first_column);
+                sink[at] = value.0;
+                sink[at + 1] = value.1;
             }
         } else {
             for (i, value) in y.into_iter().enumerate() {
