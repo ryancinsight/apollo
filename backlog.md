@@ -228,6 +228,13 @@
 - **Acceptance:** either the tables on a line with the fold sweep's interval below the misaligned one at 16384 and 65536 in both precisions, or the effect measured below 2% and recorded.
 - **Dependencies:** none. **Verification:** `pinned_sections` with a table-lead mode; the fold table tests.
 
+<a id="apollo-planar-transpose-sixteen-lanes"></a>
+## APOLLO-PLANAR-TRANSPOSE-SIXTEEN-LANES — Let the planar transposes take the eight-wide pad at sixteen lanes [patch] [perf] — todo
+- **Evidence:** PR 369's landing run on a sixteen-lane host: `rectangular_transpose_matches_the_reference` reported the kernel declining 16x32, whose padded strides are 40 and 24; both transpose kernels guard `stride % lanes == 0` and address tiles by chunk index, and `ROW_PAD` is 8, so every planar transpose on an AVX-512 `f32` host runs the scalar fallback (correct, and the pass the vector tile was measured to halve, ADR 0057).
+- **Scope:** address tile rows by element offset rather than chunk index in `TransposePlanes` and `TransposePlanesInto` (the loads are unaligned already), dropping the stride guard to rows and columns; verify with the relabeled-transpose model at sixteen lanes and the scalar reference. Non-goals: changing `ROW_PAD`.
+- **Acceptance:** the transpose tests report the vector path handling every shape at every dispatched width; a sixteen-lane landing run green.
+- **Dependencies:** none. **Verification:** the transpose tests; the CI landing run on a sixteen-lane host.
+
 <a id="apollo-workspace-impulse-oracle-budget"></a>
 ## APOLLO-WORKSPACE-IMPULSE-ORACLE-BUDGET — Fit the workspace impulse oracle in the CI slow budget [patch] — todo
 - **Evidence:** `workspace_extents_preserve_the_impulse_spectrum` takes 3.6 s in the dev profile on the 285K host (2026-09-09, base of the 1M crossover), and the hosted runner is 13 to 17 times slower on compute-bound tests, so it sits past the 30 s slow bound in the `ci` profile; twelve transforms at 262144 dominate.

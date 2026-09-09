@@ -93,7 +93,8 @@ fn fold_tables_reproduce_the_twiddle_matrix_within_their_roundings() {
     let bound = 6.0 * f64::EPSILON;
     for row in 0..m {
         for col in 0..m {
-            let k = order.column(col);
+            // Memory column `col` sits at plane column `plane(col)`.
+            let k = order.plane(col);
             let (fine, coarse) = (row * lanes + k % lanes, row * (m / lanes) + k / lanes);
             let entry = Complex64::new(fold.fine_re[fine], fold.fine_im[fine])
                 * Complex64::new(fold.coarse_re[coarse], fold.coarse_im[coarse]);
@@ -125,7 +126,8 @@ fn compact_fold_tables_reproduce_the_twiddle_matrix_within_their_roundings() {
     let bound = 6.0 * f64::EPSILON;
     for row in 0..m {
         for col in 0..m {
-            let k = order.column(col);
+            // Memory column `col` sits at plane column `plane(col)`.
+            let k = order.plane(col);
             let (fine, coarse) = (row * lanes + k % lanes, row * (m / lanes) + k / lanes);
             let entry = Complex64::new(fold.fine_re[fine], fold.fine_im[fine])
                 * Complex64::new(fold.coarse_re[coarse], fold.coarse_im[coarse]);
@@ -532,9 +534,19 @@ where
             dst_im: &mut actual_im,
             dst_stride,
         });
-        assert!(handled, "a two-lane or wider backend handles {rows}x{cols}");
-        assert_eq!(actual_re, expected_re, "{rows}x{cols} re");
-        assert_eq!(actual_im, expected_im, "{rows}x{cols} im");
+        // The kernel takes a shape whose rows, columns and padded strides
+        // are lane multiples; a sixteen-lane width declines the eight-wide
+        // pad (`backlog.md#apollo-planar-transpose-sixteen-lanes`), and the
+        // scalar reference then stands alone.
+        let lanes = LaneOrder::for_batch::<T>(rows).lanes();
+        let divides = [rows, cols, src_stride, dst_stride]
+            .iter()
+            .all(|extent| extent % lanes == 0);
+        assert_eq!(handled, divides, "{rows}x{cols} at {lanes} lanes");
+        if handled {
+            assert_eq!(actual_re, expected_re, "{rows}x{cols} re");
+            assert_eq!(actual_im, expected_im, "{rows}x{cols} im");
+        }
     }
 }
 
