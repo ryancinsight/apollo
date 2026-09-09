@@ -226,7 +226,8 @@
 - **Outcome:** eight process runs of the section probe printing the fold tables' line offsets (`../../output/apollo-planar-rectangular/tables_*.txt`): the fold sweep at 16384 reads 24.9k to 25.4k cycles `f64` and 13.2k to 13.5k `f32` with the tables at 0, 16 or 48 bytes into a line, and the 65536 spread (126k to 138k) has no correlation with the offsets; one register load per row is too few to pay the split. The tables stay as allocated.
 
 <a id="apollo-planar-transpose-sixteen-lanes"></a>
-## APOLLO-PLANAR-TRANSPOSE-SIXTEEN-LANES — Let the planar transposes take the eight-wide pad at sixteen lanes [patch] [perf] — todo
+## APOLLO-PLANAR-TRANSPOSE-SIXTEEN-LANES — Let the planar transposes take the eight-wide pad at sixteen lanes [patch] [perf] — in-progress
+- **Integrator:** claude/fable; **last-update:** 2026-09-09; branch `perf/apollo-planar-transpose-sixteen-lanes` on lane `D:/atlas/worktrees/apollo-route`, stacked on PR #370; lease: claude/fable `components/batched/{boundary,tests}.rs` 2026-09-09T23:40Z.
 - **Evidence:** PR 369's landing run on a sixteen-lane host: `rectangular_transpose_matches_the_reference` reported the kernel declining 16x32, whose padded strides are 40 and 24; both transpose kernels guard `stride % lanes == 0` and address tiles by chunk index, and `ROW_PAD` is 8, so every planar transpose on an AVX-512 `f32` host runs the scalar fallback (correct, and the pass the vector tile was measured to halve, ADR 0057).
 - **Scope:** address tile rows by element offset rather than chunk index in `TransposePlanes` and `TransposePlanesInto` (the loads are unaligned already), dropping the stride guard to rows and columns; verify with the relabeled-transpose model at sixteen lanes and the scalar reference. Non-goals: changing `ROW_PAD`.
 - **Acceptance:** the transpose tests report the vector path handling every shape at every dispatched width; a sixteen-lane landing run green.

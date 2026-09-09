@@ -491,8 +491,14 @@ where
         + core::fmt::Debug,
 {
     // 24 rows: three eight-lane tiles, so the unpaired tile block runs.
-    for (rows, cols) in [(16usize, 32usize), (32, 64), (24, 40)] {
-        let (src_stride, dst_stride) = (cols + 8, rows + 8);
+    // The last shape pads by four, a stride no eight-lane width divides.
+    for (rows, cols, pad) in [
+        (16usize, 32usize, 8usize),
+        (32, 64, 8),
+        (24, 40, 8),
+        (32, 64, 4),
+    ] {
+        let (src_stride, dst_stride) = (cols + pad, rows + pad);
         let order = LaneOrder::for_batch::<T>(rows);
         let src_re: Vec<T> = (0..rows * src_stride)
             .map(|i| T::from_f64(i as f64 + 0.25))
@@ -534,14 +540,10 @@ where
             dst_im: &mut actual_im,
             dst_stride,
         });
-        // The kernel takes a shape whose rows, columns and padded strides
-        // are lane multiples; a sixteen-lane width declines the eight-wide
-        // pad (`backlog.md#apollo-planar-transpose-sixteen-lanes`), and the
-        // scalar reference then stands alone.
+        // The kernel takes a shape whose rows and columns are lane multiples,
+        // whatever the padded stride; otherwise the scalar reference stands alone.
         let lanes = LaneOrder::for_batch::<T>(rows).lanes();
-        let divides = [rows, cols, src_stride, dst_stride]
-            .iter()
-            .all(|extent| extent % lanes == 0);
+        let divides = [rows, cols].iter().all(|extent| extent % lanes == 0);
         assert_eq!(handled, divides, "{rows}x{cols} at {lanes} lanes");
         if handled {
             assert_eq!(actual_re, expected_re, "{rows}x{cols} re");
