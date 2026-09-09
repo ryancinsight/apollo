@@ -2126,7 +2126,10 @@ that three call sites had open-coded are named functions.
 **Where the remaining 2594 ns sits.** It is now two pieces, and neither is
 another pass to remove: the paired deinterleave writes four plane streams
 where the square route writes two, and the combine reads two planes to
-write one array. Both are the minimum work for a decimation in this layout.
+write one array. Both are the minimum passes for a decimation in this
+layout, but not the minimum work: the paired deinterleave ran scalar with a
+column lookup per element, and its vector form (2026-09-09, ADR 0054's
+revision note) halved it in `f64` and cut it 3.6 times in `f32`.
 Getting past it means not decimating at all — the rectangular four-step,
 recorded against [the standing measurement](#reference-standing) as the
 follow-on and still blocked on re-deriving the symmetric-twiddle identity

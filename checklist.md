@@ -7,11 +7,8 @@
 - [x] [Seam lane order](backlog.md#apollo-planar-seam-lane-order): hermes in-lane unpack landed (PR 161); plane layout, seams, transpose and combine on the lane (`3adf12b1`).
 - [x] [Seam lane order](backlog.md#apollo-planar-seam-lane-order): paired measurement, ADR 0057 Accepted, board updated.
 - [x] [Seam lane order](backlog.md#apollo-planar-seam-lane-order): PR 357 merged; lease discharged.
-- [x] [Seam staging](backlog.md#apollo-planar-seam-staging): sink staged, source kept direct on measurement, ADR 0058 Accepted.
-- [x] [Seam staging](backlog.md#apollo-planar-seam-staging): PR 360 merged; lease discharged.
-- [x] [Compact fold](backlog.md#apollo-four-step-compact-fold): two-level table from 2^18, ADR 0059 Accepted.
-- [ ] [Compact fold](backlog.md#apollo-four-step-compact-fold): PR enqueued; merged, lease discharged.
-- [ ] [1M crossover](backlog.md#apollo-n1m-planar-crossover): gates green, PR opened behind PR 361; merged, lease discharged.
+- [ ] [Split decimation](backlog.md#apollo-planar-split-vector-deint): PR enqueued; merged, lease discharged.
+- [ ] [Split seam fusion](backlog.md#apollo-planar-split-seam-fusion): claim after the decimation lands; decimated source seam first, combine sink second, each measured against the decimation build.
 
 ## codex/root — current execution
 
