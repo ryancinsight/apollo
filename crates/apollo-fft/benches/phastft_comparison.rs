@@ -51,7 +51,10 @@
 use std::hint::black_box;
 use std::time::{Duration, Instant};
 
-use apollo_bench::{BenchmarkCase, BenchmarkConfig, BenchmarkMode, BenchmarkSuite};
+use apollo_bench::{
+    bind_measurement_processor, BenchmarkCase, BenchmarkConfig, BenchmarkError, BenchmarkMode,
+    BenchmarkSuite,
+};
 use eunomia::{Complex32, Complex64};
 use phastft::planner::{Direction, PlannerDit32, PlannerDit64};
 use phastft::{fft_f32_dit_with_planner, fft_f64_dit_with_planner};
@@ -172,7 +175,11 @@ fn bench_size(suite: &mut BenchmarkSuite, config: BenchmarkConfig, len: usize) {
     );
 }
 
-fn main() -> Result<(), apollo_bench::BenchmarkModeError> {
+fn main() -> Result<(), BenchmarkError> {
+    // Pinned like the other comparisons: unpinned, the numbers are a
+    // scheduler blend of the two core classes.
+    let processor = bind_measurement_processor()?;
+    eprintln!("phastft_comparison: {}", processor.describe());
     let started = Instant::now();
     let mode = BenchmarkMode::from_environment()?;
 
