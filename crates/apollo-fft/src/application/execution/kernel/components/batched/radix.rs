@@ -22,7 +22,7 @@ use core::ops::{Add, Mul, Sub};
 
 use hermes_simd::{LaneScalar, SimdArch, SimdKernel, SimdStorage, Vector};
 
-use super::{load, load_interleaved, store, store_interleaved};
+use super::{load, load_interleaved, reverse_row, store, store_interleaved};
 
 /// One lane of butterfly arithmetic: a SIMD vector or a scalar element.
 pub(crate) trait Lane:
@@ -238,10 +238,10 @@ pub(super) struct Columns {
     pub(super) end: usize,
 }
 
-/// A staged seam block addressed by tile-local row.
+/// A staged sink block addressed by tile-local row.
 ///
-/// The interleaved source and sink of the seam sweeps move one tile block
-/// at a time through a contiguous buffer (see [`super::sweep`]): tile row
+/// The sink writes one tile block at a time into a contiguous buffer (see
+/// [`super::sweep`]): tile row
 /// `r` starts `r * pitch` reals in, and batch column `k` sits
 /// `2 * (k - first_column)` reals further. The row set's first row is tile
 /// row `first`, and its rows are [`Rows::step`] tile rows apart, the same
@@ -265,7 +265,7 @@ impl Staging {
 /// Where a pass reads its rows and where it writes them.
 ///
 /// Exactly the combinations the two stage sets produce: the time-decimated
-/// set reads the staged source block on its first pass and the planes
+/// set reads the caller's interleaved rows on its first pass and the planes
 /// otherwise; the frequency-decimated set folds the four-step twiddle on its
 /// first pass, writes the staged sink block on its last, and both when the
 /// two coincide. Each variant selects a monomorphized pass whose row loop
@@ -274,8 +274,8 @@ impl Staging {
 pub(super) enum Seams<'a, 'b, T> {
     /// Planes in, planes out.
     Planes,
-    /// Staged interleaved rows in.
-    Source(&'a [T], Staging),
+    /// Interleaved rows in, `rows` bits wide; plane row `p` reads row `rev(p)`.
+    Source(&'a [T], u32),
     /// Planes in with the four-step twiddle planes multiplied into the loads.
     Fold((&'a [T], &'a [T])),
     /// Planes in, staged interleaved rows out.
@@ -299,9 +299,9 @@ impl<'a, 'b, T> Seams<'a, 'b, T> {
     }
 
     /// The time-decimated set's seams for one pass.
-    pub(super) fn time(source: Option<(&'a [T], Staging)>) -> Self {
-        source.map_or(Self::Planes, |(source, staging)| {
-            Self::Source(source, staging)
+    pub(super) fn time(source: Option<(&'a [T], u32)>) -> Self {
+        source.map_or(Self::Planes, |(source, row_bits)| {
+            Self::Source(source, row_bits)
         })
     }
 }
@@ -311,8 +311,9 @@ impl<'a, 'b, T> Seams<'a, 'b, T> {
 ///
 /// `tw` holds the scalar twiddles for the remainder and `twv` their lane
 /// splats for the vector loop. The caller has bounded every row of `rows` by
-/// the plane extent, `cols` by the batch and the staged rows by the staging
-/// buffer, which is what the unchecked loads and stores rely on.
+/// the plane extent, `cols` by the batch, the source rows by the caller's
+/// buffer and the staged rows by the staging buffer, which is what the
+/// unchecked loads and stores rely on.
 #[expect(
     clippy::inline_always,
     reason = "the driver must fold into the dispatcher's target-feature scope with the kernel that calls it"
@@ -350,10 +351,11 @@ pub(super) fn butterfly_rows<T, A, R, const N: usize, const NT: usize>(
             twv,
             none,
             &[],
+            0,
             &mut [],
             Staging::NONE,
         ),
-        Seams::Source(source, staging) => pass::<T, A, R, N, NT, true, false, false>(
+        Seams::Source(source, row_bits) => pass::<T, A, R, N, NT, true, false, false>(
             re,
             im,
             rows,
@@ -364,8 +366,9 @@ pub(super) fn butterfly_rows<T, A, R, const N: usize, const NT: usize>(
             twv,
             none,
             source,
+            row_bits,
             &mut [],
-            staging,
+            Staging::NONE,
         ),
         Seams::Fold(fold) => pass::<T, A, R, N, NT, false, true, false>(
             re,
@@ -378,6 +381,7 @@ pub(super) fn butterfly_rows<T, A, R, const N: usize, const NT: usize>(
             twv,
             fold,
             &[],
+            0,
             &mut [],
             Staging::NONE,
         ),
@@ -392,6 +396,7 @@ pub(super) fn butterfly_rows<T, A, R, const N: usize, const NT: usize>(
             twv,
             none,
             &[],
+            0,
             sink,
             staging,
         ),
@@ -406,6 +411,7 @@ pub(super) fn butterfly_rows<T, A, R, const N: usize, const NT: usize>(
             twv,
             fold,
             &[],
+            0,
             sink,
             staging,
         ),
@@ -443,6 +449,7 @@ fn pass<
     twv: &[Pair<Vector<T, A>>; NT],
     fold: (&[T], &[T]),
     source: &[T],
+    source_bits: u32,
     sink: &mut [T],
     staging: Staging,
 ) where
@@ -455,17 +462,19 @@ fn pass<
     let plane_step = rows.step * stride;
     let fold_first = rows.first * batch;
     let fold_step = rows.step * batch;
-    // Staged rows are tile-local and affine like the plane rows; dead, and
-    // so unmaterialized, in the passes without a seam.
+    // Staged sink rows are tile-local and affine like the plane rows; the
+    // bit-reversed source row map is not, so the source keeps a table. Both
+    // are dead, and so unmaterialized, in the passes without that seam.
     let staged_first = staging.first * staging.pitch;
     let staged_step = rows.step * staging.pitch;
+    let source_rows: [usize; N] =
+        core::array::from_fn(|i| reverse_row(rows.first + i * rows.step, source_bits) * batch * 2);
 
     let mut k = cols.start;
     while k + lanes <= cols.end {
         let mut x: [Pair<Vector<T, A>>; N] = core::array::from_fn(|i| {
             if SOURCE {
-                let at = staged_first + i * staged_step + 2 * (k - staging.first_column);
-                load_interleaved::<T, A>(source, at)
+                load_interleaved::<T, A>(source, source_rows[i] + 2 * k)
             } else {
                 let at = plane_first + i * plane_step + k;
                 (load::<T, A>(re, at), load::<T, A>(im, at))
@@ -500,7 +509,7 @@ fn pass<
     for k in k..cols.end {
         let mut x: [Pair<T>; N] = core::array::from_fn(|i| {
             if SOURCE {
-                let at = staged_first + i * staged_step + 2 * (k - staging.first_column);
+                let at = source_rows[i] + 2 * k;
                 (source[at], source[at + 1])
             } else {
                 let at = plane_first + i * plane_step + k;

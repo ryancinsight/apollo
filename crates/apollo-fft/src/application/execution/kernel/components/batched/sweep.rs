@@ -25,7 +25,7 @@
 //! set, and consecutive blocks continue the same row streams, which is what
 //! the prefetchers follow.
 //!
-//! ## Seam staging
+//! ## Sink staging
 //!
 //! The two seams read and write the caller's interleaved buffer in
 //! bit-reversed row order, and the sixteen rows of one tile are then `n`
@@ -33,12 +33,12 @@
 //! L1 sets and evict the tile between the sweep's passes whenever those
 //! sets hold it, which made the sink sweep's cost a function of where the
 //! caller's buffer sits against the planes (ADR 0057, 30k to 82k cycles at
-//! 16384 `f64`). Each seam therefore moves one tile block at a time through
-//! a contiguous staging buffer of [`STAGING_LEN`] complexes at the end of the
-//! scratch: the source rows copy in before the first pass reads them, and
-//! the last pass writes the sink rows there for a copy out afterwards. The
-//! copies are sequential moves, the staged block spreads over every set,
-//! and the seam pass addresses rows by their tile-local index.
+//! 16384 `f64`). The sink therefore writes one tile block at a time into a
+//! contiguous staging buffer of [`STAGING_LEN`] complexes at the end of the
+//! scratch, and the block's rows copy out afterwards, one sequential row
+//! move each, once the tile is dead. The source keeps its direct loads: its
+//! four rows abreast are four streams in flight, and every staged form of
+//! it measured slower (ADR 0058).
 //!
 //! ## Tile geometry
 //!
@@ -106,45 +106,14 @@ fn spread(q: usize, at: u32, width: u32) -> usize {
     low | (high << (at + width))
 }
 
-/// The caller's row and the staging offset of tile row `r` of one block:
-/// tile row `r` is caller row `rev(base + r)`, whose `batch` complexes start
-/// `row * batch * 2` reals in, and the block spans batch columns `block`.
-fn block_rows(
-    rows: usize,
-    base: usize,
-    batch: usize,
-    block: Columns,
-    pitch: usize,
-) -> impl Iterator<Item = (usize, usize, usize)> {
-    let width = 2 * (block.end - block.start);
-    let row_bits = batch.trailing_zeros();
-    (0..rows).map(move |r| {
-        let at = reverse_row(base + r, row_bits) * batch * 2 + 2 * block.start;
-        (r * pitch, at, width)
-    })
-}
-
-/// Copies one block of source rows into the staging buffer.
-#[expect(
-    clippy::inline_always,
-    reason = "must fold into the stage set's target-feature scope with the sweep that calls it"
-)]
-#[inline(always)]
-fn stage_in<T: Copy>(
-    source: &[T],
-    staging: &mut [T],
-    rows: usize,
-    base: usize,
-    batch: usize,
-    block: Columns,
-    pitch: usize,
-) {
-    for (staged, at, width) in block_rows(rows, base, batch, block, pitch) {
-        staging[staged..staged + width].copy_from_slice(&source[at..at + width]);
-    }
-}
-
-/// Copies one block of staged rows out to the sink.
+/// Copies one block of staged rows out to the sink, one row at a time.
+///
+/// Tile row `r` is caller row `rev(base + r)`, whose `batch` complexes start
+/// `row * batch * 2` reals in; the block spans batch columns `block`, and
+/// staged row `r` starts `r * pitch` reals in. Each row is one sequential
+/// move: the caller's rows share a page offset, so rows moved abreast alias
+/// one another's stores through the page-offset check and measured far
+/// slower than one row after another (ADR 0058).
 #[expect(
     clippy::inline_always,
     reason = "must fold into the stage set's target-feature scope with the sweep that calls it"
@@ -159,16 +128,18 @@ fn stage_out<T: Copy>(
     block: Columns,
     pitch: usize,
 ) {
-    for (staged, at, width) in block_rows(rows, base, batch, block, pitch) {
-        sink[at..at + width].copy_from_slice(&staging[staged..staged + width]);
+    let width = 2 * (block.end - block.start);
+    let row_bits = batch.trailing_zeros();
+    for r in 0..rows {
+        let at = reverse_row(base + r, row_bits) * batch * 2 + 2 * block.start;
+        sink[at..at + width].copy_from_slice(&staging[r * pitch..r * pitch + width]);
     }
 }
 
 /// One time-decimated sweep over stages `l0 << p` for `p < stages`.
 ///
 /// `source` is read by the pass over stage 2 when that stage is in this
-/// sweep, which is the one pass that loads every element exactly once; its
-/// rows stage through `staging` one block at a time.
+/// sweep, which is the one pass that loads every element exactly once.
 #[expect(
     clippy::inline_always,
     reason = "must fold into the stage set's target-feature scope with the driver it calls"
@@ -183,7 +154,6 @@ pub(super) fn sweep_time<T, A>(
     im: &mut [T],
     tw: &[Pair<T>],
     source: Option<&[T]>,
-    staging: &mut [T],
     batch: usize,
     stride: usize,
     len: usize,
@@ -200,17 +170,12 @@ pub(super) fn sweep_time<T, A>(
     let span = tile_rows * step0;
     let groups = len / span;
     let cols = block_columns::<T>(tile_rows, lanes, batch);
-    let pitch = 2 * cols;
     let splat = |(wr, wi): Pair<T>| (simd.splat(wr), simd.splat(wi));
-    // The source rides the sweep over stage 2, whose tiles are consecutive
-    // rows: a row's tile-local index is its distance from the base.
-    let source = source.filter(|_| l0 == 2);
-    if source.is_some() {
-        assert!(
-            staging.len() >= tile_rows * pitch,
-            "invariant: the staging buffer holds one tile block"
-        );
-    }
+    // The source rides the sweep over stage 2; its rows are read in
+    // bit-reversed order straight from the caller's buffer.
+    let source = source
+        .filter(|_| l0 == 2)
+        .map(|source| (source, len.trailing_zeros()));
 
     for j in 0..step0 {
         for g in 0..groups {
@@ -221,9 +186,6 @@ pub(super) fn sweep_time<T, A>(
                     start,
                     end: (start + cols).min(batch),
                 };
-                if let Some(source) = source {
-                    stage_in(source, staging, tile_rows, base, batch, block, pitch);
-                }
                 let mut o = 0;
                 while o + 2 <= stages {
                     let l = l0 << o;
@@ -238,11 +200,6 @@ pub(super) fn sweep_time<T, A>(
                             first: base + i0 * step0,
                             step: step0 << o,
                         };
-                        let staged = Staging {
-                            first: i0,
-                            pitch,
-                            first_column: block.start,
-                        };
                         butterfly_rows::<T, A, Dit4, 4, 3>(
                             re,
                             im,
@@ -252,9 +209,7 @@ pub(super) fn sweep_time<T, A>(
                             block,
                             &tws,
                             &twv,
-                            Seams::time(
-                                (source.is_some() && l == 2).then_some((&*staging, staged)),
-                            ),
+                            Seams::time(source.filter(|_| l == 2)),
                         );
                     }
                     o += 2;
@@ -272,11 +227,6 @@ pub(super) fn sweep_time<T, A>(
                             first: base + i0 * step0,
                             step: step0 << o,
                         };
-                        let staged = Staging {
-                            first: i0,
-                            pitch,
-                            first_column: block.start,
-                        };
                         butterfly_rows::<T, A, Dit2, 2, 1>(
                             re,
                             im,
@@ -286,9 +236,7 @@ pub(super) fn sweep_time<T, A>(
                             block,
                             &tws,
                             &twv,
-                            Seams::time(
-                                (source.is_some() && l == 2).then_some((&*staging, staged)),
-                            ),
+                            Seams::time(source.filter(|_| l == 2)),
                         );
                     }
                 }

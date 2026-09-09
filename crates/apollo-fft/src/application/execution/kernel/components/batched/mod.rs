@@ -127,9 +127,6 @@ struct BatchedStages<'a, T> {
     /// loads every element exactly once, and two interleaved vector loads
     /// plus one register deinterleave replace the two plane loads.
     source: Option<&'a [T]>,
-    /// One tile block of interleaved rows for the source, as reals:
-    /// [`sweep::STAGING_LEN`] complexes at the end of the scratch.
-    staging: &'a mut [T],
     /// Live columns per row — the loop bound.
     batch: usize,
     /// Elements per row including [`ROW_PAD`] — the index multiplier.
@@ -154,7 +151,6 @@ where
             im,
             tw,
             source,
-            staging,
             batch: b,
             stride: s,
             len,
@@ -170,7 +166,7 @@ where
         let mut l0 = 2usize;
         for (index, stages) in sweep::sweep_lengths(len.trailing_zeros()).enumerate() {
             sect!(TIME_SWEEPS[index], {
-                sweep::sweep_time(re, im, tw, source, staging, b, s, len, l0, stages, simd);
+                sweep::sweep_time(re, im, tw, source, b, s, len, l0, stages, simd);
             });
             l0 <<= stages;
         }
@@ -393,7 +389,6 @@ fn run_batched<T>(
     im: &mut [T],
     plan: &BatchedPlan<T>,
     source: Option<&[T]>,
-    staging: &mut [T],
     batch: usize,
     stride: usize,
 ) where
@@ -404,7 +399,6 @@ fn run_batched<T>(
         im,
         tw: &plan.tw,
         source,
-        staging,
         batch,
         stride,
         len: plan.len,
@@ -624,7 +618,7 @@ fn planar_stages<T, const INVERSE: bool>(
     //    already batch-major for this direction, so no transpose is needed.
     let plan = T::cached_plan::<INVERSE>(m);
     sect!("stages1", {
-        run_batched(re, im, plan.as_ref(), seams.as_deref(), staging, m, stride)
+        run_batched(re, im, plan.as_ref(), seams.as_deref(), m, stride)
     });
 
     // 2. Transpose so the second axis becomes batch-major. Pure exchange:
