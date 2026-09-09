@@ -165,6 +165,14 @@
 - **Acceptance:** the batched, lane-order, split, Bluestein and four-step suites green locally with the AVX-512 orders exercised; main green on the next AVX-512 landing run.
 - **Dependencies:** none. **Verification:** `cargo nextest run -p apollo-fft`; the CI landing run.
 
+<a id="apollo-planar-split-vector-deint"></a>
+## APOLLO-PLANAR-SPLIT-VECTOR-DEINT — Vectorize the odd-power decimation into the planes [patch] [perf] — in-progress
+- **Integrator:** claude/fable; **last-update:** 2026-09-09; branch `perf/apollo-planar-split-deint` on lane `D:/atlas/worktrees/apollo-route`, stacked on PR #362; lease: claude/fable `components/batched/boundary.rs`, `components/batched/mod.rs` (`four_step_split_batched`), `components/batched/tests.rs` 2026-09-09T20:40Z; parent [beat the references](#atlas-apollo-beat-the-references).
+- **Evidence:** `rustfft_comparison` pinned (`../../output/apollo-n1m-crossover/r1024_base*.txt`): odd powers trail RustFFT where the even powers beside them are level or ahead, 2048 `f64` 4.6 against 3.0 µs and `f32` 2.9 against 1.4, 32768 `f32` 50 against 38; `pinned_sections` attributes 25 to 28% of the split to `deint` and 23% to `combine` at 2048 and 8192 `f64`. `deinterleave_decimated_rows` is scalar with a per-element column lookup while every other seam is vectorized.
+- **Scope:** a `LaneKernel` for the decimation through `hermes_simd::vectorize` — `deinterleave_pairs` splits the complex pairs, `deinterleave_sublanes` the reals, so the registers land in the plane column order with natural stores — with the scalar form as the fallback below two lanes. Non-goals: fusing the decimation or the combine into the stage sets (the next item if the seams still dominate).
+- **Acceptance:** vector and scalar decimations agree bitwise on random rows in both precisions; the split suites unchanged; `pinned_sections` `deint` at 2048, 8192 and 32768 below the scalar form with disjoint intervals in both precisions; `rustfft_comparison` 2048 and 32768 apollo intervals below the base in both precisions.
+- **Dependencies:** none. **Verification:** batched, workspace, split, Bluestein and real-half suites; `pinned_sections`; `rustfft_comparison` counterbalanced.
+
 <a id="apollo-workspace-impulse-oracle-budget"></a>
 ## APOLLO-WORKSPACE-IMPULSE-ORACLE-BUDGET — Fit the workspace impulse oracle in the CI slow budget [patch] — todo
 - **Evidence:** `workspace_extents_preserve_the_impulse_spectrum` takes 3.6 s in the dev profile on the 285K host (2026-09-09, base of the 1M crossover), and the hosted runner is 13 to 17 times slower on compute-bound tests, so it sits past the 30 s slow bound in the `ci` profile; twelve transforms at 262144 dominate.
