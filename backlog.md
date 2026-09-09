@@ -131,6 +131,33 @@
   internal symbol table, so absence is not evidence. Attribute from emitted asm
   or an attributed-size tool instead.
 - **Dependencies:** [PR 338](https://github.com/ryancinsight/apollo/pull/338) lands as `2ac33b95`; preserve both original locks during source reconciliation.
+
+<a id="apollo-codegen-clause-evidence"></a>
+## APOLLO-CODEGEN-CLAUSE-EVIDENCE — Acceptance clauses about emitted code now have an instrument [patch] — in-progress
+
+- **The gap.** Items here routinely accept on "no attributed code-size growth",
+  "no added production scratch", or "unchanged at the fused specialization". No
+  committed gate produces that evidence and none can: CI runs fmt, the safety
+  ratchet, clippy, nextest and a bench *smoke*, while benchmarks and codegen
+  inspection are local instruments by policy. So each such clause silently
+  depends on the author attaching a local measurement, and `gap_audit.md`
+  already records two escapes of exactly this class.
+- **Closed half.** `scripts/codegen_attribution.py` makes the measurement a
+  command: `compare <base.s> <change.s> [symbol]` reports per-symbol
+  instruction deltas and whether the bodies are byte-identical, exiting
+  non-zero when they are not. Its docstring carries the two traps that cost a
+  session — a proc-macro reused across exports under the shared target dir,
+  and grepping a release PE for a symbol MSVC never emits a table for.
+  First use: the composite schedule refactor, 566 and 718 instructions either
+  side, all four monomorphizations byte-identical.
+- **Open half.** Existing items carrying such a clause cite no measurement.
+  Burn down on touch rather than in a sweep: when an item with a codegen,
+  size or scratch clause is next worked, either attach the attribution output
+  or restate the clause as something the committed gates actually establish.
+- **Non-goals.** A CI job for this. Shared-runner codegen comparison is not
+  evidence, and the bench-smoke boundary stays where it is.
+- **Risk / change class:** [patch].
+
 <a id="apollo-twiddless-fft-evaluation"></a>
 ## APOLLO-TWIDDLESS-FFT-EVALUATION — Measure the twiddless FFT against its butterfly isomorph [patch] — done 2026-09-08
 - **Outcome:** [ADR 0052](docs/adr/0052-twiddless-fft-evaluation.md) Rejected: 2.4 to 10.7 times slower than the plan at every length but 65536; PR #349 merged 2026-09-08.
