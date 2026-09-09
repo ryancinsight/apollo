@@ -20,9 +20,9 @@
 
 use core::ops::{Add, Mul, Sub};
 
-use hermes_simd::{LaneScalar, SimdArch, SimdKernel, SimdStorage, Vector};
+use hermes_simd::{LaneScalar, Simd, SimdArch, SimdKernel, SimdStorage, Vector};
 
-use super::{load, load_interleaved, reverse_row, store, store_interleaved};
+use super::{load, load_interleaved, reverse_row, store, store_interleaved, FourStepFold};
 
 /// One lane of butterfly arithmetic: a SIMD vector or a scalar element.
 pub(crate) trait Lane:
@@ -277,18 +277,18 @@ pub(super) enum Seams<'a, 'b, T> {
     Planes,
     /// Interleaved rows in, `rows` bits wide; plane row `p` reads row `rev(p)`.
     Source(&'a [T], u32),
-    /// Planes in with the four-step twiddle planes multiplied into the loads.
-    Fold((&'a [T], &'a [T])),
+    /// Planes in with the four-step twiddle tables multiplied into the loads.
+    Fold(&'a FourStepFold<T>),
     /// Planes in, interleaved rows out, staged or direct.
     Sink(&'b mut [T], SinkRows),
     /// Folded loads and sink stores in one pass.
-    FoldSink((&'a [T], &'a [T]), &'b mut [T], SinkRows),
+    FoldSink(&'a FourStepFold<T>, &'b mut [T], SinkRows),
 }
 
 impl<'a, 'b, T> Seams<'a, 'b, T> {
     /// The frequency-decimated set's seams for one pass.
     pub(super) fn frequency(
-        fold: Option<(&'a [T], &'a [T])>,
+        fold: Option<&'a FourStepFold<T>>,
         sink: Option<(&'b mut [T], SinkRows)>,
     ) -> Self {
         match (fold, sink) {
@@ -333,15 +333,15 @@ pub(super) fn butterfly_rows<T, A, R, const N: usize, const NT: usize>(
     cols: Columns,
     tw: &[Pair<T>; NT],
     twv: &[Pair<Vector<T, A>>; NT],
+    simd: Simd<T, A>,
     seams: Seams<'_, '_, T>,
 ) where
     T: LaneScalar + Lane,
     A: SimdArch + SimdKernel<T>,
     R: Radix<N, NT>,
 {
-    let none: (&[T], &[T]) = (&[], &[]);
     match seams {
-        Seams::Planes => pass::<T, A, R, N, NT, false, false, false>(
+        Seams::Planes => pass::<T, A, R, N, NT, false, false, false, false>(
             re,
             im,
             rows,
@@ -350,13 +350,14 @@ pub(super) fn butterfly_rows<T, A, R, const N: usize, const NT: usize>(
             cols,
             tw,
             twv,
-            none,
+            simd,
+            None,
             &[],
             0,
             &mut [],
             SinkRows::NONE,
         ),
-        Seams::Source(source, row_bits) => pass::<T, A, R, N, NT, true, false, false>(
+        Seams::Source(source, row_bits) => pass::<T, A, R, N, NT, true, false, false, false>(
             re,
             im,
             rows,
@@ -365,13 +366,53 @@ pub(super) fn butterfly_rows<T, A, R, const N: usize, const NT: usize>(
             cols,
             tw,
             twv,
-            none,
+            simd,
+            None,
             source,
             row_bits,
             &mut [],
             SinkRows::NONE,
         ),
-        Seams::Fold(fold) => pass::<T, A, R, N, NT, false, true, false>(
+        Seams::Fold(fold) => {
+            // The table's form is fixed per length (`COMPACT_FOLD_MIN_LEN`),
+            // so each form is its own pass rather than a test in the row loop.
+            if fold.lanes == batch {
+                pass::<T, A, R, N, NT, false, true, false, false>(
+                    re,
+                    im,
+                    rows,
+                    stride,
+                    batch,
+                    cols,
+                    tw,
+                    twv,
+                    simd,
+                    Some(fold),
+                    &[],
+                    0,
+                    &mut [],
+                    SinkRows::NONE,
+                )
+            } else {
+                pass::<T, A, R, N, NT, false, true, true, false>(
+                    re,
+                    im,
+                    rows,
+                    stride,
+                    batch,
+                    cols,
+                    tw,
+                    twv,
+                    simd,
+                    Some(fold),
+                    &[],
+                    0,
+                    &mut [],
+                    SinkRows::NONE,
+                )
+            }
+        }
+        Seams::Sink(sink, staging) => pass::<T, A, R, N, NT, false, false, false, true>(
             re,
             im,
             rows,
@@ -380,42 +421,52 @@ pub(super) fn butterfly_rows<T, A, R, const N: usize, const NT: usize>(
             cols,
             tw,
             twv,
-            fold,
-            &[],
-            0,
-            &mut [],
-            SinkRows::NONE,
-        ),
-        Seams::Sink(sink, staging) => pass::<T, A, R, N, NT, false, false, true>(
-            re,
-            im,
-            rows,
-            stride,
-            batch,
-            cols,
-            tw,
-            twv,
-            none,
+            simd,
+            None,
             &[],
             0,
             sink,
             staging,
         ),
-        Seams::FoldSink(fold, sink, staging) => pass::<T, A, R, N, NT, false, true, true>(
-            re,
-            im,
-            rows,
-            stride,
-            batch,
-            cols,
-            tw,
-            twv,
-            fold,
-            &[],
-            0,
-            sink,
-            staging,
-        ),
+        Seams::FoldSink(fold, sink, staging) => {
+            // The table's form is fixed per length (`COMPACT_FOLD_MIN_LEN`),
+            // so each form is its own pass rather than a test in the row loop.
+            if fold.lanes == batch {
+                pass::<T, A, R, N, NT, false, true, false, true>(
+                    re,
+                    im,
+                    rows,
+                    stride,
+                    batch,
+                    cols,
+                    tw,
+                    twv,
+                    simd,
+                    Some(fold),
+                    &[],
+                    0,
+                    sink,
+                    staging,
+                )
+            } else {
+                pass::<T, A, R, N, NT, false, true, true, true>(
+                    re,
+                    im,
+                    rows,
+                    stride,
+                    batch,
+                    cols,
+                    tw,
+                    twv,
+                    simd,
+                    Some(fold),
+                    &[],
+                    0,
+                    sink,
+                    staging,
+                )
+            }
+        }
     }
 }
 
@@ -438,6 +489,7 @@ fn pass<
     const NT: usize,
     const SOURCE: bool,
     const FOLD: bool,
+    const COMPACT: bool,
     const SINK: bool,
 >(
     re: &mut [T],
@@ -448,7 +500,8 @@ fn pass<
     cols: Columns,
     tw: &[Pair<T>; NT],
     twv: &[Pair<Vector<T, A>>; NT],
-    fold: (&[T], &[T]),
+    simd: Simd<T, A>,
+    fold: Option<&FourStepFold<T>>,
     source: &[T],
     source_bits: u32,
     sink: &mut [T],
@@ -461,8 +514,14 @@ fn pass<
     let lanes = <A as SimdStorage<T>>::LANE_COUNT;
     let plane_first = rows.first * stride;
     let plane_step = rows.step * stride;
-    let fold_first = rows.first * batch;
-    let fold_step = rows.step * batch;
+    // The fold's fine table is one row of `lanes` per data row and its
+    // coarse table one scalar per data row and lane group; both index by
+    // the plane row, which is the data row for the set that folds.
+    let fold_lanes = fold.map_or(1, |fold| fold.lanes);
+    let fold_groups = batch / fold_lanes;
+    // Both fold tables index by the plane row, affinely like the planes.
+    let (fine_first, fine_step) = (rows.first * fold_lanes, rows.step * fold_lanes);
+    let (coarse_first, coarse_step) = (rows.first * fold_groups, rows.step * fold_groups);
     // The seam rows keep tables: the bit-reversed row map is not affine, and
     // the sink's is chosen at run time. Both are dead, and so unmaterialized,
     // in the passes without that seam. A sink row's column `k` sits
@@ -495,10 +554,32 @@ fn pass<
             }
         });
         if FOLD {
+            let fold = fold.expect("invariant: a folding pass carries its tables");
             for (i, value) in x.iter_mut().enumerate() {
-                let at = fold_first + i * fold_step + k;
-                let w = (load::<T, A>(fold.0, at), load::<T, A>(fold.1, at));
-                *value = cmul(*value, w);
+                let fine = fine_first + i * fine_step;
+                let coarse = coarse_first + i * coarse_step;
+                // The fine row is the whole twiddle row below the compact
+                // bound; above it one register of it per lane group, times
+                // the group's coarse twiddle broadcast.
+                if COMPACT {
+                    let fine = (
+                        load::<T, A>(&fold.fine_re, fine),
+                        load::<T, A>(&fold.fine_im, fine),
+                    );
+                    let group = coarse + k / fold_lanes;
+                    let coarse = (
+                        simd.splat(fold.coarse_re[group]),
+                        simd.splat(fold.coarse_im[group]),
+                    );
+                    *value = cmul(*value, cmul(fine, coarse));
+                } else {
+                    let at = fine + k;
+                    let w = (
+                        load::<T, A>(&fold.fine_re, at),
+                        load::<T, A>(&fold.fine_im, at),
+                    );
+                    *value = cmul(*value, w);
+                }
             }
         }
         let y = R::apply(x, twv);
@@ -531,9 +612,17 @@ fn pass<
             }
         });
         if FOLD {
+            let fold = fold.expect("invariant: a folding pass carries its tables");
             for (i, value) in x.iter_mut().enumerate() {
-                let at = fold_first + i * fold_step + k;
-                *value = cmul(*value, (fold.0[at], fold.1[at]));
+                let fine = fine_first + i * fine_step;
+                let coarse = coarse_first + i * coarse_step;
+                let fine = fine + k % fold_lanes;
+                let group = coarse + k / fold_lanes;
+                let w = cmul(
+                    (fold.fine_re[fine], fold.fine_im[fine]),
+                    (fold.coarse_re[group], fold.coarse_im[group]),
+                );
+                *value = cmul(*value, w);
             }
         }
         let y = R::apply(x, tw);

@@ -61,39 +61,70 @@ fn transpose_is_its_own_inverse_and_never_touches_the_pad() {
     }
 }
 
-/// The planes must match the interleaved matrix row for row.
+/// The two-level fold tables must reproduce the twiddle matrix entry for
+/// entry within the roundings the factoring adds.
 ///
-/// They were row-permuted while the stage set that folds them was decimated
-/// in time and so took bit-reversed input. That set is now decimated in
-/// frequency and takes natural order, so the planes follow the data rows
-/// (`gap_audit.md#planar-pass-attribution`). This asserts the layout the
-/// fold actually indexes; the transform-level oracles below assert that the
-/// pairing is right.
+/// Each factor is one direct evaluation within one ulp (`EPSILON`) of
+/// exact, as is the matrix entry it is held against; the product's two
+/// roundings per part add `2 EPSILON`, so the difference is within
+/// `5 EPSILON` (measured worst `4.03`); the bound is `6 EPSILON`. Rows are
+/// natural, columns in plane order, as the fold indexes them.
 #[test]
-fn four_step_planes_are_the_row_faithful_split_of_the_interleaved_matrix() {
+fn fold_tables_reproduce_the_twiddle_matrix_within_their_roundings() {
     use crate::application::execution::kernel::mixed_radix::MixedRadixScalar;
     let (n, m) = (256usize, 16usize);
-    let planes = <f64 as BatchedPlanCache>::cached_four_step_planes::<false>(n, m);
+    let fold = <f64 as BatchedPlanCache>::cached_four_step_fold::<false>(n, m);
     let interleaved = <f64 as MixedRadixScalar>::cached_four_step_twiddles::<false>(n, m, m);
     let order = LaneOrder::for_batch::<f64>(m);
+    let lanes = fold.lanes;
+    assert_eq!(
+        lanes, m,
+        "below the compact bound the fine row is the whole row"
+    );
+    let bound = 6.0 * f64::EPSILON;
     for row in 0..m {
         for col in 0..m {
-            // Plane column `order(col)` holds memory column `col`.
-            let at = row * m + order.column(col);
-            assert_eq!(
-                planes.re[at].to_bits(),
-                interleaved[row * m + col].re.to_bits(),
-                "re ({row},{col})"
-            );
-            assert_eq!(
-                planes.im[at].to_bits(),
-                interleaved[row * m + col].im.to_bits(),
-                "im ({row},{col})"
-            );
+            let k = order.column(col);
+            let (fine, coarse) = (row * lanes + k % lanes, row * (m / lanes) + k / lanes);
+            let entry = Complex64::new(fold.fine_re[fine], fold.fine_im[fine])
+                * Complex64::new(fold.coarse_re[coarse], fold.coarse_im[coarse]);
+            let exact = interleaved[row * m + col];
+            let err = (entry.re - exact.re).hypot(entry.im - exact.im);
+            assert!(err <= bound, "({row},{col}): {err:.3e} > {bound:.3e}");
         }
     }
-    let again = <f64 as BatchedPlanCache>::cached_four_step_planes::<false>(n, m);
-    assert!(std::sync::Arc::ptr_eq(&planes, &again), "planes must cache");
+    let again = <f64 as BatchedPlanCache>::cached_four_step_fold::<false>(n, m);
+    assert!(
+        std::sync::Arc::ptr_eq(&fold, &again),
+        "the fold tables must cache"
+    );
+}
+
+/// Above the compact bound the fine table is one lane group wide and the
+/// coarse table carries the rest; the same entry-for-entry agreement holds
+/// there, checked on the smallest compact length.
+#[test]
+fn compact_fold_tables_reproduce_the_twiddle_matrix_within_their_roundings() {
+    use crate::application::execution::kernel::mixed_radix::MixedRadixScalar;
+    let (n, m) = (1usize << 18, 512usize);
+    let order = LaneOrder::for_batch::<f64>(m);
+    let fold = super::FourStepFold::<f64>::new::<false>(n, m, order);
+    let interleaved = <f64 as MixedRadixScalar>::cached_four_step_twiddles::<false>(n, m, m);
+    let lanes = fold.lanes;
+    assert_eq!(lanes, order.lanes());
+    assert!(lanes < m, "the compact table has more than one lane group");
+    let bound = 6.0 * f64::EPSILON;
+    for row in 0..m {
+        for col in 0..m {
+            let k = order.column(col);
+            let (fine, coarse) = (row * lanes + k % lanes, row * (m / lanes) + k / lanes);
+            let entry = Complex64::new(fold.fine_re[fine], fold.fine_im[fine])
+                * Complex64::new(fold.coarse_re[coarse], fold.coarse_im[coarse]);
+            let exact = interleaved[row * m + col];
+            let err = (entry.re - exact.re).hypot(entry.im - exact.im);
+            assert!(err <= bound, "({row},{col}): {err:.3e} > {bound:.3e}");
+        }
+    }
 }
 
 /// Direct DFT, the analytical oracle for the assembled transform.
@@ -404,8 +435,8 @@ fn plans_are_cached_per_length_and_direction() {
 
 #[test]
 fn batched_plans_and_planes_are_shared_across_threads() {
-    // `FourStepPlanes` owns two `m x m` planes -- 16n bytes at `f64`, 262,144
-    // at n = 16,384, the largest length the planar route accepts. The caches
+    // `FourStepFold` owns two-level tables, `m (F + m / F)` pairs, and the
+    // caches
     // are keyed per thread; if a thread that misses builds its own table
     // instead of taking the shared one, that storage exists once per thread
     // that touches the length and nothing evicts it.
@@ -432,7 +463,7 @@ fn batched_plans_and_planes_are_shared_across_threads() {
     let planes_handles: Vec<_> = (0..2)
         .map(|_| {
             std::thread::spawn(|| {
-                <f64 as BatchedPlanCache>::cached_four_step_planes::<false>(LEN, HALF)
+                <f64 as BatchedPlanCache>::cached_four_step_fold::<false>(LEN, HALF)
             })
         })
         .collect();

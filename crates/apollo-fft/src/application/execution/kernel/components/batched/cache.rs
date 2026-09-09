@@ -1,6 +1,6 @@
 //! Shared immutable tables and bounded worker-local handles.
 
-use super::{BatchedPlan, FourStepPlanes};
+use super::{BatchedPlan, FourStepFold};
 use crate::application::execution::kernel::mixed_radix::MixedRadixScalar;
 use hermes_simd::LaneScalar;
 use parking_lot::RwLock;
@@ -44,26 +44,25 @@ impl<T> TableCache<T> {
 
 /// Process-wide plan storage behind the bounded per-thread handles.
 ///
-/// A `BatchedPlan` owns `len - 1` twiddle pairs and a `FourStepPlanes` owns two
-/// planes of `n` scalars, so each is O(16n) bytes at `f64` -- 4 MiB apiece at
-/// n = 262,144. The thread-local handles below are the lock-free fast path, but a
+/// A `BatchedPlan` owns `len - 1` twiddle pairs, O(16 sqrt(n)) bytes, and a
+/// `FourStepFold` its two-level tables, O(16 sqrt(n) (F + sqrt(n) / F)). The thread-local handles below are the lock-free fast path, but a
 /// miss used to *build* a private table, so retention multiplied by the worker
 /// count of whatever executor drives the transform. A miss now takes the shared
 /// table and replaces one directional handle, so every thread converges on
 /// one allocation without growing its own table index.
 type GlobalPlanCache<T> = LazyLock<RwLock<HashMap<(usize, bool), Arc<BatchedPlan<T>>>>>;
-type GlobalPlanesCache<T> = LazyLock<RwLock<HashMap<(usize, bool), Arc<FourStepPlanes<T>>>>>;
+type GlobalFoldCache<T> = LazyLock<RwLock<HashMap<(usize, bool), Arc<FourStepFold<T>>>>>;
 
 static PLAN_GLOBAL_F64: GlobalPlanCache<f64> = LazyLock::new(|| RwLock::new(HashMap::new()));
 static PLAN_GLOBAL_F32: GlobalPlanCache<f32> = LazyLock::new(|| RwLock::new(HashMap::new()));
-static PLANES_GLOBAL_F64: GlobalPlanesCache<f64> = LazyLock::new(|| RwLock::new(HashMap::new()));
-static PLANES_GLOBAL_F32: GlobalPlanesCache<f32> = LazyLock::new(|| RwLock::new(HashMap::new()));
+static FOLD_GLOBAL_F64: GlobalFoldCache<f64> = LazyLock::new(|| RwLock::new(HashMap::new()));
+static FOLD_GLOBAL_F32: GlobalFoldCache<f32> = LazyLock::new(|| RwLock::new(HashMap::new()));
 
 thread_local! {
     static PLAN_CACHE_F64: TableCache<BatchedPlan<f64>> = const { TableCache::new() };
     static PLAN_CACHE_F32: TableCache<BatchedPlan<f32>> = const { TableCache::new() };
-    static PLANES_CACHE_F64: TableCache<FourStepPlanes<f64>> = const { TableCache::new() };
-    static PLANES_CACHE_F32: TableCache<FourStepPlanes<f32>> = const { TableCache::new() };
+    static FOLD_CACHE_F64: TableCache<FourStepFold<f64>> = const { TableCache::new() };
+    static FOLD_CACHE_F32: TableCache<FourStepFold<f32>> = const { TableCache::new() };
 }
 
 /// Scalars whose batched plans are cached per thread.
@@ -71,10 +70,7 @@ pub(crate) trait BatchedPlanCache:
     MixedRadixScalar + LaneScalar + super::radix::Lane + eunomia::layout::Pod + Sized
 {
     fn cached_plan<const INVERSE: bool>(len: usize) -> Arc<BatchedPlan<Self>>;
-    fn cached_four_step_planes<const INVERSE: bool>(
-        n: usize,
-        m: usize,
-    ) -> Arc<FourStepPlanes<Self>>;
+    fn cached_four_step_fold<const INVERSE: bool>(n: usize, m: usize) -> Arc<FourStepFold<Self>>;
 }
 
 macro_rules! impl_plan_cache {
@@ -121,24 +117,24 @@ macro_rules! impl_plan_cache {
                 })
             }
 
-            fn cached_four_step_planes<const INVERSE: bool>(
+            fn cached_four_step_fold<const INVERSE: bool>(
                 n: usize,
                 m: usize,
-            ) -> Arc<FourStepPlanes<Self>> {
+            ) -> Arc<FourStepFold<Self>> {
                 #[cold]
                 #[inline(never)]
                 fn miss<const INVERSE: bool>(
                     key: (usize, bool),
                     n: usize,
                     m: usize,
-                ) -> Arc<FourStepPlanes<$t>> {
+                ) -> Arc<FourStepFold<$t>> {
                     let shared = $planes_global.read().get(&key).cloned();
                     if let Some(planes) = shared {
                         return planes;
                     }
                     let mut guard = $planes_global.write();
                     Arc::clone(guard.entry(key).or_insert_with(|| {
-                        Arc::new(FourStepPlanes::<$t>::new::<INVERSE>(
+                        Arc::new(FourStepFold::<$t>::new::<INVERSE>(
                             n,
                             m,
                             super::LaneOrder::for_batch::<$t>(m),
@@ -163,14 +159,14 @@ macro_rules! impl_plan_cache {
 impl_plan_cache!(
     f64,
     PLAN_CACHE_F64,
-    PLANES_CACHE_F64,
+    FOLD_CACHE_F64,
     PLAN_GLOBAL_F64,
-    PLANES_GLOBAL_F64
+    FOLD_GLOBAL_F64
 );
 impl_plan_cache!(
     f32,
     PLAN_CACHE_F32,
-    PLANES_CACHE_F32,
+    FOLD_CACHE_F32,
     PLAN_GLOBAL_F32,
-    PLANES_GLOBAL_F32
+    FOLD_GLOBAL_F32
 );

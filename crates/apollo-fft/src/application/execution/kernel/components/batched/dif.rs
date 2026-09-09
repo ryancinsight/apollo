@@ -30,6 +30,7 @@
 
 use super::radix::Lane;
 use super::sweep::{sweep_frequency, sweep_lengths_descending};
+use super::FourStepFold;
 use crate::application::execution::kernel::mixed_radix::MixedRadixScalar;
 use hermes_simd::{LaneKernel, LaneScalar, Simd, SimdArch, SimdKernel};
 
@@ -42,11 +43,10 @@ pub(super) struct BatchedStagesDif<'a, T> {
     pub(super) re: &'a mut [T],
     pub(super) im: &'a mut [T],
     pub(super) tw: &'a [(T, T)],
-    /// Planar four-step twiddles multiplied into the first stage's loads, or
-    /// `None`. Row-major with row stride `batch`, rows in the same *natural*
-    /// order the data rows now carry — the mirror of the bit-reversed planes
-    /// the decimation-in-time set required.
-    pub(super) fold: Option<(&'a [T], &'a [T])>,
+    /// The four-step twiddle tables multiplied into the first stage's loads,
+    /// or `None`; rows in the same natural order the data rows carry, the
+    /// mirror of the bit-reversed planes the decimation-in-time set required.
+    pub(super) fold: Option<&'a FourStepFold<T>>,
     /// Interleaved output written by the last pass in place of the planes,
     /// or `None` to leave the result in the planes. Rows of `batch`
     /// complexes as `2 * batch` reals; plane row `p` lands in output row

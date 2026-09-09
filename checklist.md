@@ -9,7 +9,8 @@
 - [x] [Seam lane order](backlog.md#apollo-planar-seam-lane-order): PR 357 merged; lease discharged.
 - [x] [Seam staging](backlog.md#apollo-planar-seam-staging): sink staged, source kept direct on measurement, ADR 0058 Accepted.
 - [ ] [Seam staging](backlog.md#apollo-planar-seam-staging): PR 360 enqueued; merged, lease discharged.
-- [ ] [Compact fold](backlog.md#apollo-four-step-compact-fold): two-level fold table, fold sweep measured at 16384 through 262144.
+- [x] [Compact fold](backlog.md#apollo-four-step-compact-fold): two-level table from 2^18, ADR 0059 Accepted.
+- [ ] [Compact fold](backlog.md#apollo-four-step-compact-fold): PR enqueued behind PR 360, merged, lease discharged.
 
 ## codex/root — current execution
 
