@@ -1,5 +1,112 @@
 # Apollo Backlog
 
+<a id="apollo-miri-schedule-split-coverage"></a>
+## APOLLO-MIRI-SCHEDULE-SPLIT-COVERAGE — Put the split schedule's scratch under a UB checker [patch] — todo
+
+- **Finding.** ADR 0051's soundness argument for the scheduled codelets is that
+  both branches invoke the phase closure exactly once and neither catches
+  unwind, so normal return implies scratch initialization completed before
+  `assume_init_mut`. That argument is structural and is pinned token-for-token
+  by `generated_phase_owns_callback_invocation`, but no UB checker executes the
+  `Split` path — and `Split` is `#[cfg(test)]`, so it exists precisely where a
+  checker would run.
+- **Why it matters here.** This codebase has already shipped one
+  reference-to-uninitialised-memory defect in these same generators, caught by
+  the safety ratchet rather than by a checker. A structural argument is the
+  weaker evidence tier for a claim about uninitialised memory.
+- **Scope.** Run `cargo +nightly miri nextest run -p apollo-fft` filtered to
+  the composite schedule tests (`split_variant_*`, `schedule_controls_*`), so
+  both `Fused` and `Split` execute under the interpreter. Non-goals: a
+  repository-wide miri job, and any change to the generators.
+- **Known obstacle, already recorded.** The worker-scratch item measured a
+  nightly Miri run exceeding the committed 60-second budget on a different
+  workload. These codelets are n = 50 and n = 144, orders of magnitude smaller,
+  so the budget is likely not the binding constraint — but attribute before
+  assuming, per that item's own conclusion.
+- **Acceptance.** Both schedules execute under miri with no UB reported, or a
+  reported budget breach is attributed and filed rather than absorbed. Result
+  recorded on this item either way; a clean pass is a valid outcome.
+- **Risk / change class:** [patch]. **Parent:** [schedule controls](#apollo-codelet-schedule-controls).
+
+<a id="apollo-codelet-schedule-controls"></a>
+## APOLLO-CODELET-SCHEDULE-CONTROLS — Share composite schedule controls [major] [arch] — review
+- **Integrator:** claude-opus-5 (takeover; the claim went stale with the work uncommitted for 22 h); **contributors:** codex/root, codex/main_integration, codex/api_evidence; **last-update:** 2026-09-09; branch `codex/composite-phase-schedules`.
+- **Scope:** integrate explicit macro scheduling into current providers, preserving ordinary codelet signatures and deleting duplicate arithmetic/test helpers; no production split routing.
+- **Acceptance:** selected, forced-fused and forced-split values agree for lengths 50/144, both precisions and directions; independent DFT oracles pass; no added production scratch or attributed code-size growth.
+- **Decision:** [ADR 0051](docs/adr/0051-composite-phase-schedules.md); sealed zero-sized strategies share one arithmetic body; explicit opt-in preserves generated signatures.
+- **Source landed `fc34ca11`.** Net 299 insertions against 347 deletions; the
+  safety-ratchet baseline drops `cooley_tukey.rs` rather than being raised
+  (143 uncommented unsafe blocks against a baseline of 143). Gates re-run at
+  that revision: ratchet, `cargo fmt --check`, `clippy -D warnings` over
+  apollo-fft and apollo-fft-macros, 590/590 nextest.
+  - Its first check failed with `expected inline_attr, gt_pairs, ct_pairs, or
+    pp_pairs` — a keyword set absent from this tree, emitted by a stale
+    proc-macro in the shared target dir. `cargo clean -p apollo-fft-macros`
+    cleared it; the work was never broken. Recorded because the error names
+    source that does not exist, which reads as a defect in the tree.
+- **Evidence:** corrected source passes macro tests (14), focused debug tests (20), Clippy and independent source review. A stale release macro from a scratch checkout is replaced after content-preserving freshness invalidation; retained DLL `5816046B` identifies canonical source and the current parser. Runtime and size acceptance remain in progress.
+- **Verification:** generic debug/release tests, unchanged complete oracle sweep, private Rustdoc and linked code/size comparison against the retained current-provider executable.
+- **Independent judge, 2026-09-09 — verdict FAIL, four findings fixed, one open.**
+  Judged against this item's acceptance oracle without the author's reasoning.
+  It re-ran the gates itself rather than reading them off the commit.
+  - **Confirmed independently:** `Split` is genuinely unreachable in production
+    (`#[cfg(test)]` on the type, its `Schedule` impl and its `Sealed` impl; the
+    only two instantiation sites pass `Fused`); the trait is genuinely sealed
+    through a private `Sealed` supertrait; no test was weakened — the
+    equivalence test *gained* a third control and still asserts exact equality;
+    and the ratchet drop is legitimate, `cooley_tukey.rs` measuring 0 sites
+    because three real `// SAFETY:` comments were added, not comment-shaped
+    noise. No scratch-initialization escape exists: both branches invoke the
+    closure exactly once and neither catches unwind, and the emission is pinned
+    token-for-token by `generated_phase_owns_callback_invocation`.
+  - **Fixed (`480eb862`):** the breaking change touched no CHANGELOG against
+    this repo's same-commit convention; ADR 0051 described scheduling as a
+    caller-restricted general option when the macro hard-rejects anything but
+    `(2, 25)` and `(12, 12)`; and its rejection rationale cited a consumer-root
+    trait path that the accepted design also emits, so it discriminated nothing.
+  - **Judge finding rejected on evidence.** It called the fused branch's
+    `({ operation })();` an unexplained form equivalent to `operation();`.
+    It is not: the closure writes scratch, so it is `FnMut`, and calling it
+    through the binding fails to compile (`E0596`, "cannot borrow as mutable").
+    The block moves it into a temporary place — the same by-value move
+    `run_phase` performs — so both branches consume the closure identically.
+    Tried the simplification, took the compile error, reverted it, and recorded
+    the reason at the site instead.
+  - **Closed — the size clause, measured.** Release assembly for the library
+    at `fc34ca11` against its parent, which isolates the refactor from the
+    twelve `main` commits merged after it: `dft50_impl` 566 instructions
+    either side, `dft144_impl` 718 either side, whole library 372,711
+    instructions in 1,524 functions either side — **delta 0 (+0.0000%)**. All
+    four scheduled monomorphizations have **byte-identical emitted bodies**,
+    so the fused specialization is unchanged code rather than merely
+    same-sized code. That discharges "no attributed code-size growth" and
+    "no added production scratch", and substantiates ADR 0051's
+    constant-propagation claim, which was previously asserted. Repeated
+    against the shipped emission with the same result; recorded in ADR 0051
+    under Evidence. Limits: one host, one toolchain, x86-64 MSVC, release —
+    emitted code, not throughput.
+  - **Superseded note on the original open finding.** "No attributed code-size growth" and "no added
+    production scratch" are unestablished, as this item already recorded. ADR
+    0051 names the instrument and no committed gate supplies it: CI carries no
+    `cargo bloat`, no `cargo-llvm-lines` and no linked-image comparison. The
+    ADR's "constant propagation removes the unselected boundary" is asserted,
+    not substantiated, and the fused source *did* change — a closure plus a
+    live `if S::SPLIT_PHASES`. Measuring `dft50_impl`/`dft144_impl` at
+    `fc34ca11` against its parent, which isolates the refactor from the twelve
+    commits of `main` merged after it.
+  - **Judge finding corrected before recording.** It reported "no miri anywhere
+    in the repo". Miri has been run here — `#atlas-apollo-compose-arena-miri`
+    closed on miri evidence, and the worker-scratch item records a nightly Miri
+    run exceeding the 60-second budget. What is absent is a *committed* miri
+    job: `.github/workflows` contains none, so coverage is ad hoc. The
+    accurate residue is that the `Split` path's `assume_init_mut` has no
+    UB-checker coverage — structural argument plus an exact-token test, not a
+    checker. Filed as `#apollo-miri-schedule-split-coverage`.
+- **Symbol-grep note for the next reader:** searching the release PE for
+  `run_phase` or `dft144_impl` proves nothing either way — MSVC images carry no
+  internal symbol table, so absence is not evidence. Attribute from emitted asm
+  or an attributed-size tool instead.
+- **Dependencies:** [PR 338](https://github.com/ryancinsight/apollo/pull/338) lands as `2ac33b95`; preserve both original locks during source reconciliation.
 <a id="apollo-twiddless-fft-evaluation"></a>
 ## APOLLO-TWIDDLESS-FFT-EVALUATION — Measure the twiddless FFT against its butterfly isomorph [patch] — done 2026-09-08
 - **Outcome:** [ADR 0052](docs/adr/0052-twiddless-fft-evaluation.md) Rejected: 2.4 to 10.7 times slower than the plan at every length but 65536; PR #349 merged 2026-09-08.
@@ -96,20 +203,13 @@
 - **Scope:** Moirai idle-hook provider and Apollo registration/reclamation boundary; no kernel arithmetic, workload reduction or silent loss of cleanup.
 - **Evidence:** pinned `83aa411` has 16 non-deduplicating slots; Apollo's `ensure_thread_local_scratch_hook_registered` expects capacity without reserving it. The observer also assumes hook order that the provider documentation disclaims.
 - **Acceptance:** full registration rejects without mutation or panic in fallible consumer paths; ordered snapshot semantics or order-independent observation; every participating owner releases idle scratch while active borrows and later reuse remain valid.
-- **Dependencies:** complete current layout adoption; implement the missing hook in current Moirai before removing Apollo's direct pin. Reconcile Moirai's landed Mnemosyne quarantine separately.
+- **Dependencies:** current Moirai `3eb9f3ce` has hooks, but accepts unlimited registrations while executing only the first 16. Correct upstream admission before removing Apollo's direct pin; retain the current worker-loop ownership. Reconcile Moirai's landed Mnemosyne quarantine separately.
 - **Decision:** specify publication, reentrant registration, panic, wake and shutdown behavior in the owning runtime ADR; synchronize Apollo's lifecycle contract.
 - **Verification:** bounded registry/admission tests, owner-thread and wake/shutdown tests, existing Loom suites, unchanged Apollo worker and 20-window footprint oracles, locked API and controlled performance checks.
 
 <a id="apollo-local-performance-gate"></a>
-## APOLLO-LOCAL-PERFORMANCE-GATE — Keep timing on controlled local hosts [patch] [arch] — review
-- **Integrator:** codex/api_evidence; **last-update:** 2026-09-08; shared branch `codex/four-step-square-movement`.
-- **Outcome:** replace hosted timing jobs with local retained-binary comparisons; CI retains the existing seven bounded benchmark smokes.
-- **Scope:** benchmark workflow and ADR 0036; preserve instruments, statistical comparison, workloads, source/lock identity checks and smoke coverage.
-- **Acceptance:** no hosted timing execution; local baseline/candidate preparation and comparison remain reproducible under the existing bounds; workflow and documentation checks pass.
-- **Evidence:** hosted timing workflow removed; all seven smoke targets and their bounds remain unchanged. Preparation tests: ten pass, one symlink-privilege skip; four workflows parse and 19 shell steps pass syntax checks. Actionlint is unavailable.
-- **Dependencies:** current-provider correctness, API, memory and timing acceptance is collected; reuse the existing preparation and bounded native runner.
-- **Decision:** revise [ADR 0036](docs/adr/0036-native-benchmark-regression-oracle.md) for the execution venue without changing its statistical contract.
-- **Verification:** workflow lint, script regression tests, existing seven-smoke collection and unchanged local census acceptance.
+## APOLLO-LOCAL-PERFORMANCE-GATE — Keep timing on controlled local hosts [patch] [arch] — done
+- `b255df12`, [PR 338](https://github.com/ryancinsight/apollo/pull/338), merged `2ac33b95`: hosted timing removed; seven bounded smokes and preparation regressions remain in passing required CI. [ADR 0036](docs/adr/0036-native-benchmark-regression-oracle.md) preserves the statistical contract; actionlint remains unavailable locally.
 
 <a id="apollo-codelet-experiment-boundary"></a>
 ## APOLLO-CODELET-EXPERIMENT-BOUNDARY — Keep rejected codelet routes in tests [patch] — done
@@ -138,16 +238,8 @@
 ## APOLLO-REQUIRED-MERGE-CHECKS — Enforce core verification before automatic merge [patch] — done
 - Installed and read back on 2026-09-06: strict `rust workspace` and `Lockfile integrity / Lockfile integrity` requirements on `main`, with automatic merge enabled. The prior unprotected branch let `--auto` merge before hosted checks completed; [landed CI](https://github.com/ryancinsight/apollo/actions/runs/34015129487) subsequently passes.
 <a id="apollo-four-step-square-movement"></a>
-## APOLLO-FOUR-STEP-SQUARE-MOVEMENT — Consolidate provider-owned FourStep movement [patch] — review
-
-- **Integrator:** codex/01a07370; **last-update:** 2026-09-08; branch `codex/four-step-square-movement`.
-- **Build coordination:** current-provider gates and the independent 16-run census are collected; no owned native process remains. API, allocation, size and timing acceptance pass at `54e8f2d8`.
-- **Scope:** all pure-copy FourStep transposes through Leto, removing Apollo's private copy kernels and scalar trait hook; Hermes owns register movement. No fused multiplication, decomposition, route, normalization, workspace or Apollo API change.
-- **Hypothesis:** square register exchange and a checked canonical dense-copy boundary remove duplicate movement without allocation or an additional full-volume pass. [ADR 0040](docs/adr/0040-leto-fft-layout-ownership.md) owns the design, measured candidate comparison and evidence limits.
-- **Acceptance:** retain production only with unchanged allocation bounds, no executable growth and supported complete-engine improvement without supported regression; preserve the accepted provider ownership decision.
-- **Verification:** generic bitwise tile/tail/offset/canary/special-value oracles, FFT analytical and exact/oversized-workspace cases, full affected gates, unchanged replicated census and matched footprint probe.
-- **Dependencies/closure:** [Leto PR 175](https://github.com/ryancinsight/leto/pull/175) merges as `d9ca3252`. Joint adoption with Hephaestus `f6f55f45` resolves Moirai 0.6; direct `83aa411` preserves worker-idle reclamation. Lock `0ECC20AB` passes [consumer gates](../../output/apollo-square-transpose/integration/provider-adoption/collection.json) and [independent timing acceptance](../../output/apollo-square-transpose/integration/provider-adoption/census/independent-audit.json).
-- **Evidence:** current lock `0ECC20AB` passes 1,458 workspace/564 release FFT tests, docs, seven smokes, audits, 223 API checks and 20 matched allocation windows. The 16-run census passes size (-512 bytes), allocation and timing acceptance: one E-core real-half/262144 gain, no supported regression. [ADR 0040](docs/adr/0040-leto-fft-layout-ownership.md) records confidence bounds, cold-peak variation, remaining competitor gaps and exclusions.
+## APOLLO-FOUR-STEP-SQUARE-MOVEMENT — Consolidate provider-owned FourStep movement [patch] — done
+- [PR 338](https://github.com/ryancinsight/apollo/pull/338), `2ac33b95`; Leto-owned copy movement passes current-provider correctness, API, allocation and size gates, plus independently accepted timing: one supported E-core real-half/262144 gain, no supported regression. [ADR 0040](docs/adr/0040-leto-fft-layout-ownership.md) records cold-memory increases and the remaining competitor losses.
 <a id="apollo-transpose-cache-geometry"></a>
 ## APOLLO-TRANSPOSE-CACHE-GEOMETRY — Model transpose cache-set pressure [patch] — todo
 - Outcome: establish whether power-of-two transpose strides cause cache-set conflicts before changing tile geometry.

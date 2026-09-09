@@ -56,6 +56,7 @@
 | [0048](0048-worker-scratch-lifetime.md) | Worker scratch lifetime across submissions | Accepted |
 | [0049](0049-fused-twiddle-transpose.md) | Fused twiddle multiplication and register transpose | Rejected |
 | [0050](0050-cache-line-fused-traversal.md) | Cache-line traversal for fused twiddle multiplication | Rejected |
+| [0051](0051-composite-phase-schedules.md) | Composite phase schedules | Accepted |
 | [0052](0052-twiddless-fft-evaluation.md) | Twiddless FFT evaluation | Rejected |
 | [0053](0053-planar-four-step-domain.md) | Planar four-step domain above the threading threshold | Accepted |
 | [0054](0054-planar-seam-fusion.md) | Planar seams fused into the stage passes | Accepted |
