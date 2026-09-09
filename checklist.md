@@ -1,7 +1,6 @@
 # Apollo Checklist
 
 ## claude/fable — current execution
-- [ ] [Plane alignment](backlog.md#apollo-planar-source-placement): PR 369 enqueued; merged, lease discharged; then re-measure the standing cells.
 - [ ] [Lane order inverse](backlog.md#apollo-planar-lane-order-inverse): PR enqueued; merged; PR 363 rebased and re-verified.
 - [ ] [Rectangular odd powers](backlog.md#apollo-planar-rectangular-odd-powers): ADR 0060 Accepted; PR enqueued; merged, lease discharged.
 
