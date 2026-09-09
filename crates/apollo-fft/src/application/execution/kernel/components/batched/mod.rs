@@ -56,9 +56,11 @@ macro_rules! sect {
 }
 
 mod cache;
+mod lane_order;
 mod radix;
 mod sweep;
 pub(crate) use cache::BatchedPlanCache;
+use lane_order::{LaneOrder, LANE_GROUP_CAPACITY};
 
 /// Section labels of the time-decimated stage set's sweeps, by sweep index;
 /// the attribution probe reports them beneath `stages1`.
@@ -208,7 +210,8 @@ where
 }
 
 /// Two adjacent vectors of interleaved complexes at `at` (in reals), split
-/// into their real and imaginary lanes.
+/// into their real and imaginary lanes in the plane column order
+/// ([`LaneOrder`]): the sub-lane unpack alone, no cross-lane permute.
 #[expect(
     clippy::inline_always,
     reason = "must fold into the caller's target-feature scope, as `load`"
@@ -220,11 +223,12 @@ where
     A: SimdArch + SimdKernel<T>,
 {
     let lanes = <A as SimdStorage<T>>::LANE_COUNT;
-    load::<T, A>(data, at).deinterleave(load::<T, A>(data, at + lanes))
+    load::<T, A>(data, at).deinterleave_sublanes(load::<T, A>(data, at + lanes))
 }
 
-/// The counterpart of [`load_interleaved`]: real and imaginary lanes stored
-/// as two adjacent vectors of interleaved complexes at `at` (in reals).
+/// The counterpart of [`load_interleaved`]: real and imaginary lanes in plane
+/// column order stored as two adjacent vectors of interleaved complexes at
+/// `at` (in reals), in memory order.
 #[expect(
     clippy::inline_always,
     reason = "must fold into the caller's target-feature scope, as `store`"
@@ -236,7 +240,7 @@ where
     A: SimdArch + SimdKernel<T>,
 {
     let lanes = <A as SimdStorage<T>>::LANE_COUNT;
-    let (lo, hi) = re.interleave(im);
+    let (lo, hi) = re.interleave_sublanes(im);
     store::<T, A>(lo, data, at);
     store::<T, A>(hi, data, at + lanes);
 }
@@ -267,29 +271,33 @@ pub(super) fn reverse_row(row: usize, bits: u32) -> usize {
 /// stride.
 pub(crate) const ROW_PAD: usize = 8;
 
-/// Tile edge for [`transpose_planes`]. Rows use the padded element stride
-/// returned by [`plane_geometry`]; their byte stride also depends on the scalar
-/// width. Tile capacity alone does not establish cache-set occupancy.
-const TWIDDLE_TRANSPOSE_TILE: usize = 8;
-
-/// Transposes both `m x m` planes in place, tiled.
+/// Transposes both `m x m` planes in place: the scalar reference for the
+/// vector tile transpose, and the route where no vector width applies.
 ///
 /// Pure exchange: the four-step twiddle that used to ride this pass as a
 /// scalar multiply — 26% of the driver at N = 256 — now rides stage-set-2's
 /// first-stage vector loads instead, which the twiddle matrix's symmetry
 /// (`W^(j*b)` equals its own transpose) makes exactly equivalent.
-fn transpose_planes<T: Copy>(re: &mut [T], im: &mut [T], m: usize, stride: usize) {
+///
+/// Plane cell `(r, c)` holds logical column `order(c)` of row `r`, so its
+/// transpose partner is cell `(order(c), order(r))`; the map is an
+/// involution and each pair swaps once. Rows leave in natural order and
+/// columns in plane order, which is what both stage sets consume.
+fn transpose_planes<T: Copy>(
+    re: &mut [T],
+    im: &mut [T],
+    m: usize,
+    stride: usize,
+    order: LaneOrder,
+) {
     debug_assert!(stride >= m && re.len() >= m * stride);
-    for ib in (0..m).step_by(TWIDDLE_TRANSPOSE_TILE) {
-        let ie = (ib + TWIDDLE_TRANSPOSE_TILE).min(m);
-        for jb in (ib..m).step_by(TWIDDLE_TRANSPOSE_TILE) {
-            let je = (jb + TWIDDLE_TRANSPOSE_TILE).min(m);
-            for i in ib..ie {
-                let start = if jb == ib { i + 1 } else { jb };
-                for j in start.max(jb)..je {
-                    re.swap(i * stride + j, j * stride + i);
-                    im.swap(i * stride + j, j * stride + i);
-                }
+    for r in 0..m {
+        for c in 0..m {
+            let partner = (order.column(c), order.column(r));
+            if partner > (r, c) {
+                let (pr, pc) = partner;
+                re.swap(r * stride + c, pr * stride + pc);
+                im.swap(r * stride + c, pr * stride + pc);
             }
         }
     }
@@ -297,7 +305,7 @@ fn transpose_planes<T: Copy>(re: &mut [T], im: &mut [T], m: usize, stride: usize
 
 /// Plans keyed by `(length, inverse)`: the two directions carry conjugate
 /// twiddles and cannot share an entry.
-/// Planar, row-permuted four-step twiddle planes.
+/// Planar four-step twiddle planes in plane column order.
 ///
 /// The interleaved `W_n^(j*b)` matrix cannot feed a vector multiply against
 /// planar data, which is why the transpose's fused multiply was scalar — the
@@ -313,7 +321,7 @@ pub(crate) struct FourStepPlanes<T> {
 }
 
 impl<T: MixedRadixScalar<Complex = Complex<T>>> FourStepPlanes<T> {
-    fn new<const INVERSE: bool>(n: usize, m: usize) -> Self
+    fn new<const INVERSE: bool>(n: usize, m: usize, order: LaneOrder) -> Self
     where
         Complex<T>: crate::application::execution::kernel::twiddle_table::TwiddleOutput,
     {
@@ -334,11 +342,40 @@ impl<T: MixedRadixScalar<Complex = Complex<T>>> FourStepPlanes<T> {
         // Rows in natural order, because the stage set that folds these
         // consumes natural order: it is decimated in frequency. The planes
         // were row-permuted while that set was decimated in time and its
-        // input arrived bit-reversed.
-        let (re, im): (Vec<_>, Vec<_>) = interleaved.map(|value| (value.re, value.im)).unzip();
+        // input arrived bit-reversed. Columns in plane order, since the
+        // fold multiplies these lane for lane against the data planes.
+        let (mut re, mut im): (Vec<_>, Vec<_>) =
+            interleaved.map(|value| (value.re, value.im)).unzip();
+        order_columns(&mut re, m, order);
+        order_columns(&mut im, m, order);
         Self {
             re: re.into_boxed_slice(),
             im: im.into_boxed_slice(),
+        }
+    }
+}
+
+/// Permutes each row of a natural-order `m`-column plane into plane column
+/// order, one lane group at a time.
+fn order_columns<T: Copy>(plane: &mut [T], m: usize, order: LaneOrder) {
+    let lanes = order.lanes();
+    if lanes <= 1 {
+        return;
+    }
+    let Some(&first) = plane.first() else {
+        return;
+    };
+    assert!(
+        lanes <= LANE_GROUP_CAPACITY,
+        "invariant: no dispatched register holds more than {LANE_GROUP_CAPACITY} scalar lanes"
+    );
+    let mut group = [first; LANE_GROUP_CAPACITY];
+    for row in plane.chunks_exact_mut(m) {
+        for cells in row.chunks_exact_mut(lanes) {
+            group[..lanes].copy_from_slice(cells);
+            for (column, &value) in group[..lanes].iter().enumerate() {
+                cells[order.column(column)] = value;
+            }
         }
     }
 }
@@ -504,6 +541,7 @@ fn deinterleave_decimated_rows<T: Copy>(
     odd: (&mut [T], &mut [T]),
     m: usize,
     stride: usize,
+    order: LaneOrder,
 ) {
     let (e_re, e_im) = even;
     let (o_re, o_im) = odd;
@@ -514,10 +552,11 @@ fn deinterleave_decimated_rows<T: Copy>(
         for b in 0..m {
             let e = chunk[2 * b];
             let o = chunk[2 * b + 1];
-            e_re[base + b] = e.re;
-            e_im[base + b] = e.im;
-            o_re[base + b] = o.re;
-            o_im[base + b] = o.im;
+            let at = base + order.column(b);
+            e_re[at] = e.re;
+            e_im[at] = e.im;
+            o_re[at] = o.re;
+            o_im[at] = o.im;
         }
     }
 }
@@ -538,6 +577,7 @@ fn planar_stages<T, const INVERSE: bool>(
     m: usize,
     stride: usize,
     seams: Option<&mut [Complex<T>]>,
+    order: LaneOrder,
 ) where
     T: BatchedPlanCache<Complex = Complex<T>>,
 {
@@ -552,25 +592,16 @@ fn planar_stages<T, const INVERSE: bool>(
     // 2. Transpose so the second axis becomes batch-major. Pure exchange:
     //    the four-step twiddle now rides stage-set-2's first loads below.
     sect!("transpose", {
-        let handled = if T::BOUNDARY_LANES == 8 {
-            hermes_simd::vectorize_lanes::<8, T, _>(boundary::TransposePlanes {
-                re: &mut *re,
-                im: &mut *im,
-                m,
-                stride,
-            })
-            .unwrap_or(false)
-        } else {
-            false
-        } || hermes_simd::vectorize_lanes::<4, T, _>(boundary::TransposePlanes {
-            re,
-            im,
+        // The same selector as the stage sets, so the tile width and the
+        // plane column order are the one backend's.
+        let handled = hermes_simd::vectorize(boundary::TransposePlanes {
+            re: &mut *re,
+            im: &mut *im,
             m,
             stride,
-        })
-        .unwrap_or(false);
+        });
         if !handled {
-            transpose_planes(re, im, m, stride);
+            transpose_planes(re, im, m, stride, order);
         }
     });
 
@@ -615,9 +646,10 @@ pub(crate) fn four_step_batched<T, const INVERSE: bool>(
     let (m, stride) = plane_geometry(n);
     let plane = scratch_len(n);
     let (re, im) = split_plane(scratch, plane);
+    let order = LaneOrder::for_batch::<T>(m);
     // The interleaved buffer is read by the first stage pass and written by
     // the last, so the route is exactly two stage sets and one transpose.
-    planar_stages::<T, INVERSE>(re, im, n, m, stride, Some(data));
+    planar_stages::<T, INVERSE>(re, im, n, m, stride, Some(data), order);
 }
 
 pub(crate) fn four_step_split_batched<T, const INVERSE: bool>(
@@ -647,21 +679,22 @@ pub(crate) fn four_step_split_batched<T, const INVERSE: bool>(
     let combine = &twiddles[half - 1..n - 1];
 
     let (m, stride) = plane_geometry(half);
+    let order = LaneOrder::for_batch::<T>(m);
     let (even, odd) = scratch.split_at_mut(plane);
     sect!("deint", {
         let (e_re, e_im) = split_plane(even, plane);
         let (o_re, o_im) = split_plane(odd, plane);
-        deinterleave_decimated_rows(data, (e_re, e_im), (o_re, o_im), m, stride);
+        deinterleave_decimated_rows(data, (e_re, e_im), (o_re, o_im), m, stride, order);
     });
     {
         let (re, im) = split_plane(even, plane);
-        planar_stages::<T, INVERSE>(re, im, half, m, stride, None);
+        planar_stages::<T, INVERSE>(re, im, half, m, stride, None, order);
     }
     {
         let (re, im) = split_plane(odd, plane);
-        planar_stages::<T, INVERSE>(re, im, half, m, stride, None);
+        planar_stages::<T, INVERSE>(re, im, half, m, stride, None, order);
     }
-    combine_planar_halves(data, even, odd, m, stride, combine);
+    combine_planar_halves(data, even, odd, m, stride, combine, order);
 }
 
 /// Combines two planar half-transforms into `data` in one pass.
@@ -684,6 +717,7 @@ pub(crate) fn combine_planar_halves<T>(
     m: usize,
     stride: usize,
     twiddles: &[Complex<T>],
+    order: LaneOrder,
 ) where
     T: BatchedPlanCache<Complex = Complex<T>>,
 {
@@ -703,41 +737,26 @@ pub(crate) fn combine_planar_halves<T>(
     let bits = m.trailing_zeros();
     sect!("combine", {
         let twiddle_lanes = eunomia::layout::cast_slice(twiddles);
-        let handled =
-            if T::BOUNDARY_LANES == 8 {
-                hermes_simd::vectorize_hardware_lanes::<8, T, _>(boundary::CombinePlanarHalves {
-                    even_re: e_re,
-                    even_im: e_im,
-                    odd_re: o_re,
-                    odd_im: o_im,
-                    twiddles: twiddle_lanes,
-                    low: eunomia::layout::cast_slice_mut(&mut *low),
-                    high: eunomia::layout::cast_slice_mut(&mut *high),
-                    m,
-                    stride,
-                })
-                .unwrap_or(false)
-            } else {
-                false
-            } || hermes_simd::vectorize_hardware_lanes::<4, T, _>(boundary::CombinePlanarHalves {
-                even_re: e_re,
-                even_im: e_im,
-                odd_re: o_re,
-                odd_im: o_im,
-                twiddles: twiddle_lanes,
-                low: eunomia::layout::cast_slice_mut(&mut *low),
-                high: eunomia::layout::cast_slice_mut(&mut *high),
-                m,
-                stride,
-            })
-            .unwrap_or(false);
+        // The same selector as the stage sets: the kernel reads the planes
+        // in the plane column order of the backend it runs on.
+        let handled = hermes_simd::vectorize(boundary::CombinePlanarHalves {
+            even_re: e_re,
+            even_im: e_im,
+            odd_re: o_re,
+            odd_im: o_im,
+            twiddles: twiddle_lanes,
+            low: eunomia::layout::cast_slice_mut(&mut *low),
+            high: eunomia::layout::cast_slice_mut(&mut *high),
+            m,
+            stride,
+        });
 
         if !handled {
             for row in 0..m {
                 let base = row * stride;
                 let dst = (row.reverse_bits() >> (usize::BITS - bits)) * m;
                 for b in 0..m {
-                    let j = dst + b;
+                    let j = dst + order.column(b);
                     let e = Complex::new(e_re[base + b], e_im[base + b]);
                     let o = Complex::new(o_re[base + b], o_im[base + b]);
                     let rotated = o * twiddles[j];
