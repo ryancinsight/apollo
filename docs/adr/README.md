@@ -65,3 +65,4 @@
 | [0057](0057-planar-columns-in-sublane-order.md) | Plane columns in the dispatched backend's sub-lane order | Accepted |
 | [0058](0058-planar-sink-staging.md) | The planar sink staged through a contiguous block | Accepted |
 | [0059](0059-compact-four-step-fold.md) | The four-step fold from a two-level table | Accepted |
+| [0060](0060-planar-rectangular-odd-powers.md) | Odd powers of two on a rectangular planar four-step | Accepted |

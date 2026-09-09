@@ -4,8 +4,8 @@
 //! assembled transform, so a failure localizes.
 
 use super::{
-    combine_planar_halves, deinterleave_decimated_rows, four_step_batched, four_step_split_batched,
-    scratch_len, split_scratch_len, transpose_planes, BatchedPlanCache, LaneOrder,
+    four_step_batched, scratch_len, transpose_planes, transpose_planes_into, BatchedPlanCache,
+    LaneOrder, PlaneView,
 };
 use eunomia::{Complex, Complex32, Complex64};
 use std::f64::consts::TAU;
@@ -82,7 +82,7 @@ fn transpose_is_its_own_inverse_and_never_touches_the_pad() {
 fn fold_tables_reproduce_the_twiddle_matrix_within_their_roundings() {
     use crate::application::execution::kernel::mixed_radix::MixedRadixScalar;
     let (n, m) = (256usize, 16usize);
-    let fold = <f64 as BatchedPlanCache>::cached_four_step_fold::<false>(n, m);
+    let fold = <f64 as BatchedPlanCache>::cached_four_step_fold::<false>(n, m, m);
     let interleaved = <f64 as MixedRadixScalar>::cached_four_step_twiddles::<false>(n, m, m);
     let order = LaneOrder::for_batch::<f64>(m);
     let lanes = fold.lanes;
@@ -102,7 +102,7 @@ fn fold_tables_reproduce_the_twiddle_matrix_within_their_roundings() {
             assert!(err <= bound, "({row},{col}): {err:.3e} > {bound:.3e}");
         }
     }
-    let again = <f64 as BatchedPlanCache>::cached_four_step_fold::<false>(n, m);
+    let again = <f64 as BatchedPlanCache>::cached_four_step_fold::<false>(n, m, m);
     assert!(
         std::sync::Arc::ptr_eq(&fold, &again),
         "the fold tables must cache"
@@ -117,7 +117,7 @@ fn compact_fold_tables_reproduce_the_twiddle_matrix_within_their_roundings() {
     use crate::application::execution::kernel::mixed_radix::MixedRadixScalar;
     let (n, m) = (1usize << 18, 512usize);
     let order = LaneOrder::for_batch::<f64>(m);
-    let fold = super::FourStepFold::<f64>::new::<false>(n, m, order);
+    let fold = super::FourStepFold::<f64>::new::<false>(n, m, m, order);
     let interleaved = <f64 as MixedRadixScalar>::cached_four_step_twiddles::<false>(n, m, m);
     let lanes = fold.lanes;
     assert_eq!(lanes, order.lanes());
@@ -281,12 +281,12 @@ fn f32_forward_matches_the_direct_transform() {
 /// transform, 2048 with two sweeps per half and 8192, the Bluestein padding
 /// of the prime squares that first exposed it.
 #[test]
-fn split_lengths_match_the_direct_transform() {
-    for n in [2048usize, 8192] {
+fn odd_lengths_match_the_direct_transform() {
+    for n in [512usize, 2048, 8192] {
         let input = signal(n);
         let mut data = input.clone();
-        let mut scratch = vec![Complex64::default(); split_scratch_len(n)];
-        four_step_split_batched::<f64, false>(&mut data, &mut scratch);
+        let mut scratch = vec![Complex64::default(); scratch_len(n)];
+        four_step_batched::<f64, false>(&mut data, &mut scratch);
         let expected = dft(&input, false);
         let err = data
             .iter()
@@ -360,74 +360,6 @@ fn f32_n32768_public_plan_matches_an_impulse_and_round_trip() {
 }
 
 #[test]
-fn f32_planar_half_combine_matches_the_scalar_formula() {
-    let (m, stride) = (16usize, 24usize);
-    let half = m * m;
-    let plane = m * stride;
-    let mut even = vec![Complex32::default(); plane];
-    let mut odd = vec![Complex32::default(); plane];
-    let (even_re, even_im) =
-        eunomia::layout::cast_slice_mut::<_, f32>(&mut even).split_at_mut(plane);
-    let (odd_re, odd_im) = eunomia::layout::cast_slice_mut::<_, f32>(&mut odd).split_at_mut(plane);
-    for row in 0..m {
-        for column in 0..m {
-            let index = row * stride + column;
-            let logical = (row * m + column) as f32;
-            even_re[index] = 0.25 + logical * 0.003;
-            even_im[index] = -0.5 + logical * 0.002;
-            odd_re[index] = 0.75 - logical * 0.001;
-            odd_im[index] = -0.125 + logical * 0.004;
-        }
-    }
-    let twiddles: Vec<Complex32> = (0..half)
-        .map(|index| {
-            let angle = -core::f32::consts::TAU * index as f32 / (2 * half) as f32;
-            let (sin, cos) = angle.sin_cos();
-            Complex32::new(cos, sin)
-        })
-        .collect();
-    let mut expected = vec![Complex32::default(); 2 * half];
-    let bits = m.trailing_zeros();
-    let order = LaneOrder::for_batch::<f32>(m);
-    for row in 0..m {
-        let base = row * stride;
-        let dst = (row.reverse_bits() >> (usize::BITS - bits)) * m;
-        for column in 0..m {
-            // Plane column `column` holds memory column `order(column)`.
-            let index = dst + order.column(column);
-            let even_value = Complex32::new(even_re[base + column], even_im[base + column]);
-            let odd_value = Complex32::new(odd_re[base + column], odd_im[base + column]);
-            let rotated = odd_value * twiddles[index];
-            expected[index] = even_value + rotated;
-            expected[index + half] = even_value - rotated;
-        }
-    }
-
-    let mut actual = vec![Complex32::default(); 2 * half];
-    combine_planar_halves(&mut actual, &even, &odd, m, stride, &twiddles, order);
-
-    // One complex multiply followed by one add/sub accumulates at most eight
-    // unit roundoffs at this scale; the factor of two covers subnormal-free
-    // input scaling and the SIMD path's fused multiply-add rounding.
-    let bound = 16.0 * f32::EPSILON;
-    let worst = actual
-        .iter()
-        .zip(&expected)
-        .map(|(got, want)| (*got - *want).norm())
-        .fold(0.0_f32, f32::max);
-    assert!(worst <= bound, "combine error {worst:.3e} > {bound:.3e}");
-}
-
-/// The reinterleave sink at the f32 native width.
-///
-/// A correct result alone would not prove the eight-lane body ran: declining
-/// the width falls back to the four-lane body and then the scalar loop, and
-/// all three produce the same answer. So the width is asserted against the
-/// independently dispatched capability, exactly as the four-lane kernels are
-/// (`test_support::executed_or_declined_untouched`), and only then is the
-/// output compared. The pass moves data and computes nothing, so the
-/// comparison is bit-exact rather than bounded.
-#[test]
 fn plans_are_cached_per_length_and_direction() {
     let a = <f64 as BatchedPlanCache>::cached_plan::<false>(64);
     let b = <f64 as BatchedPlanCache>::cached_plan::<false>(64);
@@ -472,7 +404,7 @@ fn batched_plans_and_planes_are_shared_across_threads() {
     let planes_handles: Vec<_> = (0..2)
         .map(|_| {
             std::thread::spawn(|| {
-                <f64 as BatchedPlanCache>::cached_four_step_fold::<false>(LEN, HALF)
+                <f64 as BatchedPlanCache>::cached_four_step_fold::<false>(LEN, HALF, HALF)
             })
         })
         .collect();
@@ -547,53 +479,86 @@ fn large_planar_lengths_agree_with_rustfft_in_both_precisions() {
     large_lengths_agree_with_rustfft::<f64>(f64::EPSILON / 2.0);
 }
 
-/// The dispatched decimation moves every sample where the scalar form does.
-fn decimation_matches_the_scalar_form<T>()
+/// The rectangular transpose lands every cell where the in-place rule
+/// puts it, on the dispatched width and the scalar reference alike.
+fn rectangular_transpose_matches_the_reference<T>()
 where
     T: BatchedPlanCache<Complex = Complex<T>>
         + eunomia::FloatElement
         + PartialEq
         + core::fmt::Debug,
 {
-    // Sixteen-lane widths divide 32; the pad keeps the stride off the row.
-    let (m, stride) = (32usize, 40usize);
-    let plane = m * stride;
-    let order = LaneOrder::for_batch::<T>(m);
-    let data: Vec<Complex<T>> = (0..2 * m * m)
-        .map(|index| {
-            let x = index as f64;
-            Complex::new(T::from_f64(x + 0.25), T::from_f64(-x - 0.5))
-        })
-        .collect();
-    let sentinel = T::from_f64(-1.0);
-    let mut expected = vec![sentinel; 4 * plane];
-    let mut actual = expected.clone();
-    {
-        let (even, odd) = expected.split_at_mut(2 * plane);
-        let (e_re, e_im) = even.split_at_mut(plane);
-        let (o_re, o_im) = odd.split_at_mut(plane);
-        deinterleave_decimated_rows(&data, (e_re, e_im), (o_re, o_im), m, stride, order);
+    // 24 rows: three eight-lane tiles, so the unpaired tile block runs.
+    for (rows, cols) in [(16usize, 32usize), (32, 64), (24, 40)] {
+        let (src_stride, dst_stride) = (cols + 8, rows + 8);
+        let order = LaneOrder::for_batch::<T>(rows);
+        let src_re: Vec<T> = (0..rows * src_stride)
+            .map(|i| T::from_f64(i as f64 + 0.25))
+            .collect();
+        let src_im: Vec<T> = (0..rows * src_stride)
+            .map(|i| T::from_f64(-(i as f64) - 0.5))
+            .collect();
+        let sentinel = T::from_f64(-1.0);
+        let mut expected_re = vec![sentinel; cols * dst_stride];
+        let mut expected_im = vec![sentinel; cols * dst_stride];
+        transpose_planes_into(
+            PlaneView {
+                re: &src_re,
+                im: &src_im,
+                rows,
+                cols,
+                stride: src_stride,
+            },
+            &mut expected_re,
+            &mut expected_im,
+            dst_stride,
+            order,
+        );
+        for r in 0..rows {
+            for c in 0..cols {
+                let to = order.column(c) * dst_stride + order.plane(r);
+                assert_eq!(expected_re[to], src_re[r * src_stride + c]);
+            }
+        }
+        let mut actual_re = vec![sentinel; cols * dst_stride];
+        let mut actual_im = vec![sentinel; cols * dst_stride];
+        let handled = hermes_simd::vectorize(super::boundary::TransposePlanesInto {
+            src_re: &src_re,
+            src_im: &src_im,
+            rows,
+            cols,
+            src_stride,
+            dst_re: &mut actual_re,
+            dst_im: &mut actual_im,
+            dst_stride,
+        });
+        assert!(handled, "a two-lane or wider backend handles {rows}x{cols}");
+        assert_eq!(actual_re, expected_re, "{rows}x{cols} re");
+        assert_eq!(actual_im, expected_im, "{rows}x{cols} im");
     }
-    let handled = {
-        let (even, odd) = actual.split_at_mut(2 * plane);
-        let (e_re, e_im) = even.split_at_mut(plane);
-        let (o_re, o_im) = odd.split_at_mut(plane);
-        hermes_simd::vectorize(super::boundary::DeinterleaveDecimatedRows {
-            source: eunomia::layout::cast_slice(&data),
-            even_re: e_re,
-            even_im: e_im,
-            odd_re: o_re,
-            odd_im: o_im,
-            m,
-            stride,
-        })
-    };
-    assert!(handled, "a two-lane or wider backend handles m = 32");
-    assert_eq!(actual, expected);
 }
 
 #[test]
-fn decimation_matches_the_scalar_form_in_both_precisions() {
-    decimation_matches_the_scalar_form::<f32>();
-    decimation_matches_the_scalar_form::<f64>();
+fn rectangular_transpose_matches_the_reference_in_both_precisions() {
+    rectangular_transpose_matches_the_reference::<f32>();
+    rectangular_transpose_matches_the_reference::<f64>();
+}
+
+#[test]
+fn rectangular_fold_table_reproduces_the_twiddle_matrix() {
+    // 2048 = 32 × 64: the second set's planes are 64 rows of 32 columns,
+    // below the compact bound, so the fine table is the whole row.
+    let (n, rows, cols) = (2048usize, 64usize, 32usize);
+    let order = LaneOrder::for_batch::<f64>(cols);
+    let fold = super::FourStepFold::<f64>::new::<false>(n, rows, cols, order);
+    assert_eq!(fold.lanes, cols);
+    for p in 0..rows {
+        for k in 0..cols {
+            let angle = -TAU * ((p * order.column(k)) % n) as f64 / n as f64;
+            let (sin, cos) = angle.sin_cos();
+            let got = Complex64::new(fold.fine_re[p * cols + k], fold.fine_im[p * cols + k]);
+            let error = (got - Complex64::new(cos, sin)).norm();
+            assert!(error <= 6.0 * f64::EPSILON, "({p},{k}): {error:e}");
+        }
+    }
 }
