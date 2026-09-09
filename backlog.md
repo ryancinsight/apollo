@@ -12,29 +12,18 @@
 - **Dependencies:** none. **Verification:** batched, workspace, RustFFT-differential, dimension-1d and DFT-oracle suites; `pinned_sections`; `engine_census` and `twiddless_comparison` twice on the pinned core.
 
 <a id="apollo-planar-seam-lane-order"></a>
-## APOLLO-PLANAR-SEAM-LANE-ORDER — Store plane columns in the unpack lane order [minor] [perf] — in-progress
-- **Integrator:** claude/fable; **last-update:** 2026-09-09 12:30; branch `perf/apollo-planar-seam-lane-order` on lane `D:/atlas/worktrees/apollo-route`; hermes side landed as hermes PR 161 (`e85b019`), consumed by the lock. Commit `3adf12b1` (a takeover of this lane's uncommitted work by a peer session) holds the implementation; the transpose row order became a compile-time table in the same increment. Remaining: paired measurement on a quiet host, ADR 0057, PR.
-- lease: claude/fable crates/apollo-fft/src/application/execution/kernel/components/batched/ Cargo.lock docs/adr/ backlog.md checklist.md 2026-09-09T12:30-04:00
-- **Evidence:** ADR 0056's sink and source sweeps: each row's interleave is two `vpermpd` (port 5, cross-lane) and two unpacks per quad (`output/apollo-planar-sweeps/asm_sweep_dif_f64_avx2.s`), 8 port-5 permutes per quad on passes that otherwise run at the load-port rate; at 4096 `f64` the seam sweeps are 60% of the stage time.
-- **Scope:** the planes hold each aligned column group in the lane order the in-lane unpack produces (`0,2,1,3` per four `f64` lanes, `0,1,4,5,2,3,6,7` per eight `f32`), so `vunpcklpd`/`vunpckhpd` (`vunpcklps`/`vshufps`) alone are the interleave and deinterleave at both seams; the fold planes are built in that order, the transpose loads and stores its tile rows through the same permutation, the odd-power decimation writes it and the combine reads it. Upstream first: hermes-simd gains `interleave_in_lane`/`deinterleave_in_lane` on `SimdPermute` with the sublane width as a constant, native on AVX2 and AVX-512, the flat operation where the register is one sublane (NEON, scalar), with differential tests against the scalar model on every backend. Non-goals: the interleaved oracle, GPU.
-- **Acceptance:** no cross-lane permute in the source or sink pass listing; `t1` and `f2` at 16384 and 65536 below ADR 0056's in both precisions; results bitwise unchanged; hermes ops covered on every backend.
-- **Contributor reading, 2026-09-09 (peer session; not the paired
-  measurement the acceptance needs).** `pinned_sections` at the full eight
-  sizes, release, on `3adf12b1`: `f64` 16384 `t1` 30.0k `t2` 15.6k `f1`
-  26.8k `f2` 59.5k total 142.9k; `f64` 65536 `t1` 132.3k `f2` 206.3k total
-  598.0k. ADR 0056 records 16384 `f64` `t1` 30k `t2` 16k `f1` 26k, and
-  65536 `f64` `f2` 198k. On that comparison `t1` and `f2` are at or a shade
-  above ADR 0056's, not below, so the oracle does not read as met — but the
-  comparison is cross-run against numbers taken on another day, which is
-  the same drift that drew a false conclusion on the composite A/B, and
-  this host was carrying concurrent builds. The paired same-session run
-  against `main` is what decides; it was attempted here and aborted when
-  the lockfile picked up overlay residue and the branch advanced underneath.
-  Two things worth keeping whichever way it lands: the probe's `SIZES` had
-  been narrowed to `[65536]` in the lane's uncommitted state and is restored
-  to all eight in `3adf12b1`, and the asm half of the oracle (no cross-lane
-  permute in the source or sink listing) is still unchecked.
-- **Dependencies:** hermes-simd in-lane unpack (filed on the hermes board as the first increment). **Verification:** existing suites; `cargo asm`; `pinned_sections`.
+## APOLLO-PLANAR-SEAM-LANE-ORDER — Store plane columns in the unpack lane order [minor] [perf] — review
+- **Integrator:** claude/fable; **last-update:** 2026-09-09; branch `perf/apollo-planar-seam-lane-order` on lane `D:/atlas/worktrees/apollo-route`; hermes PR 161 landed the sub-lane pair; commit `3adf12b1` (a peer takeover of this lane's uncommitted work) holds the implementation, `7072b98a` the transpose relabeling.
+- **Outcome:** [ADR 0057](docs/adr/0057-planar-columns-in-sublane-order.md) Accepted: planes in the dispatched backend's sub-lane order through `LaneOrder`, seams reduced to the unpacks (no cross-lane permute in either listing), one `vectorize` selector for every planar kernel, `BOUNDARY_LANES` deleted; paired measurement neutral at 65536 in both precisions and within the spread below. The pairs exposed the sink sweep as a placement lottery (16384 `f64` `f2` 30k to 82k cycles by buffer offset), filed as [seam staging](#apollo-planar-seam-staging).
+- **Acceptance:** no cross-lane permute in the source or sink listing (met); results bitwise unchanged (604 tests); `t1` and `f2` below ADR 0056's (not met: the seam sweeps are not shuffle-bound, recorded in the ADR).
+- **Dependencies:** hermes-simd `e85b019` (consumed). **Verification:** batched, workspace, RustFFT-differential, dimension-1d and DFT-oracle suites; `cargo asm`; paired `pinned_sections`; warm instrument.
+
+<a id="apollo-planar-seam-staging"></a>
+## APOLLO-PLANAR-SEAM-STAGING — Stage each seam block through a contiguous buffer [patch] [perf] — todo
+- **Evidence:** ADR 0057's offset probe: the sink sweep at 16384 `f64` costs 30k, 45k or 82k cycles per call as the caller's buffer moves 64, 0 or 256 bytes modulo the page against the scratch planes, and 11k or 24k in `f32`; at 65536 `f64` 216k to 253k. The sixteen destination rows of a sink block are `n` bytes apart, a multiple of 4 KiB from 4096 up, so their lines share L1 sets and evict the tile between the sweep's passes; the source sweep reads sixteen rows with the same spacing and costs twice the plain sweep.
+- **Scope:** in the sink sweep, pass B writes its interleaved block into a contiguous staging buffer of one block (16 KiB, in the scratch), and the block's sixteen rows copy out afterwards as sequential lines; in the source sweep, the sixteen row segments copy into staging first and pass A deinterleaves from it. Copies are plain vector moves; the staging area lives in the existing scratch allocation (workspace extent updated and pinned). Non-goals: non-temporal stores, prefetch.
+- **Acceptance:** `f2` and `t1` at 16384 and 65536 independent of the probe offset (spread below 10% across the eight offsets) and at or below the best offset's value; whole-transform intervals below ADR 0057's in both instruments; results bitwise unchanged.
+- **Dependencies:** none. **Verification:** existing suites; `pinned_sections` with `APOLLO_PROBE_OFFSET` across offsets; census and warm instruments.
 
 <a id="apollo-planar-seam-prefetch"></a>
 ## APOLLO-PLANAR-SEAM-PREFETCH — Prefetch the seam streams ahead of the row loop [patch] [perf] — todo
