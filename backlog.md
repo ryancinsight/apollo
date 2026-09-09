@@ -30,7 +30,9 @@
 - **Dependencies:** hermes-simd prefetch (filed on the hermes board). **Verification:** `pinned_sections` three runs; census once.
 
 <a id="apollo-four-step-compact-fold"></a>
-## APOLLO-FOUR-STEP-COMPACT-FOLD — Fold twiddles from a two-level table [patch] [perf] — todo
+## APOLLO-FOUR-STEP-COMPACT-FOLD — Fold twiddles from a two-level table [patch] [perf] — in-progress
+- **Integrator:** claude/fable; **last-update:** 2026-09-09 16:40; branch `perf/apollo-four-step-compact-fold` on lane `D:/atlas/worktrees/apollo-route`, stacked on `perf/apollo-planar-seam-staging` (PR 360 enqueued).
+- lease: claude/fable crates/apollo-fft/src/application/execution/kernel/components/batched/ docs/adr/ backlog.md checklist.md 2026-09-09T16:40-04:00
 - **Evidence:** ADR 0056: the fold sweep reads `FourStepPlanes` as large as the data (1 MiB at 65536 `f64`) and costs 135k cycles against the plain sweep's 64k; at 262144 the planes, the fold and the caller's buffer total 12 MiB against a 3 MiB L2.
 - **Scope:** `W_N^(p k)` as `W_N^(p k_hi F) · W_N^(p k_lo)` with `F` one column group, two planar tables of `m F` and `m (m / F)` entries, one extra complex multiply per element in the fold pass; the twiddle error bound gains one rounding (documented at the fold and in the RustFFT differential's bound). Non-goals: the interleaved oracle's table.
 - **Acceptance:** `f1` at 65536 and 262144 below ADR 0056's; footprint reported by the retained-footprint probe; differential tests within the re-derived bound.
