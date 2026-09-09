@@ -17,7 +17,11 @@
 //! seams are then the sub-lane unpacks alone, the fold planes are built in
 //! the same order, the transpose permutes its tile rows to keep data rows in
 //! natural order, and the odd-power decimation and combine index through it.
-//! The order is an involution, so one map serves both directions.
+//! [`LaneOrder::column`] maps a plane column to its memory column and
+//! [`LaneOrder::plane`] back; the order is an involution at the AVX2
+//! widths (`0, 2, 1, 3`) and not at the AVX-512 ones (`0, 4, 1, 5, 2, 6,
+//! 3, 7` for eight `f64` lanes), so both maps exist and the transpose,
+//! whose two sides carry one each, never assumes one serves for both.
 //!
 //! Which order applies is a property of the backend `vectorize` selects for
 //! the scalar type on this host, and every planar kernel dispatches through
@@ -38,6 +42,9 @@ pub(crate) struct LaneOrder {
     shift: u32,
     /// The memory column of each plane column within a group.
     table: [u8; LANE_GROUP_CAPACITY],
+    /// The plane column of each memory column within a group: the inverse
+    /// of `table`.
+    inverse: [u8; LANE_GROUP_CAPACITY],
 }
 
 /// Widest lane group a plane can be ordered by: sixteen `f32` lanes
@@ -87,11 +94,25 @@ pub(crate) const fn sublane_order<const LANES: usize>(sublane: usize) -> [usize;
     table
 }
 
+/// The inverse of [`sublane_order`]: the plane lane holding each memory
+/// column of a `LANES`-lane register in sub-lanes of `sublane` lanes.
+pub(crate) const fn sublane_inverse<const LANES: usize>(sublane: usize) -> [usize; LANES] {
+    let order = sublane_order::<LANES>(sublane);
+    let mut inverse = [0usize; LANES];
+    let mut lane = 0;
+    while lane < LANES {
+        inverse[order[lane]] = lane;
+        lane += 1;
+    }
+    inverse
+}
+
 impl LaneOrder {
     /// Memory order: every column in its own place.
     pub(crate) const IDENTITY: Self = Self {
         shift: 0,
         table: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15],
+        inverse: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15],
     };
 
     /// The order of a plane whose rows hold `batch` columns, under the
@@ -107,8 +128,10 @@ impl LaneOrder {
 
     /// The order of a register of `lanes` lanes in sub-lanes of `sublane`
     /// ([`column_of`] per lane): `0, 2, 1, 3` for four `f64` lanes of
-    /// two-lane sub-lanes, and `0, 1, 4, 5, 2, 3, 6, 7` for eight `f32`
-    /// lanes of four.
+    /// two-lane sub-lanes, `0, 1, 4, 5, 2, 3, 6, 7` for eight `f32` lanes
+    /// of four, `0, 4, 1, 5, 2, 6, 3, 7` for eight `f64` lanes of two and
+    /// `0, 1, 8, 9, 2, 3, 10, 11, 4, 5, 12, 13, 6, 7, 14, 15` for sixteen
+    /// `f32` lanes of four.
     ///
     /// # Panics
     ///
@@ -121,6 +144,7 @@ impl LaneOrder {
             return Self {
                 shift: lanes.trailing_zeros(),
                 table: Self::IDENTITY.table,
+                inverse: Self::IDENTITY.inverse,
             };
         }
         assert!(
@@ -128,13 +152,16 @@ impl LaneOrder {
             "invariant: dispatched registers hold a power of two of at most {LANE_GROUP_CAPACITY} lanes in whole sub-lanes"
         );
         let mut table = Self::IDENTITY.table;
-        for (lane, cell) in table.iter_mut().enumerate().take(lanes) {
-            *cell = u8::try_from(column_of(lanes, sublane, lane))
-                .expect("invariant: a column index below sixteen");
+        let mut inverse = Self::IDENTITY.inverse;
+        for lane in 0..lanes {
+            let column = column_of(lanes, sublane, lane);
+            table[lane] = u8::try_from(column).expect("invariant: a column index below sixteen");
+            inverse[column] = u8::try_from(lane).expect("invariant: a lane index below sixteen");
         }
         Self {
             shift: lanes.trailing_zeros(),
             table,
+            inverse,
         }
     }
 
@@ -144,12 +171,19 @@ impl LaneOrder {
         1 << self.shift
     }
 
-    /// The memory column held at plane column `physical`, and the plane
-    /// column holding memory column `physical`: the map is an involution.
+    /// The memory column held at plane column `physical`.
     #[inline]
     pub(crate) fn column(self, physical: usize) -> usize {
         let mask = (1usize << self.shift) - 1;
         (physical & !mask) | usize::from(self.table[physical & mask])
+    }
+
+    /// The plane column holding memory column `column`: the inverse of
+    /// [`column`](Self::column).
+    #[inline]
+    pub(crate) fn plane(self, column: usize) -> usize {
+        let mask = (1usize << self.shift) - 1;
+        (column & !mask) | usize::from(self.inverse[column & mask])
     }
 }
 
@@ -205,7 +239,7 @@ mod tests {
         let order = LaneOrder::for_batch::<T>(lanes);
         for (physical, &column) in received.iter().enumerate() {
             assert_eq!(order.column(physical), column, "lane {physical}");
-            assert_eq!(order.column(column), physical, "involution at {physical}");
+            assert_eq!(order.plane(column), physical, "inverse at {physical}");
         }
         // Groups repeat: the second group is the first shifted by `lanes`.
         for physical in 0..lanes {
@@ -232,8 +266,48 @@ mod tests {
             let order = LaneOrder::from_geometry(lanes, sublane);
             for lane in 0..lanes {
                 assert_eq!(order.column(lane), super::column_of(lanes, sublane, lane));
+                assert_eq!(order.plane(order.column(lane)), lane);
+                assert_eq!(order.column(order.plane(lane)), lane);
             }
         }
+        assert_eq!(super::sublane_inverse::<8>(2), [0, 2, 4, 6, 1, 3, 5, 7]);
+        assert_eq!(
+            super::sublane_inverse::<16>(4),
+            [0, 1, 4, 5, 8, 9, 12, 13, 2, 3, 6, 7, 10, 11, 14, 15]
+        );
+    }
+
+    /// The register relabeling the vector transpose applies, on a scalar
+    /// model of the tile: rows fed in `order`, transposed, read back in the
+    /// inverse, must land `out[k][l] = in[order(l)][inverse(k)]` at every
+    /// width, the AVX-512 ones included, where the order is no involution.
+    fn relabeled_transpose_holds<const LANES: usize>(sublane: usize) {
+        let order = super::sublane_order::<LANES>(sublane);
+        let inverse = super::sublane_inverse::<LANES>(sublane);
+        let tile: [[usize; LANES]; LANES] =
+            core::array::from_fn(|r| core::array::from_fn(|c| 100 * r + c));
+        let ordered: [[usize; LANES]; LANES] = core::array::from_fn(|k| tile[order[k]]);
+        let transposed: [[usize; LANES]; LANES] =
+            core::array::from_fn(|r| core::array::from_fn(|c| ordered[c][r]));
+        let out: [[usize; LANES]; LANES] = core::array::from_fn(|k| transposed[inverse[k]]);
+        for k in 0..LANES {
+            for l in 0..LANES {
+                assert_eq!(
+                    out[k][l], tile[order[l]][inverse[k]],
+                    "{LANES} lanes at ({k},{l})"
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn relabeled_transpose_holds_at_every_width() {
+        relabeled_transpose_holds::<2>(2);
+        relabeled_transpose_holds::<4>(2);
+        relabeled_transpose_holds::<4>(4);
+        relabeled_transpose_holds::<8>(4);
+        relabeled_transpose_holds::<8>(2);
+        relabeled_transpose_holds::<16>(4);
     }
 
     #[test]
@@ -267,5 +341,17 @@ mod tests {
             (0..16).map(|c| sixteen.column(c)).collect::<Vec<_>>(),
             [0, 1, 8, 9, 2, 3, 10, 11, 4, 5, 12, 13, 6, 7, 14, 15]
         );
+        // Neither AVX-512 order is an involution: `plane` is its own map.
+        let wide = LaneOrder::from_geometry(8, 2);
+        assert_eq!(
+            (0..8).map(|c| wide.column(c)).collect::<Vec<_>>(),
+            [0, 4, 1, 5, 2, 6, 3, 7]
+        );
+        assert_eq!(
+            (0..8).map(|c| wide.plane(c)).collect::<Vec<_>>(),
+            [0, 2, 4, 6, 1, 3, 5, 7]
+        );
+        assert_eq!(wide.column(wide.column(1)), 2);
+        assert_eq!(sixteen.plane(8), 2);
     }
 }
