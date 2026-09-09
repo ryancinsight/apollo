@@ -38,49 +38,6 @@ declare_cache_store! {
     global_reduced: FOUR_STEP_TW_REDUCED_CACHE,
 }
 
-/// Produces the `W_N^(j*k)` matrix entries without allocating or touching caches.
-///
-/// The batched kernel's planar-plane cache builds from this and stores only
-/// its own representation; routing it through [`cached_four_step_twiddles`]
-/// would cache the interleaved matrix as a dead side effect beside the planes
-/// — the doubled-footprint defect the planes' consolidation note recorded.
-pub(crate) fn build_four_step_twiddles<C: TwiddleOutput, const INVERSE: bool>(
-    n: usize,
-    n1: usize,
-    n2: usize,
-) -> impl ExactSizeIterator<Item = C> {
-    let sign = if INVERSE { 1.0_f64 } else { -1.0_f64 };
-    let entries = n1
-        .checked_mul(n2)
-        .expect("invariant: twiddle matrix size fits usize");
-
-    // Entry (j, k) is W_n^{j*k} = exp(sign * 2πi * j * k / n), through the
-    // shared evaluation authority (`twiddle_table::twiddle_components`):
-    // mod-`n` reduction first, one direct `sin_cos` per entry, and the
-    // canonical association `sign * TAU * e / n` — the last differs from the
-    // superseded local `(sign * TAU / n) * e` by at most one rounding, within
-    // the accuracy gate's derived bound.
-    //
-    // The superseded form built row 1 by a recurrence over `k` and each later
-    // row by multiplying the row above it, so entry (j, k) carried the rounding
-    // of `j + k` complex multiplications, up to `O(n1 + n2) = O(2*sqrt(n))`.
-    // Twiddle error of that size defeats the `O(log N * u)` FFT forward-error
-    // bound (Higham, *Accuracy and Stability of Numerical Algorithms*, 2nd ed.,
-    // section 24.1), which holds only for accurately computed twiddles. The
-    // cost is `n1 * n2` `sin_cos` calls once per `(n, direction)`, behind the
-    // thread-local and global caches above.
-    // A mapped range preserves exact cardinality for the final collection,
-    // allowing Arc construction without an intermediate full matrix Vec.
-    (0..entries).map(move |index| {
-        let (sin, cos) = crate::application::execution::kernel::twiddle_table::twiddle_components(
-            sign,
-            (index / n1) * (index % n1),
-            n,
-        );
-        C::from_components(cos, sin)
-    })
-}
-
 #[inline]
 pub(crate) fn cached_four_step_twiddles<C: FourStepStore, const INVERSE: bool>(
     n: usize,
@@ -96,7 +53,26 @@ pub(crate) fn cached_four_step_twiddles<C: FourStepStore, const INVERSE: bool>(
         if let Some(v) = maybe {
             v
         } else {
-            let new_v: Arc<[C]> = build_four_step_twiddles::<C, INVERSE>(n, n1, n2).collect();
+            let sign = if INVERSE { 1.0_f64 } else { -1.0_f64 };
+            let entries = n1
+                .checked_mul(n2)
+                .expect("invariant: twiddle matrix size fits usize");
+            // Entry (j, k) is W_n^{j*k} = exp(sign * 2πi * j * k / n), through
+            // the shared evaluation authority: mod-`n` reduction first and one
+            // direct `sin_cos` per entry, so no entry carries a recurrence's
+            // O(n1 + n2) roundings, which the `O(log N * u)` forward-error
+            // bound (Higham, section 24.1) does not admit.
+            let new_v: Arc<[C]> = (0..entries)
+                .map(|index| {
+                    let (sin, cos) =
+                        crate::application::execution::kernel::twiddle_table::twiddle_components(
+                            sign,
+                            (index / n1) * (index % n1),
+                            n,
+                        );
+                    C::from_components(cos, sin)
+                })
+                .collect();
             C::four_step_global()
                 .write()
                 .entry(key)

@@ -29,7 +29,8 @@
 //! DIF downward, over the same values.
 
 use super::radix::Lane;
-use super::sweep::{sweep_frequency, sweep_lengths};
+use super::sweep::{sweep_frequency, sweep_lengths_descending};
+use super::FourStepFold;
 use crate::application::execution::kernel::mixed_radix::MixedRadixScalar;
 use hermes_simd::{LaneKernel, LaneScalar, Simd, SimdArch, SimdKernel};
 
@@ -42,11 +43,10 @@ pub(super) struct BatchedStagesDif<'a, T> {
     pub(super) re: &'a mut [T],
     pub(super) im: &'a mut [T],
     pub(super) tw: &'a [(T, T)],
-    /// Planar four-step twiddles multiplied into the first stage's loads, or
-    /// `None`. Row-major with row stride `batch`, rows in the same *natural*
-    /// order the data rows now carry — the mirror of the bit-reversed planes
-    /// the decimation-in-time set required.
-    pub(super) fold: Option<(&'a [T], &'a [T])>,
+    /// The four-step twiddle tables multiplied into the first stage's loads,
+    /// or `None`; rows in the same natural order the data rows carry, the
+    /// mirror of the bit-reversed planes the decimation-in-time set required.
+    pub(super) fold: Option<&'a FourStepFold<T>>,
     /// Interleaved output written by the last pass in place of the planes,
     /// or `None` to leave the result in the planes. Rows of `batch`
     /// complexes as `2 * batch` reals; plane row `p` lands in output row
@@ -55,6 +55,8 @@ pub(super) struct BatchedStagesDif<'a, T> {
     /// exactly once, and one register interleave plus two interleaved stores
     /// replace the two plane stores.
     pub(super) sink: Option<&'a mut [T]>,
+    /// One tile block of interleaved rows for the sink, as reals.
+    pub(super) staging: &'a mut [T],
     pub(super) batch: usize,
     pub(super) stride: usize,
     pub(super) len: usize,
@@ -78,6 +80,7 @@ where
             tw,
             fold,
             mut sink,
+            staging,
             batch: b,
             stride: s,
             len,
@@ -85,11 +88,12 @@ where
         // Widest stage first, in sweeps of up to `SWEEP_STAGES` stages per
         // trip through the planes, two per pass while two remain and then
         // one: the mirror of the time-decimated set's grouping over the
-        // same L1-resident tiles (see [`super::sweep`]). The four-step
+        // same L1-resident tiles (see [`super::sweep`]), with the odd
+        // remainder taken first so the sink rides a full tile. The four-step
         // twiddle rides the pass over stage `len` and the interleaved sink
         // the pass over stage 2. Stage `l` holds `W_l^j` at `l / 2 - 1`.
         let mut l_top = len;
-        for (index, stages) in sweep_lengths(len.trailing_zeros()).enumerate() {
+        for (index, stages) in sweep_lengths_descending(len.trailing_zeros()).enumerate() {
             sect!(super::FREQUENCY_SWEEPS[index], {
                 sweep_frequency(
                     re,
@@ -97,6 +101,7 @@ where
                     tw,
                     fold,
                     sink.as_deref_mut(),
+                    staging,
                     b,
                     s,
                     len,

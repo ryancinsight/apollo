@@ -116,7 +116,12 @@ impl LaneOrder {
     /// `sublane` does not divide it evenly.
     pub(crate) fn from_geometry(lanes: usize, sublane: usize) -> Self {
         if sublane == lanes {
-            return Self::IDENTITY;
+            // Memory order, but the group is still the register: the fold
+            // table's fine level is one register wide.
+            return Self {
+                shift: lanes.trailing_zeros(),
+                table: Self::IDENTITY.table,
+            };
         }
         assert!(
             lanes.is_power_of_two() && lanes <= LANE_GROUP_CAPACITY && lanes % sublane == 0,
@@ -133,7 +138,8 @@ impl LaneOrder {
         }
     }
 
-    /// Columns per lane group: one where the order is the identity.
+    /// Columns per lane group: the dispatched register's lanes, or one
+    /// where the batch is narrower than a register.
     pub(crate) fn lanes(self) -> usize {
         1 << self.shift
     }
@@ -250,7 +256,12 @@ mod tests {
             [0, 1, 4, 5, 2, 3, 6, 7]
         );
         assert_eq!(eight.column(13), 8 + 3);
-        assert_eq!(LaneOrder::from_geometry(4, 4), LaneOrder::IDENTITY);
+        let flat = LaneOrder::from_geometry(4, 4);
+        assert_eq!(flat.lanes(), 4);
+        assert_eq!(
+            (0..8).map(|c| flat.column(c)).collect::<Vec<_>>(),
+            (0..8).collect::<Vec<_>>()
+        );
         let sixteen = LaneOrder::from_geometry(16, 4);
         assert_eq!(
             (0..16).map(|c| sixteen.column(c)).collect::<Vec<_>>(),

@@ -2,12 +2,15 @@
 
 ## claude/fable — current execution
 
-- [x] [Stage sweeps](backlog.md#apollo-planar-stage-sweeps): sweep driver measured three times, ADR 0056 Accepted, board updated.
 - [x] [Stage sweeps](backlog.md#apollo-planar-stage-sweeps): PR 354 merged; lease discharged.
 - [x] [Seam lane order](backlog.md#apollo-planar-seam-lane-order): hermes in-lane unpack landed (PR 161); plane layout, seams, transpose and combine on the lane (`3adf12b1`).
 - [x] [Seam lane order](backlog.md#apollo-planar-seam-lane-order): paired measurement, ADR 0057 Accepted, board updated.
-- [ ] [Seam lane order](backlog.md#apollo-planar-seam-lane-order): PR enqueued, merged, lease discharged.
-- [ ] [Seam staging](backlog.md#apollo-planar-seam-staging): staging buffers for the sink and source blocks, offset-independent `f2`/`t1`.
+- [x] [Seam lane order](backlog.md#apollo-planar-seam-lane-order): PR 357 merged; lease discharged.
+- [x] [Seam staging](backlog.md#apollo-planar-seam-staging): sink staged, source kept direct on measurement, ADR 0058 Accepted.
+- [x] [Seam staging](backlog.md#apollo-planar-seam-staging): PR 360 merged; lease discharged.
+- [x] [Compact fold](backlog.md#apollo-four-step-compact-fold): two-level table from 2^18, ADR 0059 Accepted.
+- [ ] [Compact fold](backlog.md#apollo-four-step-compact-fold): PR enqueued; merged, lease discharged.
+- [ ] [1M crossover](backlog.md#apollo-n1m-planar-crossover): gates green, PR opened behind PR 361; merged, lease discharged.
 
 ## codex/root — current execution
 

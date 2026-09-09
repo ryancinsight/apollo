@@ -112,39 +112,27 @@
 - **Outcome:** [ADR 0052](docs/adr/0052-twiddless-fft-evaluation.md) Rejected: 2.4 to 10.7 times slower than the plan at every length but 65536; PR #349 merged 2026-09-08.
 
 <a id="apollo-planar-stage-sweeps"></a>
-## APOLLO-PLANAR-STAGE-SWEEPS — Run several stages per trip through the planes [patch] [perf] — review
-- **Integrator:** claude/fable; **last-update:** 2026-09-09; branch `perf/apollo-planar-interleaved-radix-eight` on lane `D:/atlas/worktrees/apollo-route`; parent [beat the references](#atlas-apollo-beat-the-references).
-- **Outcome:** [ADR 0056](docs/adr/0056-planar-stage-sweeps.md) Accepted: four stages per sweep over 16-row tiles blocked to 16 KiB, both stage sets; the plain sweep halves the pass cost (14.6 to 7.8 cycles per quad); whole transform 7 to 14% faster at 16384 and 65536 in both precisions, level with RustFFT at 16384 `f64`, ahead in `f32`, 1.07 to 1.15 behind at 65536 and 4096 `f64`. The per-sweep attribution (`t1..t3`, `f1..f3`) names the seam sweeps as most of both stage sets; evidence `../../output/apollo-planar-sweeps/`.
-- **Acceptance:** results bitwise those of the unswept sets (600 tests unchanged and passing); `pinned_sections` stage-set cycles below ADR 0055's at 16384 and 65536 in both precisions across three runs; whole-transform intervals below the previous state in both instruments.
-- **Dependencies:** none. **Verification:** batched, workspace, RustFFT-differential, dimension-1d and DFT-oracle suites; `pinned_sections`; `engine_census` and `twiddless_comparison` twice on the pinned core.
+## APOLLO-PLANAR-STAGE-SWEEPS — Run several stages per trip through the planes [patch] [perf] — done 2026-09-09
+- **Outcome:** [ADR 0056](docs/adr/0056-planar-stage-sweeps.md) Accepted: four stages per sweep over 16-row tiles blocked to 16 KiB, both stage sets; the plain sweep halves the pass cost (14.6 to 7.8 cycles per quad); whole transform 7 to 14% faster at 16384 and 65536 in both precisions; per-sweep attribution `t1..t3`, `f1..f3`; evidence `../../output/apollo-planar-sweeps/`; PR #354 merged 2026-09-09.
 
 <a id="apollo-planar-seam-lane-order"></a>
-## APOLLO-PLANAR-SEAM-LANE-ORDER — Store plane columns in the unpack lane order [minor] [perf] — review
-- **Integrator:** claude/fable; **last-update:** 2026-09-09; branch `perf/apollo-planar-seam-lane-order` on lane `D:/atlas/worktrees/apollo-route`; hermes PR 161 landed the sub-lane pair; commit `3adf12b1` (a peer takeover of this lane's uncommitted work) holds the implementation, `7072b98a` the transpose relabeling.
-- **Outcome:** [ADR 0057](docs/adr/0057-planar-columns-in-sublane-order.md) Accepted: planes in the dispatched backend's sub-lane order through `LaneOrder`, seams reduced to the unpacks (no cross-lane permute in either listing), one `vectorize` selector for every planar kernel, `BOUNDARY_LANES` deleted; paired measurement neutral at 65536 in both precisions and within the spread below. The pairs exposed the sink sweep as a placement lottery (16384 `f64` `f2` 30k to 82k cycles by buffer offset), filed as [seam staging](#apollo-planar-seam-staging).
-- **Acceptance:** no cross-lane permute in the source or sink listing (met); results bitwise unchanged (604 tests); `t1` and `f2` below ADR 0056's (not met: the seam sweeps are not shuffle-bound, recorded in the ADR).
-- **Dependencies:** hermes-simd `e85b019` (consumed). **Verification:** batched, workspace, RustFFT-differential, dimension-1d and DFT-oracle suites; `cargo asm`; paired `pinned_sections`; warm instrument.
+## APOLLO-PLANAR-SEAM-LANE-ORDER — Store plane columns in the unpack lane order [minor] [perf] — done 2026-09-09
+- **Outcome:** [ADR 0057](docs/adr/0057-planar-columns-in-sublane-order.md) Accepted: planes in the dispatched backend's sub-lane order, seams reduced to the unpacks, one selector for every planar kernel; neutral at 65536, and the pairs exposed the sink sweep's placement lottery, filed as [seam staging](#apollo-planar-seam-staging); PR #357 merged 2026-09-09.
 
 <a id="apollo-planar-seam-staging"></a>
-## APOLLO-PLANAR-SEAM-STAGING — Stage each seam block through a contiguous buffer [patch] [perf] — todo
-- **Evidence:** ADR 0057's offset probe: the sink sweep at 16384 `f64` costs 30k, 45k or 82k cycles per call as the caller's buffer moves 64, 0 or 256 bytes modulo the page against the scratch planes, and 11k or 24k in `f32`; at 65536 `f64` 216k to 253k. The sixteen destination rows of a sink block are `n` bytes apart, a multiple of 4 KiB from 4096 up, so their lines share L1 sets and evict the tile between the sweep's passes; the source sweep reads sixteen rows with the same spacing and costs twice the plain sweep.
-- **Scope:** in the sink sweep, pass B writes its interleaved block into a contiguous staging buffer of one block (16 KiB, in the scratch), and the block's sixteen rows copy out afterwards as sequential lines; in the source sweep, the sixteen row segments copy into staging first and pass A deinterleaves from it. Copies are plain vector moves; the staging area lives in the existing scratch allocation (workspace extent updated and pinned). Non-goals: non-temporal stores, prefetch.
-- **Acceptance:** `f2` and `t1` at 16384 and 65536 independent of the probe offset (spread below 10% across the eight offsets) and at or below the best offset's value; whole-transform intervals below ADR 0057's in both instruments; results bitwise unchanged.
-- **Dependencies:** none. **Verification:** existing suites; `pinned_sections` with `APOLLO_PROBE_OFFSET` across offsets; census and warm instruments.
+## APOLLO-PLANAR-SEAM-STAGING — Stage each seam block through a contiguous buffer [patch] [perf] — done 2026-09-09
+- **Outcome:** [ADR 0058](docs/adr/0058-planar-sink-staging.md) Accepted: the sink staged through a contiguous block up to `2^16`, placement-independent (16384 `f64` 30k from 30k to 82k cycles, 65536 `f32` 76k to 81k from 124k to 150k); census `f64` 4096 8.8 to 7.8 µs, 16384 37.7 to 33.8, 65536 185.9 to 175.8; the source kept direct on measurement; PR #360 merged 2026-09-09.
 
 <a id="apollo-planar-seam-prefetch"></a>
-## APOLLO-PLANAR-SEAM-PREFETCH — Prefetch the seam streams ahead of the row loop [patch] [perf] — todo
-- **Evidence:** ADR 0056: the source sweep reads the caller's buffer in bit-reversed row order and costs 2 times the plain sweep at 65536 `f64` and 4.2 times at 262144 (1341k against 318k cycles); the fold sweep and the sink sweep carry the same shape. The sixteen row streams per tile block are one-kilobyte segments, short for the L2 streamer.
-- **Scope:** software prefetch of each seam row's next lines inside the row loop (source and fold rows, sink rows with the write hint), through a hermes-simd prefetch operation added upstream; distance derived from the block width and measured. Non-goals: non-temporal stores.
-- **Acceptance:** `t1`, `f1`, `f2` at 65536 and 262144 below ADR 0056's in both precisions; no change below 16384; results unchanged.
-- **Dependencies:** hermes-simd prefetch (filed on the hermes board). **Verification:** `pinned_sections` three runs; census once.
+## APOLLO-PLANAR-SEAM-PREFETCH — Prefetch the seam streams ahead of the row loop [patch] [perf] — done 2026-09-09 (rejected)
+- **Outcome:** closed on a spike (`../../output/apollo-compact-fold/pf_*.txt`, sandbox only): prefetching the next tile block's sixteen source rows (256 `T0` prefetches per block) slowed the source sweep 12 to 25% at 16384 and 65536 in both precisions and left 262144 within noise; the source sweep is fill-bound from L2, not latency-bound, and the hermes prefetch operation is not filed. Re-open only with a finer-grained schedule and a measured hypothesis.
 
 <a id="apollo-four-step-compact-fold"></a>
-## APOLLO-FOUR-STEP-COMPACT-FOLD — Fold twiddles from a two-level table [patch] [perf] — todo
-- **Evidence:** ADR 0056: the fold sweep reads `FourStepPlanes` as large as the data (1 MiB at 65536 `f64`) and costs 135k cycles against the plain sweep's 64k; at 262144 the planes, the fold and the caller's buffer total 12 MiB against a 3 MiB L2.
-- **Scope:** `W_N^(p k)` as `W_N^(p k_hi F) · W_N^(p k_lo)` with `F` one column group, two planar tables of `m F` and `m (m / F)` entries, one extra complex multiply per element in the fold pass; the twiddle error bound gains one rounding (documented at the fold and in the RustFFT differential's bound). Non-goals: the interleaved oracle's table.
-- **Acceptance:** `f1` at 65536 and 262144 below ADR 0056's; footprint reported by the retained-footprint probe; differential tests within the re-derived bound.
-- **Dependencies:** none. **Verification:** batched and workspace suites, RustFFT differential, `pinned_sections`.
+## APOLLO-FOUR-STEP-COMPACT-FOLD — Fold twiddles from a two-level table [patch] [perf] — review
+- **Integrator:** claude/fable; **last-update:** 2026-09-09; branch `perf/apollo-four-step-compact-fold` on lane `D:/atlas/worktrees/apollo-route`, stacked on `perf/apollo-planar-seam-staging` (PR 360).
+- **Outcome:** [ADR 0059](docs/adr/0059-compact-four-step-fold.md) Accepted: `FourStepFold` holds a coarse table per row and lane group and a fine table of one register per row, `m (F + m / F)` entries for `m^2`, two-level from `2^18` and the full row below it; the fold sweep at 262144 fell from 635k to 369k cycles (`f64`) and 217k to 156k (`f32`), the whole transform 6% and 3%; below the bound the pass is unchanged. Entries within `4 EPSILON` of the matrix, pinned at 256 and 262144; the full-matrix builder is deleted.
+- **Acceptance:** `f1` at 262144 below ADR 0058's in both precisions (met); footprint `m (F + m / F)` pairs above the bound; differential tests within their bounds (met, unchanged).
+- **Dependencies:** none. **Verification:** batched and workspace suites, RustFFT differential, DFT oracle sweep; `pinned_sections` against the staged build.
 
 <a id="apollo-n65536-four-step-scalar-loss"></a>
 ## APOLLO-N65536-FOUR-STEP-SCALAR-LOSS — Remove the generic four-step loss from 65536 upward [patch] [perf] — done 2026-09-08
@@ -163,11 +151,18 @@
 - **Outcome:** closed on analysis in [ADR 0056](docs/adr/0056-planar-stage-sweeps.md): the sweep halves the bytes per element-stage without touching the arithmetic, the interleaved radix-8 would move a third fewer bytes at 1.7 times the vector operations, and the remaining cost is the seams, which the layout would not remove.
 
 <a id="apollo-n1m-planar-crossover"></a>
-## APOLLO-N1M-PLANAR-CROSSOVER — Decide the planar route at 1048576 [patch] [perf] — todo
-- **Evidence:** ADR 0053's three candidate runs at 1048576 are invalid: a tree-mate built and tested in the shared cache and the PhastFT control arm moved from 7748 to 11248–15772 µs between runs. Within-run ratios to PhastFT read 1.25, 1.45 and 1.62 (`f64`) against the generic route's 1.40, so no direction is supported.
-- **Scope:** replicated counterbalanced census at 1048576 and 2097152 on a quiet host (no concurrent cargo; record the process table), planar candidate against the generic route; move `PLANAR_MAX_LEN` only on disjoint intervals. Non-goals: kernel changes.
-- **Acceptance:** either `PLANAR_MAX_LEN` moves to `2^20` with the supported ratio recorded in ADR 0053's revision note, or the generic route is confirmed and the reason (L3 spill of the 16 MiB padded planes is the hypothesis) is recorded.
-- **Dependencies:** none. **Verification:** existing workspace and differential tests at the moved length.
+## APOLLO-N1M-PLANAR-CROSSOVER — Decide the planar route at 1048576 [patch] [perf] — review
+- **Integrator:** claude/fable; **last-update:** 2026-09-09; branch `perf/apollo-n1m-planar-crossover` on lane `D:/atlas/worktrees/apollo-route`, stacked on PR #361.
+- **Outcome:** `PLANAR_MAX_LEN` moved to `2^20` ([ADR 0053](docs/adr/0053-planar-four-step-domain.md) revised in place): quiet-host six-run counterbalanced census, `f64` 1048576 10.0 to 10.2 ms to 5.6 to 5.8 (RustFFT 6.4 to 7.1, PhastFT 6.9 to 7.5), `f32` 5.1 to 6.0 to 2.6 to 2.8 (PhastFT 3.1 to 3.4); 2097152 halves in both precisions, level with the references in `f64`, 10% behind PhastFT in `f32`; evidence `../../output/apollo-n1m-crossover/`. The PhastFT comparison bench is pinned to the measurement processor like the other three.
+- **Acceptance:** met, candidate intervals disjoint below base at both lengths and precisions across three replicates each; workspace pins extended to 1048576 and 2097152 and the impulse oracle run forward at `PLANAR_MAX_LEN`.
+- **Dependencies:** none. **Verification:** batched, workspace, RustFFT-differential, dimension-1d and DFT-oracle suites.
+
+<a id="apollo-workspace-impulse-oracle-budget"></a>
+## APOLLO-WORKSPACE-IMPULSE-ORACLE-BUDGET — Fit the workspace impulse oracle in the CI slow budget [patch] — todo
+- **Evidence:** `workspace_extents_preserve_the_impulse_spectrum` takes 3.6 s in the dev profile on the 285K host (2026-09-09, base of the 1M crossover), and the hosted runner is 13 to 17 times slower on compute-bound tests, so it sits past the 30 s slow bound in the `ci` profile; twelve transforms at 262144 dominate.
+- **Scope:** keep every form (forward, inverse, normalized) and both workspace extents at the shorter lengths and run the 262144 forms once each per precision, or shard the length list across tests as the DFT oracle sweep does; never shrink the oracle or raise the bound.
+- **Acceptance:** each test under 2 s locally (30 s on the runner at the measured ratio) with the same set of (length, form, extent) triples exercised across the tests; the `ci` run reports no slow test from this file.
+- **Dependencies:** none. **Verification:** `cargo nextest run -p apollo-fft` timings, the `ci` profile status line.
 
 <a id="apollo-sft-sublinear-recovery"></a>
 ## APOLLO-SFT-SUBLINEAR-RECOVERY — Deliver a sublinear sparse recovery route [minor] — todo
@@ -1419,6 +1414,12 @@
   table's precision. What is stable across every run this session is the set of
   signs: apollo is ahead at n = 64, n = 100 and `f32` n = 1000, and behind
   everywhere else.
+- **Large lengths, 2026-09-09.** The planar route (ADR 0053, 0056 to 0059)
+  now covers 4096 through 2097152: in `f64` apollo is level with RustFFT at
+  4096 and 262144, ahead at 16384 and 1048576, 1.04 behind at 65536 and
+  level at 2097152; in `f32` ahead of both references at every measured
+  length except 2097152 (PhastFT by 10%). Evidence in the closed items
+  above and `../../output/apollo-n1m-crossover/`.
 - **What the shape says.** Apollo is ahead exactly where it has a hand-tuned
   construction — n = 64 (`State64`) and n = 100 — and behind everywhere else,
   including at lengths where the tuned split applies (128 to 512 sit at
