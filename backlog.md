@@ -215,12 +215,11 @@
 - **Dependencies:** none. **Verification:** base-128, dimension-1d and DFT-oracle suites; `rustfft_comparison` counterbalanced.
 
 <a id="apollo-planar-source-placement"></a>
-## APOLLO-PLANAR-SOURCE-PLACEMENT — Bound the planar route's placement swing against its scratch [patch] [perf] — in-progress
-- **Integrator:** claude/fable; **last-update:** 2026-09-09; branch `perf/apollo-planar-source-placement` on lane `D:/atlas/worktrees/apollo-route`; lease: claude/fable `components/batched/{mod,sweep,pinned_sections,pinned_ladder}.rs` 2026-09-09T22:45Z; parent [beat the references](#atlas-apollo-beat-the-references).
-- **Evidence:** the pinned ladder's new direct-driver arm (`../../output/apollo-planar-rectangular/ladder1.txt`) runs 35 to 47% slower than the plan arm on the same route at 4096 and 8192 `f64` (10.8 against 8.0 µs, 25.6 against 17.3) and level at 2048, 16384 and 32768, the two arms differing only in where the scratch planes sit against the caller's buffer; the first offset sweep (`offset_*.txt`) shifted the caller's buffer alone by up to 3 KiB and saw nothing, so the pathological relative page offset lies outside those samples. A direct-sink spike below a page of row stride (`sink*`, `sections_*_t*`) was built and rejected: `f64` 2048 flat, `f32` 4096 sink sweep 5.7k against 4.1k.
-- **Scope:** the section probe gains a gap mode (the driver called direct with its scratch in the caller's allocation, `APOLLO_PROBE_GAP` complexes apart) and sweeps the relative page offset at 2048 to 8192 in both precisions; then place the planes inside the scratch at an offset chosen from the caller's page offset so the pathological alignment cannot occur, with the slack added to `scratch_len`, and re-measure. Non-goals: the sink, which stages.
-- **Acceptance:** the driver's `pinned_sections` total within 5% across every relative page offset at 2048, 4096 and 8192 in both precisions; the ladder's driver and plan arms level at every planar length.
-- **Dependencies:** none. **Verification:** `pinned_sections` by gap; the pinned ladder; the workspace pins and the oracle suites.
+## APOLLO-PLANAR-SOURCE-PLACEMENT — Start the planar planes on a cache line [patch] [perf] — review
+- **Integrator:** claude/fable; **last-update:** 2026-09-09; branch `perf/apollo-planar-source-placement` on lane `D:/atlas/worktrees/apollo-route`; parent [beat the references](#atlas-apollo-beat-the-references).
+- **Outcome:** the swing was alignment, not placement: the allocator returns sixteen-byte alignment, so three scratch allocations in four put the planes part way into a cache line and half of every sweep's register loads and stores straddle two lines. Tabulating the buffers' addresses across the sweeps (`../../output/apollo-planar-rectangular/`: `gap_*`, `gapsweep`, `pagesweep`, `align_*`) put every fast case at 0 mod 64 and every slow case at 16 or 48, whatever the page offset; the transform cost half again when misaligned (2048 `f64` 19.1k against 12.4k cycles, 8192 86k against 56k). The driver now leads the planes to a line inside the scratch with a line of slack in `scratch_len`; the ladder's driver arm, 36 to 48% slow unfixed (`ladder1`, `ladder3`), matches the plan arm at every planar length on the fixed tree (`ladder2`: 4096 8.0 against 7.9 µs, 8192 17.4 against 17.7). The caller's own buffer alignment moves the total by at most 5% (`align_*`). The direct-sink spike below a page of row stride was rejected on the way (`f32` 4096 sink sweep 5.7k against 4.1k).
+- **Acceptance:** met: the driver arm level with the plan arm at every planar length; the section probe within 5% across every scratch page offset with the scratch on a line; 612 tests with the pins moved by the slack.
+- **Dependencies:** none. **Verification:** the pinned ladder (fixed against unfixed), `pinned_sections` in page mode, the workspace pins and the oracle suites.
 
 <a id="apollo-workspace-impulse-oracle-budget"></a>
 ## APOLLO-WORKSPACE-IMPULSE-ORACLE-BUDGET — Fit the workspace impulse oracle in the CI slow budget [patch] — todo
@@ -1492,6 +1491,11 @@
   against the plain sweeps' 0.6 to 1.0), the same cost the even route pays
   and the next lever for both. Evidence `../../output/apollo-planar-rectangular/`.
 
+- **Alignment, 2026-09-09.** The planar route ran half again slower whenever
+  its scratch landed part way into a cache line, three allocations in four;
+  the planes now start on a line (item below), which is what the bimodal
+  2048 `f64` bench readings and the reference-arm drift in earlier rounds
+  partly were. Re-measure the standing cells above once it lands.
 - **1024, 2026-09-09.** The base-128 route's last level vectorized: `f64`
   1.5 to 1.6 µs against RustFFT's 1.2 (was 1.8), `f32` 0.7 to 0.8 against
   0.6 to 0.7 (was 0.8). What remains at 1024 is the gather and the two
