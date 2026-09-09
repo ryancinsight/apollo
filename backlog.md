@@ -12,11 +12,8 @@
 - **Dependencies:** none. **Verification:** batched, workspace, RustFFT-differential, dimension-1d and DFT-oracle suites; `pinned_sections`; `engine_census` and `twiddless_comparison` twice on the pinned core.
 
 <a id="apollo-planar-seam-lane-order"></a>
-## APOLLO-PLANAR-SEAM-LANE-ORDER — Store plane columns in the unpack lane order [minor] [perf] — review
-- **Integrator:** claude/fable; **last-update:** 2026-09-09; branch `perf/apollo-planar-seam-lane-order` on lane `D:/atlas/worktrees/apollo-route`; hermes PR 161 landed the sub-lane pair; commit `3adf12b1` (a peer takeover of this lane's uncommitted work) holds the implementation, `7072b98a` the transpose relabeling.
-- **Outcome:** [ADR 0057](docs/adr/0057-planar-columns-in-sublane-order.md) Accepted: planes in the dispatched backend's sub-lane order through `LaneOrder`, seams reduced to the unpacks (no cross-lane permute in either listing), one `vectorize` selector for every planar kernel, `BOUNDARY_LANES` deleted; paired measurement neutral at 65536 in both precisions and within the spread below. The pairs exposed the sink sweep as a placement lottery (16384 `f64` `f2` 30k to 82k cycles by buffer offset), filed as [seam staging](#apollo-planar-seam-staging).
-- **Acceptance:** no cross-lane permute in the source or sink listing (met); results bitwise unchanged (604 tests); `t1` and `f2` below ADR 0056's (not met: the seam sweeps are not shuffle-bound, recorded in the ADR).
-- **Dependencies:** hermes-simd `e85b019` (consumed). **Verification:** batched, workspace, RustFFT-differential, dimension-1d and DFT-oracle suites; `cargo asm`; paired `pinned_sections`; warm instrument.
+## APOLLO-PLANAR-SEAM-LANE-ORDER — Store plane columns in the unpack lane order [minor] [perf] — done 2026-09-09
+- **Outcome:** [ADR 0057](docs/adr/0057-planar-columns-in-sublane-order.md) Accepted: planes in the dispatched backend's sub-lane order, seams reduced to the unpacks, one selector for every planar kernel; neutral at 65536, and the pairs exposed the sink sweep's placement lottery, filed as [seam staging](#apollo-planar-seam-staging); PR #357 merged 2026-09-09.
 
 <a id="apollo-planar-seam-staging"></a>
 ## APOLLO-PLANAR-SEAM-STAGING — Stage each seam block through a contiguous buffer [patch] [perf] — in-progress
