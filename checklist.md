@@ -10,6 +10,7 @@
 - [x] [Seam staging](backlog.md#apollo-planar-seam-staging): PR 360 merged; lease discharged.
 - [x] [Compact fold](backlog.md#apollo-four-step-compact-fold): two-level table from 2^18, ADR 0059 Accepted.
 - [ ] [Compact fold](backlog.md#apollo-four-step-compact-fold): PR enqueued; merged, lease discharged.
+- [ ] [1M crossover](backlog.md#apollo-n1m-planar-crossover): gates green, PR opened behind PR 361; merged, lease discharged.
 
 ## codex/root — current execution
 

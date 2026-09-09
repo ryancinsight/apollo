@@ -44,12 +44,18 @@
 - **Outcome:** closed on analysis in [ADR 0056](docs/adr/0056-planar-stage-sweeps.md): the sweep halves the bytes per element-stage without touching the arithmetic, the interleaved radix-8 would move a third fewer bytes at 1.7 times the vector operations, and the remaining cost is the seams, which the layout would not remove.
 
 <a id="apollo-n1m-planar-crossover"></a>
-## APOLLO-N1M-PLANAR-CROSSOVER — Decide the planar route at 1048576 [patch] [perf] — in-progress
-- **Integrator:** claude/fable; **last-update:** 2026-09-09; branch `perf/apollo-n1m-planar-crossover` on lane `D:/atlas/worktrees/apollo-route`, stacked on PR #361; lease: claude/fable `components/batched/mod.rs` (`PLANAR_MAX_LEN`), `four_step/tests/workspace.rs`, `docs/adr/0053-*` 2026-09-09T20:05Z.
-- **Evidence:** ADR 0053's three candidate runs at 1048576 are invalid: a tree-mate built and tested in the shared cache and the PhastFT control arm moved from 7748 to 11248–15772 µs between runs. Within-run ratios to PhastFT read 1.25, 1.45 and 1.62 (`f64`) against the generic route's 1.40, so no direction is supported.
-- **Scope:** replicated counterbalanced census at 1048576 and 2097152 on a quiet host (no concurrent cargo; record the process table), planar candidate against the generic route; move `PLANAR_MAX_LEN` only on disjoint intervals. Non-goals: kernel changes.
-- **Acceptance:** either `PLANAR_MAX_LEN` moves to `2^20` with the supported ratio recorded in ADR 0053's revision note, or the generic route is confirmed and the reason (L3 spill of the 16 MiB padded planes is the hypothesis) is recorded.
-- **Dependencies:** none. **Verification:** existing workspace and differential tests at the moved length.
+## APOLLO-N1M-PLANAR-CROSSOVER — Decide the planar route at 1048576 [patch] [perf] — review
+- **Integrator:** claude/fable; **last-update:** 2026-09-09; branch `perf/apollo-n1m-planar-crossover` on lane `D:/atlas/worktrees/apollo-route`, stacked on PR #361.
+- **Outcome:** `PLANAR_MAX_LEN` moved to `2^20` ([ADR 0053](docs/adr/0053-planar-four-step-domain.md) revised in place): quiet-host six-run counterbalanced census, `f64` 1048576 10.0 to 10.2 ms to 5.6 to 5.8 (RustFFT 6.4 to 7.1, PhastFT 6.9 to 7.5), `f32` 5.1 to 6.0 to 2.6 to 2.8 (PhastFT 3.1 to 3.4); 2097152 halves in both precisions, level with the references in `f64`, 10% behind PhastFT in `f32`; evidence `../../output/apollo-n1m-crossover/`. The PhastFT comparison bench is pinned to the measurement processor like the other three.
+- **Acceptance:** met, candidate intervals disjoint below base at both lengths and precisions across three replicates each; workspace pins extended to 1048576 and 2097152 and the impulse oracle run forward at `PLANAR_MAX_LEN`.
+- **Dependencies:** none. **Verification:** batched, workspace, RustFFT-differential, dimension-1d and DFT-oracle suites.
+
+<a id="apollo-workspace-impulse-oracle-budget"></a>
+## APOLLO-WORKSPACE-IMPULSE-ORACLE-BUDGET — Fit the workspace impulse oracle in the CI slow budget [patch] — todo
+- **Evidence:** `workspace_extents_preserve_the_impulse_spectrum` takes 3.6 s in the dev profile on the 285K host (2026-09-09, base of the 1M crossover), and the hosted runner is 13 to 17 times slower on compute-bound tests, so it sits past the 30 s slow bound in the `ci` profile; twelve transforms at 262144 dominate.
+- **Scope:** keep every form (forward, inverse, normalized) and both workspace extents at the shorter lengths and run the 262144 forms once each per precision, or shard the length list across tests as the DFT oracle sweep does; never shrink the oracle or raise the bound.
+- **Acceptance:** each test under 2 s locally (30 s on the runner at the measured ratio) with the same set of (length, form, extent) triples exercised across the tests; the `ci` run reports no slow test from this file.
+- **Dependencies:** none. **Verification:** `cargo nextest run -p apollo-fft` timings, the `ci` profile status line.
 
 <a id="apollo-sft-sublinear-recovery"></a>
 ## APOLLO-SFT-SUBLINEAR-RECOVERY — Deliver a sublinear sparse recovery route [minor] — todo
@@ -1316,6 +1322,12 @@
   table's precision. What is stable across every run this session is the set of
   signs: apollo is ahead at n = 64, n = 100 and `f32` n = 1000, and behind
   everywhere else.
+- **Large lengths, 2026-09-09.** The planar route (ADR 0053, 0056 to 0059)
+  now covers 4096 through 2097152: in `f64` apollo is level with RustFFT at
+  4096 and 262144, ahead at 16384 and 1048576, 1.04 behind at 65536 and
+  level at 2097152; in `f32` ahead of both references at every measured
+  length except 2097152 (PhastFT by 10%). Evidence in the closed items
+  above and `../../output/apollo-n1m-crossover/`.
 - **What the shape says.** Apollo is ahead exactly where it has a hand-tuned
   construction — n = 64 (`State64`) and n = 100 — and behind everywhere else,
   including at lengths where the tuned split applies (128 to 512 sit at

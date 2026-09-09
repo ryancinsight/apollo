@@ -457,12 +457,15 @@ fn plane_len(n: usize) -> usize {
 /// the generic route at 65536 cost 2.7 to 4.5 times RustFFT while this route
 /// one length below sat at 1.25 times; at 65536 this route measured 208 to
 /// 228 µs against the generic route's 466 to 767 across four runs, and at
-/// 262144 it halved `f32` while leaving `f64` level. The next even power,
-/// 1048576, was measured only under host contention and stays on the
-/// generic route until a quiet replicated census decides it. The value binds
-/// to one host's cache hierarchy and Moirai's dispatch cost; re-measure
-/// before moving it in either direction.
-pub(crate) const PLANAR_MAX_LEN: usize = 1 << 18;
+/// 262144 it halved `f32` while leaving `f64` level. At 1048576, once the
+/// seams were staged and the fold folded from a two-level table (ADR 0058,
+/// ADR 0059), a quiet replicated census read this route at 5.6 to 6.6 ms
+/// `f64` against the generic route's 9.9 to 10.2 and RustFFT's 6.4 to 7.1,
+/// and 2.6 to 2.8 ms `f32` against 5.1 to 6.0 and PhastFT's 3.1 to 3.4; the
+/// split at 2097152 halved likewise. The value binds to one host's cache
+/// hierarchy and Moirai's dispatch cost; re-measure before moving it in
+/// either direction.
+pub(crate) const PLANAR_MAX_LEN: usize = 1 << 20;
 
 /// Whether [`four_step_batched`] covers a transform of length `n`.
 ///
