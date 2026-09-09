@@ -177,6 +177,14 @@
 - **Acceptance:** met on the totality (ADR 0060's revision records the one flat cell); the oracle suites, the workspace pins at every odd length, the rectangular transpose and fold tests green.
 - **Dependencies:** none. **Verification:** 611 tests; `pinned_sections`; `rustfft_comparison` counterbalanced on a quiet host.
 
+<a id="apollo-base128-level-combine-vector"></a>
+## APOLLO-BASE128-LEVEL-COMBINE-VECTOR — Vectorize the base-128 route's radix-2 level combine [patch] [perf] — in-progress
+- **Integrator:** claude/fable; **last-update:** 2026-09-09; branch `perf/apollo-base128-level-combine` on lane `D:/atlas/worktrees/apollo-route`; lease: claude/fable `components/base128/{mod.rs,split_boundary.rs,tests.rs}` 2026-09-09T22:05Z; parent [beat the references](#atlas-apollo-beat-the-references).
+- **Evidence:** 1024 is the largest power-of-two gap left, `f64` 1.7 against RustFFT's 1.2 µs and `f32` 0.9 against 0.6 (`../../output/apollo-n1m-crossover/r1024_base*.txt`); its route gathers eight blocks, runs two four-block combines, then `combine_level_in_place` over all 1024 elements as a scalar loop with one complex multiply per element, about 4k cycles, most of the `f64` gap.
+- **Scope:** the level combine as a `LaneKernel` through `vectorize` (sub-lane unpacks, planar complex multiply, unpacks back), the scalar loop kept as the reference and fallback; measure 1024 in both precisions. Non-goals: the four-block combine, the base kernel.
+- **Acceptance:** results bitwise the scalar loop's where the multiply order matches, else within the existing tests' bounds; `rustfft_comparison` 1024 apollo intervals below the base in both precisions.
+- **Dependencies:** none. **Verification:** base-128 suites, dimension-1d plan suite, DFT oracle sweep; `rustfft_comparison` counterbalanced.
+
 <a id="apollo-workspace-impulse-oracle-budget"></a>
 ## APOLLO-WORKSPACE-IMPULSE-ORACLE-BUDGET — Fit the workspace impulse oracle in the CI slow budget [patch] — todo
 - **Evidence:** `workspace_extents_preserve_the_impulse_spectrum` takes 3.6 s in the dev profile on the 285K host (2026-09-09, base of the 1M crossover), and the hosted runner is 13 to 17 times slower on compute-bound tests, so it sits past the 30 s slow bound in the `ci` profile; twelve transforms at 262144 dominate.
