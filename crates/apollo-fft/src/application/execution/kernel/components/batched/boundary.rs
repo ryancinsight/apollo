@@ -148,9 +148,10 @@ impl<T: BatchedPlanCache> LaneKernel<T> for CombinePlanarHalves<'_, T> {
 /// In-place square transpose of both padded planes through native in-register
 /// tiles (`Vector::transpose_square`): each off-diagonal tile pair loads two
 /// tiles, transposes both in registers, and stores them exchanged; diagonal
-/// tiles transpose in place. Tile rows are loaded and stored through the
-/// plane column order, which keeps the data rows natural and the columns in
-/// plane order at no cost: the order rides the row index of a tile load.
+/// tiles transpose in place. The plane column order rides the tile as a
+/// register relabeling on both sides of the in-register transpose, so data
+/// rows stay natural and columns stay in plane order with every load and
+/// store at its natural row.
 pub(crate) struct TransposePlanes<'a, T> {
     /// Padded real plane.
     pub(crate) re: &'a mut [T],
@@ -204,33 +205,39 @@ where
     T: BatchedPlanCache,
     A: SimdArch + SimdKernel<T>,
 {
-    // Tile row `r` is plane row `order(r)` of its block on both the load and
-    // the store side: register `k` of the transposed tile holds plane column
-    // `k` of the loaded rows, which is logical column `order(k)`, so it is
-    // logical row `order(k)` of the output block, at plane row `order(k)`.
-    // The order is the backend's, so the table folds into constant offsets.
-    let rows: [usize; LANES] =
+    // Plane cell `(r, c)` holds logical column `order(c)` of row `r`, so the
+    // transposed block must satisfy `out[k][l] = in[order(l)][order(k)]`.
+    // Feeding the tile transpose the loaded rows in `order` and reading its
+    // result rows back in `order` is exactly that, and both are register
+    // relabelings at compile time: every load and store keeps its natural
+    // row, which is what lets the eight-row `f32` tile keep its addressing.
+    let order: [usize; LANES] =
         const { sublane_order::<LANES>(<A as SimdPermute<T>>::SUBLANE_LANES) };
+    let transpose = |tile: [Vector<T, A>; LANES]| -> [Vector<T, A>; LANES] {
+        let mut ordered: [Vector<T, A>; LANES] = core::array::from_fn(|k| tile[order[k]]);
+        Vector::transpose_square(&mut ordered);
+        core::array::from_fn(|k| ordered[order[k]])
+    };
     for bi in (0..m).step_by(LANES) {
         let base = |r: usize, c: usize| (r * stride + c) / LANES;
-        let mut tile: [Vector<T, A>; LANES] =
-            core::array::from_fn(|r| chunk::<T, A>(plane, base(bi + rows[r], bi)));
-        Vector::transpose_square(&mut tile);
-        for (row, &r) in tile.into_iter().zip(&rows) {
+        let tile = transpose(core::array::from_fn(|r| {
+            chunk::<T, A>(plane, base(bi + r, bi))
+        }));
+        for (r, row) in tile.into_iter().enumerate() {
             put_chunk(row, plane, base(bi + r, bi));
         }
 
         for bj in (bi + LANES..m).step_by(LANES) {
-            let mut upper: [Vector<T, A>; LANES] =
-                core::array::from_fn(|r| chunk::<T, A>(plane, base(bi + rows[r], bj)));
-            let mut lower: [Vector<T, A>; LANES] =
-                core::array::from_fn(|r| chunk::<T, A>(plane, base(bj + rows[r], bi)));
-            Vector::transpose_square(&mut upper);
-            Vector::transpose_square(&mut lower);
-            for (row, &r) in lower.into_iter().zip(&rows) {
+            let upper = transpose(core::array::from_fn(|r| {
+                chunk::<T, A>(plane, base(bi + r, bj))
+            }));
+            let lower = transpose(core::array::from_fn(|r| {
+                chunk::<T, A>(plane, base(bj + r, bi))
+            }));
+            for (r, row) in lower.into_iter().enumerate() {
                 put_chunk(row, plane, base(bi + r, bj));
             }
-            for (row, &r) in upper.into_iter().zip(&rows) {
+            for (r, row) in upper.into_iter().enumerate() {
                 put_chunk(row, plane, base(bj + r, bi));
             }
         }
