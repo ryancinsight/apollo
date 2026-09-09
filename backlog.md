@@ -170,6 +170,14 @@
 ## APOLLO-PLANAR-SPLIT-SEAM-FUSION — Fuse the odd-power decimation and combine into the stage passes [patch] [perf] — done 2026-09-09 (rejected)
 - **Outcome:** built (a decimated source seam per half, a direct two-row combine sink on the odd half) and rejected on measurement: outputs bitwise the split's, but section totals rose 9 to 19% at 8192 and 32768 in both precisions; the source seam gains 10% in `f64` and loses up to 13% in `f32` (each half re-splits every input register), the direct combine sink loses 10 to 40% against the combine pass; evidence `../../output/apollo-planar-split-deint/` (`fusion_*`, `sections_fusion3`). Superseded by [the rectangular route](#apollo-planar-rectangular-odd-powers).
 
+<a id="apollo-planar-rectangular-odd-powers"></a>
+## APOLLO-PLANAR-RECTANGULAR-ODD-POWERS — Run odd powers through a rectangular planar four-step [patch] [perf] — in-progress
+- **Integrator:** claude/fable; **last-update:** 2026-09-09; branch `perf/apollo-planar-rectangular-odd` on lane `D:/atlas/worktrees/apollo-route`, stacked on PR #364; lease: claude/fable `components/batched/{mod,boundary,cache,tests}.rs`, `four_step/{workspace.rs,tests/workspace.rs}`, `radix_composite/cache/planar.rs` 2026-09-09T21:15Z; parent [beat the references](#atlas-apollo-beat-the-references).
+- **Evidence and design:** [ADR 0060](docs/adr/0060-planar-rectangular-odd-powers.md) (Proposed): the split's two boundary passes are 40 to 45% of an odd power (`../../output/apollo-planar-split-deint/`) and fusing them as seams was built and rejected there (section totals up 9 to 19%); `N = N1 · 2 N1` runs as the square route with `(len, batch)` swapped between the sets, one out-of-place rectangular transpose and one rectangular fold table, no decimation and no combine.
+- **Scope:** `four_step_rectangular_batched` replacing `four_step_split_batched` and its two consumers, `TransposePlanesInto` beside the in-place kernel with the scalar reference, `FourStepFold` over `(rows, cols)`, the workspace pins at every odd length. Non-goals: the square route, lengths past `PLANAR_MAX_LEN`.
+- **Acceptance:** ADR 0060's stop criterion: odd-power totals below the vectorized-decimation build (PR #363) with disjoint intervals at 2048, 8192 and 32768 in both precisions on `pinned_sections` and `rustfft_comparison`; the oracle suites green.
+- **Dependencies:** [APOLLO-PLANAR-LANE-ORDER-INVERSE](#apollo-planar-lane-order-inverse) (PR #364) landed. **Verification:** per ADR 0060.
+
 <a id="apollo-workspace-impulse-oracle-budget"></a>
 ## APOLLO-WORKSPACE-IMPULSE-ORACLE-BUDGET — Fit the workspace impulse oracle in the CI slow budget [patch] — todo
 - **Evidence:** `workspace_extents_preserve_the_impulse_spectrum` takes 3.6 s in the dev profile on the 285K host (2026-09-09, base of the 1M crossover), and the hosted runner is 13 to 17 times slower on compute-bound tests, so it sits past the 30 s slow bound in the `ci` profile; twelve transforms at 262144 dominate.
