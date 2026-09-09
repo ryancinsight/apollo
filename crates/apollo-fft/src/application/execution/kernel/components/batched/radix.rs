@@ -238,28 +238,29 @@ pub(super) struct Columns {
     pub(super) end: usize,
 }
 
-/// A staged sink block addressed by tile-local row.
+/// Where the sink pass writes its rows.
 ///
-/// The sink writes one tile block at a time into a contiguous buffer (see
-/// [`super::sweep`]): tile row
-/// `r` starts `r * pitch` reals in, and batch column `k` sits
-/// `2 * (k - first_column)` reals further. The row set's first row is tile
-/// row `first`, and its rows are [`Rows::step`] tile rows apart, the same
-/// step as in the planes.
+/// Staged: one tile block in a contiguous buffer (see [`super::sweep`]),
+/// tile row `r` starting `r * pitch` reals in, batch column `k` sitting
+/// `2 * (k - first_column)` reals further; the row set's first row is tile
+/// row `first` and its rows are [`Rows::step`] tile rows apart, the same
+/// step as in the planes. Direct: the caller's rows, `row_bits` wide, plane
+/// row `p` writing row `rev(p)`.
 #[derive(Clone, Copy)]
-pub(super) struct Staging {
-    pub(super) first: usize,
-    pub(super) pitch: usize,
-    pub(super) first_column: usize,
+pub(super) enum SinkRows {
+    Staged {
+        first: usize,
+        pitch: usize,
+        first_column: usize,
+    },
+    Direct {
+        row_bits: u32,
+    },
 }
 
-impl Staging {
-    /// The staging of a pass without a seam: never addressed.
-    const NONE: Self = Self {
-        first: 0,
-        pitch: 0,
-        first_column: 0,
-    };
+impl SinkRows {
+    /// The sink of a pass without one: never addressed.
+    const NONE: Self = Self::Direct { row_bits: 0 };
 }
 
 /// Where a pass reads its rows and where it writes them.
@@ -278,17 +279,17 @@ pub(super) enum Seams<'a, 'b, T> {
     Source(&'a [T], u32),
     /// Planes in with the four-step twiddle planes multiplied into the loads.
     Fold((&'a [T], &'a [T])),
-    /// Planes in, staged interleaved rows out.
-    Sink(&'b mut [T], Staging),
-    /// Folded loads and staged stores in one pass.
-    FoldSink((&'a [T], &'a [T]), &'b mut [T], Staging),
+    /// Planes in, interleaved rows out, staged or direct.
+    Sink(&'b mut [T], SinkRows),
+    /// Folded loads and sink stores in one pass.
+    FoldSink((&'a [T], &'a [T]), &'b mut [T], SinkRows),
 }
 
 impl<'a, 'b, T> Seams<'a, 'b, T> {
     /// The frequency-decimated set's seams for one pass.
     pub(super) fn frequency(
         fold: Option<(&'a [T], &'a [T])>,
-        sink: Option<(&'b mut [T], Staging)>,
+        sink: Option<(&'b mut [T], SinkRows)>,
     ) -> Self {
         match (fold, sink) {
             (Some(fold), Some((sink, staging))) => Self::FoldSink(fold, sink, staging),
@@ -353,7 +354,7 @@ pub(super) fn butterfly_rows<T, A, R, const N: usize, const NT: usize>(
             &[],
             0,
             &mut [],
-            Staging::NONE,
+            SinkRows::NONE,
         ),
         Seams::Source(source, row_bits) => pass::<T, A, R, N, NT, true, false, false>(
             re,
@@ -368,7 +369,7 @@ pub(super) fn butterfly_rows<T, A, R, const N: usize, const NT: usize>(
             source,
             row_bits,
             &mut [],
-            Staging::NONE,
+            SinkRows::NONE,
         ),
         Seams::Fold(fold) => pass::<T, A, R, N, NT, false, true, false>(
             re,
@@ -383,7 +384,7 @@ pub(super) fn butterfly_rows<T, A, R, const N: usize, const NT: usize>(
             &[],
             0,
             &mut [],
-            Staging::NONE,
+            SinkRows::NONE,
         ),
         Seams::Sink(sink, staging) => pass::<T, A, R, N, NT, false, false, true>(
             re,
@@ -451,7 +452,7 @@ fn pass<
     source: &[T],
     source_bits: u32,
     sink: &mut [T],
-    staging: Staging,
+    sink_rows: SinkRows,
 ) where
     T: LaneScalar + Lane,
     A: SimdArch + SimdKernel<T>,
@@ -462,13 +463,26 @@ fn pass<
     let plane_step = rows.step * stride;
     let fold_first = rows.first * batch;
     let fold_step = rows.step * batch;
-    // Staged sink rows are tile-local and affine like the plane rows; the
-    // bit-reversed source row map is not, so the source keeps a table. Both
-    // are dead, and so unmaterialized, in the passes without that seam.
-    let staged_first = staging.first * staging.pitch;
-    let staged_step = rows.step * staging.pitch;
+    // The seam rows keep tables: the bit-reversed row map is not affine, and
+    // the sink's is chosen at run time. Both are dead, and so unmaterialized,
+    // in the passes without that seam. A sink row's column `k` sits
+    // `2 * k - column_base` reals in.
     let source_rows: [usize; N] =
         core::array::from_fn(|i| reverse_row(rows.first + i * rows.step, source_bits) * batch * 2);
+    let (sink_base, column_base): ([usize; N], usize) = match sink_rows {
+        SinkRows::Staged {
+            first,
+            pitch,
+            first_column,
+        } => (
+            core::array::from_fn(|i| (first + i * rows.step) * pitch),
+            2 * first_column,
+        ),
+        SinkRows::Direct { row_bits } => (
+            core::array::from_fn(|i| reverse_row(rows.first + i * rows.step, row_bits) * batch * 2),
+            0,
+        ),
+    };
 
     let mut k = cols.start;
     while k + lanes <= cols.end {
@@ -490,7 +504,7 @@ fn pass<
         let y = R::apply(x, twv);
         if SINK {
             for (i, value) in y.into_iter().enumerate() {
-                let at = staged_first + i * staged_step + 2 * (k - staging.first_column);
+                let at = sink_base[i] + (2 * k - column_base);
                 store_interleaved::<T, A>(value.0, value.1, sink, at);
             }
         } else {
@@ -525,7 +539,7 @@ fn pass<
         let y = R::apply(x, tw);
         if SINK {
             for (i, value) in y.into_iter().enumerate() {
-                let at = staged_first + i * staged_step + 2 * (k - staging.first_column);
+                let at = sink_base[i] + (2 * k - column_base);
                 sink[at] = value.0;
                 sink[at + 1] = value.1;
             }

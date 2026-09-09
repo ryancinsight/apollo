@@ -60,7 +60,7 @@ use core::mem::size_of;
 use hermes_simd::{LaneScalar, Simd, SimdArch, SimdKernel, SimdStorage};
 
 use super::radix::{
-    butterfly_rows, Columns, Dif2, Dif4, Dit2, Dit4, Lane, Pair, Rows, Seams, Staging,
+    butterfly_rows, Columns, Dif2, Dif4, Dit2, Dit4, Lane, Pair, Rows, Seams, SinkRows,
 };
 use super::reverse_row;
 
@@ -81,6 +81,17 @@ const TILE_BYTES: usize = 16 * 1024;
 /// `TILE_BYTES` over the narrowest complex this route dispatches (8 bytes);
 /// wider scalars use a prefix.
 pub(crate) const STAGING_LEN: usize = TILE_BYTES / 8;
+
+/// Longest transform whose sink is staged.
+///
+/// Staging wins where the planes sit in L2, since the tile it protects is
+/// what the sink's rows would evict; where the planes overflow L2 the sink
+/// is bound by the writes themselves, and one row copy after another
+/// loses the four-row overlap of the direct stores (262144 `f64`: the
+/// sink sweep 1067k against 800k cycles, the census 5% slower; ADR 0058).
+/// The bound is one host's 3 MiB L2 against 16 bytes per element of planes
+/// plus the caller's buffer; re-measure before moving it.
+pub(super) const STAGED_SINK_MAX_LEN: usize = 1 << 16;
 
 /// Columns per tile block: [`TILE_BYTES`] over the tile's rows and both
 /// planes, rounded down to whole vectors and up to at least one, and never
@@ -301,9 +312,11 @@ pub(super) fn sweep_frequency<T, A>(
     let pitch = 2 * cols;
     let splat = |(wr, wi): Pair<T>| (simd.splat(wr), simd.splat(wi));
     // The sink rides the sweep over stage 2, whose tiles are consecutive
-    // rows, as the source does.
+    // rows, as the source does; it is staged up to `STAGED_SINK_MAX_LEN`.
     let mut sink = sink.filter(|_| l_bottom == 2);
-    if sink.is_some() {
+    let staged = len * batch <= STAGED_SINK_MAX_LEN;
+    let row_bits = len.trailing_zeros();
+    if staged && sink.is_some() {
         assert!(
             staging.len() >= tile_rows * pitch,
             "invariant: the staging buffer holds one tile block"
@@ -339,15 +352,17 @@ pub(super) fn sweep_frequency<T, A>(
                             first: base + i0 * step_bottom,
                             step: step_bottom << at,
                         };
-                        let staged = Staging {
-                            first: i0,
-                            pitch,
-                            first_column: block.start,
-                        };
-                        let pass_sink = if last && sink.is_some() {
-                            Some((&mut *staging, staged))
-                        } else {
-                            None
+                        let pass_sink = match (last, sink.as_deref_mut()) {
+                            (true, Some(_)) if staged => Some((
+                                &mut *staging,
+                                SinkRows::Staged {
+                                    first: i0,
+                                    pitch,
+                                    first_column: block.start,
+                                },
+                            )),
+                            (true, Some(sink)) => Some((sink, SinkRows::Direct { row_bits })),
+                            _ => None,
                         };
                         butterfly_rows::<T, A, Dif4, 4, 3>(
                             re,
@@ -377,15 +392,17 @@ pub(super) fn sweep_frequency<T, A>(
                             first: base + i0 * step_bottom,
                             step: step_bottom,
                         };
-                        let staged = Staging {
-                            first: i0,
-                            pitch,
-                            first_column: block.start,
-                        };
-                        let pass_sink = if last && sink.is_some() {
-                            Some((&mut *staging, staged))
-                        } else {
-                            None
+                        let pass_sink = match (last, sink.as_deref_mut()) {
+                            (true, Some(_)) if staged => Some((
+                                &mut *staging,
+                                SinkRows::Staged {
+                                    first: i0,
+                                    pitch,
+                                    first_column: block.start,
+                                },
+                            )),
+                            (true, Some(sink)) => Some((sink, SinkRows::Direct { row_bits })),
+                            _ => None,
                         };
                         butterfly_rows::<T, A, Dif2, 2, 1>(
                             re,
@@ -400,7 +417,7 @@ pub(super) fn sweep_frequency<T, A>(
                         );
                     }
                 }
-                if let Some(sink) = sink.as_deref_mut() {
+                if let Some(sink) = sink.as_deref_mut().filter(|_| staged) {
                     stage_out(sink, staging, tile_rows, base, batch, block, pitch);
                 }
                 start = block.end;
