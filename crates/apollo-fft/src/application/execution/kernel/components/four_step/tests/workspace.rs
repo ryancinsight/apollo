@@ -20,8 +20,10 @@ fn workspace_covers_padded_planes_and_nested_gathers() {
         (131_072, 2 * (256 * (256 + 8) + 2048)),
         (262_144, 512 * (512 + 8) + 2048),
         (524_288, 2 * (512 * (512 + 8) + 2048)),
-        (1_048_576, 1_048_576),
-        (2_097_152, 2_097_152 + 1_048_576),
+        (1_048_576, 1024 * (1024 + 8) + 2048),
+        (2_097_152, 2 * (1024 * (1024 + 8) + 2048)),
+        (4_194_304, 4_194_304),
+        (8_388_608, 8_388_608 + 4_194_304),
     ] {
         assert_eq!(scratch_len(n), Some(expected), "length {n}");
     }
@@ -91,6 +93,18 @@ where
 fn workspace_extents_preserve_the_impulse_spectrum() {
     check_scalar::<f32>(f64::from(f32::EPSILON) / 2.0);
     check_scalar::<f64>(f64::EPSILON / 2.0);
+}
+
+/// The largest planar length runs the exact impulse oracle once per
+/// precision. One forward transform each: a 1048576-point transform costs
+/// about 0.7 s in the dev profile here and ten times that on the hosted
+/// runner, so the full form-and-workspace matrix stays at the shorter
+/// lengths above, which exercise the same driver.
+#[test]
+fn planar_domain_boundary_preserves_the_impulse_spectrum() {
+    let n = crate::application::execution::kernel::components::batched::PLANAR_MAX_LEN;
+    check_impulse::<f32, false, false>(n, f64::from(f32::EPSILON) / 2.0, 0);
+    check_impulse::<f64, false, false>(n, f64::EPSILON / 2.0, 0);
 }
 
 #[test]
