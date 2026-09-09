@@ -460,7 +460,9 @@ fn pass<
         k += lanes;
     }
 
-    // Scalar remainder when the block is not a lane multiple.
+    // Scalar remainder when the block is not a lane multiple, which is only
+    // a batch narrower than one register; the plane column order is then
+    // the identity, so column `k` is interleaved sample `k`.
     for k in k..cols.end {
         let mut x: [Pair<T>; N] = core::array::from_fn(|i| {
             if SOURCE {

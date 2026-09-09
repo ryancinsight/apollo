@@ -5,6 +5,7 @@
 
 use super::{
     combine_planar_halves, four_step_batched, scratch_len, transpose_planes, BatchedPlanCache,
+    LaneOrder,
 };
 use eunomia::{Complex, Complex32, Complex64};
 use std::f64::consts::TAU;
@@ -12,7 +13,11 @@ use std::f64::consts::TAU;
 #[test]
 fn transpose_is_its_own_inverse_and_never_touches_the_pad() {
     for m in [1usize, 2, 4, 8, 16, 33, 64] {
-        for pad in [0usize, 8] {
+        for (pad, order) in [
+            (0usize, LaneOrder::IDENTITY),
+            (8, LaneOrder::IDENTITY),
+            (8, LaneOrder::for_batch::<f64>(m)),
+        ] {
             let stride = m + pad;
             let sentinel = f64::NAN;
             let re0: Vec<f64> = (0..m * m).map(|i| 0.5 + i as f64).collect();
@@ -23,17 +28,21 @@ fn transpose_is_its_own_inverse_and_never_touches_the_pad() {
                 re[r * stride..r * stride + m].copy_from_slice(&re0[r * m..(r + 1) * m]);
                 im[r * stride..r * stride + m].copy_from_slice(&im0[r * m..(r + 1) * m]);
             }
-            transpose_planes(&mut re, &mut im, m, stride);
+            transpose_planes(&mut re, &mut im, m, stride, order);
             for r in 0..m {
                 for c in 0..m {
+                    // Plane cell (r, c) holds logical column order(c) of
+                    // row r: the transpose of logical (order(c), row
+                    // order(r)), which sits at plane cell (order(c), order(r)).
+                    let from = order.column(c) * m + order.column(r);
                     assert_eq!(
                         re[r * stride + c],
-                        re0[c * m + r],
+                        re0[from],
                         "m={m} pad={pad} re ({r},{c})"
                     );
                     assert_eq!(
                         im[r * stride + c],
-                        im0[c * m + r],
+                        im0[from],
                         "m={m} pad={pad} im ({r},{c})"
                     );
                 }
@@ -44,7 +53,7 @@ fn transpose_is_its_own_inverse_and_never_touches_the_pad() {
                     );
                 }
             }
-            transpose_planes(&mut re, &mut im, m, stride);
+            transpose_planes(&mut re, &mut im, m, stride, order);
             for r in 0..m {
                 assert_eq!(&re[r * stride..r * stride + m], &re0[r * m..(r + 1) * m]);
             }
@@ -66,15 +75,18 @@ fn four_step_planes_are_the_row_faithful_split_of_the_interleaved_matrix() {
     let (n, m) = (256usize, 16usize);
     let planes = <f64 as BatchedPlanCache>::cached_four_step_planes::<false>(n, m);
     let interleaved = <f64 as MixedRadixScalar>::cached_four_step_twiddles::<false>(n, m, m);
+    let order = LaneOrder::for_batch::<f64>(m);
     for row in 0..m {
         for col in 0..m {
+            // Plane column `order(col)` holds memory column `col`.
+            let at = row * m + order.column(col);
             assert_eq!(
-                planes.re[row * m + col].to_bits(),
+                planes.re[at].to_bits(),
                 interleaved[row * m + col].re.to_bits(),
                 "re ({row},{col})"
             );
             assert_eq!(
-                planes.im[row * m + col].to_bits(),
+                planes.im[at].to_bits(),
                 interleaved[row * m + col].im.to_bits(),
                 "im ({row},{col})"
             );
@@ -311,11 +323,13 @@ fn f32_planar_half_combine_matches_the_scalar_formula() {
         .collect();
     let mut expected = vec![Complex32::default(); 2 * half];
     let bits = m.trailing_zeros();
+    let order = LaneOrder::for_batch::<f32>(m);
     for row in 0..m {
         let base = row * stride;
         let dst = (row.reverse_bits() >> (usize::BITS - bits)) * m;
         for column in 0..m {
-            let index = dst + column;
+            // Plane column `column` holds memory column `order(column)`.
+            let index = dst + order.column(column);
             let even_value = Complex32::new(even_re[base + column], even_im[base + column]);
             let odd_value = Complex32::new(odd_re[base + column], odd_im[base + column]);
             let rotated = odd_value * twiddles[index];
@@ -325,7 +339,7 @@ fn f32_planar_half_combine_matches_the_scalar_formula() {
     }
 
     let mut actual = vec![Complex32::default(); 2 * half];
-    combine_planar_halves(&mut actual, &even, &odd, m, stride, &twiddles);
+    combine_planar_halves(&mut actual, &even, &odd, m, stride, &twiddles, order);
 
     // One complex multiply followed by one add/sub accumulates at most eight
     // unit roundoffs at this scale; the factor of two covers subnormal-free
