@@ -33,9 +33,39 @@
 //! [`FftPlanarMut`]: crate::domain::storage::FftPlanarMut
 
 use crate::application::execution::kernel::mixed_radix::MixedRadixScalar;
+
+#[cfg(all(test, windows, target_arch = "x86_64"))]
+macro_rules! sect {
+    ($label:expr, $body:block) => {{
+        let t0 = unsafe { core::arch::x86_64::_rdtsc() };
+        let out = $body;
+        let t1 = unsafe { core::arch::x86_64::_rdtsc() };
+        crate::application::execution::kernel::components::batched::sections::record(
+            $label,
+            t1 - t0,
+        );
+        out
+    }};
+}
+#[cfg(not(all(test, windows, target_arch = "x86_64")))]
+macro_rules! sect {
+    ($label:expr, $body:block) => {{
+        let _label: &str = $label;
+        $body
+    }};
+}
+
 mod cache;
 mod radix;
+mod sweep;
 pub(crate) use cache::BatchedPlanCache;
+
+/// Section labels of the time-decimated stage set's sweeps, by sweep index;
+/// the attribution probe reports them beneath `stages1`.
+const TIME_SWEEPS: [&str; 3] = ["t1", "t2", "t3"];
+/// Section labels of the frequency-decimated stage set's sweeps, by sweep
+/// index; reported beneath `stages2`.
+const FREQUENCY_SWEEPS: [&str; 3] = ["f1", "f2", "f3"];
 
 use eunomia::Complex;
 use hermes_simd::{LaneKernel, LaneScalar, Simd, SimdArch, SimdKernel, SimdStorage, Vector};
@@ -123,76 +153,20 @@ where
             stride: s,
             len,
         } = self;
-        let row_bits = len.trailing_zeros();
-        let mut twx = 0usize;
-        let mut l = 2usize;
-
-        // Two stages per pass over the data while two remain, then one. A pass
-        // streams the whole `len * batch` array once, so the fewest passes
-        // win up to the register file: a radix-8 pass holds eight complex
-        // rows, sixteen vectors, the whole AVX2 file, and measured slower
-        // than two radix-4 passes once its spills were paid (ADR 0055). Four
-        // rows and three hoisted twiddles fit. The per-element operation
-        // order is the single-stage one, so results are bitwise those of any
-        // other grouping.
-        //
-        // The four-step twiddle and the interleaved source both ride the
-        // first pass, `l == 2`, the one pass that loads every element
-        // exactly once.
-        while l * 2 <= len {
-            let half = l >> 1;
-            let groups = len / (2 * l);
-            let pass_source = if l == 2 { source } else { None };
-            for j in 0..half {
-                let tws = [tw[twx + j], tw[twx + half + j], tw[twx + half + j + half]];
-                let twv = tws.map(|(wr, wi)| (simd.splat(wr), simd.splat(wi)));
-                for g in 0..groups {
-                    let rows = radix::Rows {
-                        first: g * 2 * l + j,
-                        step: half,
-                    };
-                    radix::butterfly_rows::<T, A, radix::Dit4, 4, 3>(
-                        re,
-                        im,
-                        rows,
-                        s,
-                        b,
-                        row_bits,
-                        &tws,
-                        &twv,
-                        radix::Seams::time(pass_source),
-                    );
-                }
-            }
-            twx += half + l;
-            l <<= 2;
-        }
-
-        if l <= len {
-            let half = l >> 1;
-            let groups = len / l;
-            let pass_source = if l == 2 { source } else { None };
-            for j in 0..half {
-                let tws = [tw[twx + j]];
-                let twv = tws.map(|(wr, wi)| (simd.splat(wr), simd.splat(wi)));
-                for g in 0..groups {
-                    let rows = radix::Rows {
-                        first: g * l + j,
-                        step: half,
-                    };
-                    radix::butterfly_rows::<T, A, radix::Dit2, 2, 1>(
-                        re,
-                        im,
-                        rows,
-                        s,
-                        b,
-                        row_bits,
-                        &tws,
-                        &twv,
-                        radix::Seams::time(pass_source),
-                    );
-                }
-            }
+        // Stages ascend from 2; each sweep applies up to `SWEEP_STAGES` of
+        // them per trip through the planes, two per pass while two remain
+        // and then one, over tiles that stay in L1 between its passes
+        // (see [`sweep`]). The four-step twiddle and the interleaved source
+        // both ride the pass over stage 2, the one pass that loads every
+        // element exactly once. The per-element operation order is the
+        // single-stage one, so results are bitwise those of any other
+        // grouping.
+        let mut l0 = 2usize;
+        for (index, stages) in sweep::sweep_lengths(len.trailing_zeros()).enumerate() {
+            sect!(TIME_SWEEPS[index], {
+                sweep::sweep_time(re, im, tw, source, b, s, len, l0, stages, simd);
+            });
+            l0 <<= stages;
         }
     }
 }
@@ -477,23 +451,6 @@ pub(crate) fn split_scratch_len(n: usize) -> usize {
 
 #[cfg(all(test, windows, target_arch = "x86_64"))]
 pub(crate) mod sections;
-
-#[cfg(all(test, windows, target_arch = "x86_64"))]
-macro_rules! sect {
-    ($label:literal, $body:block) => {{
-        let t0 = unsafe { core::arch::x86_64::_rdtsc() };
-        let out = $body;
-        let t1 = unsafe { core::arch::x86_64::_rdtsc() };
-        sections::record($label, t1 - t0);
-        out
-    }};
-}
-#[cfg(not(all(test, windows, target_arch = "x86_64")))]
-macro_rules! sect {
-    ($label:literal, $body:block) => {
-        $body
-    };
-}
 
 /// Plane geometry for a length-`n` planar transform: the square edge `m` and
 /// the padded row stride. Element `j` of a transform lands at plane index

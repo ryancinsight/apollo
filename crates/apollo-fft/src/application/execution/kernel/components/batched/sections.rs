@@ -3,18 +3,35 @@
 //! Totals accumulate in fixed per-thread storage so the recorder does not
 //! perturb allocation probes, including a worker's first transform. Only
 //! [`take`] allocates the report consumed outside the measured kernel.
+//!
+//! The route's sections are the top-level labels; each stage set's sweeps
+//! record beneath it as `t1..t3` (time-decimated) and `f1..f3`
+//! (frequency-decimated), so a stage set's cost separates into the sweeps
+//! that carry a seam and those that do not. [`is_sweep`] tells the two
+//! levels apart for a report that must not count a sweep twice.
 
 use std::cell::RefCell;
 
-const SECTION_LABELS: [&str; 6] = [
+const SECTION_LABELS: [&str; 12] = [
     "deint",
     "stages1",
     "transpose",
     "stages2",
     "reint",
     "combine",
+    "t1",
+    "t2",
+    "t3",
+    "f1",
+    "f2",
+    "f3",
 ];
 const SECTION_COUNT: usize = SECTION_LABELS.len();
+
+/// Whether `label` names a sweep nested inside a stage-set section.
+pub(crate) fn is_sweep(label: &str) -> bool {
+    super::TIME_SWEEPS.contains(&label) || super::FREQUENCY_SWEEPS.contains(&label)
+}
 
 #[derive(Clone, Copy)]
 struct SectionTotal {
@@ -46,7 +63,7 @@ pub(crate) fn record(label: &'static str, cycles: u64) {
             let slot = totals
                 .iter_mut()
                 .find(|entry| entry.is_none())
-                .expect("invariant: the planar driver records at most six section labels");
+                .expect("invariant: the planar driver records at most twelve section labels");
             *slot = Some(SectionTotal {
                 label,
                 cycles,
@@ -90,6 +107,12 @@ fn section_totals_preserve_order_and_reset() {
             ("stages2", 4, 1),
             ("reint", 5, 1),
             ("combine", 6, 1),
+            ("t1", 7, 1),
+            ("t2", 8, 1),
+            ("t3", 9, 1),
+            ("f1", 10, 1),
+            ("f2", 11, 1),
+            ("f3", 12, 1),
         ]
     );
     record("reint", 7);

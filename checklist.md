@@ -2,16 +2,9 @@
 
 ## claude/fable — current execution
 
-- [x] [Twiddless evaluation](backlog.md#apollo-twiddless-fft-evaluation): instrument, derived-tolerance tests, five-arm benchmark, ADR 0052 Proposed.
-- [x] [Twiddless evaluation](backlog.md#apollo-twiddless-fft-evaluation): local gate green, pinned measurement recorded in ADR 0052 with its verdict.
-- [x] [Twiddless evaluation](backlog.md#apollo-twiddless-fft-evaluation): PR 349 merged; lease discharged.
-- [x] [Four-step large lengths](backlog.md#apollo-n65536-four-step-scalar-loss): planar domain extended to 2^18, measurement recorded in ADR 0053.
-- [ ] [Four-step large lengths](backlog.md#apollo-n65536-four-step-scalar-loss): exact-tree gate green, PR enqueued, merged, lease discharged.
-- [x] [Planar seam fusion](backlog.md#apollo-planar-seam-fusion): fused source/sink measured, ADR 0054 Accepted.
-- [ ] [Planar seam fusion](backlog.md#apollo-planar-seam-fusion): exact-tree gate green, PR enqueued, merged, lease discharged.
-- [x] [Planar radix depth](backlog.md#apollo-planar-radix-depth): radix-8 measured and rejected, shared driver accepted, ADR 0055 recorded.
-- [x] [Planar radix depth](backlog.md#apollo-planar-radix-depth): driver specialized and pushed; unit rotations measured and rejected; bound recorded.
-- [ ] [Planar radix depth](backlog.md#apollo-planar-radix-depth): PR 353 merged, lease discharged.
+- [x] [Stage sweeps](backlog.md#apollo-planar-stage-sweeps): sweep driver measured three times, ADR 0056 Accepted, board updated.
+- [ ] [Stage sweeps](backlog.md#apollo-planar-stage-sweeps): PR enqueued, merged, lease discharged.
+- [ ] [Seam lane order](backlog.md#apollo-planar-seam-lane-order): hermes in-lane unpack landed, then the plane layout and both seams.
 
 ## codex/root — current execution
 

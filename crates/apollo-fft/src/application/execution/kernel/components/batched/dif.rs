@@ -28,7 +28,8 @@
 //! at offset `l / 2 - 1`, holding `W_l^j`. DIT walks those stages upward and
 //! DIF downward, over the same values.
 
-use super::radix::{butterfly_rows, Dif2, Dif4, Lane, Rows, Seams};
+use super::radix::Lane;
+use super::sweep::{sweep_frequency, sweep_lengths};
 use crate::application::execution::kernel::mixed_radix::MixedRadixScalar;
 use hermes_simd::{LaneKernel, LaneScalar, Simd, SimdArch, SimdKernel};
 
@@ -81,73 +82,30 @@ where
             stride: s,
             len,
         } = self;
-        let row_bits = len.trailing_zeros();
-        let mut l = len;
-
-        // Widest stage first, two per pass while two remain, then one: the
-        // mirror of the time-decimated set's grouping (see its note on why
-        // not three). The four-step twiddle rides the first pass, `l == len`,
-        // and the interleaved sink the last, whichever radix that turns out
-        // to be. Stage `l` holds `W_l^j` at `l / 2 - 1`.
-        while l >= 4 {
-            let quarter = l >> 2;
-            let groups = len / l;
-            let wide = (l >> 1) - 1;
-            let narrow = quarter - 1;
-            let pass_fold = if l == len { fold } else { None };
-            // The pair `(4, 2)` is the last pass whenever the stage count is
-            // even; an odd count leaves one radix-2 pass after it.
-            let last = l == 4;
-            for j in 0..quarter {
-                let tws = [tw[wide + j], tw[wide + j + quarter], tw[narrow + j]];
-                let twv = tws.map(|(wr, wi)| (simd.splat(wr), simd.splat(wi)));
-                for g in 0..groups {
-                    let rows = Rows {
-                        first: g * l + j,
-                        step: quarter,
-                    };
-                    butterfly_rows::<T, A, Dif4, 4, 3>(
-                        re,
-                        im,
-                        rows,
-                        s,
-                        b,
-                        row_bits,
-                        &tws,
-                        &twv,
-                        Seams::frequency(pass_fold, if last { sink.as_deref_mut() } else { None }),
-                    );
-                }
-            }
-            l >>= 2;
-        }
-
-        if l >= 2 {
-            let half = l >> 1;
-            let groups = len / l;
-            let base = half - 1;
-            let pass_fold = if l == len { fold } else { None };
-            for j in 0..half {
-                let tws = [tw[base + j]];
-                let twv = tws.map(|(wr, wi)| (simd.splat(wr), simd.splat(wi)));
-                for g in 0..groups {
-                    let rows = Rows {
-                        first: g * l + j,
-                        step: half,
-                    };
-                    butterfly_rows::<T, A, Dif2, 2, 1>(
-                        re,
-                        im,
-                        rows,
-                        s,
-                        b,
-                        row_bits,
-                        &tws,
-                        &twv,
-                        Seams::frequency(pass_fold, sink.as_deref_mut()),
-                    );
-                }
-            }
+        // Widest stage first, in sweeps of up to `SWEEP_STAGES` stages per
+        // trip through the planes, two per pass while two remain and then
+        // one: the mirror of the time-decimated set's grouping over the
+        // same L1-resident tiles (see [`super::sweep`]). The four-step
+        // twiddle rides the pass over stage `len` and the interleaved sink
+        // the pass over stage 2. Stage `l` holds `W_l^j` at `l / 2 - 1`.
+        let mut l_top = len;
+        for (index, stages) in sweep_lengths(len.trailing_zeros()).enumerate() {
+            sect!(super::FREQUENCY_SWEEPS[index], {
+                sweep_frequency(
+                    re,
+                    im,
+                    tw,
+                    fold,
+                    sink.as_deref_mut(),
+                    b,
+                    s,
+                    len,
+                    l_top,
+                    stages,
+                    simd,
+                );
+            });
+            l_top >>= stages;
         }
     }
 }
