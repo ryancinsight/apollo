@@ -145,3 +145,17 @@ measurement also found the out-of-place transpose's per-tile closure
 compiled out of the target-feature frame, seven times the in-frame cost per
 tile, which the pass transpose reaches only for an odd remainder tile; it
 is an in-frame function now.
+
+### Considered 2026-09-10: the transpose tiles loaded with the cross-half stage in the loads
+
+The tile transpose is 8 loads, 24 shuffle-port uops and 8 stores per
+eight-by-eight `f32` tile, and the pass runs at that floor (22 cycles per
+tile). Loading each register as two 128-bit half rows would fold the
+cross-half permute into the loads (16 shuffles), but LLVM emits the halves
+as separate loads plus register `vinsertf128`s, never the memory-operand
+form, so the shuffle count is unchanged and the loads double: the pass
+measured level on the rectangles and slower on the squares
+(`output/apollo-planar-rectangular/folded_*`,
+backlog.md#apollo-planar-transpose-folded-loads). The transpose keeps the
+register network; a shorter pass needs a different instruction pattern,
+not this one.
