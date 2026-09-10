@@ -20,7 +20,6 @@ leto-ops = { workspace = true }
 eunomia = { workspace = true }
 once_cell.workspace = true
 parking_lot.workspace = true
-rand = { workspace = true }
 moirai = { workspace = true }
 mnemosyne = { workspace = true }
 rustc-hash = "2.0"

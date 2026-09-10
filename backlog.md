@@ -1,5 +1,13 @@
 # Apollo Backlog
 
+<a id="APOLLO-WASM-DEPENDENCY-2026-09-10"></a>
+## APOLLO-WASM-DEPENDENCY-2026-09-10 — Keep the FFT dependency graph portable on WebAssembly [patch]
+- Status: review; integrator=root; branch=`codex/apollo-wasm-dependency`; last-update=2026-09-10.
+- Outcome: remove the unused production `rand` edge that pulls `getrandom` 0.4 without a browser backend into RITK's WASM graph.
+- Acceptance: Apollo's FFT package passes locked native checks/tests and wasm32 check; RITK's wasm32 check no longer fails in `getrandom` after its Coeus/Mnemosyne provider refresh. No FFT behavior changes.
+- Driver: RITK-SNAP-METIS-001 browser handoff; RITK remains the DICOM owner.
+- Evidence: removing the unused `rand` edge drops `getrandom` 0.4 from the `apollo-fft` target graph; 613/613 native Nextest, warning-denied native Clippy, and locked wasm32 check pass. The consumer verification remains pending Coeus PR #393, which removes its transitive Mnemosyne revision pin.
+
 <a id="apollo-3d-return-transposes"></a>
 
 ## APOLLO-3D-RETURN-TRANSPOSES-2026-09-10 — A 3-D forward moves the volume four times for two axis passes [minor] [perf] — done 2026-09-10
