@@ -1,7 +1,6 @@
 # Apollo Checklist
 
 ## claude/fable — current execution
-- [ ] [Composite passes generic](backlog.md#apollo-composite-passes-generic): radix 2 kernel, trait default, differential test, census pair, PR; then 4, 3, 5, 7, complex_simd.
 - [ ] [Lane order inverse](backlog.md#apollo-planar-lane-order-inverse): PR enqueued; merged; PR 363 rebased and re-verified.
 - [ ] [Rectangular odd powers](backlog.md#apollo-planar-rectangular-odd-powers): ADR 0060 Accepted; PR enqueued; merged, lease discharged.
 
