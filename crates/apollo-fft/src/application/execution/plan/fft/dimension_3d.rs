@@ -3,6 +3,7 @@
 //! Apollo-owned 3D FFT implementation based on separable FFT passes.
 
 pub(crate) mod dynamic_impl;
+mod passes;
 pub(crate) mod static_impl;
 
 #[cfg(test)]

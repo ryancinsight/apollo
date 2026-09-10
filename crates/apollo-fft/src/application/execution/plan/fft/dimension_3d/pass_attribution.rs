@@ -15,12 +15,15 @@
 //!   inverse pass, through `lanes::contiguous` with the plan's own twiddle
 //!   table: exactly the call axis 2 makes, and the same call axes 0 and 1 make
 //!   on their transposed scratch.
-//! - `transpose-y` / `transpose-x` — the two transposes axis 1 and axis 0 pay,
-//!   there and back, as `transpose_matrices` with each axis's real geometry.
+//! - `transpose-y` / `transpose-x` — the two transposes a separate axis-1 or
+//!   axis-0 pass pays, there and back, as `transpose_matrices` with each
+//!   axis's real geometry.
+//! - `transpose-chain` — the three single-matrix moves the full transform
+//!   runs instead, `(x, y, z)` to `(y, z, x)` to `(z, x, y)` and back.
 //!
 //! Every arm is a round trip so its buffer returns to its input and no
 //! per-iteration reseed is charged to the reading. A forward is then
-//! `3 x lanes + transpose-y + transpose-x` in per-pass units, and the report
+//! `3 x lanes + transpose-chain` in per-pass units, and the report
 //! prints that sum beside the measured forward: the gap is what the pieces do
 //! not account for (scratch acquisition, the C-order view, cache state between
 //! phases the isolated arms do not reproduce).
@@ -312,6 +315,20 @@ fn arms_for_extent(suite: &mut BenchmarkSuite, n: usize) {
         transpose_matrices(std::hint::black_box(&data), &mut scratch, 1, n, n * n);
         transpose_matrices(std::hint::black_box(&scratch), &mut data, 1, n * n, n);
     });
+
+    // The chain the full transform runs: `(x, y, z)` to `(y, z, x)` to
+    // `(z, x, y)` and back, three single-matrix moves through two scratches —
+    // a cycle, so the arm is its own round trip.
+    let mut staged = vec![Complex64::default(); n * n * n];
+    transpose_matrices(&data, &mut scratch, 1, n, n * n);
+    transpose_matrices(&scratch, &mut staged, 1, n, n * n);
+    transpose_matrices(&staged, &mut data, 1, n, n * n);
+    assert_returns_to_input("transpose-chain", n, &data, &input);
+    suite.run(BenchmarkCase::new("unpinned", "transpose-chain", n), || {
+        transpose_matrices(std::hint::black_box(&data), &mut scratch, 1, n, n * n);
+        transpose_matrices(std::hint::black_box(&scratch), &mut staged, 1, n, n * n);
+        transpose_matrices(std::hint::black_box(&staged), &mut data, 1, n, n * n);
+    });
 }
 
 fn processor_histogram(n: usize) {
@@ -391,8 +408,10 @@ fn axis_pass_attribution() {
     print!("{report}");
 
     for n in EXTENTS {
-        // Per forward: three lane passes, axis 1's transpose pair and axis
-        // 0's. Each arm is a round trip, so halve the lane and full rows.
+        // Per forward: three lane passes and the three-move layout chain the
+        // full transform runs; the per-axis pairs print beside it as what the
+        // separate passes would pay. Each arm is a round trip, so halve the
+        // lane and full rows; the chain is a cycle and counts whole.
         // Printed at the median and at the fastest sample: on a loaded host
         // the median of the full arm carries whatever else ran during it, and
         // the residual it leaves is then contention, not the plan.
@@ -404,17 +423,19 @@ fn axis_pass_attribution() {
             let lanes = read(&report, &format!("unpinned/lanes-z/{n}")) / 2.0;
             let ty = read(&report, &format!("unpinned/transpose-y/{n}"));
             let tx = read(&report, &format!("unpinned/transpose-x/{n}"));
-            let pieces = 3.0 * lanes + ty + tx;
+            let chain = read(&report, &format!("unpinned/transpose-chain/{n}"));
+            let pieces = 3.0 * lanes + chain;
             println!(
-                "ATTRIBUTION n={n} {statistic}: forward {:.1} us; lanes 3 x {:.1} = {:.1} us ({:.0}%), transposes {:.1} + {:.1} = {:.1} us ({:.0}%); pieces sum {:.1} us, unaccounted {:.1} us ({:.0}%)",
+                "ATTRIBUTION n={n} {statistic}: forward {:.1} us; lanes 3 x {:.1} = {:.1} us ({:.0}%), chain {:.1} us ({:.0}%; the per-axis pairs {:.1} + {:.1} = {:.1}); pieces sum {:.1} us, unaccounted {:.1} us ({:.0}%)",
                 full / 1e6,
                 lanes / 1e6,
                 3.0 * lanes / 1e6,
                 100.0 * 3.0 * lanes / full,
+                chain / 1e6,
+                100.0 * chain / full,
                 ty / 1e6,
                 tx / 1e6,
                 (ty + tx) / 1e6,
-                100.0 * (ty + tx) / full,
                 pieces / 1e6,
                 (full - pieces) / 1e6,
                 100.0 * (full - pieces) / full,

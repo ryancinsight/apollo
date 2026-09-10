@@ -94,6 +94,13 @@ Change-class tags: [patch] backward-compatible fix, [minor] additive non-breakin
 
 ### Changed
 
+- [patch] `apollo-fft` 3-D transforms (`FftPlan3D`, `StaticFftPlan3D`) run
+  their three axis passes as a layout chain: axis 2 in place, one transpose
+  so axis 0 is contiguous, one more so axis 1 is, and one back to C order —
+  three single-matrix moves through both scratch roles for the four the
+  separate passes paid. The per-axis entry points keep their own passes.
+  Apollo's pass probe reads a 64³ `Complex64` forward at 270 µs at the
+  fastest sample, from 359; at 32³, 88 µs from 123.
 - [patch] `apollo-fft` routes f32 lengths to the generated short-Winograd
   codelets only where the codelet is measurably faster. The selection list had
   never been measured against the decomposition it displaces, and a pinned

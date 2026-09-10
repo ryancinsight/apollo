@@ -1,10 +1,10 @@
-use super::super::lanes;
 use super::super::twiddles::cached_power_of_two_twiddle;
-use crate::application::execution::kernel::mixed_radix::scalar::plan_scratch::{
-    with_3d_x_scratch, with_3d_y_scratch, PlanScratch,
+use super::passes::{self, AxisLanes};
+use crate::application::execution::kernel::mixed_radix::scalar::plan_scratch::PlanScratch;
+use crate::application::execution::kernel::mixed_radix::{
+    dispatch_inplace, forward_inplace, inverse_inplace, MixedRadixScalar,
 };
-use crate::application::execution::kernel::mixed_radix::{dispatch_inplace, MixedRadixScalar};
-use crate::application::execution::plan::fft::layout::{transpose_matrices, with_c_order_view};
+use crate::application::execution::plan::fft::layout::with_c_order_view;
 use crate::domain::metadata::shape::Shape3D;
 use eunomia::Complex;
 use leto::Array3;
@@ -151,11 +151,7 @@ where
             [self.nx, self.ny, self.nz],
             "complex forward shape mismatch"
         );
-        with_c_order_view(data, |mut contiguous| {
-            self.axis_pass_complex::<true>(contiguous.reborrow(), 2);
-            self.axis_pass_complex::<true>(contiguous.reborrow(), 1);
-            self.axis_pass_complex::<true>(contiguous, 0);
-        });
+        with_c_order_view(data, |contiguous| self.all_axes::<true>(contiguous));
     }
 
     /// Inverse transform of a complex Leto view in-place with FFTW-compatible normalization.
@@ -168,117 +164,62 @@ where
             [self.nx, self.ny, self.nz],
             "complex inverse shape mismatch"
         );
-        with_c_order_view(data, |mut contiguous| {
-            self.axis_pass_complex::<false>(contiguous.reborrow(), 0);
-            self.axis_pass_complex::<false>(contiguous.reborrow(), 1);
-            self.axis_pass_complex::<false>(contiguous, 2);
-        });
+        with_c_order_view(data, |contiguous| self.all_axes::<false>(contiguous));
     }
 
     fn axis_pass_complex<const FORWARD: bool>(
         &self,
-        data: ArrayViewMut3<'_, F::Complex>,
+        mut data: ArrayViewMut3<'_, F::Complex>,
         axis: usize,
     ) {
-        if data.shape()[axis] <= 1 {
-            return;
-        }
-        if axis == 2 {
-            self.axis2_pass_complex::<FORWARD>(data);
-            return;
-        }
-        if axis == 1 {
-            self.axis1_pass_complex::<FORWARD>(data);
-            return;
-        }
-        if axis == 0 {
-            self.axis0_pass_complex::<FORWARD>(data);
-        }
-    }
-
-    fn axis1_pass_complex<const FORWARD: bool>(&self, mut data: ArrayViewMut3<'_, F::Complex>) {
+        let shape = [self.nx, self.ny, self.nz];
         let data_slice = data
             .as_mut_slice()
             .expect("invariant: 3D axis execution receives C-order data");
-        with_3d_y_scratch::<F::Complex, _>(self.nx * self.ny * self.nz, |scratch| {
-            transpose_matrices(data_slice, scratch, self.nx, self.ny, self.nz);
-            let lane_fn = |lane: &mut [F::Complex]| match (
-                FORWARD,
-                &self.twiddle_y_fwd,
-                &self.twiddle_y_inv,
-            ) {
-                (true, Some(tw), _) => dispatch_inplace::<F, false, false>(lane, Some(tw.as_ref())),
-                (false, _, Some(tw)) => dispatch_inplace::<F, true, true>(lane, Some(tw.as_ref())),
-                _ => {
-                    if FORWARD {
-                        crate::application::execution::kernel::mixed_radix::forward_inplace::<F>(
-                            lane,
-                        )
-                    } else {
-                        crate::application::execution::kernel::mixed_radix::inverse_inplace::<F>(
-                            lane,
-                        )
-                    }
-                }
-            };
-            lanes::execute::<F, FORWARD>(scratch, data_slice, self.ny, lane_fn);
-            transpose_matrices(scratch, data_slice, self.nx, self.nz, self.ny);
-        });
-    }
-
-    fn axis0_pass_complex<const FORWARD: bool>(&self, mut data: ArrayViewMut3<'_, F::Complex>) {
-        let data_slice = data
-            .as_mut_slice()
-            .expect("invariant: 3D axis execution receives C-order data");
-        with_3d_x_scratch::<F::Complex, _>(self.nx * self.ny * self.nz, |scratch| {
-            transpose_matrices(data_slice, scratch, 1, self.nx, self.ny * self.nz);
-            let lane_fn = |lane: &mut [F::Complex]| match (
-                FORWARD,
-                &self.twiddle_x_fwd,
-                &self.twiddle_x_inv,
-            ) {
-                (true, Some(tw), _) => dispatch_inplace::<F, false, false>(lane, Some(tw.as_ref())),
-                (false, _, Some(tw)) => dispatch_inplace::<F, true, true>(lane, Some(tw.as_ref())),
-                _ => {
-                    if FORWARD {
-                        crate::application::execution::kernel::mixed_radix::forward_inplace::<F>(
-                            lane,
-                        )
-                    } else {
-                        crate::application::execution::kernel::mixed_radix::inverse_inplace::<F>(
-                            lane,
-                        )
-                    }
-                }
-            };
-            lanes::execute::<F, FORWARD>(scratch, data_slice, self.nx, lane_fn);
-            transpose_matrices(scratch, data_slice, 1, self.ny * self.nz, self.nx);
-        });
-    }
-
-    fn axis2_pass_complex<const FORWARD: bool>(&self, mut data: ArrayViewMut3<'_, F::Complex>) {
-        if self.nz <= 1 {
-            return;
+        match axis {
+            0 => passes::axis0::<F, FORWARD>(data_slice, shape, self.lane::<FORWARD>(0)),
+            1 => passes::axis1::<F, FORWARD>(data_slice, shape, self.lane::<FORWARD>(1)),
+            2 => passes::axis2::<F, FORWARD>(data_slice, self.nz, self.lane::<FORWARD>(2)),
+            _ => unreachable!("invariant: the entry points validate the axis"),
         }
+    }
+
+    fn all_axes<const FORWARD: bool>(&self, mut data: ArrayViewMut3<'_, F::Complex>) {
         let data_slice = data
             .as_mut_slice()
             .expect("invariant: 3D axis execution receives C-order data");
-        let lane_fn =
-            |lane: &mut [F::Complex]| match (FORWARD, &self.twiddle_z_fwd, &self.twiddle_z_inv) {
-                (true, Some(tw), _) => dispatch_inplace::<F, false, false>(lane, Some(tw.as_ref())),
-                (false, _, Some(tw)) => dispatch_inplace::<F, true, true>(lane, Some(tw.as_ref())),
-                _ => {
-                    if FORWARD {
-                        crate::application::execution::kernel::mixed_radix::forward_inplace::<F>(
-                            lane,
-                        )
-                    } else {
-                        crate::application::execution::kernel::mixed_radix::inverse_inplace::<F>(
-                            lane,
-                        )
-                    }
-                }
-            };
-        lanes::contiguous::<F, FORWARD, 3>(data_slice, self.nz, lane_fn);
+        passes::all_axes::<F, FORWARD, _, _, _>(
+            data_slice,
+            [self.nx, self.ny, self.nz],
+            AxisLanes {
+                x: self.lane::<FORWARD>(0),
+                y: self.lane::<FORWARD>(1),
+                z: self.lane::<FORWARD>(2),
+            },
+        );
+    }
+
+    /// One direction's lane transform along `axis`: the cached power-of-two
+    /// twiddles where the length has them, the generic mixed radix otherwise.
+    fn lane<const FORWARD: bool>(
+        &self,
+        axis: usize,
+    ) -> impl Fn(&mut [F::Complex]) + Send + Sync + '_ {
+        let twiddles = match (axis, FORWARD) {
+            (0, true) => &self.twiddle_x_fwd,
+            (0, false) => &self.twiddle_x_inv,
+            (1, true) => &self.twiddle_y_fwd,
+            (1, false) => &self.twiddle_y_inv,
+            (2, true) => &self.twiddle_z_fwd,
+            (2, false) => &self.twiddle_z_inv,
+            _ => unreachable!("invariant: the entry points validate the axis"),
+        }
+        .as_deref();
+        move |lane: &mut [F::Complex]| match (FORWARD, twiddles) {
+            (true, Some(twiddles)) => dispatch_inplace::<F, false, false>(lane, Some(twiddles)),
+            (false, Some(twiddles)) => dispatch_inplace::<F, true, true>(lane, Some(twiddles)),
+            (true, None) => forward_inplace::<F>(lane),
+            (false, None) => inverse_inplace::<F>(lane),
+        }
     }
 }
