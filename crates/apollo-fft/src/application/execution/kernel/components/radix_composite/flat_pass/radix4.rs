@@ -203,6 +203,22 @@ where
             // The ragged tail's width and mask are the stage's, not the group's.
             let rem = prev_len % per;
             let m = prefix_mask::<T, A>(rem.max(1));
+            // The run-over tail's twiddles are the stage's: loaded once.
+            let tail_j = prev_len - rem;
+            let run_over = rem != 0 && per - rem <= prev_len;
+            // SAFETY: with `per - rem <= prev_len` each twiddle row's run-over
+            // stays inside the next row; the last row is masked.
+            let (t1, t2, t3) = if run_over {
+                unsafe {
+                    (
+                        load::<T, A>(tw, tail_j),
+                        load::<T, A>(tw, prev_len + tail_j),
+                        load_prefix::<T, A>(tw, 2 * prev_len + tail_j, rem, m),
+                    )
+                }
+            } else {
+                (Vector::zero(), Vector::zero(), Vector::zero())
+            };
             for g in 0..g_count {
                 let src_base = g * prev_len;
                 let dst_base = g * stage_chunk;
@@ -212,7 +228,7 @@ where
                 if rem != 0 {
                     let c = rem;
                     let j = prev_len - rem;
-                    if g + 1 < g_count && per - c <= prev_len {
+                    if g + 1 < g_count && run_over {
                         // The run-over tail: whole-register loads and stores
                         // that run `per - c` samples into the next row, which
                         // the next store (arms ascending, then the next group)
@@ -226,15 +242,9 @@ where
                         unsafe {
                             let at = src_base + j;
                             let a0 = load::<T, A>(src, at);
-                            let a1 = cmul(load::<T, A>(src, stride + at), load::<T, A>(tw, j));
-                            let a2 = cmul(
-                                load::<T, A>(src, 2 * stride + at),
-                                load::<T, A>(tw, prev_len + j),
-                            );
-                            let a3 = cmul(
-                                load::<T, A>(src, 3 * stride + at),
-                                load_prefix::<T, A>(tw, 2 * prev_len + j, c, m),
-                            );
+                            let a1 = cmul(load::<T, A>(src, stride + at), t1);
+                            let a2 = cmul(load::<T, A>(src, 2 * stride + at), t2);
+                            let a3 = cmul(load::<T, A>(src, 3 * stride + at), t3);
                             let b = dft4(turn, a0, a1, a2, a3);
                             for arm in 0..4 {
                                 store(b[arm], dst, dst_base + j + arm * prev_len);
