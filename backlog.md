@@ -2,41 +2,13 @@
 
 <a id="apollo-3d-return-transposes"></a>
 
-## APOLLO-3D-RETURN-TRANSPOSES-2026-09-10 — A 3-D forward moves the volume four times for two axis passes [minor] [perf] — todo
+## APOLLO-3D-RETURN-TRANSPOSES-2026-09-10 — A 3-D forward moves the volume four times for two axis passes [minor] [perf] — done 2026-09-10
 
-- **Finding.** With the lane task width
-  ([`#apollo-lane-task-width`](#apollo-lane-task-width)) and leto's task
-  transposes (leto #182, #184) in the tree, `dimension_3d::pass_attribution`
-  reads a 64³ forward at **359.2 µs** at the fastest sample (host under peer
-  load, minima only): lanes 3 × 36.5 = 109.6 µs (31%), transposes
-  90.3 + 151.3 = **241.6 µs (67%)**, pieces summing to 351.2 µs. Axes 1 and 0
-  each transpose the volume into scratch, run their lanes there, and transpose
-  back (`static_impl.rs`), so two of the four full-volume moves exist only to
-  restore the input layout between passes.
-- **Shape.** Chain the layouts instead of restoring them: axis 2 in place, one
-  transpose so axis 1 is contiguous, its lanes there, one more so axis 0 is
-  contiguous, its lanes there, and one transpose back to C order — three moves
-  for four. Whether the returning move can go too, by planning the inverse to
-  accept the rotated order, is a consumer-contract question (the k-space
-  operator would apply in the rotated layout) recorded here and not decided.
-  The scratch (`with_3d_y_scratch`), the lane pass and the transposes are
-  unchanged; the pass order and the geometry handed to each are what moves.
-- **Acceptance oracle.** The probe's forward at 64³ falls by about one
-  transpose pair at the fastest sample, the transpose rows being the same
-  instrument; `FftPlan3D` round trips and the 3-D reference tests hold bitwise
-  (a layout change reorders no arithmetic); the C-order result is unchanged.
-- **Cost model (2026-09-10).** The chain replaces two batched moves (axis 1,
-  `[64 x 64]` x 64, 45 µs each at the fastest sample) and two single-matrix
-  moves (axis 0, `[64 x 4096]`, 76 µs each after leto #184) with three
-  single-matrix moves. At today's single-matrix cost that is 228 µs for 241 —
-  a 4% forward; leto's `#leto-strided-pitch-aliasing` measured the single
-  matrix's excess as L1/L2 set aliasing at the 64 KiB pitch (256 → 141 µs on
-  one thread with the pitch padded), and once its fix lands a single move
-  costs what a batched one does and the chain is 135 µs for 180. The item
-  waits on that landing; its oracle then reads one transpose pair, as stated.
-- **Risk / change class:** [minor] [perf]; **dependencies:** leto
-  [`#leto-strided-pitch-aliasing`](../leto/backlog.md#leto-strided-pitch-aliasing);
-  kwavers consumes through its pin.
+- **Integrator:** claude-fable-5.1; **branch:** `perf/apollo-3d-return-transposes`.
+- **Outcome.** The full transform chains layouts through both scratch roles
+  in three single-matrix moves (`dimension_3d/passes.rs`); the per-axis entry
+  points keep their two-move passes. Probe at the fastest sample: 64³ forward
+  359 → 270 µs (chain 145 µs against the pairs' 234), 32³ 123 → 88 µs.
 
 <a id="apollo-batched-files-past-target"></a>
 
