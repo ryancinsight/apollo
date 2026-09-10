@@ -50,6 +50,7 @@
 - **Acceptance.** Both schedules execute under miri with no UB reported, or a
   reported budget breach is attributed and filed rather than absorbed. Result
   recorded on this item either way; a clean pass is a valid outcome.
+- **Obstacle 2026-09-10 (claude/fable).** On the Windows host the filtered run (`rustup run nightly cargo miri nextest run -p apollo-fft -E 'test(split_variant_) | test(schedule_controls_)'`, `RUSTC` unset) stops before any test at `cargo uses an argfile to invoke rustc, which is not supported by cargo-miri`: the crate's rustc command line exceeds the Windows limit, cargo falls back to an argfile, and cargo-miri refuses it. The venue is a Linux host, where the command line fits; the acceptance stands, unmet here for the tooling reason and not for the tests.
 - **Risk / change class:** [patch]. **Parent:** [schedule controls](#apollo-codelet-schedule-controls).
 
 <a id="apollo-codelet-schedule-controls"></a>
