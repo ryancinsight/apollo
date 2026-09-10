@@ -127,3 +127,21 @@ contaminated, the `f64` 32768 outlier in round four (103.9 µs beside
 
 2026-09-09: changed Proposed to Accepted; the stop criterion's
 every-cell clause is revised to the totality of cells as recorded above.
+
+### Considered 2026-09-10: the transpose staged into the second set's first sweep
+
+Deleting the transpose pass by letting the second set's first sweep
+transpose the first pair's rows into the staging buffer itself, one
+column block at a time, was built and rejected
+(backlog.md#apollo-planar-transpose-staged-sweep). That sweep's tiles are
+strided rows of the whole plane (`j + 16 i`), so a tile cannot be fed from
+consecutive transposed rows; the unit is a column block, a run of
+first-plane rows, and the staging buffer bounds it to one tile width at
+32768. Every row set then runs one register wide, and the per-row-set cost
+outweighs the L2 traffic the block saves: the first sweep read 131k cycles
+at 32768 `f32` against the transpose pass plus sweep at 48k, and 7.7k
+against 2.5k at 2048 (`output/apollo-planar-rectangular/staged2_*`). The
+measurement also found the out-of-place transpose's per-tile closure
+compiled out of the target-feature frame, seven times the in-frame cost per
+tile, which the pass transpose reaches only for an odd remainder tile; it
+is an in-frame function now.
