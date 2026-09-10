@@ -103,7 +103,7 @@ fn workspace_extents_preserve_the_impulse_spectrum() {
 /// lengths above, which exercise the same driver.
 #[test]
 fn planar_domain_boundary_preserves_the_impulse_spectrum() {
-    let n = crate::application::execution::kernel::components::batched::PLANAR_MAX_LEN;
+    let n = crate::application::execution::kernel::components::batched::plane::PLANAR_MAX_LEN;
     check_impulse::<f32, false, false>(n, f64::from(f32::EPSILON) / 2.0, 0);
     check_impulse::<f64, false, false>(n, f64::EPSILON / 2.0, 0);
 }
