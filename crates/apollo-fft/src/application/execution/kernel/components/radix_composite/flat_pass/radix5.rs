@@ -16,7 +16,9 @@
 //! `x ± i q` is the swapped `q` subtracted on the even lanes and added on
 //! the odd ones (`fmaddsub` by one), or the mirror.
 
-use super::{apply_pointwise, cmul, load, store};
+use super::{
+    apply_pointwise, cmul, load, scatter_spill, store, store_arms, MAX_COMPLEXES_PER_REGISTER,
+};
 use crate::application::execution::kernel::components::winograd::WinogradScalar;
 use eunomia::Complex;
 use hermes_simd::{LaneKernel, LaneScalar, Simd, SimdArch, SimdKernel, SimdStorage, Vector};
@@ -59,25 +61,32 @@ where
     reason = "must fold into the caller's target-feature scope; an out-of-line butterfly reintroduces the ADR 009 penalty"
 )]
 #[inline(always)]
-fn dft5<T, A>(k: Constants<T, A>, a: [Vector<T, A>; 5]) -> [Vector<T, A>; 5]
+fn dft5<T, A>(
+    k: Constants<T, A>,
+    a0: Vector<T, A>,
+    a1: Vector<T, A>,
+    a2: Vector<T, A>,
+    a3: Vector<T, A>,
+    a4: Vector<T, A>,
+) -> [Vector<T, A>; 5]
 where
     T: LaneScalar,
     A: SimdArch + SimdKernel<T>,
 {
-    let t1 = a[1] + a[4];
-    let t2 = a[1] - a[4];
-    let t3 = a[2] + a[3];
-    let t4 = a[2] - a[3];
+    let t1 = a1 + a4;
+    let t2 = a1 - a4;
+    let t3 = a2 + a3;
+    let t4 = a2 - a3;
     let m1 = t3.mul_add(k.c2, t1 * k.c1);
     let m2 = t3.mul_add(k.c1, t1 * k.c2);
     let q3 = t4.mul_add(k.s2, t2 * k.s1).swap_adjacent();
     let q4 = t2.mul_add(k.s2, -(t4 * k.s1)).swap_adjacent();
-    let a1c = a[0] + m1;
-    let a2c = a[0] + m2;
+    let a1c = a0 + m1;
+    let a2c = a0 + m2;
     // `x + i q` reads `(xr - qi, xi + qr)`: the swapped `q` subtracted on the
     // even lanes and added on the odd.
     [
-        a[0] + (t1 + t3),
+        a0 + (t1 + t3),
         a1c.fmaddsub(k.one, q3),
         a2c.fmaddsub(k.one, q4),
         a2c.fmsubadd(k.one, q4),
@@ -130,7 +139,7 @@ where
     #[inline(always)]
     fn call<A: SimdArch + SimdKernel<T>>(self, simd: Simd<T, A>) -> bool {
         let per = <A as SimdStorage<T>>::LANE_COUNT / 2;
-        if per == 0 || per > 8 {
+        if per == 0 || per > MAX_COMPLEXES_PER_REGISTER {
             return false;
         }
         let Self {
@@ -161,38 +170,35 @@ where
 
         if prev_len == 1 {
             // No twiddle; a register holds `per` groups of one arm and a
-            // group's five arms are consecutive in `dst`: the arms go through
-            // a tile of `per` groups.
-            let zero = Complex::new(T::from_f64(0.0), T::from_f64(0.0));
-            let mut tile = [zero; 5 * 8];
+            // group's five arms are consecutive in `dst`: the arm scatter
+            // transposes them in registers, leaving the groups its run-over
+            // needs to the scalar tail.
+            let slack = scatter_spill::<T, A, 5>().div_ceil(5);
             let mut g = 0;
-            while g + per <= g_count {
-                // SAFETY: `g + per <= g_count = stride`, so each arm's row stays
-                // inside `src`; the tile holds `5 per` complexes.
+            while g + per + slack <= g_count {
+                // SAFETY: `g + per <= g_count = stride`, so each arm's row
+                // stays inside `src`, and `5 (g + per) + spill <= dst.len()`.
                 unsafe {
-                    // Straight-line loads: a closure here compiled out of the
-                    // target-feature frame with every vector op a call.
-                    let mut a = [load::<T, A>(src, g); 5];
-                    for (arm, slot) in a.iter_mut().enumerate().skip(1) {
-                        *slot = load::<T, A>(src, arm * stride + g);
-                    }
-                    let b = dft5(k, a);
-                    for (arm, row) in b.into_iter().enumerate() {
-                        store(row, &mut tile, arm * per);
-                    }
-                }
-                for (i, group) in dst[5 * g..5 * (g + per)].chunks_exact_mut(5).enumerate() {
-                    for (arm, out) in group.iter_mut().enumerate() {
-                        *out = tile[arm * per + i];
-                    }
+                    let b = dft5(
+                        k,
+                        load::<T, A>(src, g),
+                        load::<T, A>(src, stride + g),
+                        load::<T, A>(src, 2 * stride + g),
+                        load::<T, A>(src, 3 * stride + g),
+                        load::<T, A>(src, 4 * stride + g),
+                    );
+                    store_arms::<T, A, 5>(b, dst, 5 * g);
                 }
                 g += per;
             }
-            while g < g_count {
+            for (g, out) in dst[5 * g..5 * g_count]
+                .chunks_exact_mut(5)
+                .enumerate()
+                .map(|(k, out)| (g + k, out))
+            {
                 let b =
                     dft5_scalar::<T, INVERSE>(core::array::from_fn(|arm| src[arm * stride + g]));
-                dst[5 * g..5 * g + 5].copy_from_slice(&b);
-                g += 1;
+                out.copy_from_slice(&b);
             }
         } else {
             for g in 0..g_count {
@@ -203,18 +209,27 @@ where
                     // SAFETY: `src_base + j + per <= stride`, so every arm's row
                     // and every twiddle row stay inside their slices, and
                     // `dst_base + j + 4 prev_len + per <= g_count * stage_chunk`.
+                    // Straight-line arms: an array filled in a loop here
+                    // round-tripped the stack on every iteration.
                     unsafe {
                         let at = src_base + j;
-                        let mut a = [load::<T, A>(src, at); 5];
-                        for (arm, slot) in a.iter_mut().enumerate().skip(1) {
-                            *slot = cmul(
-                                load::<T, A>(src, arm * stride + at),
-                                load::<T, A>(tw, (arm - 1) * prev_len + j),
-                            );
-                        }
-                        let b = dft5(k, a);
-                        for (arm, row) in b.into_iter().enumerate() {
-                            store(row, dst, dst_base + j + arm * prev_len);
+                        let a0 = load::<T, A>(src, at);
+                        let a1 = cmul(load::<T, A>(src, stride + at), load::<T, A>(tw, j));
+                        let a2 = cmul(
+                            load::<T, A>(src, 2 * stride + at),
+                            load::<T, A>(tw, prev_len + j),
+                        );
+                        let a3 = cmul(
+                            load::<T, A>(src, 3 * stride + at),
+                            load::<T, A>(tw, 2 * prev_len + j),
+                        );
+                        let a4 = cmul(
+                            load::<T, A>(src, 4 * stride + at),
+                            load::<T, A>(tw, 3 * prev_len + j),
+                        );
+                        let b = dft5(k, a0, a1, a2, a3, a4);
+                        for arm in 0..5 {
+                            store(b[arm], dst, dst_base + j + arm * prev_len);
                         }
                     }
                     j += per;

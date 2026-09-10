@@ -7,12 +7,12 @@
 //! swapped `t3` subtracted on the even lanes and added on the odd ones
 //! (`fmaddsub` by one), the mirror on the inverse.
 
-use super::{apply_pointwise, cmul, load, store};
+use super::{
+    apply_pointwise, cmul, load, scatter_spill, store, store_arms, MAX_COMPLEXES_PER_REGISTER,
+};
 use crate::application::execution::kernel::components::winograd::WinogradScalar;
 use eunomia::Complex;
-use hermes_simd::{
-    ComplexReg, LaneKernel, LaneScalar, Simd, SimdArch, SimdKernel, SimdStorage, Vector,
-};
+use hermes_simd::{LaneKernel, LaneScalar, Simd, SimdArch, SimdKernel, SimdStorage, Vector};
 
 /// One radix-4 pass: `g_count` groups of `prev_len` butterflies over four
 /// source rows `g_count * prev_len` complexes apart, each group's four
@@ -95,18 +95,10 @@ where
         clippy::inline_always,
         reason = "the body must inline into the dispatcher's target-feature frame"
     )]
-    #[expect(
-        clippy::too_many_lines,
-        reason = "the first stage, the twiddled stages and their tails are one pass; splitting them would leave the target-feature frame"
-    )]
     #[inline(always)]
     fn call<A: SimdArch + SimdKernel<T>>(self, simd: Simd<T, A>) -> bool {
         let per = <A as SimdStorage<T>>::LANE_COUNT / 2;
-        // The first stage reorders a group's four arms through a square
-        // complex transpose, which the widths one, two and four have; a
-        // wider register (sixteen `f32` lanes) takes the scalar pass there
-        // until its own reordering is measured.
-        if per == 0 || (self.prev_len == 1 && !matches!(per, 1 | 2 | 4)) {
+        if per == 0 || per > MAX_COMPLEXES_PER_REGISTER {
             return false;
         }
         let Self {
@@ -130,13 +122,14 @@ where
 
         if prev_len == 1 {
             // No twiddle (`W^0`); a register holds `per` groups of one arm,
-            // and a group's four arms are consecutive in `dst`: a square
-            // complex transpose per `per` arms reorders them where the
-            // width is four or two, and a staging tile otherwise.
+            // and a group's four arms are consecutive in `dst`: the arm
+            // scatter transposes them in registers, leaving the groups its
+            // run-over needs to the scalar tail.
+            let slack = scatter_spill::<T, A, 4>().div_ceil(4);
             let mut g = 0;
-            while g + per <= g_count {
+            while g + per + slack <= g_count {
                 // SAFETY: `g + per <= g_count = stride`, so each arm's row
-                // stays inside `src`, and `4 (g + per) <= dst.len()`.
+                // stays inside `src`, and `4 (g + per) + spill <= dst.len()`.
                 unsafe {
                     let b = dft4::<T, A, INVERSE>(
                         one,
@@ -145,38 +138,22 @@ where
                         load::<T, A>(src, 2 * stride + g),
                         load::<T, A>(src, 3 * stride + g),
                     );
-                    if per == 4 {
-                        let mut tile = b.map(ComplexReg::from_interleaved);
-                        ComplexReg::transpose_square(&mut tile);
-                        for (k, row) in tile.into_iter().enumerate() {
-                            store(row.into_interleaved(), dst, 4 * (g + k));
-                        }
-                    } else if per == 2 {
-                        let mut low = [b[0], b[1]].map(ComplexReg::from_interleaved);
-                        let mut high = [b[2], b[3]].map(ComplexReg::from_interleaved);
-                        ComplexReg::transpose_square(&mut low);
-                        ComplexReg::transpose_square(&mut high);
-                        store(low[0].into_interleaved(), dst, 4 * g);
-                        store(high[0].into_interleaved(), dst, 4 * g + 2);
-                        store(low[1].into_interleaved(), dst, 4 * (g + 1));
-                        store(high[1].into_interleaved(), dst, 4 * (g + 1) + 2);
-                    } else {
-                        for (k, arm) in b.into_iter().enumerate() {
-                            store(arm, dst, 4 * g + k);
-                        }
-                    }
+                    store_arms::<T, A, 4>(b, dst, 4 * g);
                 }
                 g += per;
             }
-            while g < g_count {
+            for (g, out) in dst[4 * g..4 * g_count]
+                .chunks_exact_mut(4)
+                .enumerate()
+                .map(|(k, out)| (g + k, out))
+            {
                 let b = dft4_scalar::<T, INVERSE>(
                     src[g],
                     src[stride + g],
                     src[2 * stride + g],
                     src[3 * stride + g],
                 );
-                dst[4 * g..4 * g + 4].copy_from_slice(&b);
-                g += 1;
+                out.copy_from_slice(&b);
             }
         } else {
             for g in 0..g_count {
