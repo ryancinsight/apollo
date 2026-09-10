@@ -18,8 +18,8 @@
 //! differences with the sines carrying the sign pair.
 
 use super::{
-    apply_pointwise, cmul, duplicated_row, load, scatter_spill, store, store_arm_halves,
-    store_arms, MAX_COMPLEXES_PER_REGISTER,
+    apply_pointwise, cmul, duplicated_row, load, load_prefix, prefix_mask, scatter_spill, store,
+    store_arm_halves, store_arms, store_prefix, MAX_COMPLEXES_PER_REGISTER,
 };
 use crate::application::execution::kernel::components::winograd::WinogradScalar;
 use eunomia::Complex;
@@ -111,47 +111,6 @@ fn dft5_scalar<T: WinogradScalar, const INVERSE: bool>(a: [Complex<T>; 5]) -> [C
     let a1c = a[0] + m1;
     let a2c = a[0] + m2;
     [a[0] + (t1 + t3), a1c + iq3, a2c + iq4, a2c - iq4, a1c - iq3]
-}
-
-#[inline]
-fn cmul_scalar<T: WinogradScalar>(a: Complex<T>, w: Complex<T>) -> Complex<T> {
-    Complex::new(a.re * w.re - a.im * w.im, a.re * w.im + a.im * w.re)
-}
-
-/// Group `g`'s butterflies from column `j` on, in scalar arithmetic: the
-/// tail of a row past the last whole register.
-#[inline]
-#[expect(
-    clippy::too_many_arguments,
-    reason = "the pass geometry is the argument list"
-)]
-fn scalar_columns<T: WinogradScalar, const INVERSE: bool>(
-    src: &[Complex<T>],
-    dst: &mut [Complex<T>],
-    tw: &[Complex<T>],
-    stride: usize,
-    prev_len: usize,
-    stage_chunk: usize,
-    g: usize,
-    j: usize,
-) {
-    let src_base = g * prev_len;
-    let dst_base = g * stage_chunk;
-    for j in j..prev_len {
-        let at = src_base + j;
-        let a: [Complex<T>; 5] = core::array::from_fn(|arm| {
-            let x = src[arm * stride + at];
-            if arm == 0 {
-                x
-            } else {
-                cmul_scalar(x, tw[(arm - 1) * prev_len + j])
-            }
-        });
-        let b = dft5_scalar::<T, INVERSE>(a);
-        for (arm, row) in b.into_iter().enumerate() {
-            dst[dst_base + j + arm * prev_len] = row;
-        }
-    }
 }
 
 impl<T, const INVERSE: bool> LaneKernel<T> for FlatPassR5<'_, T, INVERSE>
@@ -255,8 +214,37 @@ where
                 }
                 g += 2;
             }
-            for g in g..g_count {
-                scalar_columns::<T, INVERSE>(src, dst, tw, stride, prev_len, stage_chunk, g, 0);
+            if g < g_count {
+                // An odd last group: its half-register rows through masked
+                // loads and stores.
+                let m = prefix_mask::<T, A>(prev_len);
+                // SAFETY: `(g + 1) prev_len <= stride`, so the masked rows
+                // stay inside their slices, and the group's outputs end at
+                // `(g + 1) stage_chunk <= dst.len()`.
+                unsafe {
+                    let at = g * prev_len;
+                    let a0 = load_prefix::<T, A>(src, at, prev_len, m);
+                    let a1 = cmul(
+                        load_prefix::<T, A>(src, stride + at, prev_len, m),
+                        load_prefix::<T, A>(tw, 0, prev_len, m),
+                    );
+                    let a2 = cmul(
+                        load_prefix::<T, A>(src, 2 * stride + at, prev_len, m),
+                        load_prefix::<T, A>(tw, prev_len, prev_len, m),
+                    );
+                    let a3 = cmul(
+                        load_prefix::<T, A>(src, 3 * stride + at, prev_len, m),
+                        load_prefix::<T, A>(tw, 2 * prev_len, prev_len, m),
+                    );
+                    let a4 = cmul(
+                        load_prefix::<T, A>(src, 4 * stride + at, prev_len, m),
+                        load_prefix::<T, A>(tw, 3 * prev_len, prev_len, m),
+                    );
+                    let b = dft5(k, a0, a1, a2, a3, a4);
+                    for arm in 0..5 {
+                        store_prefix(b[arm], dst, g * stage_chunk + arm * prev_len, prev_len, m);
+                    }
+                }
             }
         } else {
             for g in 0..g_count {
@@ -293,7 +281,38 @@ where
                     j += per;
                 }
                 if j < prev_len {
-                    scalar_columns::<T, INVERSE>(src, dst, tw, stride, prev_len, stage_chunk, g, j);
+                    // The ragged tail: `c < per` columns through masked
+                    // loads and stores, one register per arm.
+                    let c = prev_len - j;
+                    let m = prefix_mask::<T, A>(c);
+                    // SAFETY: `src_base + prev_len <= stride`, so the `c`
+                    // masked complexes of every row and twiddle row stay
+                    // inside their slices, and the outputs end at
+                    // `dst_base + 5 prev_len <= g_count * stage_chunk`.
+                    unsafe {
+                        let at = src_base + j;
+                        let a0 = load_prefix::<T, A>(src, at, c, m);
+                        let a1 = cmul(
+                            load_prefix::<T, A>(src, stride + at, c, m),
+                            load_prefix::<T, A>(tw, j, c, m),
+                        );
+                        let a2 = cmul(
+                            load_prefix::<T, A>(src, 2 * stride + at, c, m),
+                            load_prefix::<T, A>(tw, prev_len + j, c, m),
+                        );
+                        let a3 = cmul(
+                            load_prefix::<T, A>(src, 3 * stride + at, c, m),
+                            load_prefix::<T, A>(tw, 2 * prev_len + j, c, m),
+                        );
+                        let a4 = cmul(
+                            load_prefix::<T, A>(src, 4 * stride + at, c, m),
+                            load_prefix::<T, A>(tw, 3 * prev_len + j, c, m),
+                        );
+                        let b = dft5(k, a0, a1, a2, a3, a4);
+                        for arm in 0..5 {
+                            store_prefix(b[arm], dst, dst_base + j + arm * prev_len, c, m);
+                        }
+                    }
                 }
             }
         }

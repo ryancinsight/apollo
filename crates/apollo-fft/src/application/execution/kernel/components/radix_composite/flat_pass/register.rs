@@ -5,7 +5,7 @@
 
 use core::cmp::Ordering;
 use eunomia::Complex;
-use hermes_simd::{LaneScalar, SimdArch, SimdKernel, SimdStorage, Vector};
+use hermes_simd::{BitMask, LaneScalar, Mask, SimdArch, SimdKernel, SimdStorage, Vector};
 
 /// The widest register a pass admits, in complexes: the first stage's
 /// scatter has a pair decimation for 1, 2, 4 and 8 complexes per register.
@@ -257,6 +257,82 @@ where
     pair[row.len()..per].copy_from_slice(row);
     // SAFETY: `pair` holds `MAX_COMPLEXES_PER_REGISTER >= per` complexes.
     unsafe { load::<T, A>(&pair, 0) }
+}
+
+/// The mask of the first `count` complexes of a register: the ragged tail
+/// of a row, `count < per`.
+#[expect(
+    clippy::inline_always,
+    reason = "must fold into the caller's target-feature scope; an out-of-line mask reintroduces the ADR 009 penalty"
+)]
+#[inline(always)]
+pub(in super::super) fn prefix_mask<T, A>(count: usize) -> Mask<T, A>
+where
+    T: LaneScalar,
+    A: SimdArch + SimdKernel<T>,
+{
+    debug_assert!(2 * count <= <A as SimdStorage<T>>::LANE_COUNT);
+    // SAFETY: the kernel runs inside its backend's dispatch frame, which
+    // proved host support.
+    unsafe { Mask::from_bitmask(BitMask((1_u64 << (2 * count)) - 1)) }
+}
+
+/// The first `count` complexes at complex offset `at` of `data`, zero
+/// beyond them: a ragged tail loaded without reading past the row.
+///
+/// # Safety
+/// `at + count <= data.len()`, and `mask` is [`prefix_mask`] of `count`.
+#[expect(
+    clippy::inline_always,
+    reason = "must fold into the caller's target-feature scope; an out-of-line load reintroduces the ADR 009 penalty"
+)]
+#[inline(always)]
+pub(in super::super) unsafe fn load_prefix<T, A>(
+    data: &[Complex<T>],
+    at: usize,
+    count: usize,
+    mask: Mask<T, A>,
+) -> Vector<T, A>
+where
+    T: LaneScalar,
+    A: SimdArch + SimdKernel<T>,
+{
+    debug_assert!(at + count <= data.len());
+    // SAFETY: the caller's contract; only the `2 count` masked lanes are
+    // read, and they lie inside the slice.
+    unsafe {
+        Vector::<T, A>::masked_load_partial(
+            data.as_ptr().cast::<T>().add(2 * at),
+            2 * count,
+            mask,
+            Vector::zero(),
+        )
+    }
+}
+
+/// Stores the first `count` complexes of `v` at complex offset `at`.
+///
+/// # Safety
+/// As [`load_prefix`].
+#[expect(
+    clippy::inline_always,
+    reason = "must fold into the caller's target-feature scope; an out-of-line store reintroduces the ADR 009 penalty"
+)]
+#[inline(always)]
+pub(in super::super) unsafe fn store_prefix<T, A>(
+    v: Vector<T, A>,
+    data: &mut [Complex<T>],
+    at: usize,
+    count: usize,
+    mask: Mask<T, A>,
+) where
+    T: LaneScalar,
+    A: SimdArch + SimdKernel<T>,
+{
+    debug_assert!(at + count <= data.len());
+    // SAFETY: the caller's contract; only the `2 count` masked lanes are
+    // written, and they lie inside the slice.
+    unsafe { v.masked_store_partial(data.as_mut_ptr().cast::<T>().add(2 * at), 2 * count, mask) }
 }
 
 /// Multiplies `dst` by `factors` element-wise, register-wide then scalar:
