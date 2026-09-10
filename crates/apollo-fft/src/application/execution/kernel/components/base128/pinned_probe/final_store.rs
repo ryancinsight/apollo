@@ -40,7 +40,7 @@ fn final_store_sink_against_incumbent_by_core_type() {
             let mut incumbent = source.clone();
             let mut work = source.clone();
             let twiddles = <f64 as MixedRadixScalar>::cached_twiddle_fwd(n);
-            assert!(super::transform_via_base_128::<f64, false>(
+            assert!(super::transform_via_base_128::<f64, false, false>(
                 &mut candidate,
                 &plan,
                 &twiddles,
@@ -52,7 +52,7 @@ fn final_store_sink_against_incumbent_by_core_type() {
                     &twiddles,
                 ));
             } else {
-                assert!(super::transform_via_base_128::<f64, false>(
+                assert!(super::transform_via_base_128::<f64, false, false>(
                     &mut incumbent,
                     &plan,
                     &twiddles,
@@ -74,7 +74,8 @@ fn final_store_sink_against_incumbent_by_core_type() {
                 "N={n} final-store sink differs by {error:.3e} > {bound:.3e}"
             );
 
-            let candidate_transform: BenchTransform = super::transform_via_base_128::<f64, false>;
+            let candidate_transform: BenchTransform =
+                super::transform_via_base_128::<f64, false, false>;
             let incumbent_transform: BenchTransform = if n == 512 {
                 super::transform_via_base_128_incumbent::<f64, false>
             } else {
@@ -154,7 +155,7 @@ fn split_pieces_by_size() {
             let t = std::time::Instant::now();
             for _ in 0..calls {
                 for block in scratch.chunks_exact_mut(128).take(blocks) {
-                    assert!(transform_128::<f64, false>(
+                    assert!(transform_128::<f64, false, false>(
                         std::hint::black_box(block),
                         &plan
                     ));

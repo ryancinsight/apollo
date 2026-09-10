@@ -52,6 +52,11 @@ pub(crate) mod phase_meter {
     pub(crate) static PHASES: [AtomicU64; 3] =
         [AtomicU64::new(0), AtomicU64::new(0), AtomicU64::new(0)];
     pub(crate) static CALLS: AtomicU64 = AtomicU64::new(0);
+    /// The split construction's phases per whole transform: the gather,
+    /// the base transforms with their sinks, the combine levels past them.
+    pub(crate) static OUTER: [AtomicU64; 3] =
+        [AtomicU64::new(0), AtomicU64::new(0), AtomicU64::new(0)];
+    pub(crate) static OUTER_CALLS: AtomicU64 = AtomicU64::new(0);
     #[expect(
         clippy::inline_always,
         reason = "a timing stamp outlined from the measured region distorts it"
@@ -73,6 +78,14 @@ pub(crate) mod phase_meter {
     #[inline(always)]
     pub(crate) fn add(phase: usize, dt: u64) {
         PHASES[phase].fetch_add(dt, Ordering::Relaxed);
+    }
+    #[expect(
+        clippy::inline_always,
+        reason = "a timing accumulator outlined from the measured region distorts it"
+    )]
+    #[inline(always)]
+    pub(crate) fn add_outer(phase: usize, dt: u64) {
+        OUTER[phase].fetch_add(dt, Ordering::Relaxed);
     }
 }
 
@@ -435,7 +448,7 @@ where
 /// # Panics
 ///
 /// If `data.len() * 2` is not the base lane count.
-pub(crate) fn transform_128_combining<T, const INVERSE: bool>(
+pub(crate) fn transform_128_combining<T, const INVERSE: bool, const MEASURE: bool>(
     data: &mut [Complex<T>],
     plan: &Plan128<T>,
     sink: CombineSink<'_, T>,
@@ -444,7 +457,7 @@ where
     T: MixedRadixScalar,
     Complex<T>: eunomia::layout::Pod,
 {
-    transform_base::<T, INVERSE, false, 8, 256, { table_lanes(8) }, _>(data, plan, sink)
+    transform_base::<T, INVERSE, MEASURE, 8, 256, { table_lanes(8) }, _>(data, plan, sink)
 }
 
 /// Runs block three of a four-block split and stores the final four quarters.
@@ -452,7 +465,7 @@ where
 /// # Panics
 ///
 /// If `data.len() * 2` is not the base lane count.
-pub(crate) fn transform_128_combining_final<T, const INVERSE: bool>(
+pub(crate) fn transform_128_combining_final<T, const INVERSE: bool, const MEASURE: bool>(
     data: &mut [Complex<T>],
     plan: &Plan128<T>,
     sink: FinalCombineSink<'_, T>,
@@ -461,7 +474,7 @@ where
     T: MixedRadixScalar,
     Complex<T>: eunomia::layout::Pod,
 {
-    transform_base::<T, INVERSE, false, 8, 256, { table_lanes(8) }, _>(data, plan, sink)
+    transform_base::<T, INVERSE, MEASURE, 8, 256, { table_lanes(8) }, _>(data, plan, sink)
 }
 
 /// The 128-point base plan: eight rows of sixteen.
@@ -479,7 +492,7 @@ pub(crate) type State64<T> = BasePlanState<T, 4, { table_lanes(4) }>;
 /// # Panics
 ///
 /// If `data` is not exactly 128 samples.
-pub(crate) fn transform_128<T, const INVERSE: bool>(
+pub(crate) fn transform_128<T, const INVERSE: bool, const MEASURE: bool>(
     data: &mut [Complex<T>],
     plan: &Plan128<T>,
 ) -> bool
@@ -487,7 +500,7 @@ where
     T: MixedRadixScalar,
     Complex<T>: eunomia::layout::Pod,
 {
-    transform_base::<T, INVERSE, false, 8, 256, { table_lanes(8) }, _>(data, plan, DirectSink)
+    transform_base::<T, INVERSE, MEASURE, 8, 256, { table_lanes(8) }, _>(data, plan, DirectSink)
 }
 
 /// Runs the 64-point base butterfly: the same construction over four
@@ -505,17 +518,4 @@ where
     Complex<T>: eunomia::layout::Pod,
 {
     transform_base::<T, INVERSE, false, 4, 128, { table_lanes(4) }, _>(data, plan, DirectSink)
-}
-
-/// Runs the phase-attributed variant of the 128-point base butterfly.
-#[cfg(all(test, windows, target_arch = "x86_64"))]
-pub(crate) fn transform_128_measured<T, const INVERSE: bool>(
-    data: &mut [Complex<T>],
-    plan: &Plan128<T>,
-) -> bool
-where
-    T: MixedRadixScalar,
-    Complex<T>: eunomia::layout::Pod,
-{
-    transform_base::<T, INVERSE, true, 8, 256, { table_lanes(8) }, _>(data, plan, DirectSink)
 }
