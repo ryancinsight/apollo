@@ -19,6 +19,7 @@ where
     for (prev_len, g_count) in [
         (1usize, 64usize),
         (2, 32),
+        (2, 33),
         (3, 21),
         (5, 13),
         (8, 8),
@@ -97,7 +98,7 @@ where
     }
     assert!(
         ran >= 14,
-        "the dispatched width ran {ran} of 16 pass shapes"
+        "the dispatched width ran {ran} of 18 pass shapes"
     );
 }
 
@@ -124,6 +125,7 @@ where
         (1usize, 64usize),
         (1, 65),
         (2, 32),
+        (2, 33),
         (3, 21),
         (5, 13),
         (8, 8),
@@ -205,7 +207,7 @@ where
             }
         }
     }
-    assert!(ran >= 6, "the dispatched width ran {ran} of 8 pass shapes");
+    assert!(ran >= 7, "the dispatched width ran {ran} of 9 pass shapes");
 }
 
 #[test]
@@ -230,6 +232,7 @@ where
         (1usize, 64usize),
         (1, 65),
         (2, 32),
+        (2, 33),
         (3, 21),
         (5, 13),
         (8, 8),
@@ -309,7 +312,7 @@ where
             }
         }
     }
-    assert!(ran >= 6, "the dispatched width ran {ran} of 8 pass shapes");
+    assert!(ran >= 7, "the dispatched width ran {ran} of 9 pass shapes");
 }
 
 #[test]
@@ -333,6 +336,7 @@ where
         (1usize, 64usize),
         (1, 65),
         (2, 32),
+        (2, 33),
         (3, 21),
         (5, 13),
         (8, 8),
@@ -424,7 +428,7 @@ where
             }
         }
     }
-    assert!(ran >= 6, "the dispatched width ran {ran} of 8 pass shapes");
+    assert!(ran >= 7, "the dispatched width ran {ran} of 9 pass shapes");
 }
 
 #[test]
@@ -448,6 +452,7 @@ where
         (1usize, 64usize),
         (1, 65),
         (2, 32),
+        (2, 33),
         (3, 21),
         (5, 13),
         (8, 8),
@@ -551,7 +556,7 @@ where
             }
         }
     }
-    assert!(ran >= 6, "the dispatched width ran {ran} of 8 pass shapes");
+    assert!(ran >= 7, "the dispatched width ran {ran} of 9 pass shapes");
 }
 
 #[test]

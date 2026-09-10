@@ -4,7 +4,10 @@
 //! Butterfly: `b0 = a0 + tw · a1`, `b1 = a0 − tw · a1`; the direction is in
 //! the twiddle table.
 
-use super::{apply_pointwise, cmul, load, store, store_arms, MAX_COMPLEXES_PER_REGISTER};
+use super::{
+    apply_pointwise, cmul, duplicated_row, load, store, store_arm_halves, store_arms,
+    MAX_COMPLEXES_PER_REGISTER,
+};
 use crate::application::execution::kernel::components::winograd::WinogradScalar;
 use eunomia::Complex;
 use hermes_simd::{LaneKernel, LaneScalar, Simd, SimdArch, SimdKernel, SimdStorage};
@@ -22,6 +25,35 @@ pub(in super::super) struct FlatPassR2<'a, T> {
     /// The pointwise spectrum multiplied into the output afterwards, on a
     /// convolution's last pass.
     pub(in super::super) pointwise: Option<&'a [Complex<T>]>,
+}
+
+/// Group `g`'s butterflies from column `j` on, in scalar arithmetic: the
+/// tail of a row past the last whole register.
+#[inline]
+#[expect(
+    clippy::too_many_arguments,
+    reason = "the pass geometry is the argument list"
+)]
+fn scalar_columns<T: WinogradScalar>(
+    src: &[Complex<T>],
+    dst: &mut [Complex<T>],
+    tw: &[Complex<T>],
+    stride: usize,
+    prev_len: usize,
+    stage_chunk: usize,
+    g: usize,
+    j: usize,
+) {
+    let src_base = g * prev_len;
+    let dst_base = g * stage_chunk;
+    for j in j..prev_len {
+        let v = src[stride + src_base + j];
+        let t = tw[j];
+        let a1 = Complex::new(v.re * t.re - v.im * t.im, v.re * t.im + v.im * t.re);
+        let a0 = src[src_base + j];
+        dst[dst_base + j] = Complex::new(a0.re + a1.re, a0.im + a1.im);
+        dst[dst_base + j + prev_len] = Complex::new(a0.re - a1.re, a0.im - a1.im);
+    }
 }
 
 impl<T> LaneKernel<T> for FlatPassR2<'_, T>
@@ -85,6 +117,27 @@ where
                 out[0] = Complex::new(a0.re + a1.re, a0.im + a1.im);
                 out[1] = Complex::new(a0.re - a1.re, a0.im - a1.im);
             }
+        } else if 2 * prev_len == per {
+            // Rows are half a register: a register holds two groups' rows of
+            // one arm, multiplied by the twiddle row twice over, and the two
+            // groups' outputs are contiguous in `dst`.
+            let w1 = duplicated_row::<T, A>(&tw[..prev_len]);
+            let mut g = 0;
+            while g + 2 <= g_count {
+                // SAFETY: `(g + 2) prev_len <= stride`, so both rows stay
+                // inside `src`, and the two groups' outputs end at
+                // `(g + 2) stage_chunk <= dst.len()`.
+                unsafe {
+                    let at = g * prev_len;
+                    let a0 = load::<T, A>(src, at);
+                    let a1 = cmul(load::<T, A>(src, stride + at), w1);
+                    store_arm_halves::<T, A, 2>([a0 + a1, a0 - a1], dst, g * stage_chunk);
+                }
+                g += 2;
+            }
+            for g in g..g_count {
+                scalar_columns(src, dst, tw, stride, prev_len, stage_chunk, g, 0);
+            }
         } else {
             for g in 0..g_count {
                 let src_base = g * prev_len;
@@ -104,15 +157,7 @@ where
                     }
                     j += per;
                 }
-                while j < prev_len {
-                    let v = src[stride + src_base + j];
-                    let t = tw[j];
-                    let a1 = Complex::new(v.re * t.re - v.im * t.im, v.re * t.im + v.im * t.re);
-                    let a0 = src[src_base + j];
-                    dst[dst_base + j] = Complex::new(a0.re + a1.re, a0.im + a1.im);
-                    dst[dst_base + j + prev_len] = Complex::new(a0.re - a1.re, a0.im - a1.im);
-                    j += 1;
-                }
+                scalar_columns(src, dst, tw, stride, prev_len, stage_chunk, g, j);
             }
         }
 

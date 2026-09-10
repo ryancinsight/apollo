@@ -13,11 +13,13 @@
 //!   b2 = a0 + m2 + i q4,  b3 = a0 + m2 - i q4
 //! ```
 //!
-//! `x ± i q` is the swapped `q` subtracted on the even lanes and added on
-//! the odd ones (`fmaddsub` by one), or the mirror.
+//! `i q` is the swapped `q` times `(-1, 1)`, and the swap distributes over
+//! the sums, so `i q3` and `i q4` are fused chains on the swapped
+//! differences with the sines carrying the sign pair.
 
 use super::{
-    apply_pointwise, cmul, load, scatter_spill, store, store_arms, MAX_COMPLEXES_PER_REGISTER,
+    apply_pointwise, cmul, duplicated_row, load, scatter_spill, store, store_arm_halves,
+    store_arms, MAX_COMPLEXES_PER_REGISTER,
 };
 use crate::application::execution::kernel::components::winograd::WinogradScalar;
 use eunomia::Complex;
@@ -41,18 +43,18 @@ pub(in super::super) struct FlatPassR5<'a, T, const INVERSE: bool> {
     pub(in super::super) pointwise: Option<&'a [Complex<T>]>,
 }
 
-/// The register constants of the butterfly, the sines signed by direction.
+/// The register constants of the butterfly: the cosines, and the sines
+/// signed by direction times the `(-1, 1)` of a quarter turn.
 #[derive(Clone, Copy)]
 struct Constants<T, A>
 where
     T: LaneScalar,
     A: SimdArch + SimdKernel<T>,
 {
-    one: Vector<T, A>,
     c1: Vector<T, A>,
     c2: Vector<T, A>,
-    s1: Vector<T, A>,
-    s2: Vector<T, A>,
+    s1_turn: Vector<T, A>,
+    s2_turn: Vector<T, A>,
 }
 
 /// The five-point butterfly on one register of complexes per arm.
@@ -74,24 +76,16 @@ where
     A: SimdArch + SimdKernel<T>,
 {
     let t1 = a1 + a4;
-    let t2 = a1 - a4;
     let t3 = a2 + a3;
-    let t4 = a2 - a3;
+    let t2s = (a1 - a4).swap_adjacent();
+    let t4s = (a2 - a3).swap_adjacent();
     let m1 = t3.mul_add(k.c2, t1 * k.c1);
     let m2 = t3.mul_add(k.c1, t1 * k.c2);
-    let q3 = t4.mul_add(k.s2, t2 * k.s1).swap_adjacent();
-    let q4 = t2.mul_add(k.s2, -(t4 * k.s1)).swap_adjacent();
+    let iq3 = t4s.mul_add(k.s2_turn, t2s * k.s1_turn);
+    let iq4 = t2s.mul_sub(k.s2_turn, t4s * k.s1_turn);
     let a1c = a0 + m1;
     let a2c = a0 + m2;
-    // `x + i q` reads `(xr - qi, xi + qr)`: the swapped `q` subtracted on the
-    // even lanes and added on the odd.
-    [
-        a0 + (t1 + t3),
-        a1c.fmaddsub(k.one, q3),
-        a2c.fmaddsub(k.one, q4),
-        a2c.fmsubadd(k.one, q4),
-        a1c.fmsubadd(k.one, q3),
-    ]
+    [a0 + (t1 + t3), a1c + iq3, a2c + iq4, a2c - iq4, a1c - iq3]
 }
 
 /// The scalar five-point butterfly on twiddled arms.
@@ -122,6 +116,42 @@ fn dft5_scalar<T: WinogradScalar, const INVERSE: bool>(a: [Complex<T>; 5]) -> [C
 #[inline]
 fn cmul_scalar<T: WinogradScalar>(a: Complex<T>, w: Complex<T>) -> Complex<T> {
     Complex::new(a.re * w.re - a.im * w.im, a.re * w.im + a.im * w.re)
+}
+
+/// Group `g`'s butterflies from column `j` on, in scalar arithmetic: the
+/// tail of a row past the last whole register.
+#[inline]
+#[expect(
+    clippy::too_many_arguments,
+    reason = "the pass geometry is the argument list"
+)]
+fn scalar_columns<T: WinogradScalar, const INVERSE: bool>(
+    src: &[Complex<T>],
+    dst: &mut [Complex<T>],
+    tw: &[Complex<T>],
+    stride: usize,
+    prev_len: usize,
+    stage_chunk: usize,
+    g: usize,
+    j: usize,
+) {
+    let src_base = g * prev_len;
+    let dst_base = g * stage_chunk;
+    for j in j..prev_len {
+        let at = src_base + j;
+        let a: [Complex<T>; 5] = core::array::from_fn(|arm| {
+            let x = src[arm * stride + at];
+            if arm == 0 {
+                x
+            } else {
+                cmul_scalar(x, tw[(arm - 1) * prev_len + j])
+            }
+        });
+        let b = dft5_scalar::<T, INVERSE>(a);
+        for (arm, row) in b.into_iter().enumerate() {
+            dst[dst_base + j + arm * prev_len] = row;
+        }
+    }
 }
 
 impl<T, const INVERSE: bool> LaneKernel<T> for FlatPassR5<'_, T, INVERSE>
@@ -159,13 +189,14 @@ where
                 && tw.len() >= 4 * prev_len,
             "invariant: a radix-5 pass reads five rows of g_count * prev_len complexes and four twiddle rows, and writes g_count blocks of stage_chunk"
         );
+        // `i q` on the swapped `q` is `(-qi, qr)`: the sign pair `(-1, 1)`,
+        // folded into the direction-signed sines.
         let (s1, s2) = if INVERSE { (S1, S2) } else { (-S1, -S2) };
         let k = Constants {
-            one: simd.splat(T::from_f64(1.0)),
             c1: simd.splat(T::from_f64(C1)),
             c2: simd.splat(T::from_f64(C2)),
-            s1: simd.splat(T::from_f64(s1)),
-            s2: simd.splat(T::from_f64(s2)),
+            s1_turn: Vector::<T, A>::splat_pair(T::from_f64(-s1), T::from_f64(s1)),
+            s2_turn: Vector::<T, A>::splat_pair(T::from_f64(-s2), T::from_f64(s2)),
         };
 
         if prev_len == 1 {
@@ -199,6 +230,33 @@ where
                 let b =
                     dft5_scalar::<T, INVERSE>(core::array::from_fn(|arm| src[arm * stride + g]));
                 out.copy_from_slice(&b);
+            }
+        } else if 2 * prev_len == per {
+            // Rows are half a register: a register holds two groups' rows of
+            // one arm, multiplied by the twiddle row twice over, and the two
+            // groups' outputs are contiguous in `dst`.
+            let w1 = duplicated_row::<T, A>(&tw[..prev_len]);
+            let w2 = duplicated_row::<T, A>(&tw[prev_len..2 * prev_len]);
+            let w3 = duplicated_row::<T, A>(&tw[2 * prev_len..3 * prev_len]);
+            let w4 = duplicated_row::<T, A>(&tw[3 * prev_len..4 * prev_len]);
+            let mut g = 0;
+            while g + 2 <= g_count {
+                // SAFETY: `(g + 2) prev_len <= stride`, so each arm's row
+                // stays inside `src`, and the two groups' outputs end at
+                // `(g + 2) stage_chunk <= dst.len()`.
+                unsafe {
+                    let at = g * prev_len;
+                    let a0 = load::<T, A>(src, at);
+                    let a1 = cmul(load::<T, A>(src, stride + at), w1);
+                    let a2 = cmul(load::<T, A>(src, 2 * stride + at), w2);
+                    let a3 = cmul(load::<T, A>(src, 3 * stride + at), w3);
+                    let a4 = cmul(load::<T, A>(src, 4 * stride + at), w4);
+                    store_arm_halves::<T, A, 5>(dft5(k, a0, a1, a2, a3, a4), dst, g * stage_chunk);
+                }
+                g += 2;
+            }
+            for g in g..g_count {
+                scalar_columns::<T, INVERSE>(src, dst, tw, stride, prev_len, stage_chunk, g, 0);
             }
         } else {
             for g in 0..g_count {
@@ -234,22 +292,7 @@ where
                     }
                     j += per;
                 }
-                while j < prev_len {
-                    let at = src_base + j;
-                    let a: [Complex<T>; 5] = core::array::from_fn(|arm| {
-                        let x = src[arm * stride + at];
-                        if arm == 0 {
-                            x
-                        } else {
-                            cmul_scalar(x, tw[(arm - 1) * prev_len + j])
-                        }
-                    });
-                    let b = dft5_scalar::<T, INVERSE>(a);
-                    for (arm, row) in b.into_iter().enumerate() {
-                        dst[dst_base + j + arm * prev_len] = row;
-                    }
-                    j += 1;
-                }
+                scalar_columns::<T, INVERSE>(src, dst, tw, stride, prev_len, stage_chunk, g, j);
             }
         }
 
