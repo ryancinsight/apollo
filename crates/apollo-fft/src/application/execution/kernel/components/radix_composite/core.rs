@@ -45,8 +45,8 @@ pub(super) fn composite_core_with_radices<
     // M=20736), pushing the working set from ~332 KB to ~829 KB (f64). The flat
     // path keeps the working set within L2 for M=20736.
     //
-    // Benefit 2 — future AVX2: the flat outer loop allows a single per-stage AVX2
-    // feature check (O(n_stages) overhead) instead of per-group (O(n/R) overhead).
+    // Benefit 2: the flat outer loop dispatches one register-width kernel per
+    // stage (O(n_stages) dispatches) instead of per group (O(n/R)).
     if n <= FUSE_THRESHOLD {
         let n_stages = radices.len();
         debug_assert!(n_stages <= MAX_FUSE_DEPTH);
@@ -200,11 +200,10 @@ fn flat_stockham_fused<F: CompositeCache + ShortWinogradScalar, const INVERSE: b
         // pointwise is applied once on the last pass (g_count == 1 there, covers all n elements).
         let pointwise = if is_last { pointwise_spectrum } else { None };
 
-        // Per-stage dispatch: try AVX2 for r=3 and r=4 (amortizes #[target_feature]
-        // overhead across all g_count groups; O(1) overhead per stage vs O(g_count)).
-        // Falls back to the scalar per-group loop when AVX2 is unavailable.
-        #[cfg(target_arch = "x86_64")]
-        let avx2_handled = match r {
+        // Per-stage dispatch: one register-width kernel per radix over all
+        // `g_count` groups (one dispatch per stage, not per group); the
+        // scalar per-group loop runs where the backend declines.
+        let vector_handled = match r {
             2 => {
                 if src_is_data {
                     F::try_flat_pass_r2::<INVERSE>(
@@ -322,9 +321,7 @@ fn flat_stockham_fused<F: CompositeCache + ShortWinogradScalar, const INVERSE: b
             }
             _ => false,
         };
-        #[cfg(not(target_arch = "x86_64"))]
-        let avx2_handled = false;
-        if avx2_handled {
+        if vector_handled {
             src_is_data = !src_is_data;
             prev_len = stage_chunk;
             continue;
