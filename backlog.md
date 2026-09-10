@@ -1,5 +1,36 @@
 # Apollo Backlog
 
+<a id="apollo-rotated-order-handoff"></a>
+
+## APOLLO-ROTATED-ORDER-HANDOFF-2026-09-10 — The third move of a 3-D transform only restores the caller's layout [minor] [perf] — todo
+
+- **Finding.** The layout chain
+  ([`#apollo-3d-return-transposes`](#apollo-3d-return-transposes)) needs only
+  **two** moves to transform all three axes: `(x, y, z)` has `z` contiguous, so
+  axis 2 runs in place; one rotation gives `(y, z, x)` with `x` contiguous; a
+  second gives `(z, x, y)` with `y` contiguous. Every axis is then transformed
+  and the third move exists solely to hand the caller back `(x, y, z)`. At 64³
+  a move is about 48 µs of the 145 µs the chain costs at the fastest sample, so
+  the restoring move is roughly 9% of a forward.
+- **Shape.** A pair of entry points that state the layout they leave and accept
+  — a forward that stops at `(z, x, y)` and an inverse that starts there — with
+  the order carried in the type rather than documented, so a caller cannot pass
+  a rotated volume to a C-order entry point. The existing entry points keep
+  their contract and their third move. An inverse starting rotated still costs
+  three moves (two to transform, one to restore), so a round trip goes from six
+  moves to five; a consumer willing to hold its field rotated between steps
+  drops to four, which is the larger prize and belongs to the consumer's item.
+- **Consumer question (kwavers).** A PSTD step is forward, k-space multiply,
+  inverse. The multiply is elementwise, so it is layout-agnostic **provided the
+  operator arrays are stored in the same rotated order** — they are built once
+  per grid, so rotating them is a plan-time cost, not a per-step one. That is
+  the consumer half; file it there when this lands.
+- **Acceptance oracle.** `dimension_3d::pass_attribution` gains an arm for the
+  rotated pair and reads one move less than `full` at 64³ and 32³; the round
+  trip through the rotated pair returns the input bitwise, since no arithmetic
+  order changes; the C-order entry points' arms are unchanged.
+- **Risk / change class:** [minor] [perf]; **dependencies:** none.
+
 <a id="APOLLO-WASM-DEPENDENCY-2026-09-10"></a>
 ## APOLLO-WASM-DEPENDENCY-2026-09-10 — Keep the FFT dependency graph portable on WebAssembly [patch]
 - Status: review; integrator=root; branch=`codex/apollo-wasm-dependency`; last-update=2026-09-10.
