@@ -309,13 +309,23 @@
 - **Verification:** the suites (621 tests) green with the bound moved; `cargo doc` warning-free.
 
 <a id="apollo-base128-attribution"></a>
-## APOLLO-BASE128-ATTRIBUTION — Attribute the base-128 route at 512 and 1024 [patch] [perf] — in-progress
-- **Integrator:** claude/fable; **last-update:** 2026-09-10; branch `perf/apollo-base128-attribution` on lane `D:/atlas/worktrees/apollo-route`; lease: claude/fable `components/base128/instance_major.rs`, `components/base128/instance_major/{column.rs,store.rs}`, `components/base128/pinned_probe/small_sizes.rs` 2026-09-10T20:50Z; parent [beat the references](#atlas-apollo-beat-the-references).
-- **Question:** 512 and 1024 run the 8 × 128 construction at 1.2 to 1.3 times RustFFT in both precisions (the standing table); which phase carries the gap: the gather, the inner 128-point transforms, the four-block chains and level combine, or the final store?
-- **First round (2026-09-10, `small_sizes_against_the_references_by_core_type`, performance core, `../../output/apollo-base128/small_sizes_2026-09-10.txt`):** `f64` medians against RustFFT: 32 26.4 against 15.2 ns (1.74), 64 42.1 against 49.9 (0.84), 128 94.0 against 87.4 (1.08; the bare 8 × 128 kernel 91.1), 256 249 against 208 (1.20), 512 578 against 478 (1.21), 1024 1546 against 1267 (1.22); the phase meter over the construction reads `redistribute` 2238 against `columns8` 220 and `rows16` 0, so the gather and the final store, not the 128-point transforms, carry the route, and 32 is a small-power cell of its own.
-- **Method:** the phase attribution at 512 and 1024 with the redistribute phase split into its gather and store halves, against the register-bound estimate of a copy of the data; one bounded prototype if a half sits clearly above it.
-- **Decision deliverable:** a lever filed with its measured bound, or the route's floor recorded on the parent.
-- **Dependencies:** none; parent [beat the references](#atlas-apollo-beat-the-references). **Verification:** the probes; `rustfft_comparison`.
+## APOLLO-BASE128-ATTRIBUTION — Attribute the base-128 route at 512 and 1024 [patch] [perf] — done 2026-09-10
+- Landed the per-phase meter on the split construction (`transform_via_base_128::<_, _, true>`, `small_sizes_against_the_references_by_core_type`; `../../output/apollo-base128/split_attribution_2026-09-10.txt`). Cycles on the performance core, `f64`: 512 = gather 205 + four blocks of (rows 235, columns with sink 311) + 365 unattributed (the stamps themselves are about 40 cycles each) = 2754 against RustFFT 2258 (1.22); 1024 = gather 942 + eight blocks of (235, 319) + 771 unattributed + one combine level 763 = 6908 against 5470 (1.29). The bare kernel (rows 235, columns 207) is 65% of the RustFFT budget at 1024 on its own; the construction adds gather 14%, sinks 13% (112 per block over the direct store, two loads, a multiply and a butterfly per chunk), level 11%.
+- Levers filed with their bounds: [gather in the loads](#apollo-base128-gather-in-loads) (at most 14%) and [the 1024 level in the second sink](#apollo-base128-level-in-sink) (at most 11%); together they reach about 1.1, not parity, so the parent records the base-128 floor.
+
+<a id="apollo-base128-gather-in-loads"></a>
+## APOLLO-BASE128-GATHER-IN-LOADS — Load the stride-8 source directly in the base transform [patch] [perf] — todo
+- **Evidence:** at 1024 `f64` the gather pass costs 942 cycles (14% of 6908; 0.92 per complex) and at 512 205 (7%) ([attribution](#apollo-base128-attribution)); the base transform then loads the gathered block contiguously in its first phase.
+- **Scope:** a source view for the first phase that reads sample `8 b + offset` of the ungathered input (two half-register loads per register at `f64`, one gather-free pass fewer), selected by the split construction; the gather kernel stays for the fallback. Non-goals: the sinks, the level.
+- **Acceptance:** the attribution meter reads the gather at zero and the per-block rows within its former value plus the split-load cost; 512 and 1024 not above the current route in either precision on the pinned small-sizes probe; the base-128 differential tests green.
+- **Dependencies:** none; parent [beat the references](#atlas-apollo-beat-the-references). **Verification:** `small_sizes_against_the_references_by_core_type`.
+
+<a id="apollo-base128-level-in-sink"></a>
+## APOLLO-BASE128-LEVEL-IN-SINK — Fold the 1024 combine level into the second half's final sink [patch] [perf] — todo
+- **Evidence:** at 1024 the last radix-2 level runs as its own pass over the data, 763 cycles (11%), where 512 pays no level because its `FinalCombineSink` combines as it stores ([attribution](#apollo-base128-attribution)).
+- **Scope:** a sink for the second half's block three that combines through the inner and outer twiddles as today and then through the 1024 twiddles against the completed first half, writing all four output slices; the first half keeps its sink. Non-goals: the gather, the base kernel.
+- **Acceptance:** the meter reads the level at zero and the second half's column phase within its former value plus the extra butterfly; 1024 not above the current route in either precision; the differential tests green.
+- **Dependencies:** none; parent [beat the references](#atlas-apollo-beat-the-references). **Verification:** `small_sizes_against_the_references_by_core_type`.
 
 <a id="apollo-workspace-impulse-oracle-budget"></a>
 ## APOLLO-WORKSPACE-IMPULSE-ORACLE-BUDGET — Fit the workspace impulse oracle in the CI slow budget [patch] — done 2026-09-10
@@ -1576,6 +1586,14 @@
 - **Standing bar.** Neither RustFFT nor PhastFT may be faster than apollo at
   any length. This item is the scoreboard and the parent of the work; each gap
   below becomes its own increment.
+- **Base-128 floor (2026-09-10).** At 512 and 1024 the eight-block
+  construction is 1.22 and 1.29 times RustFFT (`f64`); its bare 128-point
+  kernels alone take 65% of the RustFFT budget at 1024, and the gather,
+  combine sinks and last level add 38%, of which the two filed levers
+  ([gather in the loads](#apollo-base128-gather-in-loads), [level in the
+  sink](#apollo-base128-level-in-sink)) can remove about half. Parity at
+  these lengths needs a construction with fewer passes over the data (a
+  two-stage 32 by 32 kernel), not a faster piece of this one.
 - **Where it stands.** `small_sizes_against_the_references_by_core_type`,
   performance core, minimum of 100 pinned samples, hoisted plans on every side
   (RustFFT's planner and PhastFT's are hoisted exactly as apollo's is, so the
