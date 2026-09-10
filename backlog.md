@@ -230,12 +230,8 @@
 - **Outcome:** eight process runs of the section probe printing the fold tables' line offsets (`../../output/apollo-planar-rectangular/tables_*.txt`): the fold sweep at 16384 reads 24.9k to 25.4k cycles `f64` and 13.2k to 13.5k `f32` with the tables at 0, 16 or 48 bytes into a line, and the 65536 spread (126k to 138k) has no correlation with the offsets; one register load per row is too few to pay the split. The tables stay as allocated.
 
 <a id="apollo-planar-transpose-sixteen-lanes"></a>
-## APOLLO-PLANAR-TRANSPOSE-SIXTEEN-LANES — Let the planar transposes take the eight-wide pad at sixteen lanes [patch] [perf] — in-progress
-- **Integrator:** claude/fable; **last-update:** 2026-09-09; branch `perf/apollo-planar-transpose-sixteen-lanes` on lane `D:/atlas/worktrees/apollo-route`, stacked on PR #370; lease: claude/fable `components/batched/{boundary,tests}.rs` 2026-09-09T23:40Z.
-- **Evidence:** PR 369's landing run on a sixteen-lane host: `rectangular_transpose_matches_the_reference` reported the kernel declining 16x32, whose padded strides are 40 and 24; both transpose kernels guard `stride % lanes == 0` and address tiles by chunk index, and `ROW_PAD` is 8, so every planar transpose on an AVX-512 `f32` host runs the scalar fallback (correct, and the pass the vector tile was measured to halve, ADR 0057).
-- **Scope:** address tile rows by element offset rather than chunk index in `TransposePlanes` and `TransposePlanesInto` (the loads are unaligned already), dropping the stride guard to rows and columns; verify with the relabeled-transpose model at sixteen lanes and the scalar reference. Non-goals: changing `ROW_PAD`.
-- **Acceptance:** the transpose tests report the vector path handling every shape at every dispatched width; a sixteen-lane landing run green.
-- **Dependencies:** none. **Verification:** the transpose tests; the CI landing run on a sixteen-lane host.
+## APOLLO-PLANAR-TRANSPOSE-SIXTEEN-LANES — Let the planar transposes take the eight-wide pad at sixteen lanes [patch] [perf] — done 2026-09-09
+- **Outcome:** PR #371. Both transpose kernels address tile rows by element offset and guard rows and columns only, so the eight-wide pad is taken at sixteen lanes; the relabeled-transpose model at sixteen lanes and the scalar reference cover it, and the shape `(32, 64, 4)` pins a stride no eight-lane width divides.
 
 <a id="apollo-planar-sink-row-copy"></a>
 ## APOLLO-PLANAR-SINK-ROW-COPY — Copy the staged sink rows register-wide [patch] [perf] — done 2026-09-09 (rejected)
@@ -244,6 +240,10 @@
 <a id="apollo-planar-sink-aligned-direct"></a>
 ## APOLLO-PLANAR-SINK-ALIGNED-DIRECT — Write the sink direct where the caller's rows are on a line [patch] [perf] — done 2026-09-10
 - **Outcome:** PR #373. With the caller's rows on a line the direct sink reads `f2` at 2048 `f32` 1.6k to 1.7k cycles against 2.4k to 2.7k staged (the transform 6.6k against 7.4k to 7.8k) and is level at the 16 KiB planes (2048 `f64`, 4096 `f32`), so the sink goes direct up to `DIRECT_SINK_MAX_PLANE_BYTES` (two pages) with the caller on a line and stages otherwise; off a line unchanged, `rustfft_comparison` 2048 level (`../../output/apollo-planar-rectangular/sinkdir_*`). The 16 KiB cells of the acceptance were not met and are recorded as level.
+
+<a id="apollo-planar-transpose-staged-sweep"></a>
+## APOLLO-PLANAR-TRANSPOSE-STAGED-SWEEP — Feed the second set's first sweep from a staged transpose [patch] [perf] — done 2026-09-10 (rejected)
+- **Outcome:** built (a staged planar source seam in the pass, the first frequency sweep block by block with an in-sweep tile transpose into the staging buffer, a route selector in the driver, a bitwise differential test) and rejected on measurement: the sweep's tiles are strided rows, so the block, one tile width of columns, is the unit, and the per-row-set cost of one-vector blocks outweighs the L2 traffic saved: `f1` 32768 `f32` 131k cycles against the transpose pass plus sweep 48k, 2048 `f32` 7.7k against 2.5k, `rustfft_comparison` 32768 `f32` 63 against 40.5 µs (`../../output/apollo-planar-rectangular/staged*`). Kept: the sweeps beside their stage sets (`dit.rs`, `dif.rs`, `sink.rs`), and the out-of-place transpose's per-tile closure made an in-frame function, which the block fill exposed at seven times the in-frame cost (the odd remainder tile of a sixteen-lane `f32` host pays it in production). ADR 0060 carries the alternative.
 
 <a id="apollo-workspace-impulse-oracle-budget"></a>
 ## APOLLO-WORKSPACE-IMPULSE-ORACLE-BUDGET — Fit the workspace impulse oracle in the CI slow budget [patch] — todo
