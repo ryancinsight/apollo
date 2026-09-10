@@ -308,6 +308,95 @@ where
             for g in 0..g_count {
                 let src_base = g * prev_len;
                 let dst_base = g * stage_chunk;
+                // The ragged tail runs first: its run-over into the next arm's
+                // leading columns is overwritten by that arm's whole-register
+                // stores, and the last arm's by the next group's.
+                let rem = prev_len % per;
+                if rem != 0 {
+                    let c = rem;
+                    let j = prev_len - rem;
+                    let m = prefix_mask::<T, A>(c);
+                    if g + 1 < g_count && per - c <= prev_len {
+                        // The run-over tail: whole-register loads and stores
+                        // that run `per - c` samples into the next row, which
+                        // the next store (arms ascending, then the next group)
+                        // overwrites; the twiddle rows are masked, since the
+                        // last row has no successor.
+                        // SAFETY: with `per - c <= prev_len` every run-over stays
+                        // inside the neighbouring row of the same arm (source) or
+                        // arm (output), and `g + 1 < g_count` puts a whole group
+                        // after this one in both slices.
+                        unsafe {
+                            let at = src_base + j;
+                            let a0 = load::<T, A>(src, at);
+                            let a1 = cmul(
+                                load::<T, A>(src, stride + at),
+                                load_prefix::<T, A>(tw, j, c, m),
+                            );
+                            let a2 = cmul(
+                                load::<T, A>(src, 2 * stride + at),
+                                load_prefix::<T, A>(tw, prev_len + j, c, m),
+                            );
+                            let a3 = cmul(
+                                load::<T, A>(src, 3 * stride + at),
+                                load_prefix::<T, A>(tw, 2 * prev_len + j, c, m),
+                            );
+                            let a4 = cmul(
+                                load::<T, A>(src, 4 * stride + at),
+                                load_prefix::<T, A>(tw, 3 * prev_len + j, c, m),
+                            );
+                            let a5 = cmul(
+                                load::<T, A>(src, 5 * stride + at),
+                                load_prefix::<T, A>(tw, 4 * prev_len + j, c, m),
+                            );
+                            let a6 = cmul(
+                                load::<T, A>(src, 6 * stride + at),
+                                load_prefix::<T, A>(tw, 5 * prev_len + j, c, m),
+                            );
+                            let b = dft7(k, a0, a1, a2, a3, a4, a5, a6);
+                            for arm in 0..7 {
+                                store(b[arm], dst, dst_base + j + arm * prev_len);
+                            }
+                        }
+                    } else {
+                        // SAFETY: `src_base + prev_len <= stride`, so the `c`
+                        // masked complexes of every row and twiddle row stay
+                        // inside their slices, and the outputs end at
+                        // `dst_base + 7 prev_len <= g_count * stage_chunk`.
+                        unsafe {
+                            let at = src_base + j;
+                            let a0 = load_prefix::<T, A>(src, at, c, m);
+                            let a1 = cmul(
+                                load_prefix::<T, A>(src, stride + at, c, m),
+                                load_prefix::<T, A>(tw, j, c, m),
+                            );
+                            let a2 = cmul(
+                                load_prefix::<T, A>(src, 2 * stride + at, c, m),
+                                load_prefix::<T, A>(tw, prev_len + j, c, m),
+                            );
+                            let a3 = cmul(
+                                load_prefix::<T, A>(src, 3 * stride + at, c, m),
+                                load_prefix::<T, A>(tw, 2 * prev_len + j, c, m),
+                            );
+                            let a4 = cmul(
+                                load_prefix::<T, A>(src, 4 * stride + at, c, m),
+                                load_prefix::<T, A>(tw, 3 * prev_len + j, c, m),
+                            );
+                            let a5 = cmul(
+                                load_prefix::<T, A>(src, 5 * stride + at, c, m),
+                                load_prefix::<T, A>(tw, 4 * prev_len + j, c, m),
+                            );
+                            let a6 = cmul(
+                                load_prefix::<T, A>(src, 6 * stride + at, c, m),
+                                load_prefix::<T, A>(tw, 5 * prev_len + j, c, m),
+                            );
+                            let b = dft7(k, a0, a1, a2, a3, a4, a5, a6);
+                            for arm in 0..7 {
+                                store_prefix(b[arm], dst, dst_base + j + arm * prev_len, c, m);
+                            }
+                        }
+                    }
+                }
                 let mut j = 0;
                 while j + per <= prev_len {
                     // SAFETY: `src_base + j + per <= stride`, so every arm's row
@@ -345,48 +434,6 @@ where
                         }
                     }
                     j += per;
-                }
-                if j < prev_len {
-                    // The ragged tail: `c < per` columns through masked
-                    // loads and stores, one register per arm.
-                    let c = prev_len - j;
-                    let m = prefix_mask::<T, A>(c);
-                    // SAFETY: `src_base + prev_len <= stride`, so the `c`
-                    // masked complexes of every row and twiddle row stay
-                    // inside their slices, and the outputs end at
-                    // `dst_base + 7 prev_len <= g_count * stage_chunk`.
-                    unsafe {
-                        let at = src_base + j;
-                        let a0 = load_prefix::<T, A>(src, at, c, m);
-                        let a1 = cmul(
-                            load_prefix::<T, A>(src, stride + at, c, m),
-                            load_prefix::<T, A>(tw, j, c, m),
-                        );
-                        let a2 = cmul(
-                            load_prefix::<T, A>(src, 2 * stride + at, c, m),
-                            load_prefix::<T, A>(tw, prev_len + j, c, m),
-                        );
-                        let a3 = cmul(
-                            load_prefix::<T, A>(src, 3 * stride + at, c, m),
-                            load_prefix::<T, A>(tw, 2 * prev_len + j, c, m),
-                        );
-                        let a4 = cmul(
-                            load_prefix::<T, A>(src, 4 * stride + at, c, m),
-                            load_prefix::<T, A>(tw, 3 * prev_len + j, c, m),
-                        );
-                        let a5 = cmul(
-                            load_prefix::<T, A>(src, 5 * stride + at, c, m),
-                            load_prefix::<T, A>(tw, 4 * prev_len + j, c, m),
-                        );
-                        let a6 = cmul(
-                            load_prefix::<T, A>(src, 6 * stride + at, c, m),
-                            load_prefix::<T, A>(tw, 5 * prev_len + j, c, m),
-                        );
-                        let b = dft7(k, a0, a1, a2, a3, a4, a5, a6);
-                        for arm in 0..7 {
-                            store_prefix(b[arm], dst, dst_base + j + arm * prev_len, c, m);
-                        }
-                    }
                 }
             }
         }
