@@ -15,7 +15,9 @@
 //! even lanes and subtracted on the odd ones (`fmsubadd` by one) for `b1`
 //! forward, the mirror for `b2` and on the inverse.
 
-use super::{apply_pointwise, cmul, load, store};
+use super::{
+    apply_pointwise, cmul, load, scatter_spill, store, store_arms, MAX_COMPLEXES_PER_REGISTER,
+};
 use crate::application::execution::kernel::components::winograd::WinogradScalar;
 use eunomia::Complex;
 use hermes_simd::{LaneKernel, LaneScalar, Simd, SimdArch, SimdKernel, SimdStorage, Vector};
@@ -115,7 +117,7 @@ where
     #[inline(always)]
     fn call<A: SimdArch + SimdKernel<T>>(self, simd: Simd<T, A>) -> bool {
         let per = <A as SimdStorage<T>>::LANE_COUNT / 2;
-        if per == 0 || per > 8 {
+        if per == 0 || per > MAX_COMPLEXES_PER_REGISTER {
             return false;
         }
         let Self {
@@ -143,14 +145,14 @@ where
 
         if prev_len == 1 {
             // No twiddle; a register holds `per` groups of one arm and a
-            // group's three arms are consecutive in `dst`: the arms go through
-            // a tile of `per` groups, three stores in and `3 per` copies out.
-            let zero = Complex::new(T::from_f64(0.0), T::from_f64(0.0));
-            let mut tile = [zero; 3 * 8];
+            // group's three arms are consecutive in `dst`: the arm scatter
+            // transposes them in registers, leaving the groups its run-over
+            // needs to the scalar tail.
+            let slack = scatter_spill::<T, A, 3>().div_ceil(3);
             let mut g = 0;
-            while g + per <= g_count {
-                // SAFETY: `g + per <= g_count = stride`, so each arm's row stays
-                // inside `src`; the tile holds `3 per` complexes.
+            while g + per + slack <= g_count {
+                // SAFETY: `g + per <= g_count = stride`, so each arm's row
+                // stays inside `src`, and `3 (g + per) + spill <= dst.len()`.
                 unsafe {
                     let b = dft3::<T, A, INVERSE>(
                         k,
@@ -158,21 +160,17 @@ where
                         load::<T, A>(src, stride + g),
                         load::<T, A>(src, 2 * stride + g),
                     );
-                    for (arm, row) in b.into_iter().enumerate() {
-                        store(row, &mut tile, arm * per);
-                    }
-                }
-                for (i, group) in dst[3 * g..3 * (g + per)].chunks_exact_mut(3).enumerate() {
-                    for (arm, out) in group.iter_mut().enumerate() {
-                        *out = tile[arm * per + i];
-                    }
+                    store_arms::<T, A, 3>(b, dst, 3 * g);
                 }
                 g += per;
             }
-            while g < g_count {
+            for (g, out) in dst[3 * g..3 * g_count]
+                .chunks_exact_mut(3)
+                .enumerate()
+                .map(|(k, out)| (g + k, out))
+            {
                 let b = dft3_scalar::<T, INVERSE>(src[g], src[stride + g], src[2 * stride + g]);
-                dst[3 * g..3 * g + 3].copy_from_slice(&b);
-                g += 1;
+                out.copy_from_slice(&b);
             }
         } else {
             for g in 0..g_count {

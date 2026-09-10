@@ -4,7 +4,7 @@
 //! Butterfly: `b0 = a0 + tw · a1`, `b1 = a0 − tw · a1`; the direction is in
 //! the twiddle table.
 
-use super::{apply_pointwise, cmul, load, store};
+use super::{apply_pointwise, cmul, load, store, store_arms, MAX_COMPLEXES_PER_REGISTER};
 use crate::application::execution::kernel::components::winograd::WinogradScalar;
 use eunomia::Complex;
 use hermes_simd::{LaneKernel, LaneScalar, Simd, SimdArch, SimdKernel, SimdStorage};
@@ -39,7 +39,7 @@ where
     #[inline(always)]
     fn call<A: SimdArch + SimdKernel<T>>(self, _capability: Simd<T, A>) -> bool {
         let per = <A as SimdStorage<T>>::LANE_COUNT / 2;
-        if per == 0 {
+        if per == 0 || per > MAX_COMPLEXES_PER_REGISTER {
             return false;
         }
         let Self {
@@ -61,11 +61,29 @@ where
         );
 
         if prev_len == 1 {
-            for g in 0..g_count {
+            // No twiddle; a register holds `per` groups of one arm, and a
+            // group's two arms are consecutive in `dst`: one pair interleave.
+            let mut g = 0;
+            while g + per <= g_count {
+                // SAFETY: `g + per <= g_count = stride`, so both rows stay
+                // inside `src`, and the two output registers end at
+                // `2 (g + per) <= dst.len()`.
+                unsafe {
+                    let a0 = load::<T, A>(src, g);
+                    let a1 = load::<T, A>(src, stride + g);
+                    store_arms::<T, A, 2>([a0 + a1, a0 - a1], dst, 2 * g);
+                }
+                g += per;
+            }
+            for (g, out) in dst[2 * g..2 * g_count]
+                .chunks_exact_mut(2)
+                .enumerate()
+                .map(|(k, out)| (g + k, out))
+            {
                 let a0 = src[g];
                 let a1 = src[stride + g];
-                dst[2 * g] = Complex::new(a0.re + a1.re, a0.im + a1.im);
-                dst[2 * g + 1] = Complex::new(a0.re - a1.re, a0.im - a1.im);
+                out[0] = Complex::new(a0.re + a1.re, a0.im + a1.im);
+                out[1] = Complex::new(a0.re - a1.re, a0.im - a1.im);
             }
         } else {
             for g in 0..g_count {

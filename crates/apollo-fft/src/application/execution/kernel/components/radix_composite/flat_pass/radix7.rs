@@ -15,7 +15,9 @@
 //! The quarter turns are lane swaps with a sign pattern; the sums are fused
 //! multiply-add chains in the AVX2 kernel's order.
 
-use super::{apply_pointwise, cmul, load, store};
+use super::{
+    apply_pointwise, cmul, load, scatter_spill, store, store_arms, MAX_COMPLEXES_PER_REGISTER,
+};
 use crate::application::execution::kernel::components::winograd::WinogradScalar;
 use eunomia::Complex;
 use hermes_simd::{LaneKernel, LaneScalar, Simd, SimdArch, SimdKernel, SimdStorage, Vector};
@@ -59,29 +61,41 @@ where
     clippy::inline_always,
     reason = "must fold into the caller's target-feature scope; an out-of-line butterfly reintroduces the ADR 009 penalty"
 )]
+#[expect(
+    clippy::too_many_arguments,
+    reason = "seven arms is the butterfly's arity, not a parameter list"
+)]
 #[inline(always)]
-fn dft7<T, A>(k: Constants<T, A>, a: [Vector<T, A>; 7]) -> [Vector<T, A>; 7]
+fn dft7<T, A>(
+    k: Constants<T, A>,
+    a0: Vector<T, A>,
+    a1: Vector<T, A>,
+    a2: Vector<T, A>,
+    a3: Vector<T, A>,
+    a4: Vector<T, A>,
+    a5: Vector<T, A>,
+    a6: Vector<T, A>,
+) -> [Vector<T, A>; 7]
 where
     T: LaneScalar,
     A: SimdArch + SimdKernel<T>,
 {
-    let xr1 = a[1] + a[6];
-    let xr2 = a[2] + a[5];
-    let xr3 = a[3] + a[4];
-    let xi1 = (a[1] - a[6]).swap_adjacent() * k.turn;
-    let xi2 = (a[2] - a[5]).swap_adjacent() * k.turn;
-    let xi3 = (a[3] - a[4]).swap_adjacent() * k.turn;
+    let xr1 = a1 + a6;
+    let xr2 = a2 + a5;
+    let xr3 = a3 + a4;
+    let xi1 = (a1 - a6).swap_adjacent() * k.turn;
+    let xi2 = (a2 - a5).swap_adjacent() * k.turn;
+    let xi3 = (a3 - a4).swap_adjacent() * k.turn;
     let [c1, c2, c3] = k.c;
     let [s1, s2, s3] = k.s;
-    let x0 = a[0];
-    let re1 = xr3.mul_add(c3, xr2.mul_add(c2, xr1.mul_add(c1, x0)));
-    let re2 = xr3.mul_add(c1, xr2.mul_add(c3, xr1.mul_add(c2, x0)));
-    let re3 = xr3.mul_add(c2, xr2.mul_add(c1, xr1.mul_add(c3, x0)));
+    let re1 = xr3.mul_add(c3, xr2.mul_add(c2, xr1.mul_add(c1, a0)));
+    let re2 = xr3.mul_add(c1, xr2.mul_add(c3, xr1.mul_add(c2, a0)));
+    let re3 = xr3.mul_add(c2, xr2.mul_add(c1, xr1.mul_add(c3, a0)));
     let d1 = xi3.mul_add(s3, xi2.mul_add(s2, xi1 * s1));
     let d2 = (-xi3).mul_add(s1, (-xi2).mul_add(s3, xi1 * s2));
     let d3 = xi3.mul_add(s2, (-xi2).mul_add(s1, xi1 * s3));
     [
-        x0 + (xr1 + (xr2 + xr3)),
+        a0 + (xr1 + (xr2 + xr3)),
         re1 + d1,
         re2 + d2,
         re3 + d3,
@@ -162,7 +176,7 @@ where
     #[inline(always)]
     fn call<A: SimdArch + SimdKernel<T>>(self, simd: Simd<T, A>) -> bool {
         let per = <A as SimdStorage<T>>::LANE_COUNT / 2;
-        if per == 0 || per > 8 {
+        if per == 0 || per > MAX_COMPLEXES_PER_REGISTER {
             return false;
         }
         let Self {
@@ -191,38 +205,37 @@ where
 
         if prev_len == 1 {
             // No twiddle; a register holds `per` groups of one arm and a
-            // group's seven arms are consecutive in `dst`: the arms go through
-            // a tile of `per` groups.
-            let zero = Complex::new(T::from_f64(0.0), T::from_f64(0.0));
-            let mut tile = [zero; 7 * 8];
+            // group's seven arms are consecutive in `dst`: the arm scatter
+            // transposes them in registers, leaving the groups its run-over
+            // needs to the scalar tail.
+            let slack = scatter_spill::<T, A, 7>().div_ceil(7);
             let mut g = 0;
-            while g + per <= g_count {
-                // SAFETY: `g + per <= g_count = stride`, so each arm's row stays
-                // inside `src`; the tile holds `7 per` complexes.
+            while g + per + slack <= g_count {
+                // SAFETY: `g + per <= g_count = stride`, so each arm's row
+                // stays inside `src`, and `7 (g + per) + spill <= dst.len()`.
                 unsafe {
-                    // Straight-line loads: a closure here compiled out of the
-                    // target-feature frame with every vector op a call.
-                    let mut a = [load::<T, A>(src, g); 7];
-                    for (arm, slot) in a.iter_mut().enumerate().skip(1) {
-                        *slot = load::<T, A>(src, arm * stride + g);
-                    }
-                    let b = dft7(k, a);
-                    for (arm, row) in b.into_iter().enumerate() {
-                        store(row, &mut tile, arm * per);
-                    }
-                }
-                for (i, group) in dst[7 * g..7 * (g + per)].chunks_exact_mut(7).enumerate() {
-                    for (arm, out) in group.iter_mut().enumerate() {
-                        *out = tile[arm * per + i];
-                    }
+                    let b = dft7(
+                        k,
+                        load::<T, A>(src, g),
+                        load::<T, A>(src, stride + g),
+                        load::<T, A>(src, 2 * stride + g),
+                        load::<T, A>(src, 3 * stride + g),
+                        load::<T, A>(src, 4 * stride + g),
+                        load::<T, A>(src, 5 * stride + g),
+                        load::<T, A>(src, 6 * stride + g),
+                    );
+                    store_arms::<T, A, 7>(b, dst, 7 * g);
                 }
                 g += per;
             }
-            while g < g_count {
+            for (g, out) in dst[7 * g..7 * g_count]
+                .chunks_exact_mut(7)
+                .enumerate()
+                .map(|(k, out)| (g + k, out))
+            {
                 let b =
                     dft7_scalar::<T, INVERSE>(core::array::from_fn(|arm| src[arm * stride + g]));
-                dst[7 * g..7 * g + 7].copy_from_slice(&b);
-                g += 1;
+                out.copy_from_slice(&b);
             }
         } else {
             for g in 0..g_count {
@@ -233,18 +246,35 @@ where
                     // SAFETY: `src_base + j + per <= stride`, so every arm's row
                     // and every twiddle row stay inside their slices, and
                     // `dst_base + j + 6 prev_len + per <= g_count * stage_chunk`.
+                    // Straight-line arms: an array filled in a loop here
+                    // round-tripped the stack on every iteration.
                     unsafe {
                         let at = src_base + j;
-                        let mut a = [load::<T, A>(src, at); 7];
-                        for (arm, slot) in a.iter_mut().enumerate().skip(1) {
-                            *slot = cmul(
-                                load::<T, A>(src, arm * stride + at),
-                                load::<T, A>(tw, (arm - 1) * prev_len + j),
-                            );
-                        }
-                        let b = dft7(k, a);
-                        for (arm, row) in b.into_iter().enumerate() {
-                            store(row, dst, dst_base + j + arm * prev_len);
+                        let a0 = load::<T, A>(src, at);
+                        let a1 = cmul(load::<T, A>(src, stride + at), load::<T, A>(tw, j));
+                        let a2 = cmul(
+                            load::<T, A>(src, 2 * stride + at),
+                            load::<T, A>(tw, prev_len + j),
+                        );
+                        let a3 = cmul(
+                            load::<T, A>(src, 3 * stride + at),
+                            load::<T, A>(tw, 2 * prev_len + j),
+                        );
+                        let a4 = cmul(
+                            load::<T, A>(src, 4 * stride + at),
+                            load::<T, A>(tw, 3 * prev_len + j),
+                        );
+                        let a5 = cmul(
+                            load::<T, A>(src, 5 * stride + at),
+                            load::<T, A>(tw, 4 * prev_len + j),
+                        );
+                        let a6 = cmul(
+                            load::<T, A>(src, 6 * stride + at),
+                            load::<T, A>(tw, 5 * prev_len + j),
+                        );
+                        let b = dft7(k, a0, a1, a2, a3, a4, a5, a6);
+                        for arm in 0..7 {
+                            store(b[arm], dst, dst_base + j + arm * prev_len);
                         }
                     }
                     j += per;
