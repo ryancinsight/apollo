@@ -33,7 +33,7 @@ the interleaved oracle's own cache keeps its direct construction.
 
 The second multiply pays for itself only where the full matrix would
 stream from beyond L2, so the two-level form applies from
-`COMPACT_FOLD_MIN_LEN = 2^18`; below it the fine table is the full row and
+`COMPACT_FOLD_MIN_LEN = 2^16` (2^18 until the 2026-09-10 revision below); below it the fine table is the full row and
 the coarse table one, and the pass takes the single multiply on a
 loop-invariant test.
 
@@ -73,6 +73,34 @@ pair): `f64` 65536 fold sweep 120k against 124k, total 548k against 549k;
 `f64` 262144 fold sweep 713k against 363k, total 4398k against 4134k;
 `f32` 262144 fold sweep 222k against 142k, total 1892k against 1785k;
 `f32` 65536 total 256k against 262k, within the run-to-run spread.
+
+## Revision 2026-09-10: the bound moves to 2^16
+
+Driven by [APOLLO-FOLD-COMPACT-MEMORY](../../backlog.md#apollo-fold-compact-memory):
+the retained-footprint census read the full-row tables as `16n` bytes per
+direction below the bound, so the trade was re-measured with memory on the
+table. Section probe (`planar_passes_by_size`, performance core, four runs
+base/compact/compact/base, thousands of cycles, the better of each pair),
+the retained blocks after the first forward (`retained_footprint_attribution`)
+and the peak working set (`engine_census`), evidence in
+`output/apollo-fold-compact-2026-09-10/`:
+
+| scalar | n | fold sweep full | fold sweep compact | total full | total compact | tables full | tables compact | peak full | peak compact |
+|---|---|---|---|---|---|---|---|---|---|
+| f64 | 16384 | 24.7 | 28.9 | 117.3 | 122.7 | 256 KiB | 72 KiB | 471 KB | 281 KB |
+| f64 | 65536 | 142.1 | 117.1 | 571.8 | 547.8 | 1 MiB | 272 KiB | 1860 KB | 1086 KB |
+| f32 | 16384 | 12.9 | 14.3 | 61.4 | 61.2 | | | | |
+| f32 | 65536 | 53.1 | 58.6 | 259.0 | 260.1 | | | | |
+
+At 65536 the compact form is faster (`f64`, 0.96 of the transform) or level
+(`f32`, 1.00) and the tables shrink 3.8 times (the `f64` lane width is four,
+so `m (F + m / F)` against `m^2` is `4 + 64` against `256` per row); the
+bound moves to 2^16. At 16384 the compact form costs 5% of the `f64`
+transform for 184 KiB per direction and the bound keeps the full row. The
+original measurement above (2026-09-09) read the 65536 `f64` transform
+level and the `f32` sweep 20% behind; this pass re-measured the trade with
+the table's memory on it and reads the 65536 sweep faster at `f64` and
+the transform level at `f32`.
 
 ## Consequences
 
