@@ -206,9 +206,9 @@ where
             // The run-over tail's twiddles are the stage's: loaded once.
             let tail_j = prev_len - rem;
             let run_over = rem != 0 && per - rem <= prev_len;
-            // SAFETY: with `per - rem <= prev_len` each twiddle row's run-over
-            // stays inside the next row; the last row is masked.
             let (t1, t2, t3) = if run_over {
+                // SAFETY: with `per - rem <= prev_len` each twiddle row's
+                // run-over stays inside the next row; the last row is masked.
                 unsafe {
                     (
                         load::<T, A>(tw, tail_j),
