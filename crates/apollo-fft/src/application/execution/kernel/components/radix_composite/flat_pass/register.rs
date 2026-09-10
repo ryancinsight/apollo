@@ -68,8 +68,9 @@ where
 
 /// The complexes an arm scatter of radix `R` writes past its `per` groups:
 /// the zero padding of its last transpose tile, `per - R % per` when `R`
-/// does not fill whole tiles, none for two arms (a pair interleave) or a
-/// radix that is a multiple of the width.
+/// does not fill whole tiles, none for two arms (a pair interleave), two
+/// complexes per register (the half-register packing is exact) or a radix
+/// that is a multiple of the width.
 #[inline]
 pub(in super::super) fn scatter_spill<T, A, const R: usize>() -> usize
 where
@@ -77,7 +78,7 @@ where
     A: SimdArch + SimdKernel<T>,
 {
     let per = <A as SimdStorage<T>>::LANE_COUNT / 2;
-    if R == 2 || per == 0 || R % per == 0 {
+    if R == 2 || per <= 2 || R % per == 0 {
         0
     } else {
         per - R % per
@@ -107,8 +108,10 @@ where
 /// consecutive groups, and each group's `R` arms are consecutive in `dst`,
 /// group `i` from complex offset `at + R * i`.
 ///
-/// Two arms are one pair interleave. Otherwise the arms go through square
-/// complex transposes of `per` rows, `R.div_ceil(per)` tiles zero-padded
+/// Two arms are one pair interleave, and two complexes per register is the
+/// half-register packing of [`store_arm_halves`] (a register holds two
+/// groups' one-complex rows), exact for every radix. Otherwise the arms go
+/// through square complex transposes of `per` rows, `R.div_ceil(per)` tiles zero-padded
 /// past `R`, each the backend's pair decimation (a square read as one flat
 /// pair sequence is its stride-`per` decimation, so output `i` is column
 /// `i`): column `i` of tile `t` is arms `t * per..` of group `i`, stored at
@@ -150,6 +153,12 @@ pub(in super::super) unsafe fn store_arms<T, A, const R: usize>(
         }
         return;
     }
+    if per == 2 {
+        // SAFETY: the caller's contract; `R` registers cover `R * per`
+        // complexes with no run-over.
+        unsafe { store_arm_halves::<T, A, R>(b, dst, at) };
+        return;
+    }
     for t in (0..R.div_ceil(per)).rev() {
         let base = t * per;
         // SAFETY: the caller's contract bounds every store, the last tile's
@@ -159,11 +168,6 @@ pub(in super::super) unsafe fn store_arms<T, A, const R: usize>(
                 // One complex per register: each register is one arm of the
                 // one group.
                 1 => store(b[base], dst, at + base),
-                2 => {
-                    let (c0, c1) = arm_or_zero(b, base).deinterleave_pairs(arm_or_zero(b, base + 1));
-                    store(c0, dst, at + base);
-                    store(c1, dst, at + R + base);
-                }
                 4 => {
                     let (c0, c1, c2, c3) = arm_or_zero(b, base).deinterleave_pairs4(
                         arm_or_zero(b, base + 1),
