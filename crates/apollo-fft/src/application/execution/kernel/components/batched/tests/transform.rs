@@ -1,6 +1,10 @@
 //! The assembled transform against the direct DFT and against RustFFT.
 
-use super::super::{four_step_batched, planar_applies, scratch_len};
+use super::super::boundary::staged_transpose_applies;
+use super::super::driver::{four_step_batched_by, TransposeRoute};
+use super::super::lane_order::LaneOrder;
+use super::super::plane::plane_geometry;
+use super::super::{four_step_batched, planar_applies, scratch_len, BatchedPlanCache};
 use super::oracle::{dft, signal, tolerance};
 use eunomia::{Complex, Complex32, Complex64};
 
@@ -248,4 +252,51 @@ where
 fn large_planar_lengths_agree_with_rustfft_in_both_precisions() {
     large_lengths_agree_with_rustfft::<f32>(f64::from(f32::EPSILON) / 2.0);
     large_lengths_agree_with_rustfft::<f64>(f64::EPSILON / 2.0);
+}
+
+/// The staged transpose hands the second set the values the transpose pass
+/// wrote, in the same registers, so the two routes agree bit for bit.
+fn staged_transpose_matches_the_transpose_pass<T>()
+where
+    T: BatchedPlanCache<Complex = Complex<T>>
+        + eunomia::FloatElement
+        + PartialEq
+        + core::fmt::Debug,
+{
+    let mut compared = 0;
+    for n in [512usize, 2048, 8192, 32768] {
+        let (n1, n2) = plane_geometry(n);
+        let lanes = LaneOrder::for_batch::<T>(n1).lanes();
+        if !staged_transpose_applies::<T>(n1, n2, lanes) {
+            continue;
+        }
+        let input: Vec<Complex<T>> = signal(n)
+            .iter()
+            .map(|z| Complex::new(T::from_f64(z.re), T::from_f64(z.im)))
+            .collect();
+        let mut scratch = vec![Complex::<T>::default(); scratch_len(n)];
+        let mut staged = input.clone();
+        four_step_batched_by::<T, false>(&mut staged, &mut scratch, Some(TransposeRoute::Staged));
+        let mut passed = input;
+        four_step_batched_by::<T, false>(&mut passed, &mut scratch, Some(TransposeRoute::Pass));
+        if let Some(at) = staged.iter().zip(&passed).position(|(a, b)| a != b) {
+            panic!(
+                "n={n}: element {at} reads {:?} staged against {:?} through the pass",
+                staged[at], passed[at]
+            );
+        }
+        compared += 1;
+    }
+    // Every dispatched register width covers 512 to 8192.
+    let lanes = LaneOrder::for_batch::<T>(16).lanes();
+    assert!(
+        compared >= 3 || !matches!(lanes, 2 | 4 | 8 | 16),
+        "the staged route applied to {compared} lengths at {lanes} lanes"
+    );
+}
+
+#[test]
+fn staged_transpose_matches_the_transpose_pass_in_both_precisions() {
+    staged_transpose_matches_the_transpose_pass::<f32>();
+    staged_transpose_matches_the_transpose_pass::<f64>();
 }

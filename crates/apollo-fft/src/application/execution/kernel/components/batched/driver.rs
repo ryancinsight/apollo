@@ -1,5 +1,6 @@
 //! The four-step driver over the padded planar layout.
 
+use super::boundary::TransposedPlanes;
 use super::dif::run_batched_dif;
 use super::dit::run_batched;
 use super::lane_order::LaneOrder;
@@ -10,12 +11,53 @@ use super::plane::{
 use super::{boundary, sweep, BatchedPlanCache};
 use eunomia::Complex;
 
-/// Four-step FFT over the padded planar layout.
+/// How the rectangle's planes reach the second stage set.
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub(super) enum TransposeRoute {
+    /// A transpose pass into the second plane pair before the set runs.
+    Pass,
+    /// The set's first sweep transposes each column block into the staging
+    /// buffer itself, and there is no pass (ADR 0060, revision of
+    /// 2026-09-10).
+    Staged,
+}
+
+impl TransposeRoute {
+    /// The route for `rows × cols` first planes at the dispatched tile width.
+    pub(super) fn select<T>(rows: usize, cols: usize, lanes: usize) -> Self {
+        if boundary::staged_transpose_applies::<T>(rows, cols, lanes) {
+            Self::Staged
+        } else {
+            Self::Pass
+        }
+    }
+}
+
+/// Four-step FFT over the padded planar layout, the transpose route chosen
+/// by [`TransposeRoute::select`].
+///
+/// # Panics
+///
+/// As [`four_step_batched_by`].
+pub(crate) fn four_step_batched<T, const INVERSE: bool>(
+    data: &mut [Complex<T>],
+    scratch: &mut [Complex<T>],
+) where
+    T: BatchedPlanCache<Complex = Complex<T>>,
+{
+    four_step_batched_by::<T, INVERSE>(data, scratch, None);
+}
+
+/// Four-step FFT over the padded planar layout by `route`, or for `None`
+/// by the route [`TransposeRoute::select`] chooses; squares transpose in
+/// place whatever the route.
 ///
 /// Three steps and no more: the first stage set reads the caller's rows in
 /// bit-reversed row order straight out of `data`, one transpose moves the
-/// planes to the second axis (in place for a square, into the second plane
-/// pair for the rectangle an odd power runs as, ADR 0060), and the second
+/// planes to the second axis (in place for a square; into the second plane
+/// pair for the rectangle an odd power runs as, or inside the second set's
+/// first sweep where the transposed block fits the staging buffer, ADR
+/// 0060), and the second
 /// stage set folds the four-step twiddle into its first loads and writes
 /// `data` back from its last. The per-element operation order is the same
 /// whatever the shape.
@@ -24,9 +66,10 @@ use eunomia::Complex;
 ///
 /// Panics if `data.len()` is not a length [`planar_applies`] admits, or if
 /// `scratch` is shorter than [`scratch_len`].
-pub(crate) fn four_step_batched<T, const INVERSE: bool>(
+pub(super) fn four_step_batched_by<T, const INVERSE: bool>(
     data: &mut [Complex<T>],
     scratch: &mut [Complex<T>],
+    route: Option<TransposeRoute>,
 ) where
     T: BatchedPlanCache<Complex = Complex<T>>,
 {
@@ -64,8 +107,11 @@ pub(crate) fn four_step_batched<T, const INVERSE: bool>(
     // 2. Transpose so the second axis becomes batch-major. Pure exchange:
     //    the four-step twiddle rides stage set 2's first loads below. The
     //    same selector as the stage sets, so the tile width and the plane
-    //    column order are the one backend's.
-    let (re, im, stride) = if n1 == n2 {
+    //    column order are the one backend's. The rectangle whose transposed
+    //    column block fits the staging buffer has no pass here: the second
+    //    set's first sweep transposes the planes block by block itself.
+    let route = route.unwrap_or_else(|| TransposeRoute::select::<T>(n1, n2, order.lanes()));
+    let (re, im, stride, transposed) = if n1 == n2 {
         sect!("transpose", {
             let handled = hermes_simd::vectorize(boundary::TransposePlanes {
                 re: &mut *a_re,
@@ -77,7 +123,15 @@ pub(crate) fn four_step_batched<T, const INVERSE: bool>(
                 transpose_planes(a_re, a_im, n1, stride_a, order);
             }
         });
-        (a_re, a_im, stride_a)
+        (a_re, a_im, stride_a, None)
+    } else if route == TransposeRoute::Staged {
+        let (b_re, b_im) = split_plane(b, plane_b);
+        let source = TransposedPlanes {
+            re: &*a_re,
+            im: &*a_im,
+            stride: stride_a,
+        };
+        (b_re, b_im, stride_b, Some(source))
     } else {
         let (b_re, b_im) = split_plane(b, plane_b);
         sect!("transpose", {
@@ -107,7 +161,7 @@ pub(crate) fn four_step_batched<T, const INVERSE: bool>(
                 );
             }
         });
-        (b_re, b_im, stride_b)
+        (b_re, b_im, stride_b, None)
     };
 
     // 3. `n1` transforms of length `n2` along the second axis, with the
@@ -132,6 +186,7 @@ pub(crate) fn four_step_batched<T, const INVERSE: bool>(
             Some(fold.as_ref()),
             Some(data),
             staging,
+            transposed,
             n1,
             stride,
         )

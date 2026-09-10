@@ -11,7 +11,10 @@
 //! back to the scalar loops in the parent module, which remain the
 //! reference implementation.
 
+use core::mem::size_of;
+
 use super::lane_order::{sublane_inverse, sublane_order};
+use super::sweep::TILE_BYTES;
 use super::BatchedPlanCache;
 use hermes_simd::{LaneKernel, Simd, SimdArch, SimdKernel, SimdPermute, SimdStorage, Vector};
 
@@ -227,7 +230,7 @@ impl<T: BatchedPlanCache> LaneKernel<T> for TransposePlanesInto<'_, T> {
     reason = "the tile width must remain constant inside the target-feature frame"
 )]
 #[inline(always)]
-fn transpose_plane_into<T, A, const LANES: usize>(
+pub(super) fn transpose_plane_into<T, A, const LANES: usize>(
     src: &[T],
     rows: usize,
     cols: usize,
@@ -276,6 +279,63 @@ fn transpose_plane_into<T, A, const LANES: usize>(
         }
         if bi < rows {
             tile(bi, bj, dst);
+        }
+    }
+}
+
+/// The first stage set's planes as the second set's transposed source:
+/// the second set's `batch` rows of its `len` columns, padded to `stride`.
+#[derive(Clone, Copy)]
+pub(super) struct TransposedPlanes<'a, T> {
+    pub(super) re: &'a [T],
+    pub(super) im: &'a [T],
+    pub(super) stride: usize,
+}
+
+/// Whether the second stage set's first sweep transposes the first set's
+/// `rows × cols` planes itself, one column block of the second planes at a
+/// time (see [`super::dif::BatchedStagesDif::transposed`]): a tile width
+/// with a register transpose that divides both extents, and a block of
+/// `cols` rows by that width in both planes within [`TILE_BYTES`], so it
+/// fits the staging buffer and L1 beside the planes it writes. At four
+/// and eight lanes that is every odd power up to 32768.
+pub(super) fn staged_transpose_applies<T>(rows: usize, cols: usize, lanes: usize) -> bool {
+    matches!(lanes, 2 | 4 | 8 | 16)
+        && rows % lanes == 0
+        && cols % lanes == 0
+        && cols * lanes * 2 * size_of::<T>() <= TILE_BYTES
+}
+
+/// Transposes rows `start..start + LANE_COUNT` of `source`, all `cols`
+/// columns, into `cols` rows of `LANE_COUNT` columns in `dst_re` and
+/// `dst_im`: the column block at `start` of the transposed planes,
+/// relabeled as [`TransposePlanesInto`] relabels its tiles, so the block
+/// reads bitwise as that transpose would have written it.
+#[expect(
+    clippy::inline_always,
+    reason = "must fold into the stage set's target-feature scope with the sweep that calls it"
+)]
+#[inline(always)]
+pub(super) fn stage_transposed_block<T, A>(
+    source: TransposedPlanes<'_, T>,
+    start: usize,
+    cols: usize,
+    dst_re: &mut [T],
+    dst_im: &mut [T],
+) where
+    T: BatchedPlanCache,
+    A: SimdArch + SimdKernel<T>,
+{
+    let lanes = <A as SimdStorage<T>>::LANE_COUNT;
+    let stride = source.stride;
+    for (src, dst) in [(source.re, dst_re), (source.im, dst_im)] {
+        let rows = &src[start * stride..];
+        match lanes {
+            2 => transpose_plane_into::<T, A, 2>(rows, 2, cols, stride, dst, 2),
+            4 => transpose_plane_into::<T, A, 4>(rows, 4, cols, stride, dst, 4),
+            8 => transpose_plane_into::<T, A, 8>(rows, 8, cols, stride, dst, 8),
+            16 => transpose_plane_into::<T, A, 16>(rows, 16, cols, stride, dst, 16),
+            _ => unreachable!("invariant: the driver gates the staged transpose on the tile width"),
         }
     }
 }

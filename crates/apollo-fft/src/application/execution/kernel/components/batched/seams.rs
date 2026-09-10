@@ -53,13 +53,32 @@ impl SinkRows {
     pub(super) const NONE: Self = Self::Direct { row_bits: 0 };
 }
 
+/// Where a pass reads its staged planar rows: row `r` starts `r * pitch`
+/// reals in and column `k` sits `k - first_column` further. The block the
+/// second set's first sweep transposes out of the first set's planes
+/// (see [`super::dif::BatchedStagesDif::transposed`]).
+#[derive(Clone, Copy)]
+pub(super) struct StagedRows {
+    pub(super) pitch: usize,
+    pub(super) first_column: usize,
+}
+
+impl StagedRows {
+    /// The staged rows of a pass without them: never addressed.
+    pub(super) const NONE: Self = Self {
+        pitch: 0,
+        first_column: 0,
+    };
+}
+
 /// Where a pass reads its rows and where it writes them.
 ///
 /// Exactly the combinations the two stage sets produce: the time-decimated
 /// set reads the caller's interleaved rows on its first pass and the planes
 /// otherwise; the frequency-decimated set folds the four-step twiddle on its
-/// first pass, writes the staged sink block on its last, and both when the
-/// two coincide. Each variant selects a monomorphized pass whose row loop
+/// first pass (from a staged transpose of the first set's planes where the
+/// driver routes it so), writes the staged sink block on its last, and both
+/// when the two coincide. Each variant selects a monomorphized pass whose row loop
 /// carries no seam it does not use, which is what keeps the pass's
 /// addressing in registers.
 pub(super) enum Seams<'a, 'b, T> {
@@ -73,6 +92,9 @@ pub(super) enum Seams<'a, 'b, T> {
     Sink(&'b mut [T], SinkRows),
     /// Folded loads and sink stores in one pass.
     FoldSink(&'a FourStepFold<T>, &'b mut [T], SinkRows),
+    /// Staged planar rows in, with the four-step twiddle tables multiplied
+    /// into the loads; planes out. The first pass over a transposed block.
+    FoldStaged(&'a FourStepFold<T>, &'a [T], &'a [T], StagedRows),
 }
 
 impl<'a, 'b, T> Seams<'a, 'b, T> {

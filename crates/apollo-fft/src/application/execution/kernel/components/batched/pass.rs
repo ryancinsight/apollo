@@ -8,7 +8,7 @@ use super::fold::FourStepFold;
 use super::lane::Lane;
 use super::radix::{cmul, Pair, Radix};
 use super::register::{load, load_interleaved, reverse_row, store, store_interleaved};
-use super::seams::{Columns, Rows, Seams, SinkRows};
+use super::seams::{Columns, Rows, Seams, SinkRows, StagedRows};
 
 /// Runs radix `R` over one row set across `cols`: the vector loop over
 /// `LANE_COUNT` columns at a time and the scalar remainder.
@@ -44,7 +44,7 @@ pub(super) fn butterfly_rows<T, A, R, const N: usize, const NT: usize>(
     R: Radix<N, NT>,
 {
     match seams {
-        Seams::Planes => pass::<T, A, R, N, NT, false, false, false, false>(
+        Seams::Planes => pass::<T, A, R, N, NT, false, false, false, false, false>(
             re,
             im,
             rows,
@@ -59,28 +59,36 @@ pub(super) fn butterfly_rows<T, A, R, const N: usize, const NT: usize>(
             0,
             &mut [],
             SinkRows::NONE,
+            &[],
+            &[],
+            StagedRows::NONE,
         ),
-        Seams::Source(source, row_bits) => pass::<T, A, R, N, NT, true, false, false, false>(
-            re,
-            im,
-            rows,
-            stride,
-            batch,
-            cols,
-            tw,
-            twv,
-            simd,
-            None,
-            source,
-            row_bits,
-            &mut [],
-            SinkRows::NONE,
-        ),
+        Seams::Source(source, row_bits) => {
+            pass::<T, A, R, N, NT, true, false, false, false, false>(
+                re,
+                im,
+                rows,
+                stride,
+                batch,
+                cols,
+                tw,
+                twv,
+                simd,
+                None,
+                source,
+                row_bits,
+                &mut [],
+                SinkRows::NONE,
+                &[],
+                &[],
+                StagedRows::NONE,
+            )
+        }
         Seams::Fold(fold) => {
             // The table's form is fixed per length (`COMPACT_FOLD_MIN_LEN`),
             // so each form is its own pass rather than a test in the row loop.
             if fold.lanes == batch {
-                pass::<T, A, R, N, NT, false, true, false, false>(
+                pass::<T, A, R, N, NT, false, true, false, false, false>(
                     re,
                     im,
                     rows,
@@ -95,9 +103,12 @@ pub(super) fn butterfly_rows<T, A, R, const N: usize, const NT: usize>(
                     0,
                     &mut [],
                     SinkRows::NONE,
+                    &[],
+                    &[],
+                    StagedRows::NONE,
                 )
             } else {
-                pass::<T, A, R, N, NT, false, true, true, false>(
+                pass::<T, A, R, N, NT, false, true, true, false, false>(
                     re,
                     im,
                     rows,
@@ -112,10 +123,13 @@ pub(super) fn butterfly_rows<T, A, R, const N: usize, const NT: usize>(
                     0,
                     &mut [],
                     SinkRows::NONE,
+                    &[],
+                    &[],
+                    StagedRows::NONE,
                 )
             }
         }
-        Seams::Sink(sink, staging) => pass::<T, A, R, N, NT, false, false, false, true>(
+        Seams::Sink(sink, staging) => pass::<T, A, R, N, NT, false, false, false, true, false>(
             re,
             im,
             rows,
@@ -130,12 +144,15 @@ pub(super) fn butterfly_rows<T, A, R, const N: usize, const NT: usize>(
             0,
             sink,
             staging,
+            &[],
+            &[],
+            StagedRows::NONE,
         ),
         Seams::FoldSink(fold, sink, staging) => {
             // The table's form is fixed per length (`COMPACT_FOLD_MIN_LEN`),
             // so each form is its own pass rather than a test in the row loop.
             if fold.lanes == batch {
-                pass::<T, A, R, N, NT, false, true, false, true>(
+                pass::<T, A, R, N, NT, false, true, false, true, false>(
                     re,
                     im,
                     rows,
@@ -150,9 +167,12 @@ pub(super) fn butterfly_rows<T, A, R, const N: usize, const NT: usize>(
                     0,
                     sink,
                     staging,
+                    &[],
+                    &[],
+                    StagedRows::NONE,
                 )
             } else {
-                pass::<T, A, R, N, NT, false, true, true, true>(
+                pass::<T, A, R, N, NT, false, true, true, true, false>(
                     re,
                     im,
                     rows,
@@ -167,6 +187,54 @@ pub(super) fn butterfly_rows<T, A, R, const N: usize, const NT: usize>(
                     0,
                     sink,
                     staging,
+                    &[],
+                    &[],
+                    StagedRows::NONE,
+                )
+            }
+        }
+        Seams::FoldStaged(fold, staged_re, staged_im, staged_rows) => {
+            // The table's form is fixed per length (`COMPACT_FOLD_MIN_LEN`),
+            // so each form is its own pass rather than a test in the row loop.
+            if fold.lanes == batch {
+                pass::<T, A, R, N, NT, false, true, false, false, true>(
+                    re,
+                    im,
+                    rows,
+                    stride,
+                    batch,
+                    cols,
+                    tw,
+                    twv,
+                    simd,
+                    Some(fold),
+                    &[],
+                    0,
+                    &mut [],
+                    SinkRows::NONE,
+                    staged_re,
+                    staged_im,
+                    staged_rows,
+                )
+            } else {
+                pass::<T, A, R, N, NT, false, true, true, false, true>(
+                    re,
+                    im,
+                    rows,
+                    stride,
+                    batch,
+                    cols,
+                    tw,
+                    twv,
+                    simd,
+                    Some(fold),
+                    &[],
+                    0,
+                    &mut [],
+                    SinkRows::NONE,
+                    staged_re,
+                    staged_im,
+                    staged_rows,
                 )
             }
         }
@@ -194,6 +262,7 @@ fn pass<
     const FOLD: bool,
     const COMPACT: bool,
     const SINK: bool,
+    const STAGED: bool,
 >(
     re: &mut [T],
     im: &mut [T],
@@ -209,6 +278,9 @@ fn pass<
     source_bits: u32,
     sink: &mut [T],
     sink_rows: SinkRows,
+    staged_re: &[T],
+    staged_im: &[T],
+    staged_rows: StagedRows,
 ) where
     T: LaneScalar + Lane,
     A: SimdArch + SimdKernel<T>,
@@ -246,11 +318,19 @@ fn pass<
         ),
     };
 
+    // The staged rows hold the whole plane at their own pitch, so they
+    // index affinely like the planes.
+    let staged_base: [usize; N] =
+        core::array::from_fn(|i| (rows.first + i * rows.step) * staged_rows.pitch);
+
     let mut k = cols.start;
     while k + lanes <= cols.end {
         let mut x: [Pair<Vector<T, A>>; N] = core::array::from_fn(|i| {
             if SOURCE {
                 load_interleaved::<T, A>(source, source_rows[i] + 2 * k)
+            } else if STAGED {
+                let at = staged_base[i] + (k - staged_rows.first_column);
+                (load::<T, A>(staged_re, at), load::<T, A>(staged_im, at))
             } else {
                 let at = plane_first + i * plane_step + k;
                 (load::<T, A>(re, at), load::<T, A>(im, at))
@@ -309,6 +389,9 @@ fn pass<
             if SOURCE {
                 let at = source_rows[i] + 2 * k;
                 (source[at], source[at + 1])
+            } else if STAGED {
+                let at = staged_base[i] + (k - staged_rows.first_column);
+                (staged_re[at], staged_im[at])
             } else {
                 let at = plane_first + i * plane_step + k;
                 (re[at], im[at])

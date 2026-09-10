@@ -30,15 +30,16 @@
 
 use core::mem::size_of;
 
+use super::boundary::{stage_transposed_block, TransposedPlanes};
 use super::fold::FourStepFold;
 use super::lane::Lane;
 use super::pass::butterfly_rows;
 use super::plan::BatchedPlan;
 use super::radix::{Dif2, Dif4, Pair};
 use super::register::reverse_row;
-use super::seams::{Columns, Rows, Seams, SinkRows};
+use super::seams::{Columns, Rows, Seams, SinkRows, StagedRows};
 use super::sweep::{block_columns, spread, sweep_lengths_descending};
-use crate::application::execution::kernel::mixed_radix::MixedRadixScalar;
+use super::BatchedPlanCache;
 use hermes_simd::{LaneKernel, LaneScalar, Simd, SimdArch, SimdKernel, SimdStorage};
 
 /// Section labels of the frequency-decimated stage set's sweeps, by sweep
@@ -66,8 +67,18 @@ pub(super) struct BatchedStagesDif<'a, T> {
     /// exactly once, and one register interleave plus two interleaved stores
     /// replace the two plane stores.
     pub(super) sink: Option<&'a mut [T]>,
-    /// One tile block of interleaved rows for the sink, as reals.
+    /// One tile block of interleaved rows for the sink, as reals; the
+    /// transposed column block's planar rows while `transposed` is read.
     pub(super) staging: &'a mut [T],
+    /// The first set's planes, which the sweep over stage `len` transposes
+    /// into `staging` one column block at a time and reads from there in
+    /// place of `re`/`im`, whose rows it writes; or `None` where the driver
+    /// transposed them into `re`/`im` already. A tile of that sweep is
+    /// strided rows of the whole plane, so a block, not a tile, is the
+    /// unit: a column block of the second planes is a run of the first
+    /// planes' rows, and every tile reads its part of the block before the
+    /// next is staged (ADR 0060, revision of 2026-09-10).
+    pub(super) transposed: Option<TransposedPlanes<'a, T>>,
     pub(super) batch: usize,
     pub(super) stride: usize,
     pub(super) len: usize,
@@ -75,7 +86,7 @@ pub(super) struct BatchedStagesDif<'a, T> {
 
 impl<T> LaneKernel<T> for BatchedStagesDif<'_, T>
 where
-    T: LaneScalar + MixedRadixScalar + Lane,
+    T: BatchedPlanCache,
 {
     type Output = ();
 
@@ -92,6 +103,7 @@ where
             fold,
             mut sink,
             staging,
+            transposed,
             batch: b,
             stride: s,
             len,
@@ -113,6 +125,7 @@ where
                     fold,
                     sink.as_deref_mut(),
                     staging,
+                    transposed.filter(|_| l_top == len),
                     b,
                     s,
                     len,
@@ -137,10 +150,11 @@ pub(super) fn run_batched_dif<T>(
     fold: Option<&FourStepFold<T>>,
     sink: Option<&mut [T]>,
     staging: &mut [T],
+    transposed: Option<TransposedPlanes<'_, T>>,
     batch: usize,
     stride: usize,
 ) where
-    T: LaneScalar + MixedRadixScalar + Lane,
+    T: BatchedPlanCache,
 {
     hermes_simd::vectorize(BatchedStagesDif {
         re,
@@ -149,6 +163,7 @@ pub(super) fn run_batched_dif<T>(
         fold,
         sink,
         staging,
+        transposed,
         batch,
         stride,
         len: plan.len,
@@ -207,11 +222,30 @@ fn stage_out<T: Copy>(
     }
 }
 
+/// The loop-invariant shape of one frequency-decimated sweep, as its tile
+/// body reads it.
+#[derive(Clone, Copy)]
+struct SweepShape {
+    batch: usize,
+    stride: usize,
+    len: usize,
+    l_top: usize,
+    stages: u32,
+    tile_rows: usize,
+    step_bottom: usize,
+    /// Reals per staged sink row.
+    pitch: usize,
+    row_bits: u32,
+}
+
 /// One frequency-decimated sweep over stages `l_top >> p` for `p < stages`.
 ///
-/// `fold` rides the pass over stage `len` and `sink` the pass over stage 2,
-/// each when that stage is in this sweep; the sink rows stage through
-/// `staging` one block at a time.
+/// `fold` is multiplied into the loads of the pass over stage `len` when
+/// that stage is in this sweep and `sink` is written by the pass over stage
+/// 2 when that one is. `transposed`, given to the sweep over stage `len`,
+/// makes it read the first stage set's planes through the staging buffer,
+/// one transposed column block at a time, in place of a transpose pass
+/// (see [`BatchedStagesDif::transposed`]).
 #[expect(
     clippy::inline_always,
     reason = "must fold into the stage set's target-feature scope with the driver it calls"
@@ -228,6 +262,7 @@ pub(super) fn sweep_frequency<T, A>(
     fold: Option<&FourStepFold<T>>,
     sink: Option<&mut [T]>,
     staging: &mut [T],
+    transposed: Option<TransposedPlanes<'_, T>>,
     batch: usize,
     stride: usize,
     len: usize,
@@ -235,7 +270,7 @@ pub(super) fn sweep_frequency<T, A>(
     stages: u32,
     simd: Simd<T, A>,
 ) where
-    T: LaneScalar + Lane,
+    T: BatchedPlanCache,
     A: SimdArch + SimdKernel<T>,
 {
     let lanes = <A as SimdStorage<T>>::LANE_COUNT;
@@ -246,7 +281,6 @@ pub(super) fn sweep_frequency<T, A>(
     let groups = len / span;
     let cols = block_columns::<T>(tile_rows, lanes, batch);
     let pitch = 2 * cols;
-    let splat = |(wr, wi): Pair<T>| (simd.splat(wr), simd.splat(wi));
     // The sink rides the sweep over stage 2, whose tiles are consecutive
     // rows, as the source does; it is staged up to `STAGED_SINK_MAX_LEN`.
     let mut sink = sink.filter(|_| l_bottom == 2);
@@ -269,110 +303,225 @@ pub(super) fn sweep_frequency<T, A>(
             "invariant: the staging buffer holds one tile block"
         );
     }
+    let shape = SweepShape {
+        batch,
+        stride,
+        len,
+        l_top,
+        stages,
+        tile_rows,
+        step_bottom,
+        pitch,
+        row_bits,
+    };
 
-    for j in 0..step_bottom {
-        for g in 0..groups {
-            let base = g * span + j;
-            let mut start = 0;
-            while start < batch {
-                let block = Columns {
-                    start,
-                    end: (start + cols).min(batch),
-                };
-                let mut o = 0;
-                while o + 2 <= stages {
-                    let l = l_top >> o;
-                    let quarter = l >> 2;
-                    let wide = (l >> 1) - 1;
-                    let narrow = quarter - 1;
-                    let at = stages - o - 2;
-                    let pass_fold = if l == len { fold } else { None };
-                    // Stage 2 is in this pass only when it is the sweep's
-                    // last, so the sink rides it exactly once.
-                    let last = l == 4;
-                    for q in 0..tile_rows >> 2 {
-                        let i0 = spread(q, at, 2);
-                        let e = j + (i0 & ((1 << at) - 1)) * step_bottom;
-                        let tws = [tw[wide + e], tw[wide + e + quarter], tw[narrow + e]];
-                        let twv = tws.map(splat);
-                        let rows = Rows {
-                            first: base + i0 * step_bottom,
-                            step: step_bottom << at,
-                        };
-                        let pass_sink = match (last, sink.as_deref_mut()) {
-                            (true, Some(_)) if staged => Some((
-                                &mut *staging,
-                                SinkRows::Staged {
-                                    first: i0,
-                                    pitch,
-                                    first_column: block.start,
-                                },
-                            )),
-                            (true, Some(sink)) => Some((sink, SinkRows::Direct { row_bits })),
-                            _ => None,
-                        };
-                        butterfly_rows::<T, A, Dif4, 4, 3>(
-                            re,
-                            im,
-                            rows,
-                            stride,
-                            batch,
-                            block,
-                            &tws,
-                            &twv,
-                            simd,
-                            Seams::frequency(pass_fold, pass_sink),
-                        );
-                    }
-                    o += 2;
-                }
-                if o < stages {
-                    let l = l_top >> o;
-                    let half = l >> 1;
-                    let twx = half - 1;
-                    let pass_fold = if l == len { fold } else { None };
-                    let last = l == 2;
-                    for q in 0..tile_rows >> 1 {
-                        let i0 = spread(q, 0, 1);
-                        let tws = [tw[twx + j]];
-                        let twv = tws.map(splat);
-                        let rows = Rows {
-                            first: base + i0 * step_bottom,
-                            step: step_bottom,
-                        };
-                        let pass_sink = match (last, sink.as_deref_mut()) {
-                            (true, Some(_)) if staged => Some((
-                                &mut *staging,
-                                SinkRows::Staged {
-                                    first: i0,
-                                    pitch,
-                                    first_column: block.start,
-                                },
-                            )),
-                            (true, Some(sink)) => Some((sink, SinkRows::Direct { row_bits })),
-                            _ => None,
-                        };
-                        butterfly_rows::<T, A, Dif2, 2, 1>(
-                            re,
-                            im,
-                            rows,
-                            stride,
-                            batch,
-                            block,
-                            &tws,
-                            &twv,
-                            simd,
-                            Seams::frequency(pass_fold, pass_sink),
-                        );
-                    }
-                }
-                if let Some(sink) = sink.as_deref_mut().filter(|_| staged) {
-                    stage_out(
-                        sink, staging, tile_rows, base, batch, row_bits, block, pitch,
+    if let Some(source) = transposed {
+        // Block by block: one tile width of the second planes' columns is a
+        // run of that many first-plane rows, transposed into the staging
+        // buffer whole (every row of the plane, so the tiles' strided rows
+        // are all there), and every tile reads its part before the next
+        // block is staged. The pass over stage `len` writes the second
+        // planes from the block; nothing reads them before that.
+        assert!(
+            l_top == len && fold.is_some() && sink.is_none(),
+            "invariant: the transposed source rides the sweep over stage `len`, which folds and has no sink"
+        );
+        let width = lanes;
+        let plane = len * width;
+        assert!(
+            staging.len() >= 2 * plane && batch % width == 0,
+            "invariant: the driver gates the staged transpose on the tile width and the staging buffer"
+        );
+        let (staged_re, staged_im) = staging.split_at_mut(plane);
+        let mut start = 0;
+        while start < batch {
+            let block = Columns {
+                start,
+                end: start + width,
+            };
+            stage_transposed_block::<T, A>(source, start, len, staged_re, staged_im);
+            let staged_rows = StagedRows {
+                pitch: width,
+                first_column: start,
+            };
+            for j in 0..step_bottom {
+                for g in 0..groups {
+                    frequency_tile(
+                        re,
+                        im,
+                        tw,
+                        fold,
+                        None,
+                        None,
+                        Some((&*staged_re, &*staged_im, staged_rows)),
+                        shape,
+                        g * span + j,
+                        j,
+                        block,
+                        simd,
                     );
                 }
-                start = block.end;
+            }
+            start = block.end;
+        }
+    } else {
+        for j in 0..step_bottom {
+            for g in 0..groups {
+                let base = g * span + j;
+                let mut start = 0;
+                while start < batch {
+                    let block = Columns {
+                        start,
+                        end: (start + cols).min(batch),
+                    };
+                    let staging_sink = if staged { Some(&mut *staging) } else { None };
+                    frequency_tile(
+                        re,
+                        im,
+                        tw,
+                        fold,
+                        sink.as_deref_mut(),
+                        staging_sink,
+                        None,
+                        shape,
+                        base,
+                        j,
+                        block,
+                        simd,
+                    );
+                    start = block.end;
+                }
             }
         }
+    }
+}
+
+/// The passes of one sweep over one tile's column block: two stages per
+/// pass while two remain and then one, the fold and the staged transposed
+/// rows on the pass over stage `len`, the sink on the pass over stage 2,
+/// then the staged sink rows copied out.
+#[expect(
+    clippy::inline_always,
+    reason = "must fold into the stage set's target-feature scope with the sweep that calls it"
+)]
+#[expect(
+    clippy::too_many_arguments,
+    reason = "the tile body is the inner function of the sweep; its arguments are the sweep's operands and the tile's place"
+)]
+#[inline(always)]
+fn frequency_tile<T, A>(
+    re: &mut [T],
+    im: &mut [T],
+    tw: &[Pair<T>],
+    fold: Option<&FourStepFold<T>>,
+    mut sink: Option<&mut [T]>,
+    mut staging: Option<&mut [T]>,
+    staged: Option<(&[T], &[T], StagedRows)>,
+    shape: SweepShape,
+    base: usize,
+    j: usize,
+    block: Columns,
+    simd: Simd<T, A>,
+) where
+    T: LaneScalar + Lane,
+    A: SimdArch + SimdKernel<T>,
+{
+    let SweepShape {
+        batch,
+        stride,
+        len,
+        l_top,
+        stages,
+        tile_rows,
+        step_bottom,
+        pitch,
+        row_bits,
+    } = shape;
+    let splat = |(wr, wi): Pair<T>| (simd.splat(wr), simd.splat(wi));
+    let mut o = 0;
+    while o + 2 <= stages {
+        let l = l_top >> o;
+        let quarter = l >> 2;
+        let wide = (l >> 1) - 1;
+        let narrow = quarter - 1;
+        let at = stages - o - 2;
+        let pass_fold = if l == len { fold } else { None };
+        // Stage 2 is in this pass only when it is the sweep's last, so the
+        // sink rides it exactly once.
+        let last = l == 4;
+        for q in 0..tile_rows >> 2 {
+            let i0 = spread(q, at, 2);
+            let e = j + (i0 & ((1 << at) - 1)) * step_bottom;
+            let tws = [tw[wide + e], tw[wide + e + quarter], tw[narrow + e]];
+            let twv = tws.map(splat);
+            let rows = Rows {
+                first: base + i0 * step_bottom,
+                step: step_bottom << at,
+            };
+            let pass_sink = match (last, sink.as_deref_mut(), staging.as_deref_mut()) {
+                (true, Some(_), Some(staging)) => Some((
+                    staging,
+                    SinkRows::Staged {
+                        first: i0,
+                        pitch,
+                        first_column: block.start,
+                    },
+                )),
+                (true, Some(sink), None) => Some((sink, SinkRows::Direct { row_bits })),
+                _ => None,
+            };
+            let seams = match (pass_fold, staged) {
+                (Some(fold), Some((staged_re, staged_im, staged_rows))) => {
+                    Seams::FoldStaged(fold, staged_re, staged_im, staged_rows)
+                }
+                _ => Seams::frequency(pass_fold, pass_sink),
+            };
+            butterfly_rows::<T, A, Dif4, 4, 3>(
+                re, im, rows, stride, batch, block, &tws, &twv, simd, seams,
+            );
+        }
+        o += 2;
+    }
+    if o < stages {
+        let l = l_top >> o;
+        let half = l >> 1;
+        let twx = half - 1;
+        let pass_fold = if l == len { fold } else { None };
+        let last = l == 2;
+        for q in 0..tile_rows >> 1 {
+            let i0 = spread(q, 0, 1);
+            let tws = [tw[twx + j]];
+            let twv = tws.map(splat);
+            let rows = Rows {
+                first: base + i0 * step_bottom,
+                step: step_bottom,
+            };
+            let pass_sink = match (last, sink.as_deref_mut(), staging.as_deref_mut()) {
+                (true, Some(_), Some(staging)) => Some((
+                    staging,
+                    SinkRows::Staged {
+                        first: i0,
+                        pitch,
+                        first_column: block.start,
+                    },
+                )),
+                (true, Some(sink), None) => Some((sink, SinkRows::Direct { row_bits })),
+                _ => None,
+            };
+            let seams = match (pass_fold, staged) {
+                (Some(fold), Some((staged_re, staged_im, staged_rows))) => {
+                    Seams::FoldStaged(fold, staged_re, staged_im, staged_rows)
+                }
+                _ => Seams::frequency(pass_fold, pass_sink),
+            };
+            butterfly_rows::<T, A, Dif2, 2, 1>(
+                re, im, rows, stride, batch, block, &tws, &twv, simd, seams,
+            );
+        }
+    }
+    if let (Some(sink), Some(staging)) = (sink, staging) {
+        stage_out(
+            sink, staging, tile_rows, base, batch, row_bits, block, pitch,
+        );
     }
 }

@@ -67,7 +67,7 @@ pub(super) const SWEEP_STAGES: u32 = 4;
 /// Bytes of both planes a tile's column block occupies, sized so the block
 /// and the streams around it share a 48 KiB L1 without conflict: 16 KiB is
 /// a third of it.
-const TILE_BYTES: usize = 16 * 1024;
+pub(super) const TILE_BYTES: usize = 16 * 1024;
 
 /// Complex elements the seam staging buffer holds: one tile block of
 /// interleaved samples, which is [`TILE_BYTES`] whatever the scalar, so
