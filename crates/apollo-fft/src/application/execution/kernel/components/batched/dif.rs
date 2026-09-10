@@ -28,17 +28,22 @@
 //! at offset `l / 2 - 1`, holding `W_l^j`. DIT walks those stages upward and
 //! DIF downward, over the same values.
 
-use super::radix::Lane;
+use super::fold::FourStepFold;
+use super::lane::Lane;
+use super::plan::BatchedPlan;
 use super::sweep::{sweep_frequency, sweep_lengths_descending};
-use super::FourStepFold;
 use crate::application::execution::kernel::mixed_radix::MixedRadixScalar;
 use hermes_simd::{LaneKernel, LaneScalar, Simd, SimdArch, SimdKernel};
+
+/// Section labels of the frequency-decimated stage set's sweeps, by sweep
+/// index; reported beneath `stages2`.
+pub(super) const FREQUENCY_SWEEPS: [&str; 3] = ["f1", "f2", "f3"];
 
 /// All stages of `batch` independent length-`len` transforms over planar data,
 /// decimated in frequency.
 ///
 /// Input rows in natural order; output rows bit-reversed. Dispatch happens once
-/// for the whole stage set, as [`super::BatchedStages`] documents.
+/// for the whole stage set, as [`super::dit::BatchedStages`] documents.
 pub(super) struct BatchedStagesDif<'a, T> {
     pub(super) re: &'a mut [T],
     pub(super) im: &'a mut [T],
@@ -94,7 +99,7 @@ where
         // the pass over stage 2. Stage `l` holds `W_l^j` at `l / 2 - 1`.
         let mut l_top = len;
         for (index, stages) in sweep_lengths_descending(len.trailing_zeros()).enumerate() {
-            sect!(super::FREQUENCY_SWEEPS[index], {
+            sect!(FREQUENCY_SWEEPS[index], {
                 sweep_frequency(
                     re,
                     im,
@@ -113,4 +118,33 @@ where
             l_top >>= stages;
         }
     }
+}
+
+/// Runs the same stage set decimated in frequency: rows arrive in natural
+/// order and leave bit-reversed, which is the pairing that lets the sink
+/// absorb the permutation the time-decimated set needed a whole pass to
+/// repair (see [`BatchedStagesDif`]).
+pub(super) fn run_batched_dif<T>(
+    re: &mut [T],
+    im: &mut [T],
+    plan: &BatchedPlan<T>,
+    fold: Option<&FourStepFold<T>>,
+    sink: Option<&mut [T]>,
+    staging: &mut [T],
+    batch: usize,
+    stride: usize,
+) where
+    T: LaneScalar + MixedRadixScalar + Lane,
+{
+    hermes_simd::vectorize(BatchedStagesDif {
+        re,
+        im,
+        tw: &plan.tw,
+        fold,
+        sink,
+        staging,
+        batch,
+        stride,
+        len: plan.len,
+    });
 }

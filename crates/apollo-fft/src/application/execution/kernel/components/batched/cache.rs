@@ -1,6 +1,7 @@
 //! Shared immutable tables and bounded worker-local handles.
 
-use super::{BatchedPlan, FourStepFold};
+use super::fold::FourStepFold;
+use super::plan::BatchedPlan;
 use crate::application::execution::kernel::mixed_radix::MixedRadixScalar;
 use hermes_simd::LaneScalar;
 use parking_lot::RwLock;
@@ -67,7 +68,7 @@ thread_local! {
 
 /// Scalars whose batched plans are cached per thread.
 pub(crate) trait BatchedPlanCache:
-    MixedRadixScalar + LaneScalar + super::radix::Lane + eunomia::layout::Pod + Sized
+    MixedRadixScalar + LaneScalar + super::lane::Lane + eunomia::layout::Pod + Sized
 {
     fn cached_plan<const INVERSE: bool>(len: usize) -> Arc<BatchedPlan<Self>>;
     fn cached_four_step_fold<const INVERSE: bool>(
@@ -144,7 +145,7 @@ macro_rules! impl_plan_cache {
                             n,
                             rows,
                             cols,
-                            super::LaneOrder::for_batch::<$t>(cols),
+                            super::lane_order::LaneOrder::for_batch::<$t>(cols),
                         ))
                     }))
                 }
