@@ -20,6 +20,8 @@
 //!   axis's real geometry.
 //! - `transpose-chain` — the three single-matrix moves the full transform
 //!   runs instead, `(x, y, z)` to `(y, z, x)` to `(z, x, y)` and back.
+//! - `rotated-pair` — the same round trip through the entry points that leave
+//!   and accept `(z, x, y)`: four moves against `full`'s six.
 //!
 //! Every arm is a round trip so its buffer returns to its input and no
 //! per-iteration reseed is charged to the reading. A forward is then
@@ -316,6 +318,25 @@ fn arms_for_extent(suite: &mut BenchmarkSuite, n: usize) {
         transpose_matrices(std::hint::black_box(&scratch), &mut data, 1, n * n, n);
     });
 
+    // The rotated pair: a forward that leaves `(z, x, y)` and an inverse that
+    // takes it, two moves each against the C-order pair's three.
+    let mut array = Array3::from_shape_vec([n, n, n], input.clone())
+        .expect("invariant: the volume has n^3 elements");
+    {
+        let rotated = plan.forward_complex_rotated(&mut array);
+        plan.inverse_complex_rotated(rotated);
+    }
+    assert_returns_to_input(
+        "rotated-pair",
+        n,
+        array.as_slice().expect("C order"),
+        &input,
+    );
+    suite.run(BenchmarkCase::new("unpinned", "rotated-pair", n), || {
+        let rotated = plan.forward_complex_rotated(std::hint::black_box(&mut array));
+        plan.inverse_complex_rotated(rotated);
+    });
+
     // The chain the full transform runs: `(x, y, z)` to `(y, z, x)` to
     // `(z, x, y)` and back, three single-matrix moves through two scratches —
     // a cycle, so the arm is its own round trip.
@@ -424,6 +445,7 @@ fn axis_pass_attribution() {
             let ty = read(&report, &format!("unpinned/transpose-y/{n}"));
             let tx = read(&report, &format!("unpinned/transpose-x/{n}"));
             let chain = read(&report, &format!("unpinned/transpose-chain/{n}"));
+            let rotated = read(&report, &format!("unpinned/rotated-pair/{n}")) / 2.0;
             let pieces = 3.0 * lanes + chain;
             println!(
                 "ATTRIBUTION n={n} {statistic}: forward {:.1} us; lanes 3 x {:.1} = {:.1} us ({:.0}%), chain {:.1} us ({:.0}%; the per-axis pairs {:.1} + {:.1} = {:.1}); pieces sum {:.1} us, unaccounted {:.1} us ({:.0}%)",
@@ -439,6 +461,12 @@ fn axis_pass_attribution() {
                 pieces / 1e6,
                 (full - pieces) / 1e6,
                 100.0 * (full - pieces) / full,
+            );
+            println!(
+                "ROTATED n={n} {statistic}: forward {:.1} us against the C-order {:.1} us ({:+.0}%)",
+                rotated / 1e6,
+                full / 1e6,
+                100.0 * (rotated - full) / full,
             );
         }
         let lanes = median_ps(&report, &format!("unpinned/lanes-z/{n}")) / 2.0;

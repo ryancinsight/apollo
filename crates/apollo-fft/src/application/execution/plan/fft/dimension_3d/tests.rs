@@ -248,6 +248,59 @@ fn degenerate_extents_take_the_single_pass_and_round_trip() {
 }
 
 #[test]
+fn rotated_pair_matches_the_c_order_pair_and_round_trips() {
+    use crate::application::execution::plan::fft::dimension_3d::FftPlan3D;
+    use crate::domain::metadata::shape::Shape3D;
+
+    // Shapes with distinct extents so a wrong rotation cannot pass by symmetry,
+    // and one with an extent of 1 on each axis in turn.
+    for (nx, ny, nz) in [(6, 4, 8), (3, 5, 7), (1, 4, 5), (3, 1, 5), (3, 4, 1)] {
+        let plan = FftPlan3D::<f64>::new(
+            Shape3D::new(nx, ny, nz).expect("invariant: shape lengths are non-zero"),
+        );
+        let original = Array3::from_shape_fn([nx, ny, nz], |[i, j, k]| {
+            let x = ((i * ny + j) * nz + k) as f64;
+            Complex64::new((0.17 * x).sin() + 0.3, 0.23 * (0.31 * x).cos())
+        });
+
+        // The rotated spectrum holds the same values as the C-order spectrum,
+        // read through the rotation: element (i, j, k) of the C-order result is
+        // element (k, i, j) of the rotated one.
+        let mut c_order = original.clone();
+        plan.forward_complex_inplace(&mut c_order);
+        let mut rotated_storage = original.clone();
+        let rotated = plan.forward_complex_rotated(&mut rotated_storage);
+        assert_eq!(rotated.shape(), [nz, nx, ny], "shape {nx}x{ny}x{nz}");
+        let values = rotated.as_slice();
+        for i in 0..nx {
+            for j in 0..ny {
+                for k in 0..nz {
+                    let expected = c_order[[i, j, k]];
+                    let actual = values[(k * nx + i) * ny + j];
+                    assert_eq!(
+                        (actual.re, actual.im),
+                        (expected.re, expected.im),
+                        "shape {nx}x{ny}x{nz}, element ({i}, {j}, {k})"
+                    );
+                }
+            }
+        }
+
+        // The pair is a round trip, and the volume comes back in C order.
+        plan.inverse_complex_rotated(rotated);
+        let err = rotated_storage
+            .iter()
+            .zip(original.iter())
+            .map(|(a, b)| (a - b).norm())
+            .fold(0.0_f64, f64::max);
+        assert!(
+            err <= 1.0e-10,
+            "rotated round trip {nx}x{ny}x{nz} err={err:.2e}"
+        );
+    }
+}
+
+#[test]
 fn static_fft_3d_preserves_logical_view_order() {
     let plan = StaticFftPlan3D::<f64, 2, 3, 4>::new();
     exercise_nonstandard_layouts(

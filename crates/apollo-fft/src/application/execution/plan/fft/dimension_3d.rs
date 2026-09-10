@@ -4,6 +4,7 @@
 
 pub(crate) mod dynamic_impl;
 mod passes;
+mod rotated;
 pub(crate) mod static_impl;
 
 #[cfg(test)]
@@ -13,4 +14,5 @@ pub(crate) mod tests;
 mod pass_attribution;
 
 pub use dynamic_impl::FftPlan3D;
+pub use rotated::RotatedSpectrum;
 pub use static_impl::StaticFftPlan3D;

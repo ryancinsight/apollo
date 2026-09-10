@@ -2,34 +2,46 @@
 
 <a id="apollo-rotated-order-handoff"></a>
 
-## APOLLO-ROTATED-ORDER-HANDOFF-2026-09-10 — The third move of a 3-D transform only restores the caller's layout [minor] [perf] — todo
+## APOLLO-ROTATED-ORDER-HANDOFF-2026-09-10 — The third move of a 3-D transform only restores the caller's layout [minor] [perf] — done 2026-09-10
 
-- **Finding.** The layout chain
-  ([`#apollo-3d-return-transposes`](#apollo-3d-return-transposes)) needs only
-  **two** moves to transform all three axes: `(x, y, z)` has `z` contiguous, so
-  axis 2 runs in place; one rotation gives `(y, z, x)` with `x` contiguous; a
-  second gives `(z, x, y)` with `y` contiguous. Every axis is then transformed
-  and the third move exists solely to hand the caller back `(x, y, z)`. At 64³
-  a move is about 48 µs of the 145 µs the chain costs at the fastest sample, so
-  the restoring move is roughly 9% of a forward.
-- **Shape.** A pair of entry points that state the layout they leave and accept
-  — a forward that stops at `(z, x, y)` and an inverse that starts there — with
-  the order carried in the type rather than documented, so a caller cannot pass
-  a rotated volume to a C-order entry point. The existing entry points keep
-  their contract and their third move. An inverse starting rotated still costs
-  three moves (two to transform, one to restore), so a round trip goes from six
-  moves to five; a consumer willing to hold its field rotated between steps
-  drops to four, which is the larger prize and belongs to the consumer's item.
-- **Consumer question (kwavers).** A PSTD step is forward, k-space multiply,
-  inverse. The multiply is elementwise, so it is layout-agnostic **provided the
-  operator arrays are stored in the same rotated order** — they are built once
-  per grid, so rotating them is a plan-time cost, not a per-step one. That is
-  the consumer half; file it there when this lands.
-- **Acceptance oracle.** `dimension_3d::pass_attribution` gains an arm for the
-  rotated pair and reads one move less than `full` at 64³ and 32³; the round
-  trip through the rotated pair returns the input bitwise, since no arithmetic
-  order changes; the C-order entry points' arms are unchanged.
-- **Risk / change class:** [minor] [perf]; **dependencies:** none.
+- **Integrator:** claude-opus-5; **branch:** `perf/apollo-rotated-order-handoff`.
+- **Delivered.** `forward_complex_rotated` / `inverse_complex_rotated` on
+  `FftPlan3D`, with `RotatedSpectrum` holding the caller's storage and naming
+  the `(z, x, y)` order. Two moves per direction: the forward rotates left
+  twice, and the inverse rotates right twice, which is what lands it back in C
+  order rather than two rotations further along. Four moves for a round trip
+  against six.
+- **Measured, and short of the model.** The pass probe's `rotated-pair` arm at
+  the fastest sample reads **248.8 µs against 260.0 µs** per forward at 64³
+  (−4%) and 82.0 against 88.0 at 32³ (−7%). Two of six moves is a third of the
+  transpose time, which is 55% of a forward, so the model says −18%; the
+  measurement says −4%. The moves the rotated schedule makes are not the
+  moves the chain makes — its inverse transposes `[nz*nx, ny]` and
+  `[ny*nz, nx]`, tall matrices where the chain's are wide — and that is where
+  the difference must be. Filed as the follow-on question below rather than
+  claimed as a win.
+- **Correctness.** The rotated forward's values equal the C-order spectrum read
+  through the rotation, element by element, at five shapes including an extent
+  of one on each axis; the pair round-trips to 1e-10. Oracles in
+  `dimension_3d/tests.rs`.
+
+<a id="apollo-rotated-move-geometry"></a>
+
+## APOLLO-ROTATED-MOVE-GEOMETRY-2026-09-10 — Two moves save a quarter of one move's time [patch] [perf] — todo
+
+- **Question (spike).** The rotated pair
+  ([`#apollo-rotated-order-handoff`](#apollo-rotated-order-handoff)) removes two
+  of a round trip's six full-volume moves and buys 4–7%, where equal-cost moves
+  would buy about 18%. Either the two moves it keeps cost more than the chain's
+  three, or the lane passes around them lost something (cache state, the
+  four-step companion) that the chain's ordering preserved.
+- **Method.** Probe arms timing each move geometry alone at 64³: the chain's
+  `[nx, ny*nz]`, `[ny, nz*nx]`, `[nz, nx*ny]` against the rotated inverse's
+  `[nz*nx, ny]` and `[ny*nz, nx]`. If a tall geometry is the cost, the fix is
+  leto's tile rule reading the destination stride as well as the source pitch
+  ([`leto #leto-strided-pitch-aliasing`](../leto/backlog.md#leto-strided-pitch-aliasing));
+  if the lane passes are the cost, the fix is in the schedule.
+- **Risk / change class:** [patch] [perf]; **dependencies:** none.
 
 <a id="APOLLO-WASM-DEPENDENCY-2026-09-10"></a>
 ## APOLLO-WASM-DEPENDENCY-2026-09-10 — Keep the FFT dependency graph portable on WebAssembly [patch]

@@ -69,6 +69,16 @@ Change-class tags: [patch] backward-compatible fix, [minor] additive non-breakin
 
 ### Added
 
+- [minor] `apollo-fft` 3-D plans gain a transform pair that keeps the
+  spectrum in `(z, x, y)` order: `FftPlan3D::forward_complex_rotated` returns a
+  `RotatedSpectrum` borrowing the caller's storage, and
+  `inverse_complex_rotated` consumes it and leaves C order. Transforming three
+  axes needs only two full-volume moves in each direction — four for a round
+  trip against the C-order pair's six — because neither direction spends a move
+  restoring an order the caller does not read by axis. Elementwise work between
+  the two (a k-space operator, a filter) reads the spectrum through
+  `as_mut_slice` and `shape` and must store its own array in the same order.
+  The C-order entry points are unchanged.
 - [patch] `apollo-fft` gains a pinned prime-dispatch probe
   (`prime_dispatch_gap_by_core_type`): per prime and scalar it times the
   production plan against the isolated Rader entry in one pinned run, so the
