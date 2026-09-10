@@ -73,13 +73,17 @@ where
         + PartialEq
         + core::fmt::Debug,
 {
-    // 24 rows: three eight-lane tiles, so the unpaired tile block runs.
-    // The last shape pads by four, a stride no eight-lane width divides.
+    // Shapes in tiles of the dispatched width, so the order the reference
+    // relabels through divides them on every host (a sixteen-lane order
+    // over 24 rows indexed past the plane): three tiles of rows, so the
+    // unpaired tile block runs; the last shape pads by four, a stride the
+    // wider register widths do not divide.
+    let tile = LaneOrder::for_batch::<T>(16).lanes();
     for (rows, cols, pad) in [
-        (16usize, 32usize, 8usize),
-        (32, 64, 8),
-        (24, 40, 8),
-        (32, 64, 4),
+        (2 * tile, 4 * tile, 8),
+        (4 * tile, 8 * tile, 8),
+        (3 * tile, 5 * tile, 8),
+        (4 * tile, 8 * tile, 4),
     ] {
         let (src_stride, dst_stride) = (cols + pad, rows + pad);
         let order = LaneOrder::for_batch::<T>(rows);
