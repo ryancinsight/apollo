@@ -48,6 +48,7 @@ use super::super::lanes;
 use super::super::layout::transpose_matrices;
 use crate::application::execution::kernel::measurement_cores;
 use crate::application::execution::kernel::mixed_radix::dispatch_inplace;
+use crate::application::execution::kernel::mixed_radix::scalar::plan_scratch::with_3d_y_scratch;
 use crate::{FftPlan3D, Shape3D};
 
 /// Extents the consumers plan; the same two the kwavers baseline reads.
@@ -149,6 +150,39 @@ fn lane_pass_scheduled<const FORWARD: bool>(
 /// that still gives every processor several tasks at 4,096 lanes.
 const TASK_WIDTHS: [usize; 2] = [64, 256];
 
+/// Axis 1's transpose with its `n` matrices as independent tasks.
+///
+/// Each destination matrix is a contiguous chunk, so moirai hands out disjoint
+/// destination chunks by index and the closure reads the matching source
+/// matrix from the shared slice; the per-matrix kernel is leto's own.
+fn transpose_pair_by_matrix(source: &[Complex64], destination: &mut [Complex64], n: usize) {
+    let matrix_len = n * n;
+    moirai::for_each_chunk_mut_enumerated_with::<moirai::AdaptiveWithThreshold<1>, _, _>(
+        destination,
+        matrix_len,
+        |index, matrix| {
+            let start = index * matrix_len;
+            leto::transpose_copy(&source[start..start + matrix_len], matrix, n, n)
+                .expect("invariant: every matrix is n x n");
+        },
+    );
+}
+
+/// Axis 1 exactly as the plan runs it: transpose into the thread-local scratch,
+/// the lane pass over that scratch, transpose back — in one direction.
+///
+/// The isolated arms each run hot on their own buffer; here the lanes read
+/// scratch that the transpose just wrote from other cores, and the pass pays
+/// the scratch acquisition and moirai's join. The gap between this and
+/// `2 x transpose-y + lanes` is that interaction, which no isolated arm shows.
+fn axis1_pass<const FORWARD: bool>(plan: &FftPlan3D<f64>, data: &mut [Complex64], n: usize) {
+    with_3d_y_scratch::<Complex64, _>(n * n * n, |scratch| {
+        transpose_matrices(data, scratch, n, n, n);
+        lane_pass::<FORWARD>(plan, scratch, false);
+        transpose_matrices(scratch, data, n, n, n);
+    });
+}
+
 fn assert_returns_to_input(label: &str, n: usize, result: &[Complex64], input: &[Complex64]) {
     let error = result
         .iter()
@@ -236,6 +270,15 @@ fn arms_for_extent(suite: &mut BenchmarkSuite, n: usize) {
         });
     }
 
+    let mut data = input.clone();
+    axis1_pass::<true>(&plan, &mut data, n);
+    axis1_pass::<false>(&plan, &mut data, n);
+    assert_returns_to_input("axis1-pass", n, &data, &input);
+    suite.run(BenchmarkCase::new("unpinned", "axis1-pass", n), || {
+        axis1_pass::<true>(&plan, std::hint::black_box(&mut data), n);
+        axis1_pass::<false>(&plan, std::hint::black_box(&mut data), n);
+    });
+
     // Axis 1's pair: `nx` matrices of `[ny, nz]` there, `[nz, ny]` back.
     let mut data = input.clone();
     let mut scratch = vec![Complex64::default(); n * n * n];
@@ -246,6 +289,20 @@ fn arms_for_extent(suite: &mut BenchmarkSuite, n: usize) {
         transpose_matrices(std::hint::black_box(&data), &mut scratch, n, n, n);
         transpose_matrices(std::hint::black_box(&scratch), &mut data, n, n, n);
     });
+
+    // Axis 1's pair again, with the `nx` independent matrices spread over
+    // moirai tasks — one matrix (64 KiB at N = 64) per task — each through
+    // leto's serial tile kernel. The shipped path runs all `nx` on one thread.
+    transpose_pair_by_matrix(&data, &mut scratch, n);
+    transpose_pair_by_matrix(&scratch, &mut data, n);
+    assert_returns_to_input("transpose-y-parallel", n, &data, &input);
+    suite.run(
+        BenchmarkCase::new("unpinned", "transpose-y-parallel", n),
+        || {
+            transpose_pair_by_matrix(std::hint::black_box(&data), &mut scratch, n);
+            transpose_pair_by_matrix(std::hint::black_box(&scratch), &mut data, n);
+        },
+    );
 
     // Axis 0's pair: one `[nx, ny*nz]` matrix there, `[ny*nz, nx]` back.
     transpose_matrices(&data, &mut scratch, 1, n, n * n);
@@ -364,6 +421,25 @@ fn axis_pass_attribution() {
             );
         }
         let lanes = median_ps(&report, &format!("unpinned/lanes-z/{n}")) / 2.0;
+        for (statistic, read) in [
+            ("median", median_ps as fn(&str, &str) -> f64),
+            ("min", min_ps),
+        ] {
+            let axis = read(&report, &format!("unpinned/axis1-pass/{n}")) / 2.0;
+            let pieces = read(&report, &format!("unpinned/transpose-y/{n}"))
+                + read(&report, &format!("unpinned/lanes-z/{n}")) / 2.0;
+            println!(
+                "INTERACTION n={n} {statistic}: axis-1 pass {:.1} us against its pieces {:.1} us; gap {:.1} us ({:.0}%)",
+                axis / 1e6, pieces / 1e6, (axis - pieces) / 1e6, 100.0 * (axis - pieces) / axis
+            );
+        }
+        let ty_serial = median_ps(&report, &format!("unpinned/transpose-y/{n}"));
+        let ty_parallel = median_ps(&report, &format!("unpinned/transpose-y-parallel/{n}"));
+        println!(
+            "TRANSPOSE n={n}: axis-1 pair serial {:.1} us; one matrix per task {:.1} us",
+            ty_serial / 1e6,
+            ty_parallel / 1e6
+        );
         let serial = median_ps(&report, &format!("unpinned/lanes-serial/{n}")) / 2.0;
         let widths: Vec<String> = TASK_WIDTHS
             .iter()
