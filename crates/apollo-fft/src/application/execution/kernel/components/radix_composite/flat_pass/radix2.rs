@@ -5,8 +5,8 @@
 //! the twiddle table.
 
 use super::{
-    apply_pointwise, cmul, duplicated_row, load, store, store_arm_halves, store_arms,
-    MAX_COMPLEXES_PER_REGISTER,
+    apply_pointwise, cmul, duplicated_row, load, load_prefix, prefix_mask, store, store_arm_halves,
+    store_arms, store_prefix, MAX_COMPLEXES_PER_REGISTER,
 };
 use crate::application::execution::kernel::components::winograd::WinogradScalar;
 use eunomia::Complex;
@@ -25,35 +25,6 @@ pub(in super::super) struct FlatPassR2<'a, T> {
     /// The pointwise spectrum multiplied into the output afterwards, on a
     /// convolution's last pass.
     pub(in super::super) pointwise: Option<&'a [Complex<T>]>,
-}
-
-/// Group `g`'s butterflies from column `j` on, in scalar arithmetic: the
-/// tail of a row past the last whole register.
-#[inline]
-#[expect(
-    clippy::too_many_arguments,
-    reason = "the pass geometry is the argument list"
-)]
-fn scalar_columns<T: WinogradScalar>(
-    src: &[Complex<T>],
-    dst: &mut [Complex<T>],
-    tw: &[Complex<T>],
-    stride: usize,
-    prev_len: usize,
-    stage_chunk: usize,
-    g: usize,
-    j: usize,
-) {
-    let src_base = g * prev_len;
-    let dst_base = g * stage_chunk;
-    for j in j..prev_len {
-        let v = src[stride + src_base + j];
-        let t = tw[j];
-        let a1 = Complex::new(v.re * t.re - v.im * t.im, v.re * t.im + v.im * t.re);
-        let a0 = src[src_base + j];
-        dst[dst_base + j] = Complex::new(a0.re + a1.re, a0.im + a1.im);
-        dst[dst_base + j + prev_len] = Complex::new(a0.re - a1.re, a0.im - a1.im);
-    }
 }
 
 impl<T> LaneKernel<T> for FlatPassR2<'_, T>
@@ -135,8 +106,23 @@ where
                 }
                 g += 2;
             }
-            for g in g..g_count {
-                scalar_columns(src, dst, tw, stride, prev_len, stage_chunk, g, 0);
+            if g < g_count {
+                // An odd last group: its half-register rows through masked
+                // loads and stores.
+                let m = prefix_mask::<T, A>(prev_len);
+                // SAFETY: `(g + 1) prev_len <= stride`, so the masked rows
+                // stay inside their slices, and the group's outputs end at
+                // `(g + 1) stage_chunk <= dst.len()`.
+                unsafe {
+                    let at = g * prev_len;
+                    let a0 = load_prefix::<T, A>(src, at, prev_len, m);
+                    let a1 = cmul(
+                        load_prefix::<T, A>(src, stride + at, prev_len, m),
+                        load_prefix::<T, A>(tw, 0, prev_len, m),
+                    );
+                    store_prefix(a0 + a1, dst, g * stage_chunk, prev_len, m);
+                    store_prefix(a0 - a1, dst, g * stage_chunk + prev_len, prev_len, m);
+                }
             }
         } else {
             for g in 0..g_count {
@@ -158,7 +144,23 @@ where
                     j += per;
                 }
                 if j < prev_len {
-                    scalar_columns(src, dst, tw, stride, prev_len, stage_chunk, g, j);
+                    // The ragged tail: `c < per` columns through masked
+                    // loads and stores, one register per arm.
+                    let c = prev_len - j;
+                    let m = prefix_mask::<T, A>(c);
+                    // SAFETY: `src_base + prev_len <= stride`, so the `c`
+                    // masked complexes of every row and twiddle row stay
+                    // inside their slices, and the outputs end at
+                    // `dst_base + 2 prev_len <= g_count * stage_chunk`.
+                    unsafe {
+                        let a0 = load_prefix::<T, A>(src, src_base + j, c, m);
+                        let a1 = cmul(
+                            load_prefix::<T, A>(src, stride + src_base + j, c, m),
+                            load_prefix::<T, A>(tw, j, c, m),
+                        );
+                        store_prefix(a0 + a1, dst, dst_base + j, c, m);
+                        store_prefix(a0 - a1, dst, dst_base + j + prev_len, c, m);
+                    }
                 }
             }
         }
