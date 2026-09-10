@@ -13,7 +13,7 @@ pub struct CompositeTwiddleEntry<C> {
     pub offsets: Arc<[usize]>,
 }
 
-pub trait CompositeCache: WinogradScalar + ShortWinogradScalar {
+pub trait CompositeCache: WinogradScalar + ShortWinogradScalar + hermes_simd::LaneScalar {
     fn with_scratch<R>(n: usize, f: impl FnOnce(&mut [Complex<Self>]) -> R) -> R;
 
     /// Runs the batched-layout four-step transform, reporting whether it applied.
@@ -97,12 +97,11 @@ pub trait CompositeCache: WinogradScalar + ShortWinogradScalar {
         pointwise: Option<&[Complex<Self>]>,
     ) -> bool;
 
-    /// Attempt an AVX2-accelerated flat Stockham pass for radix-2.
-    ///
-    /// Vectorizes the trailing radix-2 stage of odd-power-of-two
-    /// decompositions (previously scalar). The scalar path is selected
-    /// structurally on non-x86 targets.
-    #[cfg(target_arch = "x86_64")]
+    /// The flat radix-2 pass over the dispatched register width, the
+    /// trailing stage of odd-power-of-two decompositions; `false` below the
+    /// amortization bound or where the backend has no vector register, and
+    /// the scalar pass runs instead. The direction is in the twiddles.
+    #[inline]
     fn try_flat_pass_r2<const INVERSE: bool>(
         src: &[Complex<Self>],
         dst: &mut [Complex<Self>],
@@ -111,7 +110,22 @@ pub trait CompositeCache: WinogradScalar + ShortWinogradScalar {
         stage_chunk: usize,
         tw: &[Complex<Self>],
         pointwise: Option<&[Complex<Self>]>,
-    ) -> bool;
+    ) -> bool {
+        // Below n = 64 the dispatch and its frame exceed the scalar
+        // radix-2 cost (measured at N = 32); tiny stages stay scalar.
+        if g_count.saturating_mul(stage_chunk) < 64 {
+            return false;
+        }
+        hermes_simd::vectorize(super::flat_pass::FlatPassR2 {
+            src,
+            dst,
+            prev_len,
+            g_count,
+            stage_chunk,
+            tw,
+            pointwise,
+        })
+    }
 }
 
 thread_local! {
@@ -214,43 +228,6 @@ fn build_composite_twiddles<F: WinogradScalar, const INVERSE: bool>(
 }
 
 impl CompositeCache for f64 {
-    /// AVX2+FMA flat pass for radix-2 f64 (trailing stage of odd powers of two).
-    #[cfg(target_arch = "x86_64")]
-    #[inline]
-    fn try_flat_pass_r2<const INVERSE: bool>(
-        src: &[Complex<f64>],
-        dst: &mut [Complex<f64>],
-        prev_len: usize,
-        g_count: usize,
-        stage_chunk: usize,
-        tw: &[Complex<f64>],
-        pointwise: Option<&[Complex<f64>]>,
-    ) -> bool {
-        // Amortization guard: below n=64 the AVX setup (feature check + frame)
-        // exceeds the scalar radix-2 cost (measured regression at N=32). Keep
-        // tiny radix-2 stages on the scalar path.
-        if g_count.saturating_mul(stage_chunk) < 64 {
-            return false;
-        }
-        #[cfg(target_arch = "x86_64")]
-        if is_x86_feature_detected!("avx2") && is_x86_feature_detected!("fma") {
-            // SAFETY: Feature detection above guarantees AVX2+FMA.
-            unsafe {
-                super::avx2::flat_pass_r2_f64(
-                    src,
-                    dst,
-                    prev_len,
-                    g_count,
-                    stage_chunk,
-                    tw,
-                    pointwise,
-                );
-            }
-            return true;
-        }
-        false
-    }
-
     /// AVX2+FMA flat pass for radix-7 f64. Checked once per stage (not per group).
     #[cfg(target_arch = "x86_64")]
     #[inline]
@@ -421,42 +398,6 @@ impl CompositeCache for f64 {
 }
 
 impl CompositeCache for f32 {
-    /// AVX2+FMA flat pass for radix-2 f32 (trailing stage of odd powers of two).
-    #[cfg(target_arch = "x86_64")]
-    #[inline]
-    fn try_flat_pass_r2<const INVERSE: bool>(
-        src: &[Complex<f32>],
-        dst: &mut [Complex<f32>],
-        prev_len: usize,
-        g_count: usize,
-        stage_chunk: usize,
-        tw: &[Complex<f32>],
-        pointwise: Option<&[Complex<f32>]>,
-    ) -> bool {
-        // Amortization guard: below n=64 the AVX setup exceeds the scalar
-        // radix-2 cost. Keep tiny radix-2 stages on the scalar path.
-        if g_count.saturating_mul(stage_chunk) < 64 {
-            return false;
-        }
-        #[cfg(target_arch = "x86_64")]
-        if is_x86_feature_detected!("avx2") && is_x86_feature_detected!("fma") {
-            // SAFETY: Feature detection above guarantees AVX2+FMA.
-            unsafe {
-                super::avx2::flat_pass_r2_f32(
-                    src,
-                    dst,
-                    prev_len,
-                    g_count,
-                    stage_chunk,
-                    tw,
-                    pointwise,
-                );
-            }
-            return true;
-        }
-        false
-    }
-
     /// AVX2+FMA flat pass for radix-7 f32. Processes 4 complex per __m256 register.
     #[cfg(target_arch = "x86_64")]
     #[inline]

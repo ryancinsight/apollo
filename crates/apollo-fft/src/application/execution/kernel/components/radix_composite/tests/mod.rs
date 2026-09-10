@@ -6,6 +6,7 @@
 //! - [`prime_radix`]: extended prime-radix coverage (11, 13)
 //! - [`large_prime`]: 17 and 23 prime-radix coverage
 //! - [`composite`]: three-odd-prime + radix-4 tail composites
+//! - [`flat_pass`]: the generic flat passes against the scalar formula
 
 use super::*;
 use crate::application::execution::kernel::direct::{dft_forward, dft_inverse};
@@ -15,6 +16,7 @@ use eunomia::{Complex32, Complex64};
 mod composite;
 mod correctness;
 mod factorize;
+mod flat_pass;
 mod large_prime;
 mod prime_radix;
 

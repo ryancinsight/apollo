@@ -6,6 +6,7 @@ pub(crate) mod arity;
 mod avx2;
 mod cache;
 mod core;
+mod flat_pass;
 
 use crate::application::execution::kernel::components::winograd::ShortWinogradScalar;
 use crate::application::execution::kernel::radix_stage::normalize_scalar;
