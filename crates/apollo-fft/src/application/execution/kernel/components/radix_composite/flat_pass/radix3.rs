@@ -283,7 +283,9 @@ where
                     }
                     j += per;
                 }
-                scalar_columns::<T, INVERSE>(src, dst, tw, stride, prev_len, stage_chunk, g, j);
+                if j < prev_len {
+                    scalar_columns::<T, INVERSE>(src, dst, tw, stride, prev_len, stage_chunk, g, j);
+                }
             }
         }
 
