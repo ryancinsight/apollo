@@ -128,6 +128,51 @@ where
             for g in 0..g_count {
                 let src_base = g * prev_len;
                 let dst_base = g * stage_chunk;
+                // The ragged tail runs first: its run-over into the next arm's
+                // leading columns is overwritten by that arm's whole-register
+                // stores, and the last arm's by the next group's.
+                let rem = prev_len % per;
+                if rem != 0 {
+                    let c = rem;
+                    let j = prev_len - rem;
+                    let m = prefix_mask::<T, A>(c);
+                    if g + 1 < g_count && per - c <= prev_len {
+                        // The run-over tail: whole-register loads and stores
+                        // that run `per - c` samples into the next row, which
+                        // the next store (arms ascending, then the next group)
+                        // overwrites; the twiddle rows are masked, since the
+                        // last row has no successor.
+                        // SAFETY: with `per - c <= prev_len` every run-over stays
+                        // inside the neighbouring row of the same arm (source) or
+                        // arm (output), and `g + 1 < g_count` puts a whole group
+                        // after this one in both slices.
+                        unsafe {
+                            let at = src_base + j;
+                            let a0 = load::<T, A>(src, at);
+                            let a1 = cmul(
+                                load::<T, A>(src, stride + at),
+                                load_prefix::<T, A>(tw, j, c, m),
+                            );
+                            store(a0 + a1, dst, dst_base + j);
+                            store(a0 - a1, dst, dst_base + j + prev_len);
+                        }
+                    } else {
+                        // SAFETY: `src_base + prev_len <= stride`, so the `c`
+                        // masked complexes of every row and twiddle row stay
+                        // inside their slices, and the outputs end at
+                        // `dst_base + 2 prev_len <= g_count * stage_chunk`.
+                        unsafe {
+                            let at = src_base + j;
+                            let a0 = load_prefix::<T, A>(src, at, c, m);
+                            let a1 = cmul(
+                                load_prefix::<T, A>(src, stride + at, c, m),
+                                load_prefix::<T, A>(tw, j, c, m),
+                            );
+                            store_prefix(a0 + a1, dst, dst_base + j, c, m);
+                            store_prefix(a0 - a1, dst, dst_base + j + prev_len, c, m);
+                        }
+                    }
+                }
                 let mut j = 0;
                 while j + per <= prev_len {
                     // SAFETY: `src_base + j + per <= stride`, so both source
@@ -142,25 +187,6 @@ where
                         store(a0 - a1, dst, dst_base + j + prev_len);
                     }
                     j += per;
-                }
-                if j < prev_len {
-                    // The ragged tail: `c < per` columns through masked
-                    // loads and stores, one register per arm.
-                    let c = prev_len - j;
-                    let m = prefix_mask::<T, A>(c);
-                    // SAFETY: `src_base + prev_len <= stride`, so the `c`
-                    // masked complexes of every row and twiddle row stay
-                    // inside their slices, and the outputs end at
-                    // `dst_base + 2 prev_len <= g_count * stage_chunk`.
-                    unsafe {
-                        let a0 = load_prefix::<T, A>(src, src_base + j, c, m);
-                        let a1 = cmul(
-                            load_prefix::<T, A>(src, stride + src_base + j, c, m),
-                            load_prefix::<T, A>(tw, j, c, m),
-                        );
-                        store_prefix(a0 + a1, dst, dst_base + j, c, m);
-                        store_prefix(a0 - a1, dst, dst_base + j + prev_len, c, m);
-                    }
                 }
             }
         }
