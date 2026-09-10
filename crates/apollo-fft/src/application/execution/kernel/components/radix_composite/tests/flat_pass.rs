@@ -1,6 +1,7 @@
 //! The generic flat passes against the scalar formula, on the dispatched
 //! register width, in both precisions.
 
+use super::super::flat_pass::{FlatPassR2, FlatPassR3, FlatPassR4, FlatPassR5, FlatPassR7};
 use super::super::CompositeCache;
 use eunomia::Complex;
 use std::f64::consts::TAU;
@@ -49,15 +50,15 @@ where
             .collect();
         for pointwise in [None, Some(factors.as_slice())] {
             let mut dst = vec![Complex::new(T::from_f64(0.0), T::from_f64(0.0)); n];
-            if !T::try_flat_pass_r2::<false>(
-                &src,
-                &mut dst,
+            if !hermes_simd::vectorize(FlatPassR2 {
+                src: &src,
+                dst: &mut dst,
                 prev_len,
                 g_count,
                 stage_chunk,
-                &tw,
+                tw: &tw,
                 pointwise,
-            ) {
+            }) {
                 continue;
             }
             ran += 1;
@@ -152,15 +153,15 @@ where
             })
             .collect();
         let mut dst = vec![Complex::new(T::from_f64(0.0), T::from_f64(0.0)); n];
-        if !T::try_flat_pass_r4::<INVERSE>(
-            &src,
-            &mut dst,
+        if !hermes_simd::vectorize(FlatPassR4::<T, INVERSE> {
+            src: &src,
+            dst: &mut dst,
             prev_len,
             g_count,
             stage_chunk,
-            &tw,
-            None,
-        ) {
+            tw: &tw,
+            pointwise: None,
+        }) {
             continue;
         }
         ran += 1;
@@ -259,15 +260,15 @@ where
             })
             .collect();
         let mut dst = vec![Complex::new(T::from_f64(0.0), T::from_f64(0.0)); n];
-        if !T::try_flat_pass_r3::<INVERSE>(
-            &src,
-            &mut dst,
+        if !hermes_simd::vectorize(FlatPassR3::<T, INVERSE> {
+            src: &src,
+            dst: &mut dst,
             prev_len,
             g_count,
             stage_chunk,
-            &tw,
-            None,
-        ) {
+            tw: &tw,
+            pointwise: None,
+        }) {
             continue;
         }
         ran += 1;
@@ -363,15 +364,15 @@ where
             })
             .collect();
         let mut dst = vec![Complex::new(T::from_f64(0.0), T::from_f64(0.0)); n];
-        if !T::try_flat_pass_r5::<INVERSE>(
-            &src,
-            &mut dst,
+        if !hermes_simd::vectorize(FlatPassR5::<T, INVERSE> {
+            src: &src,
+            dst: &mut dst,
             prev_len,
             g_count,
             stage_chunk,
-            &tw,
-            None,
-        ) {
+            tw: &tw,
+            pointwise: None,
+        }) {
             continue;
         }
         ran += 1;
@@ -479,15 +480,15 @@ where
             })
             .collect();
         let mut dst = vec![Complex::new(T::from_f64(0.0), T::from_f64(0.0)); n];
-        if !T::try_flat_pass_r7::<INVERSE>(
-            &src,
-            &mut dst,
+        if !hermes_simd::vectorize(FlatPassR7::<T, INVERSE> {
+            src: &src,
+            dst: &mut dst,
             prev_len,
             g_count,
             stage_chunk,
-            &tw,
-            None,
-        ) {
+            tw: &tw,
+            pointwise: None,
+        }) {
             continue;
         }
         ran += 1;

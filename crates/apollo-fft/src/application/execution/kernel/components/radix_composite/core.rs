@@ -2,9 +2,11 @@ use eunomia::Complex;
 
 use super::arity::dispatch_radix_stage;
 use super::cache::CompositeCache;
+use super::flat_pass::{FlatPassR2, FlatPassR3, FlatPassR4, FlatPassR5, FlatPassR7};
 use super::stockham_stage_fused_adaptive;
 use crate::application::execution::kernel::components::winograd::ShortWinogradScalar;
 use crate::application::execution::kernel::tuning::FUSE_THRESHOLD;
+use hermes_simd::{LaneKernel, Simd, SimdArch, SimdKernel};
 
 /// Maximum number of stages that may be folded into one adaptive fused pass.
 ///
@@ -165,10 +167,12 @@ pub(super) fn composite_core_with_radices<
 
 /// Flat iterative Stockham FFT for the fully-fused single-block case (n ≤ FUSE_THRESHOLD).
 ///
-/// Replaces the recursive `composite_fused_adaptive` path. Performs `n_stages` sequential
-/// passes over the data, each pass processing all `G_s = n / (r_s × P_s)` groups in a flat
-/// outer loop. `dispatch_single_radix` is `#[inline]`, so the match and call frame
-/// collapse into a tight per-group loop body with no call overhead.
+/// Performs `n_stages` sequential passes over the data, each pass processing
+/// all `G_s = n / (r_s × P_s)` groups. The register width is dispatched once
+/// per transform: the stage loop runs inside the backend's frame as
+/// [`FlatStockham`], each stage's flat pass a direct call, so the dispatch
+/// (feature checks, call layers, the kernel frame) is paid once rather than
+/// once per stage. A stage the width declines runs the scalar pass.
 ///
 /// ## Stockham addressing (pass s)
 /// - `P_s = prev_len = Π_{i<s} r_i`  (accumulated stride before pass s)
@@ -186,159 +190,135 @@ fn flat_stockham_fused<F: CompositeCache + ShortWinogradScalar, const INVERSE: b
     twiddles: &[&[Complex<F>]],
     pointwise_spectrum: Option<&[Complex<F>]>,
 ) {
-    let n = data.len();
-    let n_stages = radices.len();
-    let mut prev_len = 1usize;
-    let mut src_is_data = true;
+    hermes_simd::vectorize(FlatStockham::<F, INVERSE> {
+        data,
+        scratch,
+        radices,
+        twiddles,
+        pointwise_spectrum,
+    });
+}
 
-    for s in 0..n_stages {
-        let r = radices[s];
-        let stage_chunk = prev_len * r; // r_s × P_s: output block size per group
-        let g_count = n / stage_chunk; // G_s: groups this pass
-        let tw = twiddles[s];
-        let is_last = s + 1 == n_stages;
-        // pointwise is applied once on the last pass (g_count == 1 there, covers all n elements).
-        let pointwise = if is_last { pointwise_spectrum } else { None };
+/// One transform's flat Stockham passes on the dispatched register width;
+/// the result ends in `data`.
+struct FlatStockham<'a, F, const INVERSE: bool> {
+    data: &'a mut [Complex<F>],
+    scratch: &'a mut [Complex<F>],
+    radices: &'a [usize],
+    /// Stage `s`'s twiddles, arm `k` at `(k - 1) * prev_len`.
+    twiddles: &'a [&'a [Complex<F>]],
+    pointwise_spectrum: Option<&'a [Complex<F>]>,
+}
 
-        // Per-stage dispatch: one register-width kernel per radix over all
-        // `g_count` groups (one dispatch per stage, not per group); the
-        // scalar per-group loop runs where the backend declines.
-        let vector_handled = match r {
-            2 => {
-                if src_is_data {
-                    F::try_flat_pass_r2::<INVERSE>(
-                        data,
-                        scratch,
-                        prev_len,
-                        g_count,
-                        stage_chunk,
-                        tw,
-                        pointwise,
-                    )
-                } else {
-                    F::try_flat_pass_r2::<INVERSE>(
-                        scratch,
-                        data,
-                        prev_len,
-                        g_count,
-                        stage_chunk,
-                        tw,
-                        pointwise,
-                    )
+impl<F, const INVERSE: bool> LaneKernel<F> for FlatStockham<'_, F, INVERSE>
+where
+    F: CompositeCache + ShortWinogradScalar,
+{
+    type Output = ();
+
+    #[expect(
+        clippy::inline_always,
+        reason = "the stage loop and every pass it calls must inline into the backend's target-feature frame"
+    )]
+    #[inline(always)]
+    fn call<A: SimdArch + SimdKernel<F>>(self, simd: Simd<F, A>) {
+        let Self {
+            data,
+            scratch,
+            radices,
+            twiddles,
+            pointwise_spectrum,
+        } = self;
+        let n = data.len();
+        let n_stages = radices.len();
+        let mut prev_len = 1usize;
+        let mut src_is_data = true;
+
+        for (s, (&r, &tw)) in radices.iter().zip(twiddles).enumerate() {
+            let stage_chunk = prev_len * r; // r_s × P_s: output block size per group
+            let g_count = n / stage_chunk; // G_s: groups this pass
+                                           // The pointwise spectrum is applied once, on the last pass
+                                           // (g_count == 1 there, covering all n elements).
+            let pointwise = if s + 1 == n_stages {
+                pointwise_spectrum
+            } else {
+                None
+            };
+            let (src, dst): (&[Complex<F>], &mut [Complex<F>]) = if src_is_data {
+                (&*data, &mut *scratch)
+            } else {
+                (&*scratch, &mut *data)
+            };
+
+            let vector_handled = match r {
+                // Below n = 64 the radix-2 pass exceeds the scalar radix-2
+                // cost (measured at N = 32); tiny stages stay scalar.
+                2 => {
+                    n >= 64
+                        && FlatPassR2 {
+                            src,
+                            dst: &mut *dst,
+                            prev_len,
+                            g_count,
+                            stage_chunk,
+                            tw,
+                            pointwise,
+                        }
+                        .call(simd)
                 }
-            }
-            3 => {
-                if src_is_data {
-                    F::try_flat_pass_r3::<INVERSE>(
-                        data,
-                        scratch,
-                        prev_len,
-                        g_count,
-                        stage_chunk,
-                        tw,
-                        pointwise,
-                    )
-                } else {
-                    F::try_flat_pass_r3::<INVERSE>(
-                        scratch,
-                        data,
-                        prev_len,
-                        g_count,
-                        stage_chunk,
-                        tw,
-                        pointwise,
-                    )
+                3 => FlatPassR3::<F, INVERSE> {
+                    src,
+                    dst: &mut *dst,
+                    prev_len,
+                    g_count,
+                    stage_chunk,
+                    tw,
+                    pointwise,
                 }
-            }
-            4 => {
-                if src_is_data {
-                    F::try_flat_pass_r4::<INVERSE>(
-                        data,
-                        scratch,
-                        prev_len,
-                        g_count,
-                        stage_chunk,
-                        tw,
-                        pointwise,
-                    )
-                } else {
-                    F::try_flat_pass_r4::<INVERSE>(
-                        scratch,
-                        data,
-                        prev_len,
-                        g_count,
-                        stage_chunk,
-                        tw,
-                        pointwise,
-                    )
+                .call(simd),
+                4 => FlatPassR4::<F, INVERSE> {
+                    src,
+                    dst: &mut *dst,
+                    prev_len,
+                    g_count,
+                    stage_chunk,
+                    tw,
+                    pointwise,
                 }
-            }
-            5 => {
-                if src_is_data {
-                    F::try_flat_pass_r5::<INVERSE>(
-                        data,
-                        scratch,
-                        prev_len,
-                        g_count,
-                        stage_chunk,
-                        tw,
-                        pointwise,
-                    )
-                } else {
-                    F::try_flat_pass_r5::<INVERSE>(
-                        scratch,
-                        data,
-                        prev_len,
-                        g_count,
-                        stage_chunk,
-                        tw,
-                        pointwise,
-                    )
+                .call(simd),
+                5 => FlatPassR5::<F, INVERSE> {
+                    src,
+                    dst: &mut *dst,
+                    prev_len,
+                    g_count,
+                    stage_chunk,
+                    tw,
+                    pointwise,
                 }
-            }
-            7 => {
-                if src_is_data {
-                    F::try_flat_pass_r7::<INVERSE>(
-                        data,
-                        scratch,
-                        prev_len,
-                        g_count,
-                        stage_chunk,
-                        tw,
-                        pointwise,
-                    )
-                } else {
-                    F::try_flat_pass_r7::<INVERSE>(
-                        scratch,
-                        data,
-                        prev_len,
-                        g_count,
-                        stage_chunk,
-                        tw,
-                        pointwise,
-                    )
+                .call(simd),
+                7 => FlatPassR7::<F, INVERSE> {
+                    src,
+                    dst: &mut *dst,
+                    prev_len,
+                    g_count,
+                    stage_chunk,
+                    tw,
+                    pointwise,
                 }
+                .call(simd),
+                _ => false,
+            };
+            if !vector_handled {
+                dispatch_radix_stage::<F, INVERSE>(src, dst, prev_len, g_count, r, tw, pointwise);
             }
-            _ => false,
-        };
-        if vector_handled {
+
             src_is_data = !src_is_data;
             prev_len = stage_chunk;
-            continue;
         }
 
-        if src_is_data {
-            dispatch_radix_stage::<F, INVERSE>(data, scratch, prev_len, g_count, r, tw, pointwise);
-        } else {
-            dispatch_radix_stage::<F, INVERSE>(scratch, data, prev_len, g_count, r, tw, pointwise);
+        // If the final result landed in scratch, copy it back to data.
+        if !src_is_data {
+            data.copy_from_slice(scratch);
         }
-
-        src_is_data = !src_is_data;
-        prev_len = stage_chunk;
-    }
-
-    // If the final result landed in scratch, copy it back to data.
-    if !src_is_data {
-        data.copy_from_slice(scratch);
     }
 }
