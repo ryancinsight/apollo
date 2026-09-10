@@ -24,5 +24,6 @@ pub(super) use radix5::FlatPassR5;
 pub(super) use radix7::FlatPassR7;
 
 use register::{
-    apply_pointwise, cmul, load, scatter_spill, store, store_arms, MAX_COMPLEXES_PER_REGISTER,
+    apply_pointwise, cmul, duplicated_row, load, scatter_spill, store, store_arm_halves,
+    store_arms, MAX_COMPLEXES_PER_REGISTER,
 };

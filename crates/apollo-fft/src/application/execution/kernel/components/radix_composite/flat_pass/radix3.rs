@@ -11,12 +11,12 @@
 //!   b2  = m0 - m1
 //! ```
 //!
-//! `∓ i · diff · s` is the swapped difference scaled by `s`, added on the
-//! even lanes and subtracted on the odd ones (`fmsubadd` by one) for `b1`
-//! forward, the mirror for `b2` and on the inverse.
+//! `∓ i · diff · s` is the swapped difference times the signed sine pair
+//! `(s, -s)` forward, `(-s, s)` inverse.
 
 use super::{
-    apply_pointwise, cmul, load, scatter_spill, store, store_arms, MAX_COMPLEXES_PER_REGISTER,
+    apply_pointwise, cmul, duplicated_row, load, scatter_spill, store, store_arm_halves,
+    store_arms, MAX_COMPLEXES_PER_REGISTER,
 };
 use crate::application::execution::kernel::components::winograd::WinogradScalar;
 use eunomia::Complex;
@@ -45,9 +45,10 @@ where
     T: LaneScalar,
     A: SimdArch + SimdKernel<T>,
 {
-    one: Vector<T, A>,
     half_negative: Vector<T, A>,
-    sin_third: Vector<T, A>,
+    /// `(s, -s)` forward, `(-s, s)` inverse: the sine with the quarter
+    /// turn's sign pattern.
+    sine_turn: Vector<T, A>,
 }
 
 /// The three-point butterfly on one register of complexes per arm.
@@ -56,7 +57,7 @@ where
     reason = "must fold into the caller's target-feature scope; an out-of-line butterfly reintroduces the ADR 009 penalty"
 )]
 #[inline(always)]
-fn dft3<T, A, const INVERSE: bool>(
+fn dft3<T, A>(
     k: Constants<T, A>,
     a0: Vector<T, A>,
     a1: Vector<T, A>,
@@ -68,13 +69,8 @@ where
 {
     let sum = a1 + a2;
     let m0 = sum.mul_add(k.half_negative, a0);
-    let r = (a1 - a2).swap_adjacent() * k.sin_third;
-    let (b1, b2) = if INVERSE {
-        (m0.fmaddsub(k.one, r), m0.fmsubadd(k.one, r))
-    } else {
-        (m0.fmsubadd(k.one, r), m0.fmaddsub(k.one, r))
-    };
-    [a0 + sum, b1, b2]
+    let m1 = (a1 - a2).swap_adjacent() * k.sine_turn;
+    [a0 + sum, m0 + m1, m0 - m1]
 }
 
 /// The scalar three-point butterfly on twiddled arms.
@@ -102,6 +98,37 @@ fn cmul_scalar<T: WinogradScalar>(a: Complex<T>, w: Complex<T>) -> Complex<T> {
     Complex::new(a.re * w.re - a.im * w.im, a.re * w.im + a.im * w.re)
 }
 
+/// Group `g`'s butterflies from column `j` on, in scalar arithmetic: the
+/// tail of a row past the last whole register.
+#[inline]
+#[expect(
+    clippy::too_many_arguments,
+    reason = "the pass geometry is the argument list"
+)]
+fn scalar_columns<T: WinogradScalar, const INVERSE: bool>(
+    src: &[Complex<T>],
+    dst: &mut [Complex<T>],
+    tw: &[Complex<T>],
+    stride: usize,
+    prev_len: usize,
+    stage_chunk: usize,
+    g: usize,
+    j: usize,
+) {
+    let src_base = g * prev_len;
+    let dst_base = g * stage_chunk;
+    for j in j..prev_len {
+        let at = src_base + j;
+        let a0 = src[at];
+        let a1 = cmul_scalar(src[stride + at], tw[j]);
+        let a2 = cmul_scalar(src[2 * stride + at], tw[prev_len + j]);
+        let b = dft3_scalar::<T, INVERSE>(a0, a1, a2);
+        for (arm, row) in b.into_iter().enumerate() {
+            dst[dst_base + j + arm * prev_len] = row;
+        }
+    }
+}
+
 impl<T, const INVERSE: bool> LaneKernel<T> for FlatPassR3<'_, T, INVERSE>
 where
     T: LaneScalar + WinogradScalar,
@@ -113,6 +140,10 @@ where
     #[expect(
         clippy::inline_always,
         reason = "the body must inline into the dispatcher's target-feature frame"
+    )]
+    #[expect(
+        clippy::too_many_lines,
+        reason = "the first stage, the half-register stage, the twiddled stages and their tails are one pass; splitting them would leave the target-feature frame"
     )]
     #[inline(always)]
     fn call<A: SimdArch + SimdKernel<T>>(self, simd: Simd<T, A>) -> bool {
@@ -137,10 +168,14 @@ where
                 && tw.len() >= 2 * prev_len,
             "invariant: a radix-3 pass reads three rows of g_count * prev_len complexes and two twiddle rows, and writes g_count blocks of stage_chunk"
         );
+        let (lo, hi) = if INVERSE {
+            (-SIN_THIRD, SIN_THIRD)
+        } else {
+            (SIN_THIRD, -SIN_THIRD)
+        };
         let k = Constants {
-            one: simd.splat(T::from_f64(1.0)),
             half_negative: simd.splat(T::from_f64(-0.5)),
-            sin_third: simd.splat(T::from_f64(SIN_THIRD)),
+            sine_turn: Vector::<T, A>::splat_pair(T::from_f64(lo), T::from_f64(hi)),
         };
 
         if prev_len == 1 {
@@ -154,7 +189,7 @@ where
                 // SAFETY: `g + per <= g_count = stride`, so each arm's row
                 // stays inside `src`, and `3 (g + per) + spill <= dst.len()`.
                 unsafe {
-                    let b = dft3::<T, A, INVERSE>(
+                    let b = dft3(
                         k,
                         load::<T, A>(src, g),
                         load::<T, A>(src, stride + g),
@@ -172,12 +207,37 @@ where
                 let b = dft3_scalar::<T, INVERSE>(src[g], src[stride + g], src[2 * stride + g]);
                 out.copy_from_slice(&b);
             }
+        } else if 2 * prev_len == per {
+            // Rows are half a register: a register holds two groups' rows of
+            // one arm, multiplied by the twiddle row twice over, and the two
+            // groups' outputs are contiguous in `dst`.
+            let w1 = duplicated_row::<T, A>(&tw[..prev_len]);
+            let w2 = duplicated_row::<T, A>(&tw[prev_len..2 * prev_len]);
+            let mut g = 0;
+            while g + 2 <= g_count {
+                // SAFETY: `(g + 2) prev_len <= stride`, so each arm's row
+                // stays inside `src`, and the two groups' outputs end at
+                // `(g + 2) stage_chunk <= dst.len()`.
+                unsafe {
+                    let at = g * prev_len;
+                    let a0 = load::<T, A>(src, at);
+                    let a1 = cmul(load::<T, A>(src, stride + at), w1);
+                    let a2 = cmul(load::<T, A>(src, 2 * stride + at), w2);
+                    store_arm_halves::<T, A, 3>(dft3(k, a0, a1, a2), dst, g * stage_chunk);
+                }
+                g += 2;
+            }
+            for g in g..g_count {
+                scalar_columns::<T, INVERSE>(src, dst, tw, stride, prev_len, stage_chunk, g, 0);
+            }
         } else {
             for g in 0..g_count {
                 let src_base = g * prev_len;
                 let dst_base = g * stage_chunk;
                 let mut j = 0;
-                while j + 2 * per <= prev_len {
+                // Two registers per arm abreast where a register is two
+                // complexes: four complexes in flight either way.
+                while per < 4 && j + 2 * per <= prev_len {
                     // SAFETY: `src_base + j + 2 per <= stride`, so every arm's
                     // row and both twiddle rows stay inside their slices, and
                     // `dst_base + j + 2 prev_len + 2 per <= g_count * stage_chunk`.
@@ -197,8 +257,8 @@ where
                             load::<T, A>(src, 2 * stride + bt),
                             load::<T, A>(tw, prev_len + j + per),
                         );
-                        let b = dft3::<T, A, INVERSE>(k, a0, a1, a2);
-                        let d = dft3::<T, A, INVERSE>(k, c0, c1, c2);
+                        let b = dft3(k, a0, a1, a2);
+                        let d = dft3(k, c0, c1, c2);
                         for arm in 0..3 {
                             store(b[arm], dst, dst_base + j + arm * prev_len);
                             store(d[arm], dst, dst_base + j + per + arm * prev_len);
@@ -209,33 +269,21 @@ where
                 while j + per <= prev_len {
                     // SAFETY: as above with one register per arm.
                     unsafe {
-                        let a0 = load::<T, A>(src, src_base + j);
-                        let a1 = cmul(
-                            load::<T, A>(src, stride + src_base + j),
-                            load::<T, A>(tw, j),
-                        );
+                        let at = src_base + j;
+                        let a0 = load::<T, A>(src, at);
+                        let a1 = cmul(load::<T, A>(src, stride + at), load::<T, A>(tw, j));
                         let a2 = cmul(
-                            load::<T, A>(src, 2 * stride + src_base + j),
+                            load::<T, A>(src, 2 * stride + at),
                             load::<T, A>(tw, prev_len + j),
                         );
-                        let b = dft3::<T, A, INVERSE>(k, a0, a1, a2);
-                        for (arm, row) in b.into_iter().enumerate() {
-                            store(row, dst, dst_base + j + arm * prev_len);
+                        let b = dft3(k, a0, a1, a2);
+                        for arm in 0..3 {
+                            store(b[arm], dst, dst_base + j + arm * prev_len);
                         }
                     }
                     j += per;
                 }
-                while j < prev_len {
-                    let at = src_base + j;
-                    let a0 = src[at];
-                    let a1 = cmul_scalar(src[stride + at], tw[j]);
-                    let a2 = cmul_scalar(src[2 * stride + at], tw[prev_len + j]);
-                    let b = dft3_scalar::<T, INVERSE>(a0, a1, a2);
-                    for (arm, row) in b.into_iter().enumerate() {
-                        dst[dst_base + j + arm * prev_len] = row;
-                    }
-                    j += 1;
-                }
+                scalar_columns::<T, INVERSE>(src, dst, tw, stride, prev_len, stage_chunk, g, j);
             }
         }
 
