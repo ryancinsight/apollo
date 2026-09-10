@@ -77,23 +77,48 @@ fn check_impulse<F, const INVERSE: bool, const NORMALIZE: bool>(
     assert_eq!(scratch[required].im.into(), -3.0);
 }
 
-fn check_scalar<F>(unit_roundoff: f64)
-where
-    F: MixedRadixScalar<Complex = Complex<F>> + From<f32> + Into<f64>,
-{
-    for n in [4, 128, 512, 4096, 65_536, 131_072, 262_144] {
-        for extra_workspace in [0, 1] {
-            check_impulse::<F, false, false>(n, unit_roundoff, extra_workspace);
-            check_impulse::<F, true, false>(n, unit_roundoff, extra_workspace);
-            check_impulse::<F, true, true>(n, unit_roundoff, extra_workspace);
-        }
+/// One form at one length over both workspace extents, in both precisions.
+fn check_extents<const INVERSE: bool, const NORMALIZE: bool>(n: usize) {
+    for extra_workspace in [0, 1] {
+        check_impulse::<f32, INVERSE, NORMALIZE>(n, f64::from(f32::EPSILON) / 2.0, extra_workspace);
+        check_impulse::<f64, INVERSE, NORMALIZE>(n, f64::EPSILON / 2.0, extra_workspace);
+    }
+}
+
+/// Every form and both extents at `n`, in both precisions.
+fn check_forms(n: usize) {
+    check_extents::<false, false>(n);
+    check_extents::<true, false>(n);
+    check_extents::<true, true>(n);
+}
+
+/// The lengths below the top four-step length: the full matrix of forms
+/// and extents in both precisions.
+///
+/// The matrix is sharded by the CI budget: the hosted runner is 13 to 17
+/// times slower than the measuring host on this compute, and the whole
+/// matrix (3.6 s here) crossed the 30 s slow bound there; every shard
+/// stays under 2 s here, the 262144 forms one test each below.
+#[test]
+fn workspace_extents_preserve_the_impulse_spectrum() {
+    for n in [4, 128, 512, 4096, 65_536, 131_072] {
+        check_forms(n);
     }
 }
 
 #[test]
-fn workspace_extents_preserve_the_impulse_spectrum() {
-    check_scalar::<f32>(f64::from(f32::EPSILON) / 2.0);
-    check_scalar::<f64>(f64::EPSILON / 2.0);
+fn forward_impulse_at_the_top_four_step_length_preserves_its_spectrum() {
+    check_extents::<false, false>(262_144);
+}
+
+#[test]
+fn inverse_impulse_at_the_top_four_step_length_preserves_its_spectrum() {
+    check_extents::<true, false>(262_144);
+}
+
+#[test]
+fn normalized_inverse_impulse_at_the_top_four_step_length_preserves_its_spectrum() {
+    check_extents::<true, true>(262_144);
 }
 
 /// The largest planar length runs the exact impulse oracle once per
