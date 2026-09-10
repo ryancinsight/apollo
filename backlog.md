@@ -309,7 +309,8 @@
 - **Verification:** the suites (621 tests) green with the bound moved; `cargo doc` warning-free.
 
 <a id="apollo-base128-attribution"></a>
-## APOLLO-BASE128-ATTRIBUTION — Attribute the base-128 route at 512 and 1024 [patch] [perf] — todo
+## APOLLO-BASE128-ATTRIBUTION — Attribute the base-128 route at 512 and 1024 [patch] [perf] — in-progress
+- **Integrator:** claude/fable; **last-update:** 2026-09-10; branch `perf/apollo-base128-attribution` on lane `D:/atlas/worktrees/apollo-route`; lease: claude/fable `components/base128/instance_major.rs`, `components/base128/instance_major/{column.rs,store.rs}`, `components/base128/pinned_probe/small_sizes.rs` 2026-09-10T20:50Z; parent [beat the references](#atlas-apollo-beat-the-references).
 - **Question:** 512 and 1024 run the 8 × 128 construction at 1.2 to 1.3 times RustFFT in both precisions (the standing table); which phase carries the gap: the gather, the inner 128-point transforms, the four-block chains and level combine, or the final store?
 - **First round (2026-09-10, `small_sizes_against_the_references_by_core_type`, performance core, `../../output/apollo-base128/small_sizes_2026-09-10.txt`):** `f64` medians against RustFFT: 32 26.4 against 15.2 ns (1.74), 64 42.1 against 49.9 (0.84), 128 94.0 against 87.4 (1.08; the bare 8 × 128 kernel 91.1), 256 249 against 208 (1.20), 512 578 against 478 (1.21), 1024 1546 against 1267 (1.22); the phase meter over the construction reads `redistribute` 2238 against `columns8` 220 and `rows16` 0, so the gather and the final store, not the 128-point transforms, carry the route, and 32 is a small-power cell of its own.
 - **Method:** the phase attribution at 512 and 1024 with the redistribute phase split into its gather and store halves, against the register-bound estimate of a copy of the data; one bounded prototype if a half sits clearly above it.
