@@ -1,5 +1,6 @@
 use super::super::twiddles::cached_power_of_two_twiddle;
 use super::passes::{self, AxisLanes};
+use super::rotated::RotatedSpectrum;
 use crate::application::execution::kernel::mixed_radix::scalar::plan_scratch::PlanScratch;
 use crate::application::execution::kernel::mixed_radix::{
     dispatch_inplace, forward_inplace, inverse_inplace, MixedRadixScalar,
@@ -165,6 +166,64 @@ where
             "complex inverse shape mismatch"
         );
         with_c_order_view(data, |contiguous| self.all_axes::<false>(contiguous));
+    }
+
+    /// Forward transform leaving the spectrum in `(z, x, y)` order.
+    ///
+    /// Every axis is transformed, in two full-volume moves instead of the
+    /// three [`Self::forward_complex_inplace`] pays, because the move that
+    /// only restores the caller's C order is not made. The order rides in the
+    /// returned [`RotatedSpectrum`], which borrows `data` until the matching
+    /// [`Self::inverse_complex_rotated`] takes it back.
+    ///
+    /// # Panics
+    /// - Shape mismatch with the plan, or a view that is not C-order dense.
+    pub fn forward_complex_rotated<'data>(
+        &self,
+        data: &'data mut Array3<F::Complex>,
+    ) -> RotatedSpectrum<'data, F> {
+        assert_eq!(
+            data.shape(),
+            [self.nx, self.ny, self.nz],
+            "rotated forward shape mismatch"
+        );
+        let shape = [self.nx, self.ny, self.nz];
+        let slice = data
+            .as_slice_mut()
+            .expect("invariant: 3D rotated execution receives C-order data");
+        passes::all_axes_leaving_rotated::<F, true, _, _, _>(
+            slice,
+            shape,
+            AxisLanes {
+                x: self.lane::<true>(0),
+                y: self.lane::<true>(1),
+                z: self.lane::<true>(2),
+            },
+        );
+        RotatedSpectrum::new(slice, shape)
+    }
+
+    /// Inverse transform of a `(z, x, y)` spectrum, leaving C order.
+    ///
+    /// Two full-volume moves, so a round trip through this pair costs four
+    /// where the C-order pair costs six. Normalized like
+    /// [`Self::inverse_complex_inplace`].
+    pub fn inverse_complex_rotated(&self, spectrum: RotatedSpectrum<'_, F>) {
+        let (slice, shape) = spectrum.into_parts();
+        assert_eq!(
+            shape,
+            [self.nx, self.ny, self.nz],
+            "rotated inverse shape mismatch"
+        );
+        passes::all_axes_from_rotated::<F, false, _, _, _>(
+            slice,
+            shape,
+            AxisLanes {
+                x: self.lane::<false>(0),
+                y: self.lane::<false>(1),
+                z: self.lane::<false>(2),
+            },
+        );
     }
 
     fn axis_pass_complex<const FORWARD: bool>(

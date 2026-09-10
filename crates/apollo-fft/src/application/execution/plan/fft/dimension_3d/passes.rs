@@ -10,6 +10,11 @@
 //! landing in the caller's storage because the chain crosses both 3-D scratch
 //! roles.
 //!
+//! A caller that does not need its C order back pays two moves instead of
+//! three ([`all_axes_leaving_rotated`]), and an inverse that accepts the
+//! rotated order pays two as well ([`all_axes_from_rotated`]): four moves for
+//! a round trip against six.
+//!
 //! Every transform here is a lane pass over one contiguous axis, so the
 //! arithmetic of a forward and an inverse is the per-axis kernel's whatever
 //! the order the axes are visited in; the inverse visits them in the reverse
@@ -113,6 +118,66 @@ pub(super) fn all_axes<F, const FORWARD: bool, X, Y, Z>(
     if !FORWARD {
         axis2::<F, FORWARD>(data, nz, &lanes.z);
     }
+}
+
+/// Transforms every axis of a C-order `[nx, ny, nz]` volume and leaves it in
+/// `(z, x, y)` order, in two moves.
+///
+/// Three axes need only two moves: `z` is already contiguous, so axis 2 runs
+/// where it lies; one rotation makes `x` contiguous and the next makes `y`,
+/// and by then every axis is transformed. The third move of
+/// [`all_axes`] exists only to hand the caller back C order, and this is the
+/// schedule for a caller that does not need it. The moves land alternately in
+/// the scratch and in the caller's storage, so the result is where the caller
+/// can reach it and only one scratch role is borrowed.
+pub(super) fn all_axes_leaving_rotated<F, const FORWARD: bool, X, Y, Z>(
+    data: &mut [F::Complex],
+    [nx, ny, nz]: [usize; 3],
+    lanes: AxisLanes<X, Y, Z>,
+) where
+    F: MixedRadixScalar<Complex = Complex<F>>,
+    F::Complex: PlanScratch,
+    X: Fn(&mut [F::Complex]) + Send + Sync,
+    Y: Fn(&mut [F::Complex]) + Send + Sync,
+    Z: Fn(&mut [F::Complex]) + Send + Sync,
+{
+    axis2::<F, FORWARD>(data, nz, &lanes.z);
+    with_3d_x_scratch::<F::Complex, _>(nx * ny * nz, |staged| {
+        transpose_matrices(data, staged, 1, nx, ny * nz);
+        lanes::execute::<F, FORWARD>(staged, data, nx, &lanes.x);
+        transpose_matrices(staged, data, 1, ny, nz * nx);
+        lanes::execute::<F, FORWARD>(data, staged, ny, &lanes.y);
+    });
+}
+
+/// Transforms every axis of a `(z, x, y)` volume and leaves it in C order, in
+/// two moves.
+///
+/// The inverse of [`all_axes_leaving_rotated`]: `y` arrives contiguous, so it
+/// runs where it lies, and the two moves rotate the other way — a `[first,
+/// rest]` matrix transposed to `[rest, first]` moves the leading axis to the
+/// end, so transposing by the *trailing* axis brings it to the front. Two such
+/// moves make `x` then `z` contiguous and land the volume back in `(x, y, z)`,
+/// which is why a round trip through this pair costs four moves where the
+/// C-order pair costs six.
+pub(super) fn all_axes_from_rotated<F, const FORWARD: bool, X, Y, Z>(
+    data: &mut [F::Complex],
+    [nx, ny, nz]: [usize; 3],
+    lanes: AxisLanes<X, Y, Z>,
+) where
+    F: MixedRadixScalar<Complex = Complex<F>>,
+    F::Complex: PlanScratch,
+    X: Fn(&mut [F::Complex]) + Send + Sync,
+    Y: Fn(&mut [F::Complex]) + Send + Sync,
+    Z: Fn(&mut [F::Complex]) + Send + Sync,
+{
+    axis2::<F, FORWARD>(data, ny, &lanes.y);
+    with_3d_x_scratch::<F::Complex, _>(nx * ny * nz, |staged| {
+        transpose_matrices(data, staged, 1, nz * nx, ny);
+        lanes::execute::<F, FORWARD>(staged, data, nx, &lanes.x);
+        transpose_matrices(staged, data, 1, ny * nz, nx);
+        lanes::execute::<F, FORWARD>(data, staged, nz, &lanes.z);
+    });
 }
 
 /// Axes 0 and 1 of a C-order `[nx, ny, nz]` volume in three moves.
