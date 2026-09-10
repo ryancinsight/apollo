@@ -2,8 +2,9 @@
 
 <a id="apollo-batched-files-past-target"></a>
 
-## APOLLO-BATCHED-FILES-PAST-TARGET — Split the two batched files that crossed the 500-line target [patch] — blocked
+## APOLLO-BATCHED-FILES-PAST-TARGET — Split the batched files past the 500-line target into leaf modules [patch] — in-progress
 
+- **Integrator:** claude/fable; **last-update:** 2026-09-10; branch `refactor/apollo-batched-files-past-target` on lane `D:/atlas/worktrees/apollo-route`, stacked on PR #373; lease: claude/fable `components/batched/**` 2026-09-10T01:20Z. Taken on the re-open trigger: the lane's sink item completed (PR #373 enqueued) and its lease discharged.
 - **Ratchet regression.** The fleet scan reports `apollo/oversized_files:
   38 -> 40`. The two additions are
   `application/execution/kernel/components/batched/radix.rs` (643) and
@@ -14,18 +15,13 @@
   legitimate increment, not accreted debt. The class is a size target, so it
   fires on growth regardless of the growth's quality; the answer is the split,
   not an absorbed baseline.
-- **Blocked on region, not on judgment.** `worktrees/apollo-route` holds
-  `batched/**` under a live lease and committed to `tests.rs` within the last
-  quarter hour. Splitting under a live editor of the same files is the
-  collision the lease exists to prevent.
-- **Re-open trigger:** the apollo-route lane's item completes or its lease goes
-  stale (one hour without a commit touching `batched/**` and without a board
-  update).
-- **Shape when it runs.** `radix.rs` carries the radix selection beside the
-  staged four-step body; `tests.rs` carries both the schedule cases and the
-  lane-order cases. Each splits along that seam into leaf modules under
-  `batched/`, leaving `radix.rs` and the test module as manifests. No behaviour
-  moves.
+- **Scope.** `mod.rs` (729, an implementation-bearing manifest), `radix.rs`
+  (643) and `tests.rs` (578) split along their concerns into leaf modules
+  under `batched/`: the plan, the two stage sets, the driver, the plane
+  layout, the fold tables, the register access, the lane arithmetic, the
+  radices, the seams, the pass; the tests by subject under `tests/`. No
+  behaviour moves; the manifest keeps the module tree and the crate-facing
+  re-exports. Non-goal: `base128/tests.rs` (803, in the baseline).
 - **Acceptance:** `atlas-conformance.py check --repo apollo` reports no
   `oversized_files` regression against the committed baseline of 38, with the
   batched suite unchanged.
