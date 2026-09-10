@@ -224,7 +224,7 @@ fn forward_matches_the_direct_transform() {
         assert_eq!(data, src, "a width decline must not mutate the input");
         return;
     };
-    assert!(transform_128::<f64, false>(&mut data, &plan));
+    assert!(transform_128::<f64, false, false>(&mut data, &plan));
     let (err, bound) = (worst(&data, &dft(&src, false)), tolerance(&src));
     assert!(err <= bound, "forward differs by {err:.3e} > {bound:.3e}");
 }
@@ -237,7 +237,7 @@ fn inverse_matches_the_direct_transform() {
         assert_eq!(data, src, "a width decline must not mutate the input");
         return;
     };
-    assert!(transform_128::<f64, true>(&mut data, &plan));
+    assert!(transform_128::<f64, true, false>(&mut data, &plan));
     let (err, bound) = (worst(&data, &dft(&src, true)), tolerance(&src));
     assert!(err <= bound, "inverse differs by {err:.3e} > {bound:.3e}");
 }
@@ -252,9 +252,9 @@ fn forward_then_inverse_recovers_the_input() {
     };
     let inverse_plan = Plan128::<f64>::new_if_supported::<true>()
         .expect("the same exact-width capability serves both directions");
-    assert!(transform_128::<f64, false>(&mut data, &forward_plan));
+    assert!(transform_128::<f64, false, false>(&mut data, &forward_plan));
     assert!(
-        transform_128::<f64, true>(&mut data, &inverse_plan),
+        transform_128::<f64, true, false>(&mut data, &inverse_plan),
         "one direction cannot decline after the same width ran forward"
     );
     let n = 128.0;
@@ -278,7 +278,7 @@ fn matches_the_static_incumbent_route_within_rounding() {
         assert_eq!(ours, src, "a width decline must not mutate the input");
         return;
     };
-    assert!(transform_128::<f64, false>(&mut ours, &plan));
+    assert!(transform_128::<f64, false, false>(&mut ours, &plan));
 
     let mut theirs = src.clone();
     crate::StaticFftPlan1D::<f64, 128>::new().forward_complex_slice_inplace(&mut theirs);
@@ -301,7 +301,7 @@ fn reduced_precision_computes_or_declines_without_mutation() {
         assert_eq!(data, src, "a width decline must not mutate the input");
         return;
     };
-    assert!(transform_128::<f32, false>(&mut data, &plan));
+    assert!(transform_128::<f32, false, false>(&mut data, &plan));
 
     let expected = dft_reduced(&src, false);
     let error = data
@@ -333,7 +333,7 @@ fn comparison_specialization_does_not_record_phases() {
         assert_eq!(data, source, "a width decline must not mutate the input");
         return;
     };
-    assert!(transform_128::<f64, false>(&mut data, &plan));
+    assert!(transform_128::<f64, false, false>(&mut data, &plan));
 
     assert_eq!(CALLS.load(Ordering::Relaxed), 0);
     let recorded = std::array::from_fn(|index| PHASES[index].load(Ordering::Relaxed));

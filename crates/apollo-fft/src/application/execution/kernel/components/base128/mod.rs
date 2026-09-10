@@ -87,7 +87,7 @@ where
 ///
 /// Reports whether the dispatched width ran it, matching
 /// [`instance_major::transform_128`].
-pub(crate) fn transform_via_base_128<F, const INVERSE: bool>(
+pub(crate) fn transform_via_base_128<F, const INVERSE: bool, const MEASURE: bool>(
     data: &mut [F::Complex],
     plan: &instance_major::Plan128<F>,
     twiddles: &[F::Complex],
@@ -101,8 +101,14 @@ where
     let n = data.len();
     debug_assert!(BASE_SPLIT_LENGTHS.contains(&n));
     if n == BASE {
-        return instance_major::transform_128::<F, INVERSE>(data, plan);
+        return instance_major::transform_128::<F, INVERSE, MEASURE>(data, plan);
     }
+    #[cfg(all(test, windows, target_arch = "x86_64"))]
+    let t0 = if MEASURE {
+        instance_major::phase_meter::stamp()
+    } else {
+        0
+    };
     debug_assert_eq!(twiddles.len(), n - 1);
 
     let blocks = n / BASE;
@@ -180,6 +186,14 @@ where
                 }
                 .unwrap_or(false)
             };
+            #[cfg(all(test, windows, target_arch = "x86_64"))]
+            let t1 = if MEASURE {
+                let t = instance_major::phase_meter::stamp();
+                instance_major::phase_meter::add_outer(0, t - t0);
+                t
+            } else {
+                0
+            };
             if !gathered {
                 for (b, block) in scratch.chunks_exact_mut(BASE).enumerate().take(blocks) {
                     let offset = b.reverse_bits() >> (usize::BITS - bits);
@@ -196,13 +210,13 @@ where
             // sink falls back to the two-pass form.
             if blocks == 2 {
                 let (even, odd) = scratch.split_at_mut(BASE);
-                if !instance_major::transform_128::<F, INVERSE>(even, plan) {
+                if !instance_major::transform_128::<F, INVERSE, MEASURE>(even, plan) {
                     return false;
                 }
                 let combine = &twiddles[BASE - 1..2 * BASE - 1];
                 {
                     let (low, high) = data.split_at_mut(BASE);
-                    if instance_major::transform_128_combining::<F, INVERSE>(
+                    if instance_major::transform_128_combining::<F, INVERSE, MEASURE>(
                         odd,
                         plan,
                         instance_major::CombineSink {
@@ -215,7 +229,7 @@ where
                         return true;
                     }
                 }
-                if !instance_major::transform_128::<F, INVERSE>(odd, plan) {
+                if !instance_major::transform_128::<F, INVERSE, MEASURE>(odd, plan) {
                     return false;
                 }
                 combine_final::<F>(data, scratch, twiddles, BASE);
@@ -249,8 +263,12 @@ where
                     .chunks_exact_mut(quarter)
                     .zip(scratch[..n].chunks_exact_mut(quarter))
                 {
-                    if !combine_four_blocks::<F, INVERSE>(data_group, scratch_group, plan, twiddles)
-                    {
+                    if !combine_four_blocks::<F, INVERSE, MEASURE>(
+                        data_group,
+                        scratch_group,
+                        plan,
+                        twiddles,
+                    ) {
                         combined = false;
                         break;
                     }
@@ -258,10 +276,25 @@ where
                 if !combined {
                     return false;
                 }
+                #[cfg(all(test, windows, target_arch = "x86_64"))]
+                let t2 = if MEASURE {
+                    let t = instance_major::phase_meter::stamp();
+                    instance_major::phase_meter::add_outer(1, t - t1);
+                    t
+                } else {
+                    0
+                };
                 let mut len = quarter;
                 while len < n {
                     combine_level_in_place::<F>(data, twiddles, len);
                     len *= 2;
+                }
+                #[cfg(all(test, windows, target_arch = "x86_64"))]
+                if MEASURE {
+                    let t = instance_major::phase_meter::stamp();
+                    instance_major::phase_meter::add_outer(2, t - t2);
+                    instance_major::phase_meter::OUTER_CALLS
+                        .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
                 }
                 return true;
             }
@@ -272,7 +305,16 @@ where
             // butterfly and the outer level as its registers leave the base
             // kernel, replacing the intermediates and filling the last two
             // quarters. The detached scalar final pass disappears.
-            combine_four_blocks::<F, INVERSE>(data, &mut scratch[..n], plan, twiddles)
+            let combined =
+                combine_four_blocks::<F, INVERSE, MEASURE>(data, &mut scratch[..n], plan, twiddles);
+            #[cfg(all(test, windows, target_arch = "x86_64"))]
+            if MEASURE {
+                let t = instance_major::phase_meter::stamp();
+                instance_major::phase_meter::add_outer(1, t - t1);
+                instance_major::phase_meter::OUTER_CALLS
+                    .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+            }
+            combined
         },
     )
 }
@@ -291,6 +333,7 @@ where
 {
     let n = data.len();
     assert_eq!(n, 4 * BASE, "the incumbent probe covers only N=512");
+    const MEASURE: bool = false;
     <F as crate::application::execution::kernel::mixed_radix::MixedRadixScalar>::with_scratch(
         n,
         |scratch| {
@@ -309,7 +352,7 @@ where
                 }
             }
             for block in scratch.chunks_exact_mut(BASE).take(4) {
-                if !instance_major::transform_128::<F, INVERSE>(block, plan) {
+                if !instance_major::transform_128::<F, INVERSE, MEASURE>(block, plan) {
                     return false;
                 }
             }
@@ -327,7 +370,7 @@ where
 /// rather than an inline block. The twiddle slices are the same either way:
 /// a half of the eight-block split is a 512-point sub-problem whose levels
 /// have half-lengths `BASE` and `2 * BASE`, exactly the four-block case.
-fn combine_four_blocks<F, const INVERSE: bool>(
+fn combine_four_blocks<F, const INVERSE: bool, const MEASURE: bool>(
     data: &mut [F::Complex],
     scratch: &mut [F::Complex],
     plan: &instance_major::Plan128<F>,
@@ -349,15 +392,15 @@ where
     // Establish that both ordinary base calls run before the first output
     // mutation. The plan's one selected native width makes the following two
     // sink calls the same capability decision.
-    if !instance_major::transform_128::<F, INVERSE>(b0, plan)
-        || !instance_major::transform_128::<F, INVERSE>(b2, plan)
+    if !instance_major::transform_128::<F, INVERSE, MEASURE>(b0, plan)
+        || !instance_major::transform_128::<F, INVERSE, MEASURE>(b2, plan)
     {
         return false;
     }
     {
         let (even, _) = data.split_at_mut(2 * BASE);
         let (even_low, even_high) = even.split_at_mut(BASE);
-        if !instance_major::transform_128_combining::<F, INVERSE>(
+        if !instance_major::transform_128_combining::<F, INVERSE, MEASURE>(
             b1,
             plan,
             instance_major::CombineSink {
@@ -373,7 +416,7 @@ where
     let (low, high) = data.split_at_mut(2 * BASE);
     let (even_low, even_high) = low.split_at_mut(BASE);
     let (high_low, high_high) = high.split_at_mut(BASE);
-    instance_major::transform_128_combining_final::<F, INVERSE>(
+    instance_major::transform_128_combining_final::<F, INVERSE, MEASURE>(
         b3,
         plan,
         instance_major::FinalCombineSink {

@@ -335,7 +335,7 @@ pub(super) fn exec_base128_forward<F: MixedRadixScalar<Complex = Complex<F>>>(
     slice: &mut [F::Complex],
 ) {
     assert!(
-        transform_via_base_128::<F, false>(
+        transform_via_base_128::<F, false, false>(
             slice,
             plan.base128_forward_plan(),
             plan.base128_twiddles::<false>(),
@@ -349,7 +349,7 @@ pub(super) fn exec_base128_inverse<F: MixedRadixScalar<Complex = Complex<F>>>(
     slice: &mut [F::Complex],
 ) {
     assert!(
-        transform_via_base_128::<F, true>(
+        transform_via_base_128::<F, true, false>(
             slice,
             plan.base128_inverse_plan(),
             plan.base128_twiddles::<true>(),
@@ -367,7 +367,7 @@ pub(super) fn exec_base128_inverse_unnorm<F: MixedRadixScalar<Complex = Complex<
     slice: &mut [F::Complex],
 ) {
     assert!(
-        transform_via_base_128::<F, true>(
+        transform_via_base_128::<F, true, false>(
             slice,
             plan.base128_inverse_plan(),
             plan.base128_twiddles::<true>(),

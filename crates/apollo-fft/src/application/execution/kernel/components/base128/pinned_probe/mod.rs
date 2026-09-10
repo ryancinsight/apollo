@@ -42,7 +42,7 @@ fn phase_attribution(
     super::instance_major::phase_meter::CALLS.store(0, Ordering::Relaxed);
     for _ in 0..CALLS {
         work.copy_from_slice(src);
-        assert!(super::instance_major::transform_128_measured::<f64, false>(
+        assert!(super::instance_major::transform_128::<f64, false, true>(
             std::hint::black_box(work),
             plan,
         ));
@@ -58,6 +58,68 @@ fn phase_attribution(
         *average = phase.load(Ordering::Relaxed) / calls;
     }
     averages
+}
+
+/// Per-phase cycles of the split construction at `n`: the outer phases per
+/// transform (gather, base transforms with their sinks, combine levels)
+/// and the inner phases per base transform (the fused load-and-rows pass,
+/// the column pass with its sink).
+fn split_attribution(
+    src: &[Complex64],
+    work: &mut [Complex64],
+    plan: &super::instance_major::Plan128<f64>,
+    twiddles: &[Complex64],
+) -> SplitPhases {
+    use std::sync::atomic::Ordering;
+
+    let calls: u64 = 4_096;
+    for phase in super::instance_major::phase_meter::PHASES
+        .iter()
+        .chain(&super::instance_major::phase_meter::OUTER)
+    {
+        phase.store(0, Ordering::Relaxed);
+    }
+    super::instance_major::phase_meter::CALLS.store(0, Ordering::Relaxed);
+    super::instance_major::phase_meter::OUTER_CALLS.store(0, Ordering::Relaxed);
+    for _ in 0..calls {
+        work.copy_from_slice(src);
+        assert!(super::transform_via_base_128::<f64, false, true>(
+            std::hint::black_box(work),
+            plan,
+            twiddles,
+        ));
+    }
+    let inner_calls = super::instance_major::phase_meter::CALLS
+        .load(Ordering::Relaxed)
+        .max(1);
+    let outer_calls = super::instance_major::phase_meter::OUTER_CALLS
+        .load(Ordering::Relaxed)
+        .max(1);
+    let inner = |phase: usize| {
+        super::instance_major::phase_meter::PHASES[phase].load(Ordering::Relaxed) / inner_calls
+    };
+    let outer = |phase: usize| {
+        super::instance_major::phase_meter::OUTER[phase].load(Ordering::Relaxed) / outer_calls
+    };
+    SplitPhases {
+        blocks_per_call: inner_calls / outer_calls,
+        gather: outer(0),
+        blocks: outer(1),
+        levels: outer(2),
+        rows: inner(0),
+        columns: inner(2),
+    }
+}
+
+/// The split construction's cycles per phase, per transform for the outer
+/// three and per base transform for the inner two.
+struct SplitPhases {
+    blocks_per_call: u64,
+    gather: u64,
+    blocks: u64,
+    levels: u64,
+    rows: u64,
+    columns: u64,
 }
 
 /// Reference-library dispatch for the probe: PhastFT publishes one planner

@@ -1,7 +1,7 @@
 //! The inner gate: the small-size transforms this construction is built
 //! from, measured against the reference implementations at both scalars.
 
-use super::{phase_attribution, ProbeScalar};
+use super::{phase_attribution, split_attribution, ProbeScalar};
 use crate::application::execution::kernel::measurement_cores;
 use crate::application::execution::kernel::mixed_radix::MixedRadixScalar;
 use apollo_bench::{BenchmarkCase, BenchmarkConfig, BenchmarkSuite};
@@ -97,14 +97,14 @@ where
                 .expect("the pinned host must provide a native base capability");
             work.copy_from_slice(&src);
             assert!(
-                super::instance_major::transform_128::<T, false>(&mut work, &base_plan),
+                super::instance_major::transform_128::<T, false, false>(&mut work, &base_plan),
                 "the pinned host must provide a native base capability"
             );
             suite.run(
                 BenchmarkCase::new(core, format!("base-128-{scalar}"), n),
                 || {
                     work.copy_from_slice(&src);
-                    std::hint::black_box(super::instance_major::transform_128::<T, false>(
+                    std::hint::black_box(super::instance_major::transform_128::<T, false, false>(
                         std::hint::black_box(&mut work),
                         &base_plan,
                     ));
@@ -177,8 +177,31 @@ fn small_sizes_against_the_references_by_core_type() {
                 .expect("the pinned host must provide the four-lane base capability");
             let phases = phase_attribution(&src, &mut work, &base_plan);
             println!(
-                "B128 phases: redistribute={} rows16={} columns8={}",
+                "B128 phases: load_and_rows={} retired={} columns_and_sink={}",
                 phases[0], phases[1], phases[2]
+            );
+        }
+        for n in [512usize, 1024] {
+            let src: Vec<Complex64> = (0..n)
+                .map(|i| {
+                    let x = i as f64;
+                    Complex64::new((0.017 * x).sin(), 0.25 * (0.031 * x).cos())
+                })
+                .collect();
+            let mut work = src.clone();
+            let base_plan = super::instance_major::Plan128::<f64>::new_if_supported::<false>()
+                .expect("the pinned host must provide the four-lane base capability");
+            let twiddles = <f64 as MixedRadixScalar>::cached_twiddle_fwd(n);
+            let split = split_attribution(&src, &mut work, &base_plan, &twiddles);
+            println!(
+                "B128 split n={n}: gather={} blocks={} levels={} total={} | per block ({}): load_and_rows={} columns_and_sink={}",
+                split.gather,
+                split.blocks,
+                split.levels,
+                split.gather + split.blocks + split.levels,
+                split.blocks_per_call,
+                split.rows,
+                split.columns
             );
         }
         println!("SML cpu={landed} ({core})");
