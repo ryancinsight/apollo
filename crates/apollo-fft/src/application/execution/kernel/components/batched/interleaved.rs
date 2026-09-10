@@ -31,7 +31,8 @@
 //! Every butterfly pairs whole rows, so vector lanes never mix batches and no
 //! intra-register shuffle vocabulary is needed beyond the complex multiply.
 
-use super::{BatchedPlan, BatchedPlanCache};
+use super::plan::BatchedPlan;
+use super::BatchedPlanCache;
 use crate::application::execution::kernel::mixed_radix::MixedRadixScalar;
 use eunomia::Complex;
 use hermes_simd::{ComplexReg, LaneKernel, LaneScalar, Simd, SimdArch, SimdKernel, SimdStorage};

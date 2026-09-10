@@ -27,7 +27,7 @@ const SECTION_COUNT: usize = SECTION_LABELS.len();
 
 /// Whether `label` names a sweep nested inside a stage-set section.
 pub(crate) fn is_sweep(label: &str) -> bool {
-    super::TIME_SWEEPS.contains(&label) || super::FREQUENCY_SWEEPS.contains(&label)
+    super::dit::TIME_SWEEPS.contains(&label) || super::dif::FREQUENCY_SWEEPS.contains(&label)
 }
 
 #[derive(Clone, Copy)]
