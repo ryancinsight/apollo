@@ -249,11 +249,8 @@
 - **Dependencies:** none; parent [beat the references](#atlas-apollo-beat-the-references). **Verification:** the oracle suites for any prototype; `rustfft_comparison` and `pinned_sections`.
 
 <a id="apollo-workspace-impulse-oracle-budget"></a>
-## APOLLO-WORKSPACE-IMPULSE-ORACLE-BUDGET — Fit the workspace impulse oracle in the CI slow budget [patch] — todo
-- **Evidence:** `workspace_extents_preserve_the_impulse_spectrum` takes 3.6 s in the dev profile on the 285K host (2026-09-09, base of the 1M crossover), and the hosted runner is 13 to 17 times slower on compute-bound tests, so it sits past the 30 s slow bound in the `ci` profile; twelve transforms at 262144 dominate.
-- **Scope:** keep every form (forward, inverse, normalized) and both workspace extents at the shorter lengths and run the 262144 forms once each per precision, or shard the length list across tests as the DFT oracle sweep does; never shrink the oracle or raise the bound.
-- **Acceptance:** each test under 2 s locally (30 s on the runner at the measured ratio) with the same set of (length, form, extent) triples exercised across the tests; the `ci` run reports no slow test from this file.
-- **Dependencies:** none. **Verification:** `cargo nextest run -p apollo-fft` timings, the `ci` profile status line.
+## APOLLO-WORKSPACE-IMPULSE-ORACLE-BUDGET — Fit the workspace impulse oracle in the CI slow budget [patch] — done 2026-09-10
+- **Outcome:** PR #382. The matrix is sharded: the lengths below 262144 keep every form and extent in one test (1.5 s here), the 262144 forms run one test each over both precisions and extents (0.8 s each here), every (length, form, extent) triple exercised as before; 3.6 s became four tests under 1.6 s.
 
 <a id="apollo-sft-sublinear-recovery"></a>
 ## APOLLO-SFT-SUBLINEAR-RECOVERY — Deliver a sublinear sparse recovery route [minor] — todo
@@ -332,16 +329,9 @@
 ## APOLLO-FOUR-STEP-SQUARE-MOVEMENT — Consolidate provider-owned FourStep movement [patch] — done
 - [PR 338](https://github.com/ryancinsight/apollo/pull/338), `2ac33b95`; Leto-owned copy movement passes current-provider correctness, API, allocation and size gates, plus independently accepted timing: one supported E-core real-half/262144 gain, no supported regression. [ADR 0040](docs/adr/0040-leto-fft-layout-ownership.md) records cold-memory increases and the remaining competitor losses.
 <a id="apollo-transpose-cache-geometry"></a>
-## APOLLO-TRANSPOSE-CACHE-GEOMETRY — Model transpose cache-set pressure [patch] — todo
-- Outcome: establish whether power-of-two transpose strides cause cache-set conflicts before changing tile geometry.
-- Scope: existing dense-copy/FourStep traversals and first-party topology; no FFT arithmetic, workload or tolerance changes.
-- Evidence: retained `output/apollo-cache-tile/cache-topology.txt` identifies P CPU 1 L1D 48 KiB and E CPU 3 L1D 32 KiB, both 64-byte lines. Capacity alone does not establish conflict misses.
-- Investigation: [source model](../../output/apollo-square-transpose/tile-diagnostics/restoration/cache-investigation.md) gives row strides 4,096/8,192 bytes and orbit `S/gcd(S,stride/64)`. Both alias identically when `S=64`; this alone cannot explain a size-specific slowdown. Tile footprint is not per-set reuse distance.
-- Next evidence: unchanged phase attribution and actual buffer geometry before API or tile changes. Windows exposes generic CacheMisses/LLC counters, but the queried list does not identify L1D replacement or DTLB events; establish event semantics before attribution.
-- Dependency: Themis `3540692` omits associativity; adding it to exhaustive public `CacheLevel` is breaking. Implement typed metadata upstream only if validated production selection requires it, rather than expanding the API for observation alone.
-- Acceptance: verify per-core geometry, derive address-to-set occupancy with stated mapping assumptions, and confirm or reject the conflict hypothesis with controlled counters or an independently checked cache model.
-- Verification: unchanged complete-engine census and allocation windows for any resulting production change; no inferred cache-miss or performance claim from capacity alone.
-- Risk/class: performance-model investigation; source analysis and counter availability are established, with no measured miss or new speedup claim. Production work follows closure of the active movement increment.
+## APOLLO-TRANSPOSE-CACHE-GEOMETRY — Model transpose cache-set pressure [patch] — done 2026-09-10 (superseded)
+- **Outcome:** the conflict hypothesis was confirmed and closed by measurement rather than counters: the planar route pads every plane row by a cache line (`ROW_PAD`, ADR 0056 and 0057), because an unpadded power-of-two stride put every row of a plane in one L1 set, and the padded stride measured the aliasing away; the remaining transpose cost is the register network's shuffle floor ([the folded-loads item](#apollo-planar-transpose-folded-loads), ADR 0060). No further model is pending.
+
 <a id="apollo-four-step-cache-tile"></a>
 ## APOLLO-FOUR-STEP-CACHE-TILE — Evaluate cache-line fused traversal [patch] — done
 - [PR 336](https://github.com/ryancinsight/apollo/pull/336), `7976ab49`; [Rejected ADR 0050](docs/adr/0050-cache-line-fused-traversal.md) records no supported performance gain, executable/cold-allocation growth and restored production.
