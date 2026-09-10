@@ -605,6 +605,73 @@
   hot path this investigation actually found.
 - **Parent:** [`#atlas-apollo-beat-the-references`](#atlas-apollo-beat-the-references).
 
+<a id="apollo-lane-task-width"></a>
+
+## APOLLO-LANE-TASK-WIDTH-2026-09-09 — A 3-D lane pass scheduled one lane per task, and ran slower than serial [patch] [perf] — done 2026-09-09
+
+- **Integrator:** claude-fable-5.1; **branch:** `perf/apollo-lane-task-width`,
+  authored through the git API — both apollo trees were held by peers.
+- **Last-update:** 2026-09-09.
+- **Instrument.** `plan/fft/dimension_3d/pass_attribution.rs`, the pass-level
+  probe [`#apollo-n64-lane-pass`](#apollo-n64-lane-pass) and kwavers
+  `#kw-fft3d-baseline` both said was missing: on one 32³ and one 64³ volume it
+  times the plan's full round trip, the contiguous-axis lane pass through
+  `lanes::contiguous` with the plan's own twiddles, and the two transpose pairs
+  axes 1 and 0 pay, each as a round trip so nothing is reseeded inside the
+  timing — then prints `3 x lanes + transposes` beside the measured forward at
+  the median and at the fastest sample. Unpinned, because the solver is. An
+  untimed pass histograms which processor ran each lane. Two control arms carry
+  the finding: the same lanes run serially on one thread, and the same lanes
+  through moirai at chosen task widths.
+- **Finding, reproduced across four runs on a loaded host (7–15 concurrent
+  `rustc`).** `lanes::execute` handed moirai **one lane per task** — 1 KB at
+  N = 64 — and moirai's per-task dispatch measures about 180 ns against a
+  55–130 ns codelet, so the scheduler cost more than the work it scheduled:
+
+  | 64³, one lane pass | per pass |
+  | --- | --- |
+  | shipped, one lane per task | **734–738 µs** |
+  | serial, one thread, no scheduler | 225 µs |
+  | moirai, 64 lanes per task (64 KiB) | **45–55 µs** |
+  | moirai, 256 lanes per task | 57–68 µs |
+
+  At 32³: shipped 328–350 µs, serial 17.7 µs, 64 lanes/task 11.4–12.3. The
+  parallel pass was 3.3x (64³) and 19x (32³) *slower than not parallelising*.
+  The serial arm's per-lane figures — 55 ns at 64, 17.3 ns at 32 — match the
+  pinned codelet readings of `#apollo-n64-lane-pass`, which is the check that
+  this instrument reads the codelet correctly and the loss is the schedule.
+- **Fix.** `lanes::execute`'s no-workspace branch now chunks by
+  `lane_len x lanes_per_task`, with the width derived from a 64 KiB task
+  (`TASK_BYTES`, carrying the measurement above): one core's L2 with room,
+  dispatch amortised below a percent, and the measured optimum of the widths
+  tried. Task boundaries stay lane boundaries because both the task and the
+  buffer are whole lanes; a `debug_assert!` pins the empty remainder. The
+  workspace (four-step) branch already grouped lanes and is unchanged.
+- **Result.** Lane pass at 64³ **42–106 µs** across four post-fix runs against
+  734–738 before — 7–16x, the spread being the host's load, not the change
+  (the serial control moved 225 → 342 µs in the same runs). Forward at 64³:
+  2.0 ms median / **1.2 ms fastest sample**, from 3.3–5.0 ms; at 32³ 0.11–0.28
+  ms from 0.95–1.2. The lanes now land 49/51% on performance/efficiency
+  processors at 64³ (was 32/68%). 84/84 `plan::fft` value tests unchanged;
+  clippy clean on Windows and, outside the overlay, on the Linux target.
+- **What the attribution reads now, at the fastest sample, 64³:** forward
+  1.20 ms = lanes 9% + transposes **60%** + 30% the pieces do not reproduce
+  (scratch acquisition, the view, cache state between phases). The transposes
+  are the dominant measured piece — the lever
+  [`#kw-fft3d-baseline`](../kwavers/backlog.md#kw-fft3d-baseline-2026-09-08)
+  named first, then withdrew, is back at the top now that the scheduling loss
+  in front of it is gone; the unaccounted 30% is the next thing to name.
+- **Consumer consequence, not yet measured.** kwavers' 64³ forward read
+  1.70 ms on its own LTO profile before this; its `fft3d_baseline` bench is the
+  oracle, re-run once its apollo pin advances (co-evolution). Every PSTD
+  timestep on a 64³ grid pays two of these.
+- **Limits.** Wall-clock on a contended host — medians are inflated and the
+  full arm most of all, which is why the fastest sample is printed beside them;
+  ratios within a run are the evidence, absolute figures are bounds. Unpinned
+  by design.
+- **Risk / change class:** [patch] [perf]; **dependencies:** none.
+- **Parent:** [`#atlas-apollo-beat-the-references`](#atlas-apollo-beat-the-references).
+
 <a id="apollo-n64-lane-pass"></a>
 
 ## APOLLO-N64-LANE-PASS-2026-09-08 — The N=64 lane pass is the stack's most-executed kernel and is unmeasured in its own regime [minor] [perf] — measured 2026-09-08: shipped arm confirmed; attribution corrected
