@@ -25,33 +25,18 @@
 - **Outcome:** PR #375. `batched/mod.rs` (729), `radix.rs` (643), `tests.rs` (578) and `sweep.rs`'s tests split by concern into leaf modules under `batched/` and `batched/tests/`, line moves only; the fleet scan on the tree reads `oversized_files` 37 against the baseline 38 and `manifest_implementation` 23 against 24, no class up. Remaining in the baseline: `base128/tests.rs` (803).
 
 <a id="apollo-miri-schedule-split-coverage"></a>
-## APOLLO-MIRI-SCHEDULE-SPLIT-COVERAGE — Put the split schedule's scratch under a UB checker [patch] — todo
+## APOLLO-MIRI-SCHEDULE-SPLIT-COVERAGE — Put the split schedule's scratch under a UB checker [patch] — done 2026-09-10
 
-- **Finding.** ADR 0051's soundness argument for the scheduled codelets is that
-  both branches invoke the phase closure exactly once and neither catches
-  unwind, so normal return implies scratch initialization completed before
-  `assume_init_mut`. That argument is structural and is pinned token-for-token
-  by `generated_phase_owns_callback_invocation`, but no UB checker executes the
-  `Split` path — and `Split` is `#[cfg(test)]`, so it exists precisely where a
-  checker would run.
-- **Why it matters here.** This codebase has already shipped one
-  reference-to-uninitialised-memory defect in these same generators, caught by
-  the safety ratchet rather than by a checker. A structural argument is the
-  weaker evidence tier for a claim about uninitialised memory.
-- **Scope.** Run `cargo +nightly miri nextest run -p apollo-fft` filtered to
-  the composite schedule tests (`split_variant_*`, `schedule_controls_*`), so
-  both `Fused` and `Split` execute under the interpreter. Non-goals: a
-  repository-wide miri job, and any change to the generators.
-- **Known obstacle, already recorded.** The worker-scratch item measured a
-  nightly Miri run exceeding the committed 60-second budget on a different
-  workload. These codelets are n = 50 and n = 144, orders of magnitude smaller,
-  so the budget is likely not the binding constraint — but attribute before
-  assuming, per that item's own conclusion.
-- **Acceptance.** Both schedules execute under miri with no UB reported, or a
-  reported budget breach is attributed and filed rather than absorbed. Result
-  recorded on this item either way; a clean pass is a valid outcome.
-- **Obstacle 2026-09-10 (claude/fable).** On the Windows host the filtered run (`rustup run nightly cargo miri nextest run -p apollo-fft -E 'test(split_variant_) | test(schedule_controls_)'`, `RUSTC` unset) stops before any test at `cargo uses an argfile to invoke rustc, which is not supported by cargo-miri`: the crate's rustc command line exceeds the Windows limit, cargo falls back to an argfile, and cargo-miri refuses it. The venue is a Linux host, where the command line fits; the acceptance stands, unmet here for the tooling reason and not for the tests.
-- **Risk / change class:** [patch]. **Parent:** [schedule controls](#apollo-codelet-schedule-controls).
+- Clean under both aliasing models on a quiet host:
+  `schedule_controls_preserve_composite_values` drives `Fused` and `Split`
+  through dft50 and dft144 in both directions and reports **no undefined
+  behaviour** — stacked borrows 4.6 s, `-Zmiri-tree-borrows` 10.5 s. ADR 0051's
+  scratch-initialization argument now has checker evidence, not only the
+  structural argument and its token-pinned test.
+- Refutes a blocker recorded elsewhere: the worker-scratch item parked on
+  "nightly Miri exceeds 60 seconds". It does on that workload; on these
+  codelets it finishes in seconds, so miri cost is per-workload and is not a
+  standing reason to skip a targeted run.
 
 <a id="apollo-codelet-schedule-controls"></a>
 ## APOLLO-CODELET-SCHEDULE-CONTROLS — Share composite schedule controls [major] [arch] — review
