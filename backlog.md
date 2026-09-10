@@ -25,8 +25,18 @@
   transpose pair at the fastest sample, the transpose rows being the same
   instrument; `FftPlan3D` round trips and the 3-D reference tests hold bitwise
   (a layout change reorders no arithmetic); the C-order result is unchanged.
-- **Risk / change class:** [minor] [perf]; **dependencies:** none; kwavers
-  consumes through its pin.
+- **Cost model (2026-09-10).** The chain replaces two batched moves (axis 1,
+  `[64 x 64]` x 64, 45 µs each at the fastest sample) and two single-matrix
+  moves (axis 0, `[64 x 4096]`, 76 µs each after leto #184) with three
+  single-matrix moves. At today's single-matrix cost that is 228 µs for 241 —
+  a 4% forward; leto's `#leto-strided-pitch-aliasing` measured the single
+  matrix's excess as L1/L2 set aliasing at the 64 KiB pitch (256 → 141 µs on
+  one thread with the pitch padded), and once its fix lands a single move
+  costs what a batched one does and the chain is 135 µs for 180. The item
+  waits on that landing; its oracle then reads one transpose pair, as stated.
+- **Risk / change class:** [minor] [perf]; **dependencies:** leto
+  [`#leto-strided-pitch-aliasing`](../leto/backlog.md#leto-strided-pitch-aliasing);
+  kwavers consumes through its pin.
 
 <a id="apollo-batched-files-past-target"></a>
 
