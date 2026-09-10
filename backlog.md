@@ -73,6 +73,12 @@
 
 - **Outcome:** Windows-only incumbent and four-block measurement helpers now live under `base128/pinned_probe`; `base128/mod.rs` is 451 lines and the `apollo-fft` suite remains green (622 passed, 42 skipped).
 
+<a id="apollo-3d-attribution-module"></a>
+
+## APOLLO-3D-ATTRIBUTION-MODULE — Keep attribution reporting in a leaf module [patch] — done 2026-09-10
+
+- **Outcome:** Windows-only processor and axis attribution reporting now lives in `dimension_3d/pass_attribution/report.rs`; the parent module is 355 lines and the `apollo-fft` suite remains green (622 passed, 42 skipped).
+
 <a id="apollo-miri-schedule-split-coverage"></a>
 ## APOLLO-MIRI-SCHEDULE-SPLIT-COVERAGE — Put the split schedule's scratch under a UB checker [patch] — done 2026-09-10
 
