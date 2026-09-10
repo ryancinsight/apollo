@@ -200,37 +200,36 @@ where
                 }
             }
         } else {
+            // The ragged tail's width and mask are the stage's, not the group's.
+            let rem = prev_len % per;
+            let m = prefix_mask::<T, A>(rem.max(1));
             for g in 0..g_count {
                 let src_base = g * prev_len;
                 let dst_base = g * stage_chunk;
                 // The ragged tail runs first: its run-over into the next arm's
                 // leading columns is overwritten by that arm's whole-register
                 // stores, and the last arm's by the next group's.
-                let rem = prev_len % per;
                 if rem != 0 {
                     let c = rem;
                     let j = prev_len - rem;
-                    let m = prefix_mask::<T, A>(c);
                     if g + 1 < g_count && per - c <= prev_len {
                         // The run-over tail: whole-register loads and stores
                         // that run `per - c` samples into the next row, which
                         // the next store (arms ascending, then the next group)
-                        // overwrites; the twiddle rows are masked, since the
-                        // last row has no successor.
+                        // overwrites; twiddle rows run into the next row too, the
+                        // last one masked since it has no successor.
                         // SAFETY: with `per - c <= prev_len` every run-over stays
-                        // inside the neighbouring row of the same arm (source) or
-                        // arm (output), and `g + 1 < g_count` puts a whole group
-                        // after this one in both slices.
+                        // inside the neighbouring row of the same arm (source),
+                        // the next arm (output) or the next twiddle row, and
+                        // `g + 1 < g_count` puts a whole group after this one in
+                        // both slices.
                         unsafe {
                             let at = src_base + j;
                             let a0 = load::<T, A>(src, at);
-                            let a1 = cmul(
-                                load::<T, A>(src, stride + at),
-                                load_prefix::<T, A>(tw, j, c, m),
-                            );
+                            let a1 = cmul(load::<T, A>(src, stride + at), load::<T, A>(tw, j));
                             let a2 = cmul(
                                 load::<T, A>(src, 2 * stride + at),
-                                load_prefix::<T, A>(tw, prev_len + j, c, m),
+                                load::<T, A>(tw, prev_len + j),
                             );
                             let a3 = cmul(
                                 load::<T, A>(src, 3 * stride + at),
