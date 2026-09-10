@@ -222,6 +222,40 @@ impl<T: BatchedPlanCache> LaneKernel<T> for TransposePlanesInto<'_, T> {
     }
 }
 
+/// One source tile of `LANES` rows at `(bi, bj)` transposed to `(bj, bi)`
+/// of `dst`, relabeled as [`transpose_plane_into`] describes. A named
+/// function, not a closure: the block fill of the staged transpose runs
+/// every tile through this path, and a closure here compiled out of the
+/// target-feature frame, each tile then a call with its shuffles emulated
+/// (seven times the in-frame cost).
+#[expect(
+    clippy::inline_always,
+    reason = "the tile width must remain constant inside the target-feature frame"
+)]
+#[inline(always)]
+fn transpose_tile<T, A, const LANES: usize>(
+    src: &[T],
+    src_stride: usize,
+    dst: &mut [T],
+    dst_stride: usize,
+    bi: usize,
+    bj: usize,
+) where
+    T: BatchedPlanCache,
+    A: SimdArch + SimdKernel<T>,
+{
+    let order: [usize; LANES] =
+        const { sublane_order::<LANES>(<A as SimdPermute<T>>::SUBLANE_LANES) };
+    let inverse: [usize; LANES] =
+        const { sublane_inverse::<LANES>(<A as SimdPermute<T>>::SUBLANE_LANES) };
+    let mut ordered: [Vector<T, A>; LANES] =
+        core::array::from_fn(|k| lanes_at::<T, A>(src, (bi + order[k]) * src_stride + bj));
+    Vector::transpose_square(&mut ordered);
+    for k in 0..LANES {
+        put_lanes_at(ordered[inverse[k]], dst, (bj + k) * dst_stride + bi);
+    }
+}
+
 #[expect(
     clippy::inline_always,
     reason = "the tile width must remain constant inside the target-feature frame"
@@ -249,14 +283,6 @@ fn transpose_plane_into<T, A, const LANES: usize>(
     // flight as in the in-place kernel's tile pair; destination rows are
     // written sequentially, each store extending a row the previous tile
     // just wrote. A row count of one odd tile block keeps the single form.
-    let tile = |bi: usize, bj: usize, dst: &mut [T]| {
-        let mut ordered: [Vector<T, A>; LANES] =
-            core::array::from_fn(|k| lanes_at::<T, A>(src, (bi + order[k]) * src_stride + bj));
-        Vector::transpose_square(&mut ordered);
-        for k in 0..LANES {
-            put_lanes_at(ordered[inverse[k]], dst, (bj + k) * dst_stride + bi);
-        }
-    };
     for bj in (0..cols).step_by(LANES) {
         let mut bi = 0;
         while bi + 2 * LANES <= rows {
@@ -275,7 +301,7 @@ fn transpose_plane_into<T, A, const LANES: usize>(
             bi += 2 * LANES;
         }
         if bi < rows {
-            tile(bi, bj, dst);
+            transpose_tile::<T, A, LANES>(src, src_stride, dst, dst_stride, bi, bj);
         }
     }
 }
