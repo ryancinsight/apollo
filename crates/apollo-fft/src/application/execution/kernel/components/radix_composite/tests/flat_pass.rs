@@ -106,3 +106,112 @@ fn radix_2_pass_matches_the_scalar_formula_in_both_precisions() {
     radix_2_pass_matches_the_scalar_formula::<f32>(f64::from(f32::EPSILON) / 2.0);
     radix_2_pass_matches_the_scalar_formula::<f64>(f64::EPSILON / 2.0);
 }
+
+/// A radix-4 pass over several shapes in both directions against the
+/// scalar butterfly on twiddled arms.
+///
+/// Each output sums four twiddled arms: two multiply roundings and two add
+/// levels per arm, within `4 u` of each `|a_k|` (the twiddles are unit), and
+/// the scalar reference carries the same; the bound is `12 u` of the arms'
+/// magnitude.
+fn radix_4_pass_matches_the_scalar_formula<T, const INVERSE: bool>(unit_roundoff: f64)
+where
+    T: CompositeCache + eunomia::FloatElement + Into<f64>,
+{
+    let sign = if INVERSE { 1.0 } else { -1.0 };
+    let mut ran = 0;
+    for (prev_len, g_count) in [
+        (1usize, 64usize),
+        (1, 65),
+        (2, 32),
+        (3, 21),
+        (5, 13),
+        (8, 8),
+        (13, 5),
+        (32, 2),
+    ] {
+        let stage_chunk = 4 * prev_len;
+        let n = g_count * stage_chunk;
+        let src: Vec<Complex<T>> = (0..n)
+            .map(|i| {
+                let x = i as f64;
+                Complex::new(
+                    T::from_f64((0.017 * x).sin() - 0.25),
+                    T::from_f64(0.5 * (0.023 * x).cos() + 0.125),
+                )
+            })
+            .collect();
+        let tw: Vec<Complex<T>> = (1..4)
+            .flat_map(|k| {
+                (0..prev_len).map(move |j| {
+                    let (s, c) = (sign * TAU * (k * j) as f64 / stage_chunk as f64).sin_cos();
+                    Complex::new(T::from_f64(c), T::from_f64(s))
+                })
+            })
+            .collect();
+        let mut dst = vec![Complex::new(T::from_f64(0.0), T::from_f64(0.0)); n];
+        if !T::try_flat_pass_r4::<INVERSE>(
+            &src,
+            &mut dst,
+            prev_len,
+            g_count,
+            stage_chunk,
+            &tw,
+            None,
+        ) {
+            continue;
+        }
+        ran += 1;
+        let stride = g_count * prev_len;
+        for g in 0..g_count {
+            for j in 0..prev_len {
+                let arm = |k: usize| -> (f64, f64) {
+                    let a = src[k * stride + g * prev_len + j];
+                    let (ar, ai): (f64, f64) = (a.re.into(), a.im.into());
+                    if k == 0 {
+                        return (ar, ai);
+                    }
+                    let t = tw[(k - 1) * prev_len + j];
+                    let (tr, ti): (f64, f64) = (t.re.into(), t.im.into());
+                    (ar * tr - ai * ti, ar * ti + ai * tr)
+                };
+                let (a0, a1, a2, a3) = (arm(0), arm(1), arm(2), arm(3));
+                let magnitude = [a0, a1, a2, a3].iter().map(|a| a.0.hypot(a.1)).sum::<f64>();
+                let t0 = (a0.0 + a2.0, a0.1 + a2.1);
+                let t1 = (a0.0 - a2.0, a0.1 - a2.1);
+                let t2 = (a1.0 + a3.0, a1.1 + a3.1);
+                let t3 = (a1.0 - a3.0, a1.1 - a3.1);
+                let it3 = if INVERSE {
+                    (-t3.1, t3.0)
+                } else {
+                    (t3.1, -t3.0)
+                };
+                let expected = [
+                    (t0.0 + t2.0, t0.1 + t2.1),
+                    (t1.0 + it3.0, t1.1 + it3.1),
+                    (t0.0 - t2.0, t0.1 - t2.1),
+                    (t1.0 - it3.0, t1.1 - it3.1),
+                ];
+                let bound = 12.0 * unit_roundoff * magnitude;
+                for (k, e) in expected.iter().enumerate() {
+                    let got = dst[g * stage_chunk + j + k * prev_len];
+                    let (gr, gi): (f64, f64) = (got.re.into(), got.im.into());
+                    let error = (gr - e.0).hypot(gi - e.1);
+                    assert!(
+                        error <= bound,
+                        "inverse={INVERSE} prev_len={prev_len} g_count={g_count} group {g} j={j} arm {k}: {error:e} > {bound:e}"
+                    );
+                }
+            }
+        }
+    }
+    assert!(ran >= 6, "the dispatched width ran {ran} of 8 pass shapes");
+}
+
+#[test]
+fn radix_4_pass_matches_the_scalar_formula_in_both_precisions_and_directions() {
+    radix_4_pass_matches_the_scalar_formula::<f32, false>(f64::from(f32::EPSILON) / 2.0);
+    radix_4_pass_matches_the_scalar_formula::<f32, true>(f64::from(f32::EPSILON) / 2.0);
+    radix_4_pass_matches_the_scalar_formula::<f64, false>(f64::EPSILON / 2.0);
+    radix_4_pass_matches_the_scalar_formula::<f64, true>(f64::EPSILON / 2.0);
+}
