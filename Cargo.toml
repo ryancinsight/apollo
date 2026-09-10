@@ -91,8 +91,6 @@ phastft = { version = "0.4.1", default-features = false }
 # exploits real-input symmetry over rustfft: a size-N real transform costs about
 # half a size-N complex one and yields N/2+1 bins instead of N.
 realfft = "3.5.0"
-# Temporary co-evolution pin for the worker-idle reclamation seam; remove
-# `rev` after Moirai's hook lands on main and regenerate Cargo.lock.
 moirai = { package = "moirai-runtime", version = "0.6.0", git = "https://github.com/ryancinsight/Moirai.git", features = ["melinoe"] }
 serde = { version = "1.0.228", features = ["derive"] }
 serde_json = "1.0.150"
