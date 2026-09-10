@@ -1,5 +1,33 @@
 # Apollo Backlog
 
+<a id="apollo-3d-return-transposes"></a>
+
+## APOLLO-3D-RETURN-TRANSPOSES-2026-09-10 — A 3-D forward moves the volume four times for two axis passes [minor] [perf] — todo
+
+- **Finding.** With the lane task width
+  ([`#apollo-lane-task-width`](#apollo-lane-task-width)) and leto's task
+  transposes (leto #182, #184) in the tree, `dimension_3d::pass_attribution`
+  reads a 64³ forward at **359.2 µs** at the fastest sample (host under peer
+  load, minima only): lanes 3 × 36.5 = 109.6 µs (31%), transposes
+  90.3 + 151.3 = **241.6 µs (67%)**, pieces summing to 351.2 µs. Axes 1 and 0
+  each transpose the volume into scratch, run their lanes there, and transpose
+  back (`static_impl.rs`), so two of the four full-volume moves exist only to
+  restore the input layout between passes.
+- **Shape.** Chain the layouts instead of restoring them: axis 2 in place, one
+  transpose so axis 1 is contiguous, its lanes there, one more so axis 0 is
+  contiguous, its lanes there, and one transpose back to C order — three moves
+  for four. Whether the returning move can go too, by planning the inverse to
+  accept the rotated order, is a consumer-contract question (the k-space
+  operator would apply in the rotated layout) recorded here and not decided.
+  The scratch (`with_3d_y_scratch`), the lane pass and the transposes are
+  unchanged; the pass order and the geometry handed to each are what moves.
+- **Acceptance oracle.** The probe's forward at 64³ falls by about one
+  transpose pair at the fastest sample, the transpose rows being the same
+  instrument; `FftPlan3D` round trips and the 3-D reference tests hold bitwise
+  (a layout change reorders no arithmetic); the C-order result is unchanged.
+- **Risk / change class:** [minor] [perf]; **dependencies:** none; kwavers
+  consumes through its pin.
+
 <a id="apollo-batched-files-past-target"></a>
 
 ## APOLLO-BATCHED-FILES-PAST-TARGET — Split the batched files past the 500-line target into leaf modules [patch] — done 2026-09-10
