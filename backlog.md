@@ -435,30 +435,8 @@
 
 <a id="apollo-stranded-branches"></a>
 
-## APOLLO-STRANDED-BRANCHES-2026-09-04 — Two abandoned branches hold deltas main does not [patch] — todo
-
-- **Integrator:** unclaimed; **branch:** none; **lease:** none.
-- **Last-update:** 2026-09-04.
-- **Context.** A branch-inventory sweep found eight local branches. Three were
-  fully merged and three superseded; both were deleted. Two carry a delta main
-  does not have, and neither is small enough to absorb without a decision.
-- **`origin/test/apollo-stft-leto-sidecar`** (last commit 2026-09-02). Its
-  `leto_reference.rs` parity tests landed on main, but its second commit —
-  migrating the STFT GPU staging buffers in
-  `crates/apollo-stft/src/infrastructure/transport/gpu/infrastructure/buffers.rs`
-  to Mnemosyne `AlignedVec` — did not: main has no `AlignedVec` in that file.
-  Decide whether the migration is wanted; if so, rebase that commit alone onto
-  current main and deliver it, otherwise delete the branch.
-- **`chore/apollo-mnemosyne-rev-and-f16-gate`** (local only, never pushed, last
-  commit 2026-09-02). Mixes a superseded mnemosyne rev bump with two changes
-  main lacks: an explicit `half` dependency on `apollo-fft`, and wiring
-  Mnemosyne as the global allocator in the validation binary. The rev bump is
-  dead; the other two need separate adjudication. Push it before any cleanup
-  touches this clone — it exists in exactly one place.
-- **Acceptance oracle.** Each branch either delivered as a rebased increment
-  or deleted with the reason recorded here; apollo's local branch list holds
-  only branches mapped to an open item or an enqueued PR.
-- **Risk / change class:** [patch].
+## APOLLO-STRANDED-BRANCHES-2026-09-04 — Two abandoned branches hold deltas main does not [patch] — done 2026-09-10
+- **Outcome:** both deleted, no unique work. `origin/test/apollo-stft-leto-sidecar` had by 2026-09-10 become the pushed home of the local `chore/apollo-mnemosyne-rev-and-f16-gate` lineage (its eight commits, last `f4537f26`), and its delta against main was a mnemosyne `rev = "e26ee02"` pin (quarantine main never adopted), the removal of the `half` workspace dependency main carries, a stripped Cargo.lock, and no source change: the `AlignedVec` staging migration and the validation-binary allocator wiring named on 2026-09-04 are not on it. The local branch exists in no tree or lane. apollo's local branch list maps to open items and enqueued PRs only.
 
 <a id="apollo-hephaestus-default"></a>
 
