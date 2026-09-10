@@ -341,7 +341,8 @@
 - Levers filed with their bounds: [gather in the loads](#apollo-base128-gather-in-loads) (at most 14%) and [the 1024 level in the second sink](#apollo-base128-level-in-sink) (at most 11%); together they reach about 1.1, not parity, so the parent records the base-128 floor.
 
 <a id="apollo-base128-gather-in-loads"></a>
-## APOLLO-BASE128-GATHER-IN-LOADS — Load the stride-8 source directly in the base transform [patch] [perf] — todo
+## APOLLO-BASE128-GATHER-IN-LOADS — Load the stride-8 source directly in the base transform [patch] [perf] — in-progress
+- **Integrator:** claude/fable; **last-update:** 2026-09-11; branch `perf/apollo-base128-gather-in-loads` on lane `D:/atlas/worktrees/apollo-route`; lease: claude/fable `components/base128/` 2026-09-11T02:00Z.
 - **Evidence:** at 1024 `f64` the gather pass costs 942 cycles (14% of 6908; 0.92 per complex) and at 512 205 (7%) ([attribution](#apollo-base128-attribution)); the base transform then loads the gathered block contiguously in its first phase.
 - **Scope:** a source view for the first phase that reads sample `8 b + offset` of the ungathered input (two half-register loads per register at `f64`, one gather-free pass fewer), selected by the split construction; the gather kernel stays for the fallback. Non-goals: the sinks, the level.
 - **Acceptance:** the attribution meter reads the gather at zero and the per-block rows within its former value plus the split-load cost; 512 and 1024 not above the current route in either precision on the pinned small-sizes probe; the base-128 differential tests green.
