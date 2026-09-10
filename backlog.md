@@ -1577,6 +1577,18 @@
   against the plain sweeps' 0.6 to 1.0), the same cost the even route pays
   and the next lever for both. Evidence `../../output/apollo-planar-rectangular/`.
 
+- **Standing, 2026-09-10, main after #379** (`../../output/apollo-scoreboard-2026-09-10/`,
+  the same three instruments, two runs each). Unchanged within the run
+  spread: 512 1.2 / 1.2, 1024 1.3 / 1.3, 2048 1.26 / 1.6, 4096 1.0 / 1.1,
+  16384 1.06 / 1.05, 32768 1.02 / 1.06, 65536 1.0 / 0.91, 262144 0.83 `f64`
+  (`f64` / `f32`, below 1 ahead). The direct sink (#373) moves only callers
+  whose rows sit on a line, which the benches' per-iteration clone is one
+  process in four. The odd-power seams now sit at measured floors: the
+  transpose at the register network's shuffle floor (ADR 0060, the staged
+  and the load-folded forms both rejected), the sink at its interleave; the
+  gap at 2048 `f32` is the pass count against RustFFT's three radix-16
+  passes in L1, not a seam, so the next lever there is a shorter route,
+  not a cheaper seam.
 - **Standing, 2026-09-09, main `52c84126`.** `engine_census` (cache flushed,
   `f64`), `rustfft_comparison` and `twiddless_comparison` (clone-inclusive,
   both precisions), pinned performance core, two runs each
