@@ -9,6 +9,25 @@ use eunomia::Complex;
 /// Existing multidimensional crossover, measured in total complex elements.
 const PARALLEL_THRESHOLD: usize = 32_768;
 
+/// Bytes of lane data one scheduled task carries when lanes need no workspace.
+///
+/// One lane per task — the previous shape — made a 64³ pass 3.3x *slower*
+/// than running its 4,096 lanes serially on one thread: 734 µs against 225,
+/// because moirai's per-task dispatch measures about 180 ns and a length-64
+/// lane's codelet is 55 to 130 ns, so the scheduler outweighed the work it
+/// scheduled. 64 KiB is 64 such lanes, which amortises the dispatch to well
+/// under a percent, stays inside one core's L2, and measured 45 to 55 µs for
+/// the same pass — faster than a quarter-megabyte task (57 to 68 µs) and than
+/// serial (`dimension_3d::pass_attribution`, 2026-09-09). A lane at or above
+/// this size is one task, as before.
+const TASK_BYTES: usize = 64 * 1024;
+
+/// Lanes per scheduled task for `lane_len`, never fewer than one.
+fn lanes_per_task<T>(lane_len: usize) -> usize {
+    let lane_bytes = lane_len.saturating_mul(core::mem::size_of::<T>()).max(1);
+    (TASK_BYTES / lane_bytes).max(1)
+}
+
 /// Runs contiguous lanes using the same scratch role as a later transpose.
 /// Rank-two staging owns the 3D X role and rank-three staging the 2D role,
 /// so these borrows remain disjoint even for non-contiguous input views.
@@ -57,13 +76,24 @@ pub(super) fn execute<F, const FORWARD: bool>(
     assert!(lane_len > 0 && active.len().is_multiple_of(lane_len));
     crate::ensure_thread_local_scratch_hook_registered();
     let Some(required) = workspace(lane_len).filter(|&required| required <= companion.len()) else {
+        // A task is a whole number of lanes, and `active` is a whole number of
+        // lanes, so every task boundary is a lane boundary and the shorter
+        // final task moirai may hand out still divides exactly.
+        let task_len = lane_len * lanes_per_task::<F::Complex>(lane_len);
         moirai::for_each_chunk_mut_with::<moirai::AdaptiveWithThreshold<PARALLEL_THRESHOLD>, _, _>(
             active,
-            lane_len,
-            |lane| {
+            task_len,
+            |task| {
                 #[cfg(all(test, not(miri)))]
                 crate::application::execution::kernel::worker_quiescence::record_worker();
-                direct(lane);
+                let mut lanes = task.chunks_exact_mut(lane_len);
+                for lane in &mut lanes {
+                    direct(lane);
+                }
+                debug_assert!(
+                    lanes.into_remainder().is_empty(),
+                    "invariant: task boundaries fall on lane boundaries"
+                );
             },
         );
         return;
