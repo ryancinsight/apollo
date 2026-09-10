@@ -1,10 +1,8 @@
-use super::super::lanes;
-use crate::application::execution::kernel::mixed_radix::scalar::plan_scratch::{
-    with_3d_x_scratch, with_3d_y_scratch, PlanScratch,
-};
+use super::passes::{self, AxisLanes};
+use crate::application::execution::kernel::mixed_radix::scalar::plan_scratch::PlanScratch;
 use crate::application::execution::kernel::mixed_radix::MixedRadixScalar;
 use crate::application::execution::plan::fft::dimension_1d::StaticFftPlan1D;
-use crate::application::execution::plan::fft::layout::{transpose_matrices, with_c_order_view};
+use crate::application::execution::plan::fft::layout::with_c_order_view;
 use core::marker::PhantomData;
 use eunomia::Complex;
 use leto::Array3;
@@ -88,11 +86,7 @@ where
             [NX, NY, NZ],
             "static 3D forward shape mismatch"
         );
-        with_c_order_view(data, |mut contiguous| {
-            Self::axis2_pass_complex::<true>(contiguous.reborrow());
-            Self::axis1_pass_complex::<true>(contiguous.reborrow());
-            Self::axis0_pass_complex::<true>(contiguous);
-        });
+        with_c_order_view(data, |contiguous| Self::all_axes::<true>(contiguous));
     }
 
     /// Inverse transform of a complex Leto view in-place with normalization.
@@ -106,76 +100,33 @@ where
             [NX, NY, NZ],
             "static 3D inverse shape mismatch"
         );
-        with_c_order_view(data, |mut contiguous| {
-            Self::axis0_pass_complex::<false>(contiguous.reborrow());
-            Self::axis1_pass_complex::<false>(contiguous.reborrow());
-            Self::axis2_pass_complex::<false>(contiguous);
-        });
+        with_c_order_view(data, |contiguous| Self::all_axes::<false>(contiguous));
     }
 
-    fn axis2_pass_complex<const FORWARD: bool>(mut data: ArrayViewMut3<'_, F::Complex>) {
-        if NZ <= 1 {
-            return;
-        }
-        let data_slice = data
-            .as_mut_slice()
-            .expect("invariant: 3D axis execution receives C-order data");
-        let lane_plan = StaticFftPlan1D::<F, NZ>::new();
-        let lane_fn = |lane: &mut [F::Complex]| {
+    /// One direction's lane transform for a compile-time axis length.
+    fn lane<const FORWARD: bool, const N: usize>() -> impl Fn(&mut [F::Complex]) + Send + Sync {
+        let lane_plan = StaticFftPlan1D::<F, N>::new();
+        move |lane: &mut [F::Complex]| {
             if FORWARD {
                 lane_plan.forward_complex_slice_inplace(lane);
             } else {
                 lane_plan.inverse_complex_slice_inplace(lane);
             }
-        };
-        lanes::contiguous::<F, FORWARD, 3>(data_slice, NZ, lane_fn);
+        }
     }
 
-    fn axis1_pass_complex<const FORWARD: bool>(mut data: ArrayViewMut3<'_, F::Complex>) {
-        if NY <= 1 {
-            return;
-        }
+    fn all_axes<const FORWARD: bool>(mut data: ArrayViewMut3<'_, F::Complex>) {
         let data_slice = data
             .as_mut_slice()
             .expect("invariant: 3D axis execution receives C-order data");
-        with_3d_y_scratch::<F::Complex, _>(NX * NY * NZ, |scratch| {
-            transpose_matrices(data_slice, scratch, NX, NY, NZ);
-
-            let lane_plan = StaticFftPlan1D::<F, NY>::new();
-            let lane_fn = |lane: &mut [F::Complex]| {
-                if FORWARD {
-                    lane_plan.forward_complex_slice_inplace(lane);
-                } else {
-                    lane_plan.inverse_complex_slice_inplace(lane);
-                }
-            };
-            lanes::execute::<F, FORWARD>(scratch, data_slice, NY, lane_fn);
-
-            transpose_matrices(scratch, data_slice, NX, NZ, NY);
-        });
-    }
-
-    fn axis0_pass_complex<const FORWARD: bool>(mut data: ArrayViewMut3<'_, F::Complex>) {
-        if NX <= 1 {
-            return;
-        }
-        let data_slice = data
-            .as_mut_slice()
-            .expect("invariant: 3D axis execution receives C-order data");
-        with_3d_x_scratch::<F::Complex, _>(NX * NY * NZ, |scratch| {
-            transpose_matrices(data_slice, scratch, 1, NX, NY * NZ);
-
-            let lane_plan = StaticFftPlan1D::<F, NX>::new();
-            let lane_fn = |lane: &mut [F::Complex]| {
-                if FORWARD {
-                    lane_plan.forward_complex_slice_inplace(lane);
-                } else {
-                    lane_plan.inverse_complex_slice_inplace(lane);
-                }
-            };
-            lanes::execute::<F, FORWARD>(scratch, data_slice, NX, lane_fn);
-
-            transpose_matrices(scratch, data_slice, 1, NY * NZ, NX);
-        });
+        passes::all_axes::<F, FORWARD, _, _, _>(
+            data_slice,
+            [NX, NY, NZ],
+            AxisLanes {
+                x: Self::lane::<FORWARD, NX>(),
+                y: Self::lane::<FORWARD, NY>(),
+                z: Self::lane::<FORWARD, NZ>(),
+            },
+        );
     }
 }

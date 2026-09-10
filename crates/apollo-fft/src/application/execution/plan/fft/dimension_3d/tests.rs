@@ -197,6 +197,57 @@ fn axis_passes_compose_to_full_forward_and_roundtrip_per_axis() {
 }
 
 #[test]
+fn degenerate_extents_take_the_single_pass_and_round_trip() {
+    use crate::application::execution::plan::fft::dimension_3d::FftPlan3D;
+    use crate::domain::metadata::shape::Shape3D;
+
+    // One non-contiguous axis of length one leaves the other its own pass; both
+    // at one leave only axis 2. Each shape must still round-trip and match the
+    // direct forward.
+    fn check<const NX: usize, const NY: usize, const NZ: usize>() {
+        let input = signal::<NX, NY, NZ>();
+        let expected = direct_forward::<NX, NY, NZ>(&input);
+
+        let plan = StaticFftPlan3D::<f64, NX, NY, NZ>::new();
+        let mut actual = input.clone();
+        plan.forward_complex_inplace(&mut actual);
+        let err = max_err(&actual, &expected);
+        assert!(
+            err <= 1.0e-10,
+            "static [{NX}, {NY}, {NZ}] forward err={err:.2e}"
+        );
+        plan.inverse_complex_inplace(&mut actual);
+        let err = max_err(&actual, &input);
+        assert!(
+            err <= 1.0e-10,
+            "static [{NX}, {NY}, {NZ}] round trip err={err:.2e}"
+        );
+
+        let plan = FftPlan3D::<f64>::new(
+            Shape3D::new(NX, NY, NZ).expect("invariant: shape lengths are non-zero"),
+        );
+        let mut actual = input.clone();
+        plan.forward_complex_inplace(&mut actual);
+        let err = max_err(&actual, &expected);
+        assert!(
+            err <= 1.0e-10,
+            "dynamic [{NX}, {NY}, {NZ}] forward err={err:.2e}"
+        );
+        plan.inverse_complex_inplace(&mut actual);
+        let err = max_err(&actual, &input);
+        assert!(
+            err <= 1.0e-10,
+            "dynamic [{NX}, {NY}, {NZ}] round trip err={err:.2e}"
+        );
+    }
+    check::<1, 4, 5>();
+    check::<3, 1, 5>();
+    check::<1, 1, 5>();
+    check::<3, 4, 1>();
+    check::<1, 1, 1>();
+}
+
+#[test]
 fn static_fft_3d_preserves_logical_view_order() {
     let plan = StaticFftPlan3D::<f64, 2, 3, 4>::new();
     exercise_nonstandard_layouts(
