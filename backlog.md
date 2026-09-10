@@ -67,6 +67,12 @@
 
 - **Outcome:** PR #375. `batched/mod.rs` (729), `radix.rs` (643), `tests.rs` (578) and `sweep.rs`'s tests split by concern into leaf modules under `batched/` and `batched/tests/`, line moves only; the fleet scan on the tree reads `oversized_files` 37 against the baseline 38 and `manifest_implementation` 23 against 24, no class up. Remaining in the baseline: `base128/tests.rs` (803).
 
+<a id="apollo-base128-probe-module"></a>
+
+## APOLLO-BASE128-PROBE-MODULE — Keep measurement helpers in the probe module [patch] — done 2026-09-10
+
+- **Outcome:** Windows-only incumbent and four-block measurement helpers now live under `base128/pinned_probe`; `base128/mod.rs` is 451 lines and the `apollo-fft` suite remains green (622 passed, 42 skipped).
+
 <a id="apollo-miri-schedule-split-coverage"></a>
 ## APOLLO-MIRI-SCHEDULE-SPLIT-COVERAGE — Put the split schedule's scratch under a UB checker [patch] — done 2026-09-10
 
