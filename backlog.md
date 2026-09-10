@@ -2,29 +2,9 @@
 
 <a id="apollo-batched-files-past-target"></a>
 
-## APOLLO-BATCHED-FILES-PAST-TARGET — Split the batched files past the 500-line target into leaf modules [patch] — in-progress
+## APOLLO-BATCHED-FILES-PAST-TARGET — Split the batched files past the 500-line target into leaf modules [patch] — done 2026-09-10
 
-- **Integrator:** claude/fable; **last-update:** 2026-09-10; branch `refactor/apollo-batched-files-past-target` on lane `D:/atlas/worktrees/apollo-route`, stacked on PR #373; lease: claude/fable `components/batched/**` 2026-09-10T01:20Z. Taken on the re-open trigger: the lane's sink item completed (PR #373 enqueued) and its lease discharged.
-- **Ratchet regression.** The fleet scan reports `apollo/oversized_files:
-  38 -> 40`. The two additions are
-  `application/execution/kernel/components/batched/radix.rs` (643) and
-  `.../batched/tests.rs` (599); no file left the class, so the delta is exactly
-  these two.
-- **Provenance.** Both crossed through the four-step planar work —
-  `323ccfc5`, `7720e3ef`, `c20fec4a`, `ba762b2c`, `982eb84e` — which is a
-  legitimate increment, not accreted debt. The class is a size target, so it
-  fires on growth regardless of the growth's quality; the answer is the split,
-  not an absorbed baseline.
-- **Scope.** `mod.rs` (729, an implementation-bearing manifest), `radix.rs`
-  (643) and `tests.rs` (578) split along their concerns into leaf modules
-  under `batched/`: the plan, the two stage sets, the driver, the plane
-  layout, the fold tables, the register access, the lane arithmetic, the
-  radices, the seams, the pass; the tests by subject under `tests/`. No
-  behaviour moves; the manifest keeps the module tree and the crate-facing
-  re-exports. Non-goal: `base128/tests.rs` (803, in the baseline).
-- **Acceptance:** `atlas-conformance.py check --repo apollo` reports no
-  `oversized_files` regression against the committed baseline of 38, with the
-  batched suite unchanged.
+- **Outcome:** PR #375. `batched/mod.rs` (729), `radix.rs` (643), `tests.rs` (578) and `sweep.rs`'s tests split by concern into leaf modules under `batched/` and `batched/tests/`, line moves only; the fleet scan on the tree reads `oversized_files` 37 against the baseline 38 and `manifest_implementation` 23 against 24, no class up. Remaining in the baseline: `base128/tests.rs` (803).
 
 <a id="apollo-miri-schedule-split-coverage"></a>
 ## APOLLO-MIRI-SCHEDULE-SPLIT-COVERAGE — Put the split schedule's scratch under a UB checker [patch] — todo
