@@ -237,6 +237,10 @@
 ## APOLLO-PLANAR-SINK-ROW-COPY — Copy the staged sink rows register-wide [patch] [perf] — done 2026-09-09 (rejected)
 - **Outcome:** the staged rows copied with register loads and stores in place of one memcpy per row: no measurable effect. On a quiet host the sink sweep of the unchanged tree moves by up to 20% between its own two runs at 2048 to 16384 (`f64` 2048 5.1k and 4.2k cycles), the candidate sits inside that spread (4.4k and 4.8k), 4096 `f64` reads above it, and `rustfft_comparison` is flat at 2048 in both precisions; a 256-byte memcpy is not the cost. Evidence `../../output/apollo-planar-rectangular/` (`rowcopy_*`, `sections_*_r*`). The sink sweep's cost per element stays open on the parent item; the next instrument is the seam sweep measured alone against a plain sweep of the same stages, since the section probe's run-to-run spread now exceeds the effects left.
 
+<a id="apollo-planar-sink-aligned-direct"></a>
+## APOLLO-PLANAR-SINK-ALIGNED-DIRECT — Write the sink direct where the caller's rows are on a line [patch] [perf] — done 2026-09-10
+- **Outcome:** PR #373. With the caller's rows on a line the direct sink reads `f2` at 2048 `f32` 1.6k to 1.7k cycles against 2.4k to 2.7k staged (the transform 6.6k against 7.4k to 7.8k) and is level at the 16 KiB planes (2048 `f64`, 4096 `f32`), so the sink goes direct up to `DIRECT_SINK_MAX_PLANE_BYTES` (two pages) with the caller on a line and stages otherwise; off a line unchanged, `rustfft_comparison` 2048 level (`../../output/apollo-planar-rectangular/sinkdir_*`). The 16 KiB cells of the acceptance were not met and are recorded as level.
+
 <a id="apollo-workspace-impulse-oracle-budget"></a>
 ## APOLLO-WORKSPACE-IMPULSE-ORACLE-BUDGET — Fit the workspace impulse oracle in the CI slow budget [patch] — todo
 - **Evidence:** `workspace_extents_preserve_the_impulse_spectrum` takes 3.6 s in the dev profile on the 285K host (2026-09-09, base of the 1M crossover), and the hosted runner is 13 to 17 times slower on compute-bound tests, so it sits past the 30 s slow bound in the `ci` profile; twelve transforms at 262144 dominate.

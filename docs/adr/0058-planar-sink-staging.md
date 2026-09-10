@@ -108,6 +108,18 @@ pair after the gate (`st_main3` / `st_stage3`) reads 4096 8.9 to 8.0 and
 counted. Above the gate the sink is main's direct store, so 262144 keeps
 main's behaviour apart from the sweep grouping.
 
+## Revision 2026-09-10
+
+Below the staging gate a second arm: where the caller's rows sit on a
+cache line and a plane is at most `DIRECT_SINK_MAX_PLANE_BYTES` (two
+pages) the sink is written direct, since there the staged form's extra
+pass over the tile outweighs the direct stores' line splits (which a
+line-aligned caller does not pay): 2048 `f32` reads the sink sweep 1.6k
+to 1.7k cycles direct against 2.4k to 2.7k staged, the 16 KiB planes
+level, misaligned callers unchanged
+(`output/apollo-planar-rectangular/sinkdir_*`,
+backlog.md#apollo-planar-sink-aligned-direct).
+
 ## Consequences
 
 Apollo leads RustFFT at 4096 and 16384 `f64` in the census and sits 1.02
