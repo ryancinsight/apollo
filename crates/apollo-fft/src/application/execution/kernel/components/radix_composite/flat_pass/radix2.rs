@@ -157,7 +157,9 @@ where
                     }
                     j += per;
                 }
-                scalar_columns(src, dst, tw, stride, prev_len, stage_chunk, g, j);
+                if j < prev_len {
+                    scalar_columns(src, dst, tw, stride, prev_len, stage_chunk, g, j);
+                }
             }
         }
 
