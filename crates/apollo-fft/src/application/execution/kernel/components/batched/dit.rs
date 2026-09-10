@@ -3,10 +3,13 @@
 //! natural order.
 
 use super::lane::Lane;
+use super::pass::butterfly_rows;
 use super::plan::BatchedPlan;
-use super::sweep;
+use super::radix::{Dit2, Dit4, Pair};
+use super::seams::{Columns, Rows, Seams};
+use super::sweep::{block_columns, spread, sweep_lengths};
 use crate::application::execution::kernel::mixed_radix::MixedRadixScalar;
-use hermes_simd::{LaneKernel, LaneScalar, Simd, SimdArch, SimdKernel};
+use hermes_simd::{LaneKernel, LaneScalar, Simd, SimdArch, SimdKernel, SimdStorage};
 
 /// Section labels of the time-decimated stage set's sweeps, by sweep index;
 /// the attribution probe reports them beneath `stages1`.
@@ -66,9 +69,9 @@ where
         // single-stage one, so results are bitwise those of any other
         // grouping.
         let mut l0 = 2usize;
-        for (index, stages) in sweep::sweep_lengths(len.trailing_zeros()).enumerate() {
+        for (index, stages) in sweep_lengths(len.trailing_zeros()).enumerate() {
             sect!(TIME_SWEEPS[index], {
-                sweep::sweep_time(re, im, tw, source, b, s, len, l0, stages, simd);
+                sweep_time(re, im, tw, source, b, s, len, l0, stages, simd);
             });
             l0 <<= stages;
         }
@@ -98,4 +101,116 @@ pub(super) fn run_batched<T>(
         stride,
         len: plan.len,
     });
+}
+
+/// One time-decimated sweep over stages `l0 << p` for `p < stages`.
+///
+/// `source` is read by the pass over stage 2 when that stage is in this
+/// sweep, which is the one pass that loads every element exactly once.
+#[expect(
+    clippy::inline_always,
+    reason = "must fold into the stage set's target-feature scope with the driver it calls"
+)]
+#[expect(
+    clippy::too_many_arguments,
+    reason = "the sweep is the loop nest of one stage set; its arguments are the set's fields plus the sweep's stage range"
+)]
+#[inline(always)]
+pub(super) fn sweep_time<T, A>(
+    re: &mut [T],
+    im: &mut [T],
+    tw: &[Pair<T>],
+    source: Option<&[T]>,
+    batch: usize,
+    stride: usize,
+    len: usize,
+    l0: usize,
+    stages: u32,
+    simd: Simd<T, A>,
+) where
+    T: LaneScalar + Lane,
+    A: SimdArch + SimdKernel<T>,
+{
+    let lanes = <A as SimdStorage<T>>::LANE_COUNT;
+    let step0 = l0 >> 1;
+    let tile_rows = 1usize << stages;
+    let span = tile_rows * step0;
+    let groups = len / span;
+    let cols = block_columns::<T>(tile_rows, lanes, batch);
+    let splat = |(wr, wi): Pair<T>| (simd.splat(wr), simd.splat(wi));
+    // The source rides the sweep over stage 2; its rows are read in
+    // bit-reversed order straight from the caller's buffer.
+    let source = source
+        .filter(|_| l0 == 2)
+        .map(|source| (source, len.trailing_zeros()));
+
+    for j in 0..step0 {
+        for g in 0..groups {
+            let base = g * span + j;
+            let mut start = 0;
+            while start < batch {
+                let block = Columns {
+                    start,
+                    end: (start + cols).min(batch),
+                };
+                let mut o = 0;
+                while o + 2 <= stages {
+                    let l = l0 << o;
+                    let half = l >> 1;
+                    let twx = half - 1;
+                    for q in 0..tile_rows >> 2 {
+                        let i0 = spread(q, o, 2);
+                        let e = j + (i0 & ((1 << o) - 1)) * step0;
+                        let tws = [tw[twx + e], tw[twx + half + e], tw[twx + half + e + half]];
+                        let twv = tws.map(splat);
+                        let rows = Rows {
+                            first: base + i0 * step0,
+                            step: step0 << o,
+                        };
+                        butterfly_rows::<T, A, Dit4, 4, 3>(
+                            re,
+                            im,
+                            rows,
+                            stride,
+                            batch,
+                            block,
+                            &tws,
+                            &twv,
+                            simd,
+                            Seams::time(source.filter(|_| l == 2)),
+                        );
+                    }
+                    o += 2;
+                }
+                if o < stages {
+                    let l = l0 << o;
+                    let half = l >> 1;
+                    let twx = half - 1;
+                    for q in 0..tile_rows >> 1 {
+                        let i0 = spread(q, o, 1);
+                        let e = j + (i0 & ((1 << o) - 1)) * step0;
+                        let tws = [tw[twx + e]];
+                        let twv = tws.map(splat);
+                        let rows = Rows {
+                            first: base + i0 * step0,
+                            step: step0 << o,
+                        };
+                        butterfly_rows::<T, A, Dit2, 2, 1>(
+                            re,
+                            im,
+                            rows,
+                            stride,
+                            batch,
+                            block,
+                            &tws,
+                            &twv,
+                            simd,
+                            Seams::time(source.filter(|_| l == 2)),
+                        );
+                    }
+                }
+                start = block.end;
+            }
+        }
+    }
 }
