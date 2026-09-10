@@ -272,12 +272,10 @@
 - **Dependencies:** none; parent [beat the references](#atlas-apollo-beat-the-references). **Verification:** the pinned order probe (`../../output/apollo-composite-generic/composite_orders.rs`).
 
 <a id="apollo-fold-compact-memory"></a>
-## APOLLO-FOLD-COMPACT-MEMORY — Decide the compact fold table below 2^18 by its memory against its cost [patch] — in-progress
-- **Integrator:** claude/fable; **last-update:** 2026-09-10; branch `perf/apollo-fold-compact-memory` on lane `D:/atlas/worktrees/apollo-route`; lease: claude/fable `components/batched/fold.rs`, `docs/adr/0059-compact-four-step-fold.md` 2026-09-10T20:00Z; parent [beat the references](#atlas-apollo-beat-the-references).
-- **Evidence:** the retained-footprint census on main (`retained_footprint_attribution`, 2026-09-10): after the first forward the planar route retains its scratch (about `16n` bytes) and the fold tables, which below `COMPACT_FOLD_MIN_LEN = 2^18` are the full `m × m` matrix, `16n` bytes per direction (65536 `f64`: 1 MiB each, 2 MiB both directions, per precision); above the bound the compact form retains `2n / F` plus a row (262144: 1 MiB against 4). ADR 0059 set the bound by speed alone: at 65536 `f32` the compact fold sweep read 48k to 58k cycles (about 4% of the transform), at 16384 within noise.
-- **Scope:** measure the compact form at 16384 and 65536 in both precisions with the section probe (four runs, counterbalanced) and `engine_census`; decide the bound by the recorded trade (retained bytes per length and direction against transform time), and move `COMPACT_FOLD_MIN_LEN` with an ADR 0059 revision if the trade holds, or record the measured cost and keep it. Non-goals: the fold's arithmetic, the scratch.
-- **Acceptance:** the bound recorded with both sides of the trade measured; if moved, the oracle suites green and the census retained bytes at the moved lengths one eighth or less.
-- **Dependencies:** none. **Verification:** `pinned_sections`, `engine_census`, `retained_footprint_attribution`.
+## APOLLO-FOLD-COMPACT-MEMORY — Decide the compact fold table below 2^18 by its memory against its cost [patch] — review
+- **Integrator:** claude/fable; **last-update:** 2026-09-10; branch `perf/apollo-fold-compact-memory` (PR pending); parent [beat the references](#atlas-apollo-beat-the-references).
+- **Outcome:** `COMPACT_FOLD_MIN_LEN` 2^18 to 2^16 (ADR 0059, revision 2026-09-10). Measured on main 9fec6a5b against the bound at 2^14 (`../../output/apollo-fold-compact-2026-09-10/`, section probe four runs counterbalanced, footprint census, peak working-set census): at 65536 the compact table reads 0.96 (`f64`) and 1.00 (`f32`) of the transform, the fold tables 1 MiB to 272 KiB per direction (`f64`), the peak working set 1860 KB to 1086 KB; at 16384 it reads 1.05 (`f64`) and 1.00 (`f32`) for 256 KiB to 72 KiB, so the full row stays there. The acceptance named one eighth; the two-level form at the `f64` lane width is 3.8 times smaller, which the ADR records with its formula.
+- **Verification:** the suites (621 tests) green with the bound moved; `cargo doc` warning-free.
 
 <a id="apollo-base128-attribution"></a>
 ## APOLLO-BASE128-ATTRIBUTION — Attribute the base-128 route at 512 and 1024 [patch] [perf] — todo
