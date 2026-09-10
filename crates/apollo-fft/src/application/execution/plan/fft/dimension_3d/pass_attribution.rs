@@ -351,4 +351,5 @@ fn arms_for_extent(suite: &mut BenchmarkSuite, n: usize) {
     });
 }
 
+#[cfg(test)]
 mod report;
