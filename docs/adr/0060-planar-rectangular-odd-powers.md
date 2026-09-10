@@ -159,3 +159,17 @@ measured level on the rectangles and slower on the squares
 backlog.md#apollo-planar-transpose-folded-loads). The transpose keeps the
 register network; a shorter pass needs a different instruction pattern,
 not this one.
+
+### Considered 2026-09-10: the bottom passes without their multiplies
+
+The spike into the L1-resident floor (backlog.md#apollo-planar-l1-route-spike)
+ran the first time-decimated pass and the last frequency-decimated pass
+(stages 2 and 4, twiddles `1`, `1` and `W_4^1`) without their three
+multiplies. The passes measured level at 2048 in both precisions and the
+bench did not move (`output/apollo-planar-rectangular/bottom_*`): they are
+bound by the seam shuffles and the load and store traffic of a pass, not
+by the FP ports, so the route's cost at L1 sizes is its pass count. The
+planar layout caps a pass at radix 4 on sixteen registers (ADR 0055), and
+with the seams at their floors (the two sections above) the remaining gap
+to RustFFT at 2048 `f32` (1.6 times) is structural to the route: a
+shorter one is a different kernel family, not a planar variant.
