@@ -2,8 +2,6 @@ use eunomia::Complex;
 
 mod adaptive;
 pub(crate) mod arity;
-#[cfg(target_arch = "x86_64")]
-mod avx2;
 mod cache;
 mod core;
 mod flat_pass;

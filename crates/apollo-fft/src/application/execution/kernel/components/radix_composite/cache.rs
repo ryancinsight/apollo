@@ -57,11 +57,11 @@ pub trait CompositeCache: WinogradScalar + ShortWinogradScalar + hermes_simd::La
         })
     }
 
-    /// Attempt an AVX2-accelerated flat Stockham pass for radix-3.
-    ///
-    /// Same amortization contract as `try_flat_pass_r4`.
-    /// The scalar path is selected structurally on non-x86 targets.
-    #[cfg(target_arch = "x86_64")]
+    /// The flat radix-3 pass over the dispatched register width; `false`
+    /// where the backend has no vector register, and the scalar pass runs
+    /// instead. `tw` holds the two twiddle rows, arm `k` at
+    /// `(k - 1) * prev_len`.
+    #[inline]
     fn try_flat_pass_r3<const INVERSE: bool>(
         src: &[Complex<Self>],
         dst: &mut [Complex<Self>],
@@ -70,15 +70,23 @@ pub trait CompositeCache: WinogradScalar + ShortWinogradScalar + hermes_simd::La
         stage_chunk: usize,
         tw: &[Complex<Self>],
         pointwise: Option<&[Complex<Self>]>,
-    ) -> bool;
+    ) -> bool {
+        hermes_simd::vectorize(super::flat_pass::FlatPassR3::<Self, INVERSE> {
+            src,
+            dst,
+            prev_len,
+            g_count,
+            stage_chunk,
+            tw,
+            pointwise,
+        })
+    }
 
-    /// Attempt an AVX2-accelerated flat Stockham pass for radix-5.
-    ///
-    /// Same amortization contract as `try_flat_pass_r4`. Vectorizes the
-    /// radix-5 stage (previously scalar) shared by every composite with a
-    /// factor of 5 (e.g. N=15, 25, 100, 180, 1000).
-    /// The scalar path is selected structurally on non-x86 targets.
-    #[cfg(target_arch = "x86_64")]
+    /// The flat radix-5 pass over the dispatched register width; `false`
+    /// where the backend has no vector register, and the scalar pass runs
+    /// instead. `tw` holds the 4 twiddle rows, arm `k` at
+    /// `(k - 1) * prev_len`.
+    #[inline]
     fn try_flat_pass_r5<const INVERSE: bool>(
         src: &[Complex<Self>],
         dst: &mut [Complex<Self>],
@@ -87,14 +95,23 @@ pub trait CompositeCache: WinogradScalar + ShortWinogradScalar + hermes_simd::La
         stage_chunk: usize,
         tw: &[Complex<Self>],
         pointwise: Option<&[Complex<Self>]>,
-    ) -> bool;
+    ) -> bool {
+        hermes_simd::vectorize(super::flat_pass::FlatPassR5::<Self, INVERSE> {
+            src,
+            dst,
+            prev_len,
+            g_count,
+            stage_chunk,
+            tw,
+            pointwise,
+        })
+    }
 
-    /// Attempt an AVX2-accelerated flat Stockham pass for radix-7.
-    ///
-    /// Same amortization contract; vectorizes the radix-7 stage (previously
-    /// scalar) shared by every composite with a factor of 7. The scalar path
-    /// is selected structurally on non-x86 targets.
-    #[cfg(target_arch = "x86_64")]
+    /// The flat radix-7 pass over the dispatched register width; `false`
+    /// where the backend has no vector register, and the scalar pass runs
+    /// instead. `tw` holds the 6 twiddle rows, arm `k` at
+    /// `(k - 1) * prev_len`.
+    #[inline]
     fn try_flat_pass_r7<const INVERSE: bool>(
         src: &[Complex<Self>],
         dst: &mut [Complex<Self>],
@@ -103,7 +120,17 @@ pub trait CompositeCache: WinogradScalar + ShortWinogradScalar + hermes_simd::La
         stage_chunk: usize,
         tw: &[Complex<Self>],
         pointwise: Option<&[Complex<Self>]>,
-    ) -> bool;
+    ) -> bool {
+        hermes_simd::vectorize(super::flat_pass::FlatPassR7::<Self, INVERSE> {
+            src,
+            dst,
+            prev_len,
+            g_count,
+            stage_chunk,
+            tw,
+            pointwise,
+        })
+    }
 
     /// The flat radix-2 pass over the dispatched register width, the
     /// trailing stage of odd-power-of-two decompositions; `false` below the
@@ -236,99 +263,6 @@ fn build_composite_twiddles<F: WinogradScalar, const INVERSE: bool>(
 }
 
 impl CompositeCache for f64 {
-    /// AVX2+FMA flat pass for radix-7 f64. Checked once per stage (not per group).
-    #[cfg(target_arch = "x86_64")]
-    #[inline]
-    fn try_flat_pass_r7<const INVERSE: bool>(
-        src: &[Complex<f64>],
-        dst: &mut [Complex<f64>],
-        prev_len: usize,
-        g_count: usize,
-        stage_chunk: usize,
-        tw: &[Complex<f64>],
-        pointwise: Option<&[Complex<f64>]>,
-    ) -> bool {
-        #[cfg(target_arch = "x86_64")]
-        if is_x86_feature_detected!("avx2") && is_x86_feature_detected!("fma") {
-            // SAFETY: Feature detection above guarantees AVX2+FMA.
-            unsafe {
-                super::avx2::flat_pass_r7_f64::<INVERSE>(
-                    src,
-                    dst,
-                    prev_len,
-                    g_count,
-                    stage_chunk,
-                    tw,
-                    pointwise,
-                );
-            }
-            return true;
-        }
-        false
-    }
-
-    /// AVX2+FMA flat pass for radix-5 f64. Checked once per stage (not per group).
-    #[cfg(target_arch = "x86_64")]
-    #[inline]
-    fn try_flat_pass_r5<const INVERSE: bool>(
-        src: &[Complex<f64>],
-        dst: &mut [Complex<f64>],
-        prev_len: usize,
-        g_count: usize,
-        stage_chunk: usize,
-        tw: &[Complex<f64>],
-        pointwise: Option<&[Complex<f64>]>,
-    ) -> bool {
-        #[cfg(target_arch = "x86_64")]
-        if is_x86_feature_detected!("avx2") && is_x86_feature_detected!("fma") {
-            // SAFETY: Feature detection above guarantees AVX2+FMA.
-            unsafe {
-                super::avx2::flat_pass_r5_f64::<INVERSE>(
-                    src,
-                    dst,
-                    prev_len,
-                    g_count,
-                    stage_chunk,
-                    tw,
-                    pointwise,
-                );
-            }
-            return true;
-        }
-        false
-    }
-
-    /// AVX2+FMA flat pass for radix-3 f64.
-    #[cfg(target_arch = "x86_64")]
-    #[inline]
-    fn try_flat_pass_r3<const INVERSE: bool>(
-        src: &[Complex<f64>],
-        dst: &mut [Complex<f64>],
-        prev_len: usize,
-        g_count: usize,
-        stage_chunk: usize,
-        tw: &[Complex<f64>],
-        pointwise: Option<&[Complex<f64>]>,
-    ) -> bool {
-        #[cfg(target_arch = "x86_64")]
-        if is_x86_feature_detected!("avx2") && is_x86_feature_detected!("fma") {
-            // SAFETY: Feature detection above guarantees AVX2+FMA.
-            unsafe {
-                super::avx2::flat_pass_r3_f64::<INVERSE>(
-                    src,
-                    dst,
-                    prev_len,
-                    g_count,
-                    stage_chunk,
-                    tw,
-                    pointwise,
-                );
-            }
-            return true;
-        }
-        false
-    }
-
     #[inline]
     fn with_scratch<R>(n: usize, f: impl FnOnce(&mut [Complex<Self>]) -> R) -> R {
         TL_COMPOSITE_SCRATCH_64.with(|pool| pool.with_scratch(n, f))
@@ -375,99 +309,6 @@ impl CompositeCache for f64 {
 }
 
 impl CompositeCache for f32 {
-    /// AVX2+FMA flat pass for radix-7 f32. Processes 4 complex per __m256 register.
-    #[cfg(target_arch = "x86_64")]
-    #[inline]
-    fn try_flat_pass_r7<const INVERSE: bool>(
-        src: &[Complex<f32>],
-        dst: &mut [Complex<f32>],
-        prev_len: usize,
-        g_count: usize,
-        stage_chunk: usize,
-        tw: &[Complex<f32>],
-        pointwise: Option<&[Complex<f32>]>,
-    ) -> bool {
-        #[cfg(target_arch = "x86_64")]
-        if is_x86_feature_detected!("avx2") && is_x86_feature_detected!("fma") {
-            // SAFETY: Feature detection above guarantees AVX2+FMA.
-            unsafe {
-                super::avx2::flat_pass_r7_f32::<INVERSE>(
-                    src,
-                    dst,
-                    prev_len,
-                    g_count,
-                    stage_chunk,
-                    tw,
-                    pointwise,
-                );
-            }
-            return true;
-        }
-        false
-    }
-
-    /// AVX2+FMA flat pass for radix-5 f32. Processes 4 complex per __m256 register.
-    #[cfg(target_arch = "x86_64")]
-    #[inline]
-    fn try_flat_pass_r5<const INVERSE: bool>(
-        src: &[Complex<f32>],
-        dst: &mut [Complex<f32>],
-        prev_len: usize,
-        g_count: usize,
-        stage_chunk: usize,
-        tw: &[Complex<f32>],
-        pointwise: Option<&[Complex<f32>]>,
-    ) -> bool {
-        #[cfg(target_arch = "x86_64")]
-        if is_x86_feature_detected!("avx2") && is_x86_feature_detected!("fma") {
-            // SAFETY: Feature detection above guarantees AVX2+FMA.
-            unsafe {
-                super::avx2::flat_pass_r5_f32::<INVERSE>(
-                    src,
-                    dst,
-                    prev_len,
-                    g_count,
-                    stage_chunk,
-                    tw,
-                    pointwise,
-                );
-            }
-            return true;
-        }
-        false
-    }
-
-    /// AVX2+FMA flat pass for radix-3 f32.
-    #[cfg(target_arch = "x86_64")]
-    #[inline]
-    fn try_flat_pass_r3<const INVERSE: bool>(
-        src: &[Complex<f32>],
-        dst: &mut [Complex<f32>],
-        prev_len: usize,
-        g_count: usize,
-        stage_chunk: usize,
-        tw: &[Complex<f32>],
-        pointwise: Option<&[Complex<f32>]>,
-    ) -> bool {
-        #[cfg(target_arch = "x86_64")]
-        if is_x86_feature_detected!("avx2") && is_x86_feature_detected!("fma") {
-            // SAFETY: Feature detection above guarantees AVX2+FMA.
-            unsafe {
-                super::avx2::flat_pass_r3_f32::<INVERSE>(
-                    src,
-                    dst,
-                    prev_len,
-                    g_count,
-                    stage_chunk,
-                    tw,
-                    pointwise,
-                );
-            }
-            return true;
-        }
-        false
-    }
-
     #[inline]
     fn with_scratch<R>(n: usize, f: impl FnOnce(&mut [Complex<Self>]) -> R) -> R {
         TL_COMPOSITE_SCRATCH_32.with(|pool| pool.with_scratch(n, f))

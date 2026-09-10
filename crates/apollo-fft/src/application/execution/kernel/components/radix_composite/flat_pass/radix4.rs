@@ -189,26 +189,30 @@ where
                     // SAFETY: `src_base + j + 2 per <= stride`, so every arm's
                     // row and every twiddle row stay inside their slices, and
                     // `dst_base + j + 3 prev_len + 2 per <= g_count * stage_chunk`.
+                    // Straight-line loads: a closure here compiled out of the
+                    // target-feature frame with every vector op a call.
                     unsafe {
-                        let arms = |at: usize| -> [Vector<T, A>; 4] {
-                            [
-                                load::<T, A>(src, src_base + at),
-                                cmul(
-                                    load::<T, A>(src, stride + src_base + at),
-                                    load::<T, A>(tw, at),
-                                ),
-                                cmul(
-                                    load::<T, A>(src, 2 * stride + src_base + at),
-                                    load::<T, A>(tw, prev_len + at),
-                                ),
-                                cmul(
-                                    load::<T, A>(src, 3 * stride + src_base + at),
-                                    load::<T, A>(tw, 2 * prev_len + at),
-                                ),
-                            ]
-                        };
-                        let [a0, a1, a2, a3] = arms(j);
-                        let [c0, c1, c2, c3] = arms(j + per);
+                        let (at, bt) = (src_base + j, src_base + j + per);
+                        let a0 = load::<T, A>(src, at);
+                        let a1 = cmul(load::<T, A>(src, stride + at), load::<T, A>(tw, j));
+                        let a2 = cmul(
+                            load::<T, A>(src, 2 * stride + at),
+                            load::<T, A>(tw, prev_len + j),
+                        );
+                        let a3 = cmul(
+                            load::<T, A>(src, 3 * stride + at),
+                            load::<T, A>(tw, 2 * prev_len + j),
+                        );
+                        let c0 = load::<T, A>(src, bt);
+                        let c1 = cmul(load::<T, A>(src, stride + bt), load::<T, A>(tw, j + per));
+                        let c2 = cmul(
+                            load::<T, A>(src, 2 * stride + bt),
+                            load::<T, A>(tw, prev_len + j + per),
+                        );
+                        let c3 = cmul(
+                            load::<T, A>(src, 3 * stride + bt),
+                            load::<T, A>(tw, 2 * prev_len + j + per),
+                        );
                         let b = dft4::<T, A, INVERSE>(one, a0, a1, a2, a3);
                         let d = dft4::<T, A, INVERSE>(one, c0, c1, c2, c3);
                         for k in 0..4 {

@@ -11,10 +11,16 @@
 //! complexes and a complex offset is twice a real one.
 
 mod radix2;
+mod radix3;
 mod radix4;
+mod radix5;
+mod radix7;
 
 pub(super) use radix2::FlatPassR2;
+pub(super) use radix3::FlatPassR3;
 pub(super) use radix4::FlatPassR4;
+pub(super) use radix5::FlatPassR5;
+pub(super) use radix7::FlatPassR7;
 
 use eunomia::Complex;
 use hermes_simd::{LaneScalar, SimdArch, SimdKernel, SimdStorage, Vector};
