@@ -67,6 +67,7 @@ pub(crate) mod plane;
 mod radix;
 mod register;
 mod seams;
+mod sink;
 mod sweep;
 
 pub(crate) use cache::BatchedPlanCache;
