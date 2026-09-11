@@ -168,9 +168,30 @@ pub(crate) fn prefers_bluestein_for_rader(n: usize) -> bool {
             && !crate::application::execution::kernel::radix_shape::is_prime23_smooth(m))
 }
 
+/// Whether the Rader convolution for the prime `n` runs as two half-length
+/// convolutions (the half-cyclic backend) rather than one of length
+/// `n - 1`.
+///
+/// The half-cyclic form pays four split and recombine passes and two
+/// codelet transforms of `(n - 1) / 2` to spare the full form its one
+/// transform of `n - 1`; it wins only where that full-length transform
+/// steps over a large prime factor. Measured 2026-09-11
+/// (`half_cyclic_composition_attribution_by_core_type`, both core types,
+/// both scalars, in one run): where `n - 1` is 7-smooth the full form
+/// runs 22 to 60% faster (`n = 97, 101, 113, 151`: `f32` 302 / 271 / 302
+/// / 386 us a batch against 557 / 678 / 642 / 667, `f64` 407 / 397 / 452 /
+/// 593 against 525 / 611 / 576 / 851); where it is not, the half form
+/// wins (`n = 83, 107`, `n - 1 = 2 x 41`, `2 x 53`: 15 to 18%) or the two
+/// are within 5% (`n = 59, 67`, `n - 1 = 2 x 29`, `2 x 3 x 11`, where the
+/// eight-byte scalar keeps the half form by 13% and the four-byte one
+/// reads the full form 5% under). The earlier rule took the half form for
+/// every prime above the threshold, having measured it against Bluestein
+/// and not against the full form.
 #[inline]
 pub(crate) fn prefers_half_cyclic_for_rader<F: MixedRadixScalar>(n: usize) -> bool {
-    n > F::HALF_CYCLIC_RADER_THRESHOLD || F::HALF_CYCLIC_RADER_PRIMES.contains(&n)
+    F::HALF_CYCLIC_RADER_PRIMES.contains(&n)
+        || (n > F::HALF_CYCLIC_RADER_THRESHOLD
+            && !crate::application::execution::kernel::radix_shape::is_seven_smooth(n - 1))
 }
 
 #[inline(never)]
