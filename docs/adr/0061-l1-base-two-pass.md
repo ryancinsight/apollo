@@ -153,3 +153,18 @@ measured first and gained nothing over the split at 256.
   The order lands for its smaller loop and its shared second stage; the
   per-sample gap to RustFFT's butterfly stays the open question, with
   its own kernel's census the next reading.
+- **2026-09-11, both kernels under one census.** RustFFT's
+  `Butterfly256Avx64` at `f64` (its methods instantiate in the consumer's
+  test binary; `output/apollo-base128/base256_2026-09-11.md`): the
+  32-point row pass 424 instructions, 43 spills and 65 shuffles per column
+  set, four sets; the eight-point column pass 109 instructions and no
+  spills per set, sixteen sets; about 1700 and 1740 per 256 points.
+  Apollo's `8 x 4` rows: about 750 instructions a row pair, 3000 per 256
+  points; the column pass 83 per group, about 1330. The column pass is
+  at or below the reference; the row phase runs about 1.8 times its
+  instruction count, the excess being the `zbuf` round trip between the
+  two radix stages and the pair transpose into staging, which RustFFT
+  does not pay (its rows run in registers, spilling, and its transpose
+  rides the column pass). The next slice holds the 32-sample row in
+  registers without the intermediate plane, its outputs stored straight
+  into staging through the pair transpose.
