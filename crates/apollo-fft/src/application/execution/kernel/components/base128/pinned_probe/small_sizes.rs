@@ -229,25 +229,9 @@ fn small_sizes_against_the_references_by_core_type() {
                 })
                 .collect();
             let mut work = src.clone();
-            let base_plan = super::instance_major::Plan128::<f64>::new_if_supported::<false>()
-                .expect("the pinned host must provide the four-lane base capability");
             let twiddles = <f64 as MixedRadixScalar>::cached_twiddle_fwd(n);
-            let split = split_attribution(&src, &mut work, |work| {
-                super::transform_via_base_128::<f64, false, true>(work, &base_plan, &twiddles)
-            });
-            println!(
-                "B128 split n={n}: gather={} blocks={} levels={} total={} | per block ({}): load_and_rows={} columns_and_sink={}",
-                split.gather,
-                split.blocks,
-                split.levels,
-                split.gather + split.blocks + split.levels,
-                split.blocks_per_call,
-                split.rows,
-                split.columns
-            );
-            // The 256 route (ADR 0061) where the width carries 32-sample rows.
-            if let Some(plan256) =
-                super::instance_major::Plan256::<f64>::new_if_supported::<false>()
+            let plan256 = super::instance_major::Plan256::<f64>::new_if_supported::<false>()
+                .expect("the pinned host must provide a native base capability");
             {
                 let split = split_attribution(&src, &mut work, |work| {
                     super::transform_via_base_256::<f64, false, true>(work, &plan256, &twiddles)

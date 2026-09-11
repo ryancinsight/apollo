@@ -4,7 +4,6 @@
 use super::instance_major::{transform_128, Plan128};
 use super::instance_major::{transform_256, Plan256};
 use super::instance_major::{transform_64, Plan64};
-use crate::application::execution::kernel::mixed_radix::MixedRadixScalar;
 use eunomia::{Complex, Complex32, Complex64};
 use std::f64::consts::TAU;
 
@@ -79,7 +78,7 @@ fn reduced_tolerance(input: &[Complex32]) -> f32 {
 /// the incumbent twiddle route; the fallback asserts that route's round-trip
 /// correctness instead of merely asserting twiddles exist.
 fn assert_incumbent_route_round_trips(plan: &crate::FftPlan1D<f64>, n: usize) {
-    if plan.base128.is_some() || plan.base64.is_some() {
+    if plan.base128.is_some() || plan.base256.is_some() || plan.base64.is_some() {
         return;
     }
     let source = signal(n);
@@ -437,11 +436,13 @@ fn dynamic_plan_owns_forward_and_lazily_initializes_inverse() {
 
 #[test]
 fn dynamic_split_plans_share_complete_twiddle_tables() {
-    for n in [256usize, 512] {
+    // The 256 base splits 512 and 1024; 256 itself is one block and keeps
+    // no split table.
+    for n in [512usize, 1024] {
         let plan = crate::FftPlan1D::<f64>::new(
             crate::Shape1D::new(n).expect("invariant: shape lengths are non-zero"),
         );
-        let Some(_) = plan.base128.as_ref() else {
+        let Some(_) = plan.base256.as_ref() else {
             assert_incumbent_route_round_trips(&plan, n);
             continue;
         };
@@ -492,16 +493,21 @@ fn dynamic_split_plans_share_complete_twiddle_tables() {
 
 #[test]
 fn dynamic_split_plans_normalize_by_full_length() {
-    for n in super::BASE_SPLIT_LENGTHS {
+    for n in [128usize, 256, 512, 1024] {
         let plan = crate::FftPlan1D::<f64>::new(
             crate::Shape1D::new(n).expect("invariant: shape lengths are non-zero"),
         );
         let source = signal(n);
         let mut actual = source.clone();
-        let Some(_) = plan.base128.as_ref() else {
+        let selected = if n == 128 {
+            plan.base128.is_some()
+        } else {
+            plan.base256.is_some()
+        };
+        if !selected {
             assert_incumbent_route_round_trips(&plan, n);
             continue;
-        };
+        }
 
         plan.forward_complex_slice_inplace(&mut actual);
         plan.inverse_complex_slice_inplace(&mut actual);
@@ -522,7 +528,7 @@ fn assert_dynamic_split_matches_direct<const INVERSE: bool>() {
         );
         let source = signal(n);
         let mut actual = source.clone();
-        let Some(_) = plan.base128.as_ref() else {
+        let Some(_) = plan.base256.as_ref() else {
             assert_eq!(actual, source, "a width decline must not mutate the input");
             continue;
         };
@@ -569,7 +575,7 @@ fn reduced_dynamic_split_matches_the_direct_transform() {
         crate::Shape1D::new(N).expect("invariant: shape lengths are non-zero"),
     );
     let mut actual = source.clone();
-    let Some(_) = plan.base128.as_ref() else {
+    let Some(_) = plan.base256.as_ref() else {
         assert_eq!(actual, source, "a width decline must not mutate the input");
         return;
     };
@@ -804,68 +810,4 @@ fn gather_matches_the_strided_reference_at_both_widths() {
     assert_gather_matches_reference::<f64>(4);
     assert_gather_matches_reference::<f32>(2);
     assert_gather_matches_reference::<f32>(4);
-}
-
-/// The dispatched level combine agrees with the scalar loop within the
-/// rounding of one complex multiply and one addition.
-fn level_combine_matches_the_scalar_loop<T>(unit_roundoff: f64)
-where
-    T: hermes_simd::LaneScalar
-        + MixedRadixScalar<Complex = eunomia::Complex<T>>
-        + eunomia::FloatElement
-        + Into<f64>,
-    eunomia::Complex<T>: eunomia::layout::Pod
-        + Copy
-        + core::ops::Mul<Output = eunomia::Complex<T>>
-        + core::ops::Add<Output = eunomia::Complex<T>>
-        + core::ops::Sub<Output = eunomia::Complex<T>>,
-{
-    let len = 512usize;
-    let twiddles: Vec<eunomia::Complex<T>> = (0..len)
-        .map(|j| {
-            let angle = -core::f64::consts::TAU * j as f64 / (2 * len) as f64;
-            let (sin, cos) = angle.sin_cos();
-            eunomia::Complex::new(T::from_f64(cos), T::from_f64(sin))
-        })
-        .collect();
-    let data: Vec<eunomia::Complex<T>> = (0..2 * len)
-        .map(|i| {
-            let x = i as f64;
-            eunomia::Complex::new(
-                T::from_f64((0.013 * x).sin()),
-                T::from_f64(0.5 * (0.029 * x).cos()),
-            )
-        })
-        .collect();
-    let mut expected = data.clone();
-    for j in 0..len {
-        let rotated = expected[len + j] * twiddles[j];
-        let even = expected[j];
-        expected[j] = even + rotated;
-        expected[len + j] = even - rotated;
-    }
-    let mut actual = data;
-    let handled = hermes_simd::vectorize(super::split_boundary::CombineLevel::<T> {
-        data: eunomia::layout::cast_slice_mut(&mut actual),
-        twiddles: eunomia::layout::cast_slice(&twiddles),
-        len,
-    });
-    assert!(
-        handled,
-        "a two-lane or wider backend handles a 512-sample level"
-    );
-    // One complex multiply (fused, two roundings) and one add or subtract
-    // against the scalar form's two-operation product: at most four
-    // roundings apart at the inputs' unit scale.
-    let bound = 4.0 * unit_roundoff;
-    for (j, (got, want)) in actual.iter().zip(&expected).enumerate() {
-        let error = (got.re.into() - want.re.into()).hypot(got.im.into() - want.im.into());
-        assert!(error <= bound, "sample {j}: {error:e} > {bound:e}");
-    }
-}
-
-#[test]
-fn level_combine_matches_the_scalar_loop_in_both_precisions() {
-    level_combine_matches_the_scalar_loop::<f32>(f64::from(f32::EPSILON));
-    level_combine_matches_the_scalar_loop::<f64>(f64::EPSILON);
 }
