@@ -1,36 +1,30 @@
 # Apollo Backlog
 
+<a id="apollo-lane-parallel-threshold"></a>
+
+## APOLLO-LANE-PARALLEL-THRESHOLD-2026-09-11 — Lane passes under 32,768 elements run on one thread whether or not that is faster [patch] [perf] — todo
+
+- **Finding.** `lanes::PARALLEL_THRESHOLD = 32_768` total complex elements decides
+  serial against moirai-parallel for every lane pass, and no measurement is recorded
+  for it (it arrived as the "existing multidimensional crossover", 9db2f6ea). The real
+  half-spectrum pair at 32³ runs its passes on the 32·32·17 = 17,408-element half
+  volume, so they run serially: fastest sample 103 and 122 µs per transform in two
+  probe rounds, against 88 and 98 µs for the complex pair, which sits exactly at the
+  threshold. With the constant at 16,384 the same probe read 66 µs, at 82% host load.
+- **Acceptance.** A quiet or pinned sweep of the threshold over 4,096, 8,192, 16,384
+  and 32,768 against the complex and real pairs at 16³, 24³, 32×32×16, 32³ and 48³
+  sets the constant, its derivation recorded beside it; the real pair at 32³ then reads
+  below the complex pair, and no swept complex size regresses.
+- **Risk / change class:** [patch] [perf]; regions
+  `crates/apollo-fft/src/application/execution/plan/fft/lanes.rs` and the 3-D probe;
+  **dependencies:** [#apollo-native-real-3d](#apollo-native-real-3d).
+
 <a id="apollo-native-real-3d"></a>
 
-## APOLLO-NATIVE-REAL-3D-2026-09-11 — A real 3-D field is transformed as if it were complex [minor] [perf] — in-progress
+## APOLLO-NATIVE-REAL-3D-2026-09-11 — A real 3-D field is transformed as if it were complex [minor] [perf] — done 2026-09-11
 
-- **Integrator:** claude-opus-5; **branch:** `perf/apollo-native-real-3d`; regions
-  `crates/apollo-fft/src/application/execution/kernel/real_fft.rs`,
-  `.../plan/fft/real_storage/`, `.../plan/fft/dimension_3d/`. **Last-update:** 2026-09-11.
-- **Finding.** `RealFftData::forward_3d_into` widens the real field to complex
-  across the whole volume and runs the full complex plan; `inverse_3d_into`
-  copies the spectrum to scratch and runs the full complex inverse. Neither
-  uses the real split apollo already has per lane (`forward_1d_half_into`: pack
-  N reals as N/2 complex, a half-length transform, `untangle_real_half`).
-  kwavers emulates a half-spectrum pair on top of that, and its PSTD path —
-  `forward_r2c_into` + `inverse_c2r_into` — costs **1.8–2.0x** the plain complex
-  pair at 64³ (2.63 / 3.29 ms against 1.45 / 1.66, same process, two rounds at
-  30% and 14% host load), 1.2–1.3x at 32³ and 1.7x at 16³.
-- **Shape.** `FftPlan3D` gains a half-spectrum pair: a forward that runs the z
-  lanes through the existing per-lane real kernel into `(nx, ny, nz/2+1)` and
-  then the y and x passes on that half volume, and an inverse that runs x and y
-  on the half volume and the z lanes through a **new** per-lane inverse — the
-  retangle `Fe[k] = (X[k] + conj X[M-k])/2`, `Fo[k] = (X[k] - conj X[M-k])·conj(W^k)/2`,
-  `Z = Fe + i·Fo`, a size-`M` inverse, and the pair unpack — which apollo does
-  not have (its 1-D inverse takes only a full spectrum). Lengths the split does
-  not admit (`nz % 4 != 0`) take the widening path and say so in the contract.
-- **Acceptance oracle.** The forward equals the first `nz/2+1` bins of the full
-  complex spectrum within the derived bound; the pair round-trips to 1e-10;
-  shapes include an extent of one on each axis and an `nz` the split refuses;
-  the per-lane inverse round-trips every length the split admits up to 1024.
-  kwavers' r2c round trip, moved onto the pair, falls below its complex pair.
-- **Consumer:** [`kwavers #kw-native-r2c`](../kwavers/backlog.md#kw-native-r2c).
-  **Risk / change class:** [minor] [perf]; **dependencies:** none.
+- a8cd1c94: `fft_3d_array_half_into`/`ifft_3d_array_half_into` and the per-lane real inverse; oracles in `tests/real_half_api/`. Fastest sample per transform at 64³ 205–210 µs against the complex pair's 271 (two probe rounds, 9–39% host load).
+- At 32³ the pair reads 103–122 µs against 88–98: its half volume runs serially under the lane threshold, filed as [#apollo-lane-parallel-threshold](#apollo-lane-parallel-threshold). The kwavers r2c-against-complex measurement moves to [`KW-NATIVE-R2C`](../kwavers/backlog.md#kw-native-r2c), where the routing it measures lands.
 
 <a id="apollo-rotated-order-handoff"></a>
 
