@@ -221,7 +221,8 @@ fn small_sizes_against_the_references_by_core_type() {
                 phases[0], phases[1], phases[2]
             );
         }
-        for n in [512usize, 1024] {
+        {
+            let n = 1024usize;
             let src: Vec<Complex64> = (0..n)
                 .map(|i| {
                     let x = i as f64;

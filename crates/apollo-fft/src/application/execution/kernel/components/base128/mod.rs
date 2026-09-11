@@ -1,14 +1,13 @@
 //! The register-resident bases and the radix step over them —
 //! `ATLAS-APOLLO-BASE-BUTTERFLY-128`, ADR 0061.
 //!
-//! One instance-major kernel serves 64, 128, and 256 points; 512 and 1024
-//! are two and four 256-blocks whose combining butterflies ride the last
-//! blocks' column passes. At four lanes every block loads its samples
-//! straight out of the parent, so the route is the blocks' own passes and
-//! nothing else; at eight lanes the blocks are gathered first, the
-//! measured better of the two (`transform_via_base`), and 512 is instead
-//! one sixteen-row block (`ROWS = 16` over 32-sample rows, the column
-//! pass a sixteen-point DIF), the gather and the combining sink gone.
+//! One instance-major kernel serves 64, 128, 256, and 512 points (512 as
+//! sixteen 32-sample rows, the column pass a sixteen-point DIF); 1024 is
+//! four 256-blocks whose radix-4 step rides the last block's column pass.
+//! At four lanes every block loads its samples straight out of the
+//! parent, so the route is the blocks' own passes and nothing else; at
+//! eight lanes the blocks are gathered first, the measured better of the
+//! two (`transform_via_base`).
 //!
 //! The register map selects a native width once: f64 retains the four-lane
 //! AVX2 layout, f32 uses the eight-lane AVX2 layout or the four-lane NEON
@@ -65,8 +64,8 @@ where
     eunomia::layout::cast_slice(data)
 }
 
-/// The 256 base and one radix step over it for 256, 512, and 1024
-/// samples, from the plan state that owns its tables.
+/// The 256 base and one radix-4 step over it for 256 and 1024 samples,
+/// from the plan state that owns its tables.
 pub(crate) fn transform_via_base_256<F, const INVERSE: bool, const MEASURE: bool>(
     data: &mut [F::Complex],
     state: &instance_major::State256<F>,
@@ -95,12 +94,12 @@ where
 }
 
 /// The base and one radix step over it: `n = BASE` runs the kernel in
-/// place, `2 BASE` pairs the even and odd subsequences, `4 BASE` runs the
-/// radix-4 step over its four subsequences' spectra. The combining
-/// butterflies ride the last block's column pass
-/// ([`instance_major::CombineSink`], [`instance_major::FinalRadix4Sink`]);
-/// the twiddle table is stage-major, the level of half-length `len`
-/// reading `len` entries from `len - 1`.
+/// place, `4 BASE` runs the radix-4 step over its four subsequences'
+/// spectra, the combining butterflies riding the last block's column pass
+/// ([`instance_major::FinalRadix4Sink`]); the twiddle table is
+/// stage-major, the level of half-length `len` reading `len` entries from
+/// `len - 1`. (`2 BASE` was a pair of blocks under a combining sink until
+/// the sixteen-row base took 512 at both widths, ADR 0061.)
 ///
 /// Where a block reads its samples is the plan width's measured choice
 /// (ADR 0061). At four lanes every block loads its stride-`blocks`
@@ -109,11 +108,11 @@ where
 /// parent read by the last block's rows before its sink writes it — `f64`
 /// 1024 from 1.33 to 1.15 of RustFFT. At eight lanes the same loads cost
 /// two or four windows and up to three shuffles a register, more than the
-/// gather they replace (`f32` 512 and 1024 measured 2 to 4% slower), so
-/// that width gathers the subsequences into scratch first
+/// gather they replace (`f32` 1024 measured 2 to 4% slower), so that
+/// width gathers the subsequences into scratch first
 /// ([`split_boundary::GatherBlocks`]) and every block reads contiguously.
-/// Both forms run the first three blocks of four into scratch and the
-/// last through the radix-4 sink, so no intermediate pair is written.
+/// Both forms run the first three blocks into scratch and the last
+/// through the radix-4 sink, so no intermediate pair is written.
 ///
 /// Reports whether the dispatched width ran it.
 fn transform_via_base<
@@ -138,7 +137,7 @@ where
 {
     let n = data.len();
     debug_assert!(BASE == 8 * ROW_LEN && BLOCK_LANES == 2 * BASE && SINK_LANES == 2 * BLOCK_LANES);
-    debug_assert!(n % BASE == 0 && (n / BASE).is_power_of_two() && n / BASE <= 4);
+    debug_assert!(n == BASE || n == 4 * BASE);
     if n == BASE {
         return instance_major::transform_block::<
             F,
@@ -157,7 +156,6 @@ where
         0
     };
     debug_assert_eq!(sinks.inner().len(), SINK_LANES);
-    let blocks = n / BASE;
     let gathered_width = plan.native_eight_lanes();
     let scratch_len = n;
     <F as crate::application::execution::kernel::mixed_radix::MixedRadixScalar>::with_scratch(
@@ -165,25 +163,16 @@ where
         |scratch| {
             let scratch = &mut scratch[..scratch_len];
             if gathered_width {
-                let gathered = match blocks {
-                    2 => hermes_simd::vectorize_lanes::<8, F, _>(split_boundary::GatherBlocks::<
-                        F,
-                        2,
-                        BLOCK_LANES,
-                    > {
-                        src: lanes::<F>(data),
-                        dst: eunomia::layout::cast_slice_mut(&mut scratch[..n]),
-                    }),
-                    _ => hermes_simd::vectorize_lanes::<8, F, _>(split_boundary::GatherBlocks::<
+                let gathered =
+                    hermes_simd::vectorize_lanes::<8, F, _>(split_boundary::GatherBlocks::<
                         F,
                         4,
                         BLOCK_LANES,
                     > {
                         src: lanes::<F>(data),
                         dst: eunomia::layout::cast_slice_mut(&mut scratch[..n]),
-                    }),
-                }
-                .unwrap_or(false);
+                    })
+                    .unwrap_or(false);
                 if !gathered {
                     return false;
                 }
@@ -196,8 +185,8 @@ where
             } else {
                 0
             };
-            let ran = match (blocks, gathered_width) {
-                (2, false) => two_blocks_direct::<
+            let ran = if gathered_width {
+                four_blocks_gathered::<
                     F,
                     INVERSE,
                     MEASURE,
@@ -206,8 +195,9 @@ where
                     BLOCK_LANES,
                     SINK_LANES,
                     TABLE_LANES,
-                >(data, scratch, plan, sinks),
-                (2, true) => two_blocks_gathered::<
+                >(data, scratch, plan, sinks)
+            } else {
+                four_blocks_direct::<
                     F,
                     INVERSE,
                     MEASURE,
@@ -216,27 +206,7 @@ where
                     BLOCK_LANES,
                     SINK_LANES,
                     TABLE_LANES,
-                >(data, scratch, plan, sinks),
-                (_, false) => four_blocks_direct::<
-                    F,
-                    INVERSE,
-                    MEASURE,
-                    ROW_LEN,
-                    BASE,
-                    BLOCK_LANES,
-                    SINK_LANES,
-                    TABLE_LANES,
-                >(data, scratch, plan, sinks),
-                (_, true) => four_blocks_gathered::<
-                    F,
-                    INVERSE,
-                    MEASURE,
-                    ROW_LEN,
-                    BASE,
-                    BLOCK_LANES,
-                    SINK_LANES,
-                    TABLE_LANES,
-                >(data, scratch, plan, sinks),
+                >(data, scratch, plan, sinks)
             };
             #[cfg(all(test, windows, target_arch = "x86_64"))]
             if MEASURE {
@@ -285,88 +255,6 @@ where
         Src,
         S,
     >(out, source, plan, sink)
-}
-
-/// Two blocks, each reading the parent: the even block into scratch, the
-/// odd block over the parent with the combining sink.
-fn two_blocks_direct<
-    F,
-    const INVERSE: bool,
-    const MEASURE: bool,
-    const ROW_LEN: usize,
-    const BASE: usize,
-    const BLOCK_LANES: usize,
-    const SINK_LANES: usize,
-    const TABLE_LANES: usize,
->(
-    data: &mut [F::Complex],
-    scratch: &mut [F::Complex],
-    plan: &instance_major::BasePlan<F, 8, ROW_LEN, TABLE_LANES>,
-    sinks: &instance_major::SplitSinks<F>,
-) -> bool
-where
-    F: crate::application::execution::kernel::mixed_radix::MixedRadixScalar<
-        Complex = eunomia::Complex<F>,
-    >,
-    eunomia::Complex<F>: eunomia::layout::Pod,
-{
-    let inner = lane_array::<F, SINK_LANES>(sinks.inner());
-    let even = &mut scratch[..BASE];
-    block::<F, INVERSE, MEASURE, ROW_LEN, BLOCK_LANES, TABLE_LANES, _, _>(
-        even,
-        instance_major::ParentSplit::<F, 2, 0>(lanes::<F>(data)),
-        plan,
-        instance_major::DirectSink,
-    ) && block::<F, INVERSE, MEASURE, ROW_LEN, BLOCK_LANES, TABLE_LANES, _, _>(
-        data,
-        instance_major::SelfSplit::<2, 1>,
-        plan,
-        instance_major::CombineSink {
-            peer: base_lanes::<F, BLOCK_LANES>(even),
-            tw: inner,
-        },
-    )
-}
-
-/// Two gathered blocks in scratch: the even block in place, the odd block
-/// over the parent with the combining sink.
-fn two_blocks_gathered<
-    F,
-    const INVERSE: bool,
-    const MEASURE: bool,
-    const ROW_LEN: usize,
-    const BASE: usize,
-    const BLOCK_LANES: usize,
-    const SINK_LANES: usize,
-    const TABLE_LANES: usize,
->(
-    data: &mut [F::Complex],
-    scratch: &mut [F::Complex],
-    plan: &instance_major::BasePlan<F, 8, ROW_LEN, TABLE_LANES>,
-    sinks: &instance_major::SplitSinks<F>,
-) -> bool
-where
-    F: crate::application::execution::kernel::mixed_radix::MixedRadixScalar<
-        Complex = eunomia::Complex<F>,
-    >,
-    eunomia::Complex<F>: eunomia::layout::Pod,
-{
-    let inner = lane_array::<F, SINK_LANES>(sinks.inner());
-    let (even, odd) = scratch.split_at_mut(BASE);
-    block::<F, INVERSE, MEASURE, ROW_LEN, BLOCK_LANES, TABLE_LANES, _, _>(
-        even,
-        instance_major::SelfSplit::<1, 0>,
-        plan,
-        instance_major::DirectSink,
-    ) && block::<F, INVERSE, MEASURE, ROW_LEN, BLOCK_LANES, TABLE_LANES, _, _>(
-        data,
-        instance_major::ParentSplit::<F, 1, 0>(lanes::<F>(&odd[..BASE])),
-        plan,
-        instance_major::CombineSink {
-            peer: base_lanes::<F, BLOCK_LANES>(even),
-            tw: inner,
-        },
-    )
 }
 
 /// Four blocks, each reading the parent: subsequences 0, 1, and 2 into

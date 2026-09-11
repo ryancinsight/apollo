@@ -497,17 +497,57 @@ fn dynamic_plan_owns_forward_and_lazily_initializes_inverse() {
 }
 
 #[test]
+fn single_block_512_plans_keep_no_split_table() {
+    // 512 is one sixteen-row block at either width: its state carries no
+    // sink table and no interleaved table, and the 256 base is not built
+    // beside it.
+    let plan = crate::FftPlan1D::<f64>::new(
+        crate::Shape1D::new(512).expect("invariant: shape lengths are non-zero"),
+    );
+    let Some(state) = plan.base512.as_ref() else {
+        assert_incumbent_route_round_trips(&plan, 512);
+        return;
+    };
+    assert!(plan.base256.is_none(), "512 is one block, never a split");
+    assert!(plan.twiddle_fwd.is_none() && plan.twiddle_inv.get().is_none());
+    assert_eq!(state.sinks().inner().len(), 0);
+    assert_eq!(state.sinks().outer().len(), 0);
+    assert!(!state.inverse_is_initialized());
+    let source = signal(512);
+    let mut data = source.clone();
+    plan.forward_complex_slice_inplace(&mut data);
+    assert!(!state.inverse_is_initialized());
+    plan.inverse_complex_slice_inplace(&mut data);
+    assert!(state.inverse_is_initialized() && state.inverse_sinks().inner().is_empty());
+    let clone = plan.clone();
+    assert!(std::sync::Arc::ptr_eq(
+        state,
+        clone
+            .base512
+            .as_ref()
+            .expect("a single-block plan clone shares its base state")
+    ));
+    let error = worst(&data, &source);
+    let bound = 2.0 * tolerance(&source);
+    assert!(
+        error <= bound,
+        "N=512 single-block round trip differs by {error:.3e} > {bound:.3e}"
+    );
+}
+
+#[test]
 fn dynamic_split_plans_keep_their_sink_tables_in_the_base_state() {
-    // The 256 base splits 512 and 1024; 256 itself is one block and keeps
-    // no split table. The sink twiddles live in the base state, dup-split
-    // at the plan's width, so the plan retains no interleaved table.
-    for n in [512usize, 1024] {
+    // The 256 base splits 1024; 256 itself is one block and keeps no split
+    // table. The sink twiddles live in the base state, dup-split at the
+    // plan's width, so the plan retains no interleaved table.
+    {
+        let n = 1024usize;
         let plan = crate::FftPlan1D::<f64>::new(
             crate::Shape1D::new(n).expect("invariant: shape lengths are non-zero"),
         );
         let Some(state) = plan.base256.as_ref() else {
             assert_incumbent_route_round_trips(&plan, n);
-            continue;
+            return;
         };
         assert!(
             plan.twiddle_fwd.is_none(),
@@ -515,7 +555,7 @@ fn dynamic_split_plans_keep_their_sink_tables_in_the_base_state() {
         );
         assert!(plan.twiddle_inv.get().is_none());
         assert_eq!(state.sinks().inner().len(), 2 * 512);
-        assert_eq!(state.sinks().outer().len(), if n == 1024 { 512 } else { 0 });
+        assert_eq!(state.sinks().outer().len(), 512);
         assert!(!state.inverse_is_initialized() && !state.inverse_sinks_initialized());
         let clone = plan.clone();
         assert!(std::sync::Arc::ptr_eq(
@@ -556,10 +596,10 @@ fn dynamic_split_plans_normalize_by_full_length() {
         );
         let source = signal(n);
         let mut actual = source.clone();
-        let selected = if n == 128 {
-            plan.base128.is_some()
-        } else {
-            plan.base256.is_some()
+        let selected = match n {
+            128 => plan.base128.is_some(),
+            512 => plan.base512.is_some(),
+            _ => plan.base256.is_some(),
         };
         if !selected {
             assert_incumbent_route_round_trips(&plan, n);
@@ -578,17 +618,17 @@ fn dynamic_split_plans_normalize_by_full_length() {
     }
 }
 
-fn assert_dynamic_split_matches_direct<const INVERSE: bool>() {
+fn assert_dynamic_base_matches_direct<const INVERSE: bool>() {
     for n in [256usize, 512] {
         let plan = crate::FftPlan1D::<f64>::new(
             crate::Shape1D::new(n).expect("invariant: shape lengths are non-zero"),
         );
         let source = signal(n);
         let mut actual = source.clone();
-        let Some(_) = plan.base256.as_ref() else {
+        if plan.base256.is_none() && plan.base512.is_none() {
             assert_eq!(actual, source, "a width decline must not mutate the input");
             continue;
-        };
+        }
 
         if INVERSE {
             plan.inverse_complex_slice_inplace(&mut actual);
@@ -610,17 +650,17 @@ fn assert_dynamic_split_matches_direct<const INVERSE: bool>() {
 }
 
 #[test]
-fn dynamic_split_forward_matches_the_direct_transform() {
-    assert_dynamic_split_matches_direct::<false>();
+fn dynamic_base_forward_matches_the_direct_transform() {
+    assert_dynamic_base_matches_direct::<false>();
 }
 
 #[test]
-fn dynamic_split_inverse_matches_the_direct_transform() {
-    assert_dynamic_split_matches_direct::<true>();
+fn dynamic_base_inverse_matches_the_direct_transform() {
+    assert_dynamic_base_matches_direct::<true>();
 }
 
 #[test]
-fn reduced_dynamic_split_matches_the_direct_transform() {
+fn reduced_dynamic_base_matches_the_direct_transform() {
     const N: usize = 512;
     let source: Vec<Complex32> = (0..N)
         .map(|index| {
@@ -632,14 +672,11 @@ fn reduced_dynamic_split_matches_the_direct_transform() {
         crate::Shape1D::new(N).expect("invariant: shape lengths are non-zero"),
     );
     let mut actual = source.clone();
-    if plan.base512.is_none() && plan.base256.is_none() {
+    if plan.base512.is_none() {
         assert_eq!(actual, source, "a width decline must not mutate the input");
         return;
     }
-    assert!(
-        plan.base512.is_some() != plan.base256.is_some(),
-        "512 is one sixteen-row block or the two-block split, never both"
-    );
+    assert!(plan.base256.is_none(), "512 is one block, never a split");
 
     plan.forward_complex_slice_inplace(&mut actual);
     let expected = dft_reduced(&source, false);
@@ -651,7 +688,7 @@ fn reduced_dynamic_split_matches_the_direct_transform() {
     let bound = reduced_tolerance(&source);
     assert!(
         error <= bound,
-        "reduced N=512 split differs by {error:.3e} > {bound:.3e}"
+        "reduced N=512 base differs by {error:.3e} > {bound:.3e}"
     );
 }
 
@@ -783,70 +820,47 @@ fn f32_dynamic_plan_clones_execute_inverse_concurrently() {
 /// The gather must run at the plan's native width, not merely produce the
 /// right answer: a wrong-width dispatch falls back and still passes value
 /// checks, so this asserts the dispatched width handled the pass and that
-/// its output matches the scalar strided reference for both block counts.
-fn assert_gather_matches_reference<T>(blocks: usize)
+/// its output matches the scalar strided reference.
+fn assert_gather_matches_reference<T>()
 where
     T: crate::application::execution::kernel::mixed_radix::MixedRadixScalar
         + hermes_simd::LaneScalar,
 {
-    let n = blocks * 128;
+    const BLOCKS: usize = 4;
+    let n = BLOCKS * 128;
     let lanes: Vec<T> = (0..2 * n)
         .map(|i| T::from_precise(((i * 37) % 97) as f64 * 0.125 - 4.0))
         .collect();
     let mut reference = vec![T::from_precise(0.0); 2 * n];
-    let bits = blocks.trailing_zeros();
-    for b in 0..blocks {
-        let row = b.reverse_bits() >> (usize::BITS - bits);
+    for b in 0..BLOCKS {
+        let row = b.reverse_bits() >> (usize::BITS - 2);
         for j in 0..128 {
-            reference[(row * 128 + j) * 2] = lanes[(j * blocks + b) * 2];
-            reference[(row * 128 + j) * 2 + 1] = lanes[(j * blocks + b) * 2 + 1];
+            reference[(row * 128 + j) * 2] = lanes[(j * BLOCKS + b) * 2];
+            reference[(row * 128 + j) * 2 + 1] = lanes[(j * BLOCKS + b) * 2 + 1];
         }
     }
     let mut narrow = vec![T::from_precise(0.0); 2 * n];
     let mut wide = vec![T::from_precise(0.0); 2 * n];
-    let (narrow_handled, wide_handled) = if blocks == 2 {
-        (
-            hermes_simd::vectorize_lanes::<4, T, _>(super::split_boundary::GatherBlocks::<
-                T,
-                2,
-                256,
-            > {
-                src: &lanes,
-                dst: &mut narrow,
-            })
-            .unwrap_or(false),
-            hermes_simd::vectorize_lanes::<8, T, _>(super::split_boundary::GatherBlocks::<
-                T,
-                2,
-                256,
-            > {
-                src: &lanes,
-                dst: &mut wide,
-            })
-            .unwrap_or(false),
-        )
-    } else {
-        (
-            hermes_simd::vectorize_lanes::<4, T, _>(super::split_boundary::GatherBlocks::<
-                T,
-                4,
-                256,
-            > {
-                src: &lanes,
-                dst: &mut narrow,
-            })
-            .unwrap_or(false),
-            hermes_simd::vectorize_lanes::<8, T, _>(super::split_boundary::GatherBlocks::<
-                T,
-                4,
-                256,
-            > {
-                src: &lanes,
-                dst: &mut wide,
-            })
-            .unwrap_or(false),
-        )
-    };
+    let narrow_handled =
+        hermes_simd::vectorize_lanes::<4, T, _>(super::split_boundary::GatherBlocks::<
+            T,
+            BLOCKS,
+            256,
+        > {
+            src: &lanes,
+            dst: &mut narrow,
+        })
+        .unwrap_or(false);
+    let wide_handled =
+        hermes_simd::vectorize_lanes::<8, T, _>(super::split_boundary::GatherBlocks::<
+            T,
+            BLOCKS,
+            256,
+        > {
+            src: &lanes,
+            dst: &mut wide,
+        })
+        .unwrap_or(false);
     // The four-lane request lands on a native or emulated four-lane frame
     // everywhere this suite runs; it must handle and match bit-exactly
     // (the pass moves values, computing nothing).
@@ -867,8 +881,6 @@ where
 
 #[test]
 fn gather_matches_the_strided_reference_at_both_widths() {
-    assert_gather_matches_reference::<f64>(2);
-    assert_gather_matches_reference::<f64>(4);
-    assert_gather_matches_reference::<f32>(2);
-    assert_gather_matches_reference::<f32>(4);
+    assert_gather_matches_reference::<f64>();
+    assert_gather_matches_reference::<f32>();
 }

@@ -192,41 +192,6 @@ impl<T: LaneScalar> StoreSink<T> for DirectSink {
     }
 }
 
-/// The odd block of a pair combines with the even block's spectrum on the
-/// way out: `out` is the pair, low half `peer + W reg`, high half
-/// `peer - W reg`.
-pub(crate) struct CombineSink<'a, T, const LANES: usize, const TW_LANES: usize> {
-    /// The even block's spectrum.
-    pub(crate) peer: &'a [T; LANES],
-    /// `W_{2 BASE}^j` per chunk, dup-split ([`SplitSinks::inner`]).
-    pub(crate) tw: &'a [T; TW_LANES],
-}
-
-impl<T: LaneScalar, const LANES: usize, const TW_LANES: usize> StoreSink<T>
-    for CombineSink<'_, T, LANES, TW_LANES>
-{
-    const OUT_BLOCKS: usize = 2;
-
-    #[expect(
-        clippy::inline_always,
-        reason = "the base kernel invokes this concrete sink once per SIMD chunk"
-    )]
-    #[inline(always)]
-    fn store<A: SimdArch + SimdKernel<T>>(
-        &mut self,
-        simd: &Simd<T, A>,
-        reg: ComplexReg<T, A>,
-        chunk: usize,
-        out: &mut [T],
-    ) {
-        let block = LANES / <A as SimdStorage<T>>::LANE_COUNT;
-        let even = input(simd, self.peer, chunk);
-        let (low, high) = even.butterfly(twiddled(simd, self.tw, reg, chunk));
-        put(simd, low.into_interleaved(), out, chunk);
-        put(simd, high.into_interleaved(), out, block + chunk);
-    }
-}
-
 /// The last block of four: the radix-4 step over the four block spectra
 /// as its registers leave the kernel. `sub0`, `sub2`, and `sub1` are the
 /// other three blocks' spectra; the even half is `sub0 -+ W_{2 BASE}^j

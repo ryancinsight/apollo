@@ -22,16 +22,16 @@
 //! out-of-order window overlaps groups, and the meter reads about 37
 //! cycles a group.
 //!
-//! The sixteen-row form (the 512-point base at eight lanes) runs one
-//! distance-8 stage under `W_16^a` and then the eight-point network on each
-//! half: the sums hold the even spectral rows, the twiddled differences the
-//! odd ones, so the low half's register `q` lands on row `2 rev3(q)` and
-//! the high half's on `2 rev3(q) + 1`. Sixteen columns and their
-//! broadcasts exceed the AVX2 file, so the group spills — 223
-//! instructions, 39 shuffles and 35 stack moves, a chain of about 104
-//! cycles for 54 of issue — and still runs 512 as one block in 12% less
-//! wall clock than two gathered 256-blocks under the combining sink (ADR
-//! 0061, the revision of 2026-09-11).
+//! The sixteen-row form (the 512-point base) runs one distance-8 stage
+//! under `W_16^a` and then the eight-point network on each half: the sums
+//! hold the even spectral rows, the twiddled differences the odd ones, so
+//! the low half's register `q` lands on row `2 rev3(q)` and the high
+//! half's on `2 rev3(q) + 1`. Sixteen columns and their broadcasts exceed
+//! the AVX2 file, so the group spills — 223 instructions, 39 shuffles and
+//! 35 stack moves at either width, a chain of about 104 cycles for 54 of
+//! issue — and still runs 512 as one block in 12% (`f32`, eight lanes)
+//! and 10% (`f64`, four lanes) less wall clock than two 256-blocks under
+//! a combining sink (ADR 0061, the revisions of 2026-09-11).
 
 use super::store::StoreSink;
 use super::{MIX_CH, REV2, REV3};
