@@ -5,6 +5,7 @@ use crate::application::execution::kernel::mixed_radix::scalar::plan_scratch::Pl
 use crate::application::execution::kernel::mixed_radix::{
     dispatch_inplace, forward_inplace, inverse_inplace, MixedRadixScalar,
 };
+use crate::application::execution::kernel::real_fft::split_twiddle_table;
 use crate::application::execution::plan::fft::layout::with_c_order_view;
 use crate::domain::metadata::shape::Shape3D;
 use eunomia::Complex;
@@ -28,6 +29,9 @@ pub struct FftPlan3D<F: MixedRadixScalar> {
     /// samples is `nz/2` complex ones.
     pub(crate) twiddle_half_z_fwd: Option<Arc<[F::Complex]>>,
     pub(crate) twiddle_half_z_inv: Option<Arc<[F::Complex]>>,
+    /// The real split's `W_nz^k`, evaluated once for every z lane of the
+    /// half-spectrum pair rather than once per lane.
+    pub(crate) split_twiddles: Box<[F::Complex]>,
 }
 
 impl<F: MixedRadixScalar> std::fmt::Debug for FftPlan3D<F> {
@@ -66,6 +70,7 @@ where
             twiddle_x_inv: cached_power_of_two_twiddle::<F, false>(nx),
             twiddle_half_z_fwd: cached_power_of_two_twiddle::<F, true>(m),
             twiddle_half_z_inv: cached_power_of_two_twiddle::<F, false>(m),
+            split_twiddles: split_twiddle_table::<F>(nz),
         }
     }
 
@@ -243,6 +248,11 @@ where
             &self.twiddle_half_z_inv
         };
         lane_over::<F, FORWARD>(twiddles.as_deref())
+    }
+
+    /// The real split's twiddles for the z lanes, `W_nz^k` for `k = 1..⌈nz/4⌉`.
+    pub(crate) fn split_twiddles(&self) -> &[F::Complex] {
+        &self.split_twiddles
     }
 
     /// One direction's transform of a full z lane, for real lanes the split

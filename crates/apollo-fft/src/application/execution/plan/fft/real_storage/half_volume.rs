@@ -59,7 +59,12 @@ pub(super) fn forward<T>(
             nz,
             || (),
             |(), bins, reals| {
-                split::forward(reals, bins, &half_lane);
+                split::forward(
+                    reals,
+                    bins,
+                    plan.split_twiddles().iter().copied(),
+                    &half_lane,
+                );
             },
         );
     } else {
@@ -119,7 +124,7 @@ pub(super) fn inverse<T>(
         // the spectrum's lanes, then the unpack into the output's.
         let half_lane = plan.half_z_lane::<false>();
         lanes::each(bins, depth, |lane| {
-            split::inverse_packed::<T>(lane, nz, &half_lane);
+            split::inverse_packed::<T>(lane, nz, plan.split_twiddles().iter().copied(), &half_lane);
         });
         let packed = nz / 2;
         lanes::paired(
