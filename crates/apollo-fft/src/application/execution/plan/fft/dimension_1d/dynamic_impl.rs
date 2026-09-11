@@ -57,8 +57,9 @@ pub struct FftPlan1D<F: MixedRadixScalar> {
     /// ahead of them at n = 2048 where the width is eight lanes.
     pub(crate) base256: Option<Arc<State256<F>>>,
     /// The 512-point single-pass base (sixteen rows of thirty-two), built
-    /// at n = 512 at either native width and, as four blocks under the
-    /// radix-4 sink, at n = 2048 at four lanes (ADR 0061).
+    /// at n = 512 at either native width, as four blocks under the radix-4
+    /// sink at n = 2048 at four lanes, and as eight blocks under a radix-8
+    /// pass ahead of them at n = 4096 (ADR 0061).
     pub(crate) base512: Option<Arc<State512<F>>>,
     pub(crate) base64: Option<Arc<State64<F>>>,
     /// The 180 column route (ADR 0062): five register-resident 36-point
@@ -188,7 +189,9 @@ impl<F: MixedRadixScalar<Complex = Complex<F>>> FftPlan1D<F> {
         // column pass over its 256-point butterfly — and four 512-blocks
         // under the radix-4 sink at four.
         let eight_blocks_at_2048 = n == 2048 && instance_major::native_eight_lanes::<F>();
-        let base512 = if n == 512 || (n == 2048 && !eight_blocks_at_2048) {
+        // 4096 is eight 512-blocks under the same radix-8 pass at either
+        // width, RustFFT's shape there (its 512 butterfly under one 8xn pass).
+        let base512 = if n == 512 || n == 4096 || (n == 2048 && !eight_blocks_at_2048) {
             State512::new_if_supported(n).map(Arc::new)
         } else {
             None
@@ -530,7 +533,7 @@ impl<F: MixedRadixScalar<Complex = Complex<F>>> FftPlan1D<F> {
                         inverse_impl = exec_base256_inverse::<F>;
                         inverse_unnorm_impl = exec_base256_inverse_unnorm::<F>;
                     }
-                    11 if base512.is_some() => {
+                    11 | 12 if base512.is_some() => {
                         forward_impl = exec_base512_forward::<F>;
                         inverse_impl = exec_base512_inverse::<F>;
                         inverse_unnorm_impl = exec_base512_inverse_unnorm::<F>;
