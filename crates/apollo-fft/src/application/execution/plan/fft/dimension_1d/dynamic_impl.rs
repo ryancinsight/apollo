@@ -178,15 +178,10 @@ impl<F: MixedRadixScalar<Complex = Complex<F>>> FftPlan1D<F> {
         } else {
             None
         };
-        // 384 is three 128-blocks under a radix-3 step where the 128 state
-        // reads the parent at stride three (four lanes); the eight-lane
-        // shape keeps the composite route there (ADR 0061).
-        let base128 = if n == 128 {
+        // 384 is three 128-blocks under a radix-3 step, the blocks reading
+        // the parent at stride three at either width (ADR 0061).
+        let base128 = if n == 128 || n == 384 {
             State128::new_if_supported(n).map(Arc::new)
-        } else if n == 384 {
-            State128::new_if_supported(n)
-                .filter(State128::serves_three_blocks)
-                .map(Arc::new)
         } else {
             None
         };

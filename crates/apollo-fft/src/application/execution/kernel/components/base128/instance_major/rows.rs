@@ -167,10 +167,6 @@ where
     A: SimdArch + SimdKernel<T>,
 {
     debug_assert!(OFFSET < BLOCKS && S * 2 == <A as SimdStorage<T>>::LANE_COUNT);
-    debug_assert!(
-        BLOCKS != 3 || S == 2,
-        "invariant: three blocks read the parent at four lanes only"
-    );
     if BLOCKS == 1 {
         window(simd, parent, S * c)
     } else if BLOCKS == 3 && S == 2 {
@@ -185,6 +181,28 @@ where
             .swap_samples()
             .into_interleaved();
         low.interleave_halves(high).0
+    } else if BLOCKS == 3 {
+        // Four samples three apart from `12 c + OFFSET`: column 0 of the
+        // four windows there and three, six, nine samples on. The parent
+        // ends inside the last chunk's window nine on, so that chunk's
+        // windows step back three samples and take column 3.
+        let base = 12 * c + OFFSET;
+        let (start, col) = if 2 * (base + 13) <= parent.len() {
+            (base, 0)
+        } else {
+            (base - 3, 3)
+        };
+        let (x0, x1) =
+            window(simd, parent, start).interleave_halves(window(simd, parent, start + 3));
+        let (y0, y1) =
+            window(simd, parent, start + 6).interleave_halves(window(simd, parent, start + 9));
+        let (x, y) = if col / 2 == 0 { (x0, y0) } else { (x1, y1) };
+        let (even, odd) = x.deinterleave_pairs(y);
+        if col % 2 == 0 {
+            even
+        } else {
+            odd
+        }
     } else if S == 2 {
         // The two samples sit `BLOCKS` apart from `2 BLOCKS c + OFFSET`;
         // the even-aligned windows holding them share the sample's parity.

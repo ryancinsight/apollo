@@ -571,10 +571,10 @@ fn four_block_2048_plans_keep_their_sink_tables_in_the_512_state() {
 }
 
 #[test]
-fn three_block_384_plans_route_through_the_128_state_at_four_lanes() {
-    // 384 is three 128-blocks under the radix-3 sink where the 128 state
-    // reads the parent at four lanes; the eight-lane shape declines and
-    // the composite route serves it. Either way the plan matches the DFT.
+fn three_block_384_plans_route_through_the_128_state() {
+    // 384 is three 128-blocks under the radix-3 sink in whichever shape the
+    // 128 state holds; a host without a native width keeps the composite
+    // route. Either way the plan matches the DFT.
     let plan = crate::FftPlan1D::<f64>::new(
         crate::Shape1D::new(384).expect("invariant: shape lengths are non-zero"),
     );
@@ -598,20 +598,58 @@ fn three_block_384_plans_route_through_the_128_state_at_four_lanes() {
     let Some(state) = plan.base128.as_ref() else {
         return;
     };
-    assert!(
-        state.serves_three_blocks(),
-        "the eight-lane shape never takes 384"
-    );
     let (inner, second, outer) = match state.as_ref() {
         super::instance_major::State128::EightRows(state) => (
             state.sinks().inner().len(),
             state.sinks().second().len(),
             state.sinks().outer().len(),
         ),
-        super::instance_major::State128::FourRows(_) => unreachable!("asserted above"),
+        super::instance_major::State128::FourRows(state) => (
+            state.sinks().inner().len(),
+            state.sinks().second().len(),
+            state.sinks().outer().len(),
+        ),
     };
     assert_eq!((inner, second, outer), (4 * 128, 4 * 128, 0));
     assert!(state.inverse_is_initialized());
+}
+
+#[test]
+fn three_block_384_matches_the_reduced_direct_transform() {
+    const N: usize = 384;
+    let source: Vec<Complex32> = (0..N)
+        .map(|index| {
+            let x = index as f32;
+            Complex32::new((0.043 * x).sin(), 0.25 * (0.029 * x).cos())
+        })
+        .collect();
+    let plan = crate::FftPlan1D::<f32>::new(
+        crate::Shape1D::new(N).expect("invariant: shape lengths are non-zero"),
+    );
+    let mut actual = source.clone();
+    plan.forward_complex_slice_inplace(&mut actual);
+    let expected = dft_reduced(&source, false);
+    let error = actual
+        .iter()
+        .zip(&expected)
+        .map(|(value, reference)| (value.re - reference.re).hypot(value.im - reference.im))
+        .fold(0.0_f32, f32::max);
+    let bound = reduced_tolerance(&source);
+    assert!(
+        error <= bound,
+        "reduced N=384 forward differs by {error:.3e} > {bound:.3e}"
+    );
+    plan.inverse_complex_slice_inplace(&mut actual);
+    let error = actual
+        .iter()
+        .zip(&source)
+        .map(|(value, reference)| (value.re - reference.re).hypot(value.im - reference.im))
+        .fold(0.0_f32, f32::max);
+    let bound = 2.0 * reduced_tolerance(&source);
+    assert!(
+        error <= bound,
+        "reduced N=384 round trip differs by {error:.3e} > {bound:.3e}"
+    );
 }
 
 #[test]
