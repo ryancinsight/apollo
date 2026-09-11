@@ -29,7 +29,7 @@ const fn select_lane_width(
     }
 }
 
-pub(crate) struct BasePlan<T, const ROWS: usize, const TABLE_LANES: usize> {
+pub(crate) struct BasePlan<T, const ROWS: usize, const ROW_LEN: usize, const TABLE_LANES: usize> {
     /// Dup-split twiddles. The fixed-size type is load-bearing, not
     /// decoration: the checked view's `offset + LANE_COUNT <= len` assert
     /// folds only when the length is a compile-time constant, and this
@@ -45,8 +45,8 @@ pub(crate) struct BasePlan<T, const ROWS: usize, const TABLE_LANES: usize> {
     pub(super) col: [[T; 2]; 2],
 }
 
-impl<T: MixedRadixScalar, const ROWS: usize, const TABLE_LANES: usize>
-    BasePlan<T, ROWS, TABLE_LANES>
+impl<T: MixedRadixScalar, const ROWS: usize, const ROW_LEN: usize, const TABLE_LANES: usize>
+    BasePlan<T, ROWS, ROW_LEN, TABLE_LANES>
 {
     /// Builds the immutable plan for the widest native layout this kernel
     /// implements. Scalar fallback is not a base-kernel capability.
@@ -71,8 +71,12 @@ impl<T: MixedRadixScalar, const ROWS: usize, const TABLE_LANES: usize>
             let (s, c) = (dir * core::f64::consts::TAU * j as f64 / n as f64).sin_cos();
             [c, s]
         };
-        debug_assert_eq!(TABLE_LANES, table_lanes(ROWS));
-        let n = 16 * ROWS;
+        debug_assert_eq!(TABLE_LANES, table_lanes(ROWS, ROW_LEN));
+        assert!(
+            ROW_LEN == 16,
+            "invariant: the row layer below is the sixteen-sample one; ADR 0061's 32-sample rows follow"
+        );
+        let n = ROW_LEN * ROWS;
         let mut table = Vec::with_capacity(TABLE_LANES);
         for a in 1..ROWS {
             let groups = match lane_width {
@@ -121,13 +125,18 @@ impl<T: MixedRadixScalar, const ROWS: usize, const TABLE_LANES: usize>
 }
 
 /// Plan-owned directional state for a selected base route.
-pub(crate) struct BasePlanState<T, const ROWS: usize, const TABLE_LANES: usize> {
-    forward: BasePlan<T, ROWS, TABLE_LANES>,
-    inverse: OnceLock<BasePlan<T, ROWS, TABLE_LANES>>,
+pub(crate) struct BasePlanState<
+    T,
+    const ROWS: usize,
+    const ROW_LEN: usize,
+    const TABLE_LANES: usize,
+> {
+    forward: BasePlan<T, ROWS, ROW_LEN, TABLE_LANES>,
+    inverse: OnceLock<BasePlan<T, ROWS, ROW_LEN, TABLE_LANES>>,
 }
 
-impl<T: MixedRadixScalar, const ROWS: usize, const TABLE_LANES: usize>
-    BasePlanState<T, ROWS, TABLE_LANES>
+impl<T: MixedRadixScalar, const ROWS: usize, const ROW_LEN: usize, const TABLE_LANES: usize>
+    BasePlanState<T, ROWS, ROW_LEN, TABLE_LANES>
 {
     /// Builds the forward plan when the exact-width route is available.
     ///
@@ -147,12 +156,12 @@ impl<T: MixedRadixScalar, const ROWS: usize, const TABLE_LANES: usize>
     }
 
     /// Borrows the immutable forward plan.
-    pub(crate) fn forward(&self) -> &BasePlan<T, ROWS, TABLE_LANES> {
+    pub(crate) fn forward(&self) -> &BasePlan<T, ROWS, ROW_LEN, TABLE_LANES> {
         &self.forward
     }
 
     /// Borrows the immutable inverse plan, initializing it once across clones.
-    pub(crate) fn inverse(&self) -> &BasePlan<T, ROWS, TABLE_LANES> {
+    pub(crate) fn inverse(&self) -> &BasePlan<T, ROWS, ROW_LEN, TABLE_LANES> {
         self.inverse
             .get_or_init(|| BasePlan::new::<true>(self.forward.lane_width))
     }

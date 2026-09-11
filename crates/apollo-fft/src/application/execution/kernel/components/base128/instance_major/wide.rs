@@ -57,12 +57,13 @@ pub(super) struct BaseTransform<
     const INVERSE: bool,
     const MEASURE_PHASES: bool,
     const ROWS: usize,
+    const ROW_LEN: usize,
     const LANES: usize,
     const TABLE_LANES: usize,
     S,
 > {
     pub(super) data: &'a mut [T; LANES],
-    pub(super) plan: &'a BasePlan<T, ROWS, TABLE_LANES>,
+    pub(super) plan: &'a BasePlan<T, ROWS, ROW_LEN, TABLE_LANES>,
     /// Type-selected output strategy, shared with the four-lane kernel: the
     /// sinks index by view chunk, so the same fixed-size buffers serve both
     /// chunk geometries.
@@ -74,10 +75,12 @@ impl<
         const INVERSE: bool,
         const MEASURE_PHASES: bool,
         const ROWS: usize,
+        const ROW_LEN: usize,
         const LANES: usize,
         const TABLE_LANES: usize,
         S,
-    > LaneKernel<T> for BaseTransform<'_, T, INVERSE, MEASURE_PHASES, ROWS, LANES, TABLE_LANES, S>
+    > LaneKernel<T>
+    for BaseTransform<'_, T, INVERSE, MEASURE_PHASES, ROWS, ROW_LEN, LANES, TABLE_LANES, S>
 where
     T: LaneScalar + MixedRadixScalar,
     S: super::store::StoreSink<T>,
@@ -98,8 +101,13 @@ where
             return false;
         }
         debug_assert!(ROWS == 4 || ROWS == 8);
-        debug_assert_eq!(LANES, 32 * ROWS);
-        debug_assert_eq!(TABLE_LANES, super::table_lanes(ROWS));
+        // This width lays out sixteen-sample rows; ADR 0061's 32-sample rows
+        // reach it in a later slice.
+        if ROW_LEN != 16 {
+            return false;
+        }
+        debug_assert_eq!(LANES, 2 * ROW_LEN * ROWS);
+        debug_assert_eq!(TABLE_LANES, super::table_lanes(ROWS, ROW_LEN));
 
         // The final 28 table lanes are the unchanged four-lane broadcast
         // constants. Loading their first real/imaginary scalar and splatting
@@ -250,7 +258,7 @@ where
 
         // The shared lane-wise `ROWS`-point DIF column pass, four groups of
         // four interleaved complex samples at this width.
-        super::column::column_pass::<T, A, S, INVERSE, ROWS, 4>(
+        super::column::column_pass::<T, A, S, INVERSE, ROWS, ROW_LEN>(
             simd,
             staging.as_slice(),
             self.plan.table.as_slice(),
