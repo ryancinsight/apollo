@@ -44,7 +44,11 @@ Recommended shape (option B below, after the revision of 2026-09-11):
 eight 32-point rows through the row phases widened from sixteen to
 thirty-two samples, then the eight-point column pass unchanged. Option A
 (sixteen 16-point rows, the column pass widened to sixteen) was built and
-measured first and gained nothing over the split at 256.
+measured first and gained nothing over the split at 256. At eight lanes
+512 is the same kernel as sixteen 32-point rows in one pass — the
+sixteen-point column network in registers, spilling — rather than two
+256-blocks under the step (the revision of 2026-09-11, the single-pass
+512 base); the four-lane width keeps the two-block split.
 
 ## Options
 
@@ -324,3 +328,31 @@ measured first and gained nothing over the split at 256.
   The route after slices 5 to 14: `f64` 128 1.02 to 1.07, 256 0.99 to
   1.02, 512 0.98 to 1.08, 1024 1.00 to 1.07 of RustFFT; `f32` 128 1.03
   to 1.10, 256 1.00 to 1.04, 512 1.06 to 1.14, 1024 0.96 to 1.05.
+- **2026-09-11, the single-pass 512 base at eight lanes
+  (`APOLLO-SINGLE-PASS-512-BASE`).** The kernel at `ROWS = 16` over
+  32-sample rows, one block of 512: the row phases unchanged (540
+  instructions a four-row group, four groups), the column pass a
+  sixteen-point DIF in registers — one distance-8 stage under `W_16^a`
+  (the odd multiples as dup-split broadcasts, `W_16^{2,6}` the eighths,
+  `W_16^4` the quarter turn), then the eight-point network on each half,
+  the low half's register `q` stored to row `2 rev3(q)`, the high half's
+  to `2 rev3(q) + 1`. Option A's objection stands as a fact — sixteen
+  columns and their broadcasts exceed the AVX2 file, and the group spills
+  (223 instructions, 35 stack moves, a chain of about 104 cycles for 54
+  of issue, over eight groups) — but the spills are not the cost: the
+  instruction count is 5% above the two-block route's (3944 against
+  about 3760 with its gather), and the wall clock is 12% below it. What
+  the single pass removes is the two-block route's passes — the gather,
+  the second block's round trip through scratch, the combining sink's
+  table reads — not instructions. Pinned probe, two runs
+  (`output/apollo-base128/small_sizes_base512_run{1,2}_2026-09-11.txt`):
+  `f32` 512 239 / 237 us against RustFFT's 238 / 237 (1.01 / 1.00, from
+  1.10 to 1.12 on the two-block route in the strided runs), on the
+  efficiency core 491 / 491 against 504 / 504 (0.97 from 1.20); every
+  other length inside its drift (`f32` 256 1.02 / 1.00, 1024 1.02 /
+  1.04; `f64` unchanged, the sixteen-row form declining at four lanes).
+  The direct-transform oracle is green at 512 in both directions at
+  `f32`; `f64` asserts the decline. Selected at n = 512 where the plan is
+  eight-lane; the four-lane width keeps the two-block split, its own
+  sixteen-row form (8 KB of staging at `f64`) unmeasured and out of the
+  item's scope.
