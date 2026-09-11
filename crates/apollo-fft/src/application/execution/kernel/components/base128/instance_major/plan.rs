@@ -105,8 +105,8 @@ impl<T: MixedRadixScalar, const ROWS: usize, const ROW_LEN: usize, const TABLE_L
             // `W_32^{1,3,5,7}` and `W_16^{1,3}` for the first group, then
             // the odd multiples the later groups reach under a rotation or a
             // sign (`W_32^{9,15,21}`, `W_16^{5,7,9}`), so no operation
-            // follows a layer multiply. The eighths are the `sqrt(2)/2`
-            // scaling.
+            // follows a layer multiply; then the eighths `W_8^{1,3}` for
+            // the radix-8 and the layer alike.
             for (j, n) in [
                 (1, 32),
                 (3, 32),
@@ -120,6 +120,8 @@ impl<T: MixedRadixScalar, const ROWS: usize, const ROW_LEN: usize, const TABLE_L
                 (5, 16),
                 (7, 16),
                 (9, 16),
+                (1, 8),
+                (3, 8),
             ] {
                 push_broadcast(w(j, n));
             }
@@ -130,8 +132,9 @@ impl<T: MixedRadixScalar, const ROWS: usize, const ROW_LEN: usize, const TABLE_L
             push_broadcast(row3);
             let neg1 = row1;
             push_broadcast([-neg1[0], -neg1[1]]);
+            push_broadcast(w(1, 8));
+            push_broadcast(w(3, 8));
         }
-        table.extend([core::f64::consts::FRAC_1_SQRT_2; 4].map(T::from_precise));
 
         let col = [w(1, 8), w(3, 8)].map(|v| [T::from_precise(v[0]), T::from_precise(v[1])]);
         let table: Box<[T; TABLE_LANES]> = table

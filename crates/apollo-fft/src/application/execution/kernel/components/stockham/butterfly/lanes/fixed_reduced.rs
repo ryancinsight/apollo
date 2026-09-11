@@ -11,7 +11,7 @@
 use eunomia::{Complex32, Complex64};
 use hermes_simd::{ComplexReg, LaneKernel, Simd, SimdArch, SimdKernel, Vector};
 
-use crate::application::execution::kernel::components::register_butterfly::radix8;
+use crate::application::execution::kernel::components::register_butterfly::{radix8, HalfRoot2};
 use crate::application::execution::kernel::mixed_radix::scalar::twiddle_constants::{
     TWIDDLES_64_FWD, TWIDDLES_64_INV,
 };
@@ -79,7 +79,8 @@ where
     for quad in 0..2 {
         let c0 = 4 * quad;
         let rows = core::array::from_fn(|r| load(simd, &data[8 * r + c0..8 * r + c0 + 4]));
-        let mut column = radix8::<f32, A, INVERSE>(rows, half_root2);
+        let mut column =
+            radix8::<f32, A, INVERSE, _>(rows, &HalfRoot2::<_, _, INVERSE>(half_root2));
         for (p, value) in column.iter_mut().enumerate().skip(1) {
             let twiddles = [
                 twiddle::<INVERSE>(p * c0),
@@ -104,7 +105,7 @@ where
             ComplexReg::transpose_square(&mut block);
             columns[c0..c0 + 4].copy_from_slice(&block);
         }
-        let out = radix8::<f32, A, INVERSE>(columns, half_root2);
+        let out = radix8::<f32, A, INVERSE, _>(columns, &HalfRoot2::<_, _, INVERSE>(half_root2));
         for (q, value) in out.into_iter().enumerate() {
             store(value, &mut data[8 * q + p0..8 * q + p0 + 4]);
         }
