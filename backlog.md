@@ -2,8 +2,9 @@
 
 <a id="apollo-lane-parallel-threshold"></a>
 
-## APOLLO-LANE-PARALLEL-THRESHOLD-2026-09-11 — Lane passes under 32,768 elements run on one thread whether or not that is faster [patch] [perf] — todo
+## APOLLO-LANE-PARALLEL-THRESHOLD-2026-09-11 — Lane passes under 32,768 elements run on one thread whether or not that is faster [patch] [perf] — in-progress
 
+- **Integrator:** claude-opus-5; **branch:** `perf/apollo-lane-parallel-threshold`, stacked on #436. **Last-update:** 2026-09-11.
 - **Finding.** `lanes::PARALLEL_THRESHOLD = 32_768` total complex elements decides
   serial against moirai-parallel for every lane pass, and no measurement is recorded
   for it (it arrived as the "existing multidimensional crossover", 9db2f6ea). The real
