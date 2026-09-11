@@ -8,6 +8,8 @@ use super::instance_major::{transform_64, Plan64};
 use eunomia::{Complex, Complex32, Complex64};
 use std::f64::consts::TAU;
 
+mod split;
+
 fn dft(input: &[Complex64], inverse: bool) -> Vec<Complex64> {
     let n = input.len();
     let sign = if inverse { 1.0 } else { -1.0 };
@@ -45,6 +47,10 @@ fn tolerance(input: &[Complex64]) -> f64 {
 }
 
 fn worst(a: &[Complex64], b: &[Complex64]) -> f64 {
+    assert!(a
+        .iter()
+        .chain(b)
+        .all(|v| v.re.is_finite() && v.im.is_finite()));
     a.iter()
         .zip(b)
         .map(|(x, y)| (x.re - y.re).hypot(x.im - y.im))
@@ -580,9 +586,9 @@ fn four_block_2048_plans_keep_their_sink_tables_in_the_512_state() {
 
 #[test]
 fn eight_block_2048_plans_keep_their_twiddle_rows_in_the_256_state() {
-    // 2048 at eight lanes is eight eight-row blocks under the radix-8 pass
-    // ahead of them: the 256 state carries the chunk-major twiddle table
-    // and no radix-4 tables, and no 512 base is built beside it.
+    // 2048 at eight lanes is eight eight-row blocks under the radix-8 sink:
+    // the 256 state carries the seven interleaved twiddle rows and no
+    // radix-4 tables, and no 512 base is built beside it.
     const N: usize = 2048;
     let plan = crate::FftPlan1D::<f32>::new(
         crate::Shape1D::new(N).expect("invariant: shape lengths are non-zero"),
@@ -604,9 +610,8 @@ fn eight_block_2048_plans_keep_their_twiddle_rows_in_the_256_state() {
     assert_eq!(state.sinks().inner().len(), 0);
     assert_eq!(state.sinks().outer().len(), 0);
     assert!(!state.inverse_is_initialized() && !state.inverse_sinks_initialized());
-    // Chunk `k / 4` holds the seven registers `j = 1..8` in turn, register
-    // `j - 1` carrying `W_2048^{j k}` at sample `k % 4`: the cache's value
-    // for `j k` reduced modulo 2048 and negated past the half circle.
+    // Row `j - 1` at `k` is `W_2048^{j k}`, the cache's value for `j k`
+    // reduced modulo 2048 and negated past the half circle.
     let rows = state.sinks().rows();
     let cache = <f32 as crate::application::execution::kernel::mixed_radix::MixedRadixScalar>::cached_twiddle_fwd(N);
     for j in 1..8 {
@@ -618,7 +623,7 @@ fn eight_block_2048_plans_keep_their_twiddle_rows_in_the_256_state() {
                 let w = cache[m - 1];
                 Complex32::new(-w.re, -w.im)
             };
-            let lane = ((k / 4) * 7 + (j - 1)) * 8 + 2 * (k % 4);
+            let lane = ((j - 1) * 256 + k) * 2;
             assert_eq!(
                 (rows[lane], rows[lane + 1]),
                 (expected.re, expected.im),
@@ -635,6 +640,7 @@ fn eight_block_2048_plans_keep_their_twiddle_rows_in_the_256_state() {
     let mut actual = source.clone();
     plan.forward_complex_slice_inplace(&mut actual);
     let expected = dft_reduced(&source, false);
+    assert!(actual.iter().all(|v| v.re.is_finite() && v.im.is_finite()));
     let error = actual
         .iter()
         .zip(&expected)
@@ -652,48 +658,19 @@ fn eight_block_2048_plans_keep_their_twiddle_rows_in_the_256_state() {
         .zip(&source)
         .map(|(value, reference)| (value.re - reference.re).hypot(value.im - reference.im))
         .fold(0.0_f32, f32::max);
-    let bound = 2.0 * reduced_tolerance(&source);
+    // Each FFT has at most sixteen rounding contributions per radix-2
+    // stage (complex products, additions and rounded twiddles). Propagating
+    // gamma_d through a forward and normalized inverse gives
+    // (2 gamma_d + gamma_d^2) ||source||_1. No direct-DFT summation occurs
+    // in this round trip, so its O(N epsilon) allowance does not belong here.
+    let du = 16.0 * N.ilog2() as f32 * (f32::EPSILON / 2.0);
+    let gamma = du / (1.0 - du);
+    let norm: f32 = source.iter().map(|v| v.re.hypot(v.im)).sum();
+    let bound = (2.0 * gamma + gamma * gamma) * norm;
+    assert!(actual.iter().all(|v| v.re.is_finite() && v.im.is_finite()));
     assert!(
         error <= bound,
         "N=2048 eight-block round trip differs by {error:.3e} > {bound:.3e}"
-    );
-}
-
-#[test]
-fn eight_block_2048_matches_the_direct_transform_at_four_lanes() {
-    // The column-first form at two complexes a register: the 256 state
-    // built for 2048 serves the four-lane frame through the same passes,
-    // whether or not the plan selects it there.
-    const N: usize = 2048;
-    let Some(state) = super::instance_major::State256::<f64>::new_if_supported(N) else {
-        return;
-    };
-    assert_eq!(state.sinks().rows().len(), 7 * 2 * 256);
-    let source = signal(N);
-    let mut data = source.clone();
-    assert!(
-        super::transform_via_base_256::<f64, false, false>(&mut data, &state),
-        "the eight-block route runs at the width its state was built for"
-    );
-    let expected = dft(&source, false);
-    let error = worst(&data, &expected);
-    let bound = tolerance(&source);
-    assert!(
-        error <= bound,
-        "N=2048 eight-block forward at four lanes differs by {error:.3e} > {bound:.3e}"
-    );
-    assert!(super::transform_via_base_256::<f64, true, false>(
-        &mut data, &state
-    ));
-    let scale = 1.0 / N as f64;
-    for value in &mut data {
-        *value = Complex64::new(value.re * scale, value.im * scale);
-    }
-    let error = worst(&data, &source);
-    let bound = 2.0 * tolerance(&source);
-    assert!(
-        error <= bound,
-        "N=2048 eight-block round trip at four lanes differs by {error:.3e} > {bound:.3e}"
     );
 }
 
@@ -1066,19 +1043,24 @@ fn f32_dynamic_plan_clones_execute_inverse_concurrently() {
 /// right answer: a wrong-width dispatch falls back and still passes value
 /// checks, so this asserts the dispatched width handled the pass and that
 /// its output matches the scalar strided reference.
-fn assert_gather_matches_reference<T>()
+fn assert_gather_matches_reference<T, const BLOCKS: usize>()
 where
     T: crate::application::execution::kernel::mixed_radix::MixedRadixScalar
         + hermes_simd::LaneScalar,
 {
-    const BLOCKS: usize = 4;
     let n = BLOCKS * 128;
     let lanes: Vec<T> = (0..2 * n)
         .map(|i| T::from_precise(((i * 37) % 97) as f64 * 0.125 - 4.0))
         .collect();
     let mut reference = vec![T::from_precise(0.0); 2 * n];
     for b in 0..BLOCKS {
-        let row = b.reverse_bits() >> (usize::BITS - 2);
+        // Four blocks land bit-reversed for the radix-4 sink, eight in
+        // natural order for the radix-8 one.
+        let row = if BLOCKS == 4 {
+            b.reverse_bits() >> (usize::BITS - 2)
+        } else {
+            b
+        };
         for j in 0..128 {
             reference[(row * 128 + j) * 2] = lanes[(j * BLOCKS + b) * 2];
             reference[(row * 128 + j) * 2 + 1] = lanes[(j * BLOCKS + b) * 2 + 1];
@@ -1126,61 +1108,8 @@ where
 
 #[test]
 fn gather_matches_the_strided_reference_at_both_widths() {
-    assert_gather_matches_reference::<f64>();
-    assert_gather_matches_reference::<f32>();
-}
-
-/// The eight-block interleave against the scalar reference: block `q` at
-/// `k` lands at `8 k + q`. The pass moves values, so both widths must match
-/// bit-exactly where they handle the request.
-fn assert_interleave_matches_reference<T>()
-where
-    T: crate::application::execution::kernel::mixed_radix::MixedRadixScalar
-        + hermes_simd::LaneScalar,
-{
-    const BLOCKS: usize = 8;
-    let n = BLOCKS * 128;
-    let lanes: Vec<T> = (0..2 * n)
-        .map(|i| T::from_precise(((i * 41) % 89) as f64 * 0.125 - 4.0))
-        .collect();
-    let mut reference = vec![T::from_precise(0.0); 2 * n];
-    for q in 0..BLOCKS {
-        for k in 0..128 {
-            reference[(k * BLOCKS + q) * 2] = lanes[(q * 128 + k) * 2];
-            reference[(k * BLOCKS + q) * 2 + 1] = lanes[(q * 128 + k) * 2 + 1];
-        }
-    }
-    let mut narrow = vec![T::from_precise(0.0); 2 * n];
-    let mut wide = vec![T::from_precise(0.0); 2 * n];
-    let narrow_handled = hermes_simd::vectorize_lanes::<4, T, _>(
-        super::split_boundary::InterleaveBlocks::<T, 256> {
-            src: &lanes,
-            dst: &mut narrow,
-        },
-    )
-    .unwrap_or(false);
-    let wide_handled = hermes_simd::vectorize_lanes::<8, T, _>(
-        super::split_boundary::InterleaveBlocks::<T, 256> {
-            src: &lanes,
-            dst: &mut wide,
-        },
-    )
-    .unwrap_or(false);
-    assert!(narrow_handled, "four-lane interleave must be handled");
-    assert_eq!(narrow, reference, "four-lane interleave output mismatch");
-    let plan_is_wide = super::instance_major::Plan8x16::<T>::new_if_supported::<false>()
-        .is_some_and(|plan| plan.native_eight_lanes());
-    if plan_is_wide {
-        assert!(
-            wide_handled,
-            "the eight-lane interleave must handle where the plan is eight-lane"
-        );
-        assert_eq!(wide, reference, "eight-lane interleave output mismatch");
-    }
-}
-
-#[test]
-fn interleave_matches_the_strided_reference_at_both_widths() {
-    assert_interleave_matches_reference::<f64>();
-    assert_interleave_matches_reference::<f32>();
+    assert_gather_matches_reference::<f64, 4>();
+    assert_gather_matches_reference::<f32, 4>();
+    assert_gather_matches_reference::<f64, 8>();
+    assert_gather_matches_reference::<f32, 8>();
 }

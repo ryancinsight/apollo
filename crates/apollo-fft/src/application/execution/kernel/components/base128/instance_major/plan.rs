@@ -225,7 +225,7 @@ where
                 T::cached_twiddle_fwd(n)
             };
             if n == 8 * base {
-                SplitSinks::build_radix8(samples, &twiddles, base)
+                SplitSinks::build_radix8(&twiddles, base)
             } else {
                 SplitSinks::build(samples, &twiddles, base, n)
             }

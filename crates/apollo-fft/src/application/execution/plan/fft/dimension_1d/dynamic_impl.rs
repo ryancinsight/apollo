@@ -53,8 +53,8 @@ pub struct FftPlan1D<F: MixedRadixScalar> {
     pub(crate) base128: Option<Arc<State128<F>>>,
     /// The 256-point two-pass base (ADR 0061), built at n = 256 in place of
     /// the split state where its width runs, as four blocks under the
-    /// radix-4 sink at n = 1024, and as eight blocks under a radix-8 pass
-    /// ahead of them at n = 2048 where the width is eight lanes.
+    /// radix-4 sink at n = 1024, and as eight blocks under the radix-8 sink
+    /// at n = 2048 where the width is eight lanes.
     pub(crate) base256: Option<Arc<State256<F>>>,
     /// The 512-point single-pass base (sixteen rows of thirty-two), built
     /// at n = 512 at either native width and, as four blocks under the
@@ -183,10 +183,10 @@ impl<F: MixedRadixScalar<Complex = Complex<F>>> FftPlan1D<F> {
         // exists on every host the 128 one does.
         // 512 is one sixteen-row block at either width, measured against
         // two 256-blocks under a combining sink at both. 2048 is the
-        // width's measured form (ADR 0061): eight 256-blocks under a
-        // radix-8 pass ahead of them at eight lanes — RustFFT's shape, one
-        // column pass over its 256-point butterfly — and four 512-blocks
-        // under the radix-4 sink at four.
+        // width's measured form (ADR 0061): eight 256-blocks under the
+        // radix-8 sink at eight lanes — RustFFT's shape, one column pass
+        // over its 256-point butterfly — and four 512-blocks under the
+        // radix-4 sink at four.
         let eight_blocks_at_2048 = n == 2048 && instance_major::native_eight_lanes::<F>();
         let base512 = if n == 512 || (n == 2048 && !eight_blocks_at_2048) {
             State512::new_if_supported(n).map(Arc::new)
