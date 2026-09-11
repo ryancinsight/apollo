@@ -9,16 +9,19 @@
 
 <a id="apollo-lane-parallel-threshold"></a>
 
-## APOLLO-LANE-PARALLEL-THRESHOLD-2026-09-11 — Derive lane parallelism from task geometry [patch] [perf] — in-progress
+## APOLLO-LANE-PARALLEL-THRESHOLD-2026-09-11 — Derive lane parallelism from task geometry [patch] [perf] — done
 
-- Integrator: Codex; branch: `perf/apollo-paired-parallel-bytes`; scope: lane scheduling and its crossover probe; no transform algorithm changes.
-- Acceptance: retain a production decision only with controlled real 3-D pair improvement and no complex-control regression; run native lane and real-half tests, format and clippy gates.
-- Reopened 2026-09-11: the byte rule below does not establish a geometry-aware crossover. The inverse-pass trial at 94–100% host load is inconclusive, not evidence for rejecting parallelism or fusion.
-- lease: Codex lane scheduling, `benches/lane_threshold.rs`, real-half tests, benchmark runner and smoke wiring; 2026-09-11T22:10:00Z
-- Probe correction: move the instrument out of the unit-test binary, whose per-task worker tracker takes a global mutex; preserve native CSV observations, bind the measurement processor and include both native precisions. The unpinned exploratory campaign is not acceptance evidence.
+- [PR #442](https://github.com/ryancinsight/apollo/pull/442): preserve the element floor and admit five wide lane groups through the chunk-aware policy from [Moirai #328](https://github.com/ryancinsight/Moirai/pull/328); production probe and runner: ef794330.
+- Core Ultra 9 285K evidence: real f64 32³ pair improves 12–20%; all 20 cases pass replicated counterbalanced regression checks without spread suppression. Gates: 644 native, 37 optimized and 37 standalone integration tests; clippy, format, doctest, rustdoc and standalone lock checks pass. Full evidence is in the PR; rejected multi-dispatch variants are not retained.
 
-- A paired pass now decides by the bytes both sides move (`PARALLEL_BYTES`, the same crossover in complex f64 bytes): an output element count undercounts a pass that also reads a wider input, which is why the 32³ real z pass ran serially while the complex volume of half its bytes ran parallel.
-- Prior unit-test timings and the busy-host inverse-pass trial do not establish the production crossover. The replacement instrument is `benches/lane_threshold.rs`; `scripts/lane_threshold.py` runs two counterbalanced replications with processor, host-load and executable identities.
+<a id="apollo-melinoe-executor-receiver"></a>
+
+## APOLLO-MELINOE-EXECUTOR-RECEIVER-2026-09-11 — Track unpublished provider receiver construction [patch] — blocked
+
+- Scope: upstream Melinoe executor registration at local `af052fc`; independent of the lane-policy change and absent from its standalone dependency pins.
+- Finding: `shared_instance<E>` casts a static unit value to `&E`; `E: ParallelExecutor + 'static` does not establish size, alignment or validity for that reference. Source inspection establishes the unsound generic construction; no Miri reproduction has run.
+- Acceptance: upstream constructs a valid receiver or removes the receiver requirement, with an adversarial implementation test and Miri evidence; Apollo advances only to a corrected published commit.
+- Blocker: separate unpublished provider migration; re-open when its corrected Git revision is available. Basis: `src/sync/scoped/partition/executor.rs:149–215` in Melinoe `af052fc`.
 
 <a id="apollo-native-real-3d"></a>
 
