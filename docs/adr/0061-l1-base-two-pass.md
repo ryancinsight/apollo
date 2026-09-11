@@ -168,3 +168,19 @@ measured first and gained nothing over the split at 256.
   rides the column pass). The next slice holds the 32-sample row in
   registers without the intermediate plane, its outputs stored straight
   into staging through the pair transpose.
+- **2026-09-11, the row pair in registers.** The row phase is its own
+  module (`instance_major/rows.rs`): the four first-stage groups and the
+  second-stage pairs are constant-indexed monomorphizations, the whole row
+  pair live across the crossover, no `zbuf`. Census per `f64` row pair:
+  532 instructions and 50 stack moves, straight-line, against the plane's
+  about 770 and 73 (RustFFT 424 and 43). Meter: rows per 256-block 532 to
+  536 cycles against 560 to 562, the block about 4% faster
+  (`output/apollo-base128/small_sizes_rowsreg_run{1,2}_2026-09-11.txt`);
+  wall clock inside run drift. A 31% instruction cut moving the meter 4.5%
+  reads the row phase as latency-bound on its butterfly chains. Two
+  findings the module documents: a closure or `array::from_fn` inside the
+  kernel compiles outside the dispatcher's target-feature frame (its
+  intrinsics become calls), and `Vector::zero()` re-probes the host, so the
+  zero comes from the dispatch token. The larger gap is now `f32` at 256
+  and 512 (1.29 to 1.38 of RustFFT), where the eight-lane width declines
+  32-sample rows.

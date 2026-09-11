@@ -1,25 +1,21 @@
-//! The 128-point base butterfly: mixed radix 8 x 16, register-resident
-//! stages, one 2 KB staging buffer, no gathers and no scattered accesses.
+//! The instance-major base butterfly: `ROWS` stride-`ROWS` subsequences of
+//! `ROW_LEN` samples (`8 x 16` is the 128-point transform, `4 x 16` the
+//! 64-point one, `8 x 32` the 256-point one), register-resident row pairs,
+//! one staging buffer, no gathers and no scattered accesses.
 //!
-//! Decomposition `x[8b + a]`, `a = 0..8`, `b = 0..16`:
+//! Decomposition `x[ROWS b + a]`, `a = 0..ROWS`, `b = 0..ROW_LEN`:
 //!
-//! 1. **Redistribute.** The eight stride-8 subsequences move into staging
-//!    rows through whole-register concatenations: block pair `(m, m + 8)`
-//!    loads eight contiguous registers and emits, per `a`, the pair
-//!    `[x[8m + a], x[8(m + 8) + a]]` with one `swap_pairs` + `blend` each.
-//!    Those pairs are exactly the first-stage operand pairs of a
-//!    decimation-in-time 16-point transform, so writing them at position
-//!    `rev3(m)` leaves every staging row already in DIT order — the bit
-//!    reversal costs nothing.
-//! 2. **Rows.** Each staging row runs the register-resident DIT-16 (the
-//!    N = 16 codelet's stage network: an in-register sample butterfly, then
-//!    three whole-register twiddled stages), producing natural spectral
-//!    order in place.
-//! 3. **Columns.** For each natural column pair, eight registers load
-//!    contiguously, rows `1..8` multiply by the mixed-radix twiddle
-//!    `W_128^{a * k2}`, a lane-wise 8-point DIF runs across the row index,
-//!    and register `q` stores to output row `rev3(q)` — natural output
-//!    order, 32-byte contiguous stores.
+//! 1. **Rows.** A register holds sample `b` of two rows, `[x[ROWS b + 2p],
+//!    x[ROWS b + 2p + 1]]`, one contiguous source load, so the row twiddles
+//!    are broadcast scalars. Each row pair runs the `(ROW_LEN / 4) x 4`
+//!    transform in registers ([`rows`]) and stores its natural-order
+//!    spectra into staging through a pair transpose, row-major with two
+//!    samples a chunk.
+//! 2. **Columns.** For each natural sample pair, `ROWS` registers load
+//!    contiguously, rows `1..ROWS` multiply by the mixed-radix twiddle
+//!    `W_N^{a k}`, a lane-wise `ROWS`-point DIF runs across the row index,
+//!    and register `q` stores to output row `rev(q)` ([`column`]) — natural
+//!    output order, 32-byte contiguous stores.
 //!
 //! The register map has native layouts for four scalar lanes (two interleaved
 //! complex samples) and eight scalar lanes (four interleaved complex samples).
@@ -33,10 +29,11 @@ use crate::application::execution::kernel::components::register_butterfly::{
 use crate::application::execution::kernel::mixed_radix::MixedRadixScalar;
 use core::mem::size_of;
 use eunomia::Complex;
-use hermes_simd::{ComplexReg, LaneKernel, LaneScalar, Simd, SimdArch, SimdKernel, SimdStorage};
+use hermes_simd::{LaneKernel, LaneScalar, Simd, SimdArch, SimdKernel, SimdStorage};
 
 mod column;
 mod plan;
+mod rows;
 mod store;
 mod wide;
 
@@ -185,11 +182,6 @@ where
         reason = "the body must inline into the dispatcher's target-feature \
                   frame (hermes LaneKernel contract for large bodies)"
     )]
-    #[expect(
-        clippy::too_many_lines,
-        reason = "one three-phase register-resident transform; splitting it \
-                  moves live registers across call boundaries"
-    )]
     #[inline(always)]
     fn call<A: SimdArch + SimdKernel<T>>(self, simd: Simd<T, A>) -> bool {
         if <A as SimdStorage<T>>::LANE_COUNT != 4 {
@@ -200,237 +192,40 @@ where
         // a multiple of the four-lane width, so chunk indices are exact. The
         // checked-slice load form spends a visible share of the transform in
         // repeated probes, bounds checks, and Result branches.
-        let tab_view = simd.view(self.plan.table.as_slice());
-        // Dup-split complex multiply: one shuffle, one multiply, one
-        // alternating FMA (see the plan-layout doc).
-        let cmul = |v: ComplexReg<T, A>, ch: usize| super::cmul::cmul_chunk(&tab_view, v, ch);
-        let zero = T::from_precise(0.0);
-        let one = T::from_precise(1.0);
-        let neg = T::from_precise(-1.0);
-        // Sign vector of the in-register sample butterfly and the blend mask
-        // selecting the high complex of a register.
-        let constants = [one, one, neg, neg, zero, zero, neg, neg];
-        let constants = simd.view(&constants);
-        let _sgn = hermes_simd::Vector::<T, A>::from_view_chunk(&constants, 0);
-        let hi_mask = hermes_simd::Vector::<T, A>::from_view_chunk(&constants, 1);
-
         #[cfg(all(test, windows, target_arch = "x86_64"))]
         let t0 = if MEASURE_PHASES {
             phase_meter::stamp()
         } else {
             0
         };
-        // Phases 1 and 2, across FFT instances. A register holds sample `b`
-        // of two *different* rows — `[x[8b + 2p], x[8b + 2p + 1]]` — which is
-        // one contiguous source load, so the separate redistribution pass is
-        // gone. Every row twiddle is then a broadcast scalar rather than a
-        // per-sample pair, which is what makes the trivial ones free: the
-        // radix-4 step's only internal twiddle is a rotation, and `W_16^2`
-        // and `W_16^6` reduce to the `sqrt(2)/2` identity. Four general
-        // multiplies per pair of instances replace the sixteen the
-        // sample-major layout required (gap_audit.md#base128-arithmetic-count).
-        //
-        // 16 = 4 x 4 with `b = 4*b1 + b0` and output `k2 = 4q + m`: radix-4
-        // over `b1` within each stride-4 group, the `W_16^{b0*m}` layer, then
-        // radix-4 over `b0`. Natural order in and out, so no bit reversal.
-        // The staging buffer is written in full by phase 1 before phase 2
-        // reads a lane of it, so zero-filling it first was pure waste — a
-        // 2 KB `memset` the disassembly showed costing about 7% of the
-        // transform at every size this kernel serves
-        // (gap_audit.md#base-kernel-memset).
+        // Phases 1 and 2, the row pairs (`rows`); the staging buffer is
+        // written in full by them before phase 3 reads a lane of it, so
+        // zero-filling it first was pure waste — a 2 KB `memset` the
+        // disassembly showed costing about 7% of the transform at every
+        // size this kernel serves (gap_audit.md#base-kernel-memset).
         debug_assert!(LANES == 2 * ROW_LEN * ROWS && TABLE_LANES == table_lanes(ROWS, ROW_LEN));
-        let b16_1 = layer_ch(ROWS, ROW_LEN);
-        let chunks_per_row = ROW_LEN / 2;
         let mut staging_uninit = core::mem::MaybeUninit::<[T; LANES]>::uninit();
         // SAFETY: the reference is used only for writes until every lane is
-        // initialized. Phase 1 stores chunk `2p*8 + g` and `(2p+1)*8 + g`
-        // for `p in 0..ROWS/2` and `g = 2q + mh` with `q in 0..4,
-        // mh in 0..2` — rows `0..ROWS` times chunks 0..8, all `8*ROWS`
-        // four-lane chunks (`LANES` lanes), before phase 2 performs the
-        // first read. Every `LaneScalar` implementor is an
-        // IEEE float with no validity niche. Coverage is enforced, not just
-        // argued: debug builds poison the buffer with NaN below, so a lane
-        // read before it is written poisons the output and fails every
+        // initialized. The row pass stores chunk `row * (ROW_LEN / 2) + g`
+        // for every row in `0..ROWS` and every `g in 0..ROW_LEN / 2` — all
+        // `ROWS * ROW_LEN / 2` four-lane chunks (`LANES` lanes) — before
+        // phase 3 performs the first read. Every `LaneScalar` implementor is
+        // an IEEE float with no validity niche. Coverage is enforced, not
+        // just argued: debug builds poison the buffer with NaN below, so a
+        // lane read before it is written poisons the output and fails every
         // value-semantic oracle in the debug suite. Miri cannot reach this
         // body (the dispatcher only selects it on AVX2 hardware); the NaN
         // poison plus the analytical oracles are the substitute coverage.
         let staging: &mut [T; LANES] = unsafe { &mut *staging_uninit.as_mut_ptr() };
         #[cfg(debug_assertions)]
         staging.fill(T::from_precise(f64::NAN));
-        {
-            let data_view = simd.view(self.data.as_slice());
-            let mut stg = simd.view_mut(staging.as_mut_slice());
-            let half_root2 = hermes_simd::Vector::<T, A>::from_view_chunk(
-                &tab_view,
-                b16_1 + layer_chunks(ROW_LEN) - 1,
-            );
-            // The row's second stage is radix-4 over `b0` for each of the
-            // `ROW_LEN / 4` values of `m`; `zbuf` holds `z[b0][m]` at chunk
-            // `4 m + b0`.
-
-            // The two radix-4 stages run as separate passes over a
-            // 512-byte spill plane. Holding all sixteen twiddled values in
-            // registers across the second stage was measured at 4x the
-            // baseline: sixteen live registers are the whole AVX2 file, and
-            // the allocator spilled the unchanged column pass along with it.
-            // Staging them deliberately costs the same traffic the deleted
-            // redistribution pass used to pay, and keeps each stage inside
-            // roughly a dozen live values.
-            let mut zbuf = [T::from_precise(0.0); 128];
-            for p in 0..ROWS / 2 {
-                {
-                    let mut zv = simd.view_mut(&mut zbuf);
-                    let load_r = |b: usize| {
-                        ComplexReg::<T, A>::from_interleaved(hermes_simd::Vector::from_view_chunk(
-                            &data_view,
-                            (ROWS / 2) * b + p,
-                        ))
-                    };
-                    if ROW_LEN == 32 {
-                        // 32 = 8 x 4 with `b = 4 b1 + b0`: radix-8 over `b1`
-                        // within each stride-4 group, the `W_32^{b0 m}` layer,
-                        // then radix-4 over `b0` below, so no stage holds more
-                        // than eight columns and their twiddles (the 4 x 8
-                        // order spilled forty registers a row pair). The
-                        // layer's general multiplies are the six broadcasts of
-                        // the table; the others are those under `W_32^8` (a
-                        // rotation) or `W_32^16` (a sign), and the eighths
-                        // are the `sqrt(2)/2` scalings.
-                        let rot = rot90::<T, A, INVERSE>;
-                        let neg = |v: ComplexReg<T, A>| {
-                            ComplexReg::from_interleaved(-v.into_interleaved())
-                        };
-                        let (w1, w3, w5, w7, v1, v3) = (
-                            b16_1,
-                            b16_1 + 2,
-                            b16_1 + 4,
-                            b16_1 + 6,
-                            b16_1 + 8,
-                            b16_1 + 10,
-                        );
-                        for b0 in 0..4usize {
-                            let y = radix8::<T, A, INVERSE>(
-                                core::array::from_fn(|b1| load_r(b0 + 4 * b1)),
-                                half_root2,
-                            );
-                            let z = match b0 {
-                                0 => y,
-                                1 => [
-                                    y[0],
-                                    cmul(y[1], w1),
-                                    cmul(y[2], v1),
-                                    cmul(y[3], w3),
-                                    root2_twiddle::<T, A, INVERSE, false>(y[4], half_root2),
-                                    cmul(y[5], w5),
-                                    cmul(y[6], v3),
-                                    cmul(y[7], w7),
-                                ],
-                                2 => [
-                                    y[0],
-                                    cmul(y[1], v1),
-                                    root2_twiddle::<T, A, INVERSE, false>(y[2], half_root2),
-                                    cmul(y[3], v3),
-                                    rot(y[4]),
-                                    rot(cmul(y[5], v1)),
-                                    root2_twiddle::<T, A, INVERSE, true>(y[6], half_root2),
-                                    rot(cmul(y[7], v3)),
-                                ],
-                                _ => [
-                                    y[0],
-                                    cmul(y[1], w3),
-                                    cmul(y[2], v3),
-                                    rot(cmul(y[3], w1)),
-                                    root2_twiddle::<T, A, INVERSE, true>(y[4], half_root2),
-                                    rot(cmul(y[5], w7)),
-                                    neg(cmul(y[6], v1)),
-                                    neg(cmul(y[7], w5)),
-                                ],
-                            };
-                            for (m, reg) in z.into_iter().enumerate() {
-                                reg.into_interleaved()
-                                    .store_to_view_chunk(&mut zv, 4 * m + b0);
-                            }
-                        }
-                    } else {
-                        for b0 in 0..4usize {
-                            let y = radix4::<T, A, INVERSE>([
-                                load_r(b0),
-                                load_r(b0 + 4),
-                                load_r(b0 + 8),
-                                load_r(b0 + 12),
-                            ]);
-                            // The `W_16^{b0*m}` layer: one general multiply only
-                            // where the twiddle is neither unity, a rotation, nor
-                            // a `sqrt(2)/2` scaling.
-                            let z = match b0 {
-                                0 => y,
-                                1 => [
-                                    y[0],
-                                    cmul(y[1], b16_1),
-                                    root2_twiddle::<T, A, INVERSE, false>(y[2], half_root2),
-                                    cmul(y[3], b16_1 + 2),
-                                ],
-                                2 => [
-                                    y[0],
-                                    root2_twiddle::<T, A, INVERSE, false>(y[1], half_root2),
-                                    rot90::<T, A, INVERSE>(y[2]),
-                                    root2_twiddle::<T, A, INVERSE, true>(y[3], half_root2),
-                                ],
-                                _ => [
-                                    y[0],
-                                    cmul(y[1], b16_1 + 2),
-                                    root2_twiddle::<T, A, INVERSE, true>(y[2], half_root2),
-                                    cmul(y[3], b16_1 + 4),
-                                ],
-                            };
-                            for (m, reg) in z.into_iter().enumerate() {
-                                reg.into_interleaved()
-                                    .store_to_view_chunk(&mut zv, 4 * m + b0);
-                            }
-                        }
-                    }
-                }
-
-                // Radix-4 over `b0`, then the pair transpose that hands
-                // phase 3 its sample-major registers.
-                let zv = simd.view(&zbuf);
-                let load_z = |m: usize, b0: usize| {
-                    ComplexReg::<T, A>::from_interleaved(hermes_simd::Vector::from_view_chunk(
-                        &zv,
-                        4 * m + b0,
-                    ))
-                };
-                // Output `(ROW_LEN / 4) q + m`; the two `m` of a pair land as
-                // consecutive samples of chunk `(ROW_LEN / 8) q + mh`.
-                let pairs = ROW_LEN / 8;
-                for mh in 0..pairs {
-                    let m0 = 2 * mh;
-                    let o0 = radix4::<T, A, INVERSE>([
-                        load_z(m0, 0),
-                        load_z(m0, 1),
-                        load_z(m0, 2),
-                        load_z(m0, 3),
-                    ]);
-                    let o1 = radix4::<T, A, INVERSE>([
-                        load_z(m0 + 1, 0),
-                        load_z(m0 + 1, 1),
-                        load_z(m0 + 1, 2),
-                        load_z(m0 + 1, 3),
-                    ]);
-                    for q in 0..4usize {
-                        let g = pairs * q + mh;
-                        let a = o0[q].into_interleaved();
-                        let b = o1[q].into_interleaved();
-                        hi_mask
-                            .blend(b.swap_pairs(), a)
-                            .store_to_view_chunk(&mut stg, 2 * p * chunks_per_row + g);
-                        hi_mask
-                            .blend(b, a.swap_pairs())
-                            .store_to_view_chunk(&mut stg, (2 * p + 1) * chunks_per_row + g);
-                    }
-                }
-            }
-        }
+        rows::row_pass::<T, A, INVERSE, ROWS, ROW_LEN>(
+            simd,
+            self.data.as_slice(),
+            self.plan.table.as_slice(),
+            staging.as_mut_slice(),
+            layer_ch(ROWS, ROW_LEN),
+        );
 
         // Counter 0 now carries the fused load-and-rows pass; counter 1 is
         // retired with the separate redistribution it used to time.
