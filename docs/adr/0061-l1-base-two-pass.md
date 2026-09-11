@@ -1,6 +1,6 @@
 # ADR 0061: A two-pass base of 256 for the L1-resident powers of two
 
-- **Status:** Proposed
+- **Status:** Accepted
 - **Date:** 2026-09-11
 - **Class:** [minor] [arch] [perf]
 - **Item:** [APOLLO-L1-BASE-TWO-PASS](../../backlog.md#apollo-l1-base-two-pass); parent [ATLAS-APOLLO-BEAT-THE-REFERENCES](../../backlog.md#atlas-apollo-beat-the-references)
@@ -277,4 +277,22 @@ measured first and gained nothing over the split at 256.
   shuffles from 83 and 17, the eight stack moves unchanged) and kept for
   the form; the wall clock read inside drift
   (`output/apollo-base128/small_sizes_colreg_run{1,2}_2026-09-11.txt`).
-  The next reading is two groups interleaved in one iteration.
+- **2026-09-11, two column groups interleaved (rejected).** Two eight-row
+  groups an iteration with their loads, twiddles, and stages interleaved
+  at the source: the meter's 1024 column phase 613 to 628 a block from
+  520 to 527, `f32` 1024 638 to 640 us from 611 to 612, the 256 base
+  218 us from 209 to 210 — sixteen live columns spill past what the
+  interleave buys, and the out-of-order window overlaps groups better
+  than the source can
+  (`output/apollo-base128/small_sizes_colpair_run{1,2}_2026-09-11.txt`).
+  Reverted. With that, the base shape is decided and this record moves
+  to Accepted: the 256-point instance-major base with 32-sample rows in
+  registers at either width, the split over it reading the parent at
+  four lanes and gathered at eight, the radix step as the last block's
+  sink, the sink twiddles owned by the plan state. The route reads `f64`
+  512 at 1.08 to 1.15 and 1024 at 1.13 to 1.17 of RustFFT, `f32` 512 at
+  1.16 to 1.19 and 1024 at 1.03 to 1.08, from 1.17 to 1.38 when the item
+  opened; what remains is inside the kernels — the row pair's 511
+  instructions against RustFFT's 424 (the pair transpose 32 of them, the
+  eighths 12) and the column group's 67-cycle chain — and is the
+  follow-up item's, not a shape decision.
