@@ -54,9 +54,8 @@ pub struct FftPlan1D<F: MixedRadixScalar> {
     /// The 256-point two-pass base (ADR 0061), built at n = 256 in place of
     /// the split state where its width runs.
     pub(crate) base256: Option<Arc<State256<F>>>,
-    /// The 512-point single-pass base (sixteen rows of thirty-two), built at
-    /// n = 512 where the plan is eight-lane; elsewhere 512 is the two-block
-    /// split over `base256`.
+    /// The 512-point single-pass base (sixteen rows of thirty-two), built
+    /// at n = 512 at either native width (ADR 0061).
     pub(crate) base512: Option<Arc<State512<F>>>,
     pub(crate) base64: Option<Arc<State64<F>>>,
 
@@ -178,9 +177,8 @@ impl<F: MixedRadixScalar<Complex = Complex<F>>> FftPlan1D<F> {
         // step above it. The 128 base serves its own length only: the split
         // over 128-blocks it once carried to 1024 is gone, since the 256 base
         // exists on every host the 128 one does.
-        // At eight lanes 512 is one sixteen-row block rather than two
-        // gathered 256-blocks under a combining sink; the four-lane width
-        // declines the sixteen-row form and keeps the split.
+        // 512 is one sixteen-row block at either width, measured against
+        // two 256-blocks under a combining sink at both (ADR 0061).
         let base512 = if n == 512 {
             State512::new_if_supported(n).map(Arc::new)
         } else {

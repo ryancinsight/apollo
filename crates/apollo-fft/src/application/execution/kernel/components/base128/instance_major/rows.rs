@@ -180,17 +180,6 @@ where
         } else {
             odd
         }
-    } else if BLOCKS == 2 {
-        // Four samples two apart from `8 c + OFFSET`: the even or odd
-        // samples of the two four-sample windows from `8 c`.
-        let base = 8 * c;
-        let (even, odd) =
-            window(simd, parent, base).deinterleave_pairs(window(simd, parent, base + 4));
-        if OFFSET % 2 == 0 {
-            even
-        } else {
-            odd
-        }
     } else {
         // Four samples four apart from `16 c + OFFSET`: sample `OFFSET` of
         // each of the four windows from `16 c`, one column of their

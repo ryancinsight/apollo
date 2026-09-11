@@ -68,13 +68,12 @@ where
     unsafe { v.store_unaligned(data.as_mut_ptr().add(c * <A as SimdStorage<T>>::LANE_COUNT)) }
 }
 
-/// Gathers the split's stride-`BLOCKS` subsequences into contiguous blocks.
+/// Gathers the split's four stride-4 subsequences into contiguous blocks.
 ///
-/// A parent chunk holds two adjacent samples, so a subsequence chunk is a
-/// whole-register concatenation of two parent chunks — the phase-one blend
-/// network. `BLOCKS = 2` pairs neighbours; `BLOCKS = 4` pairs at distance
-/// two, and the network lands the four subsequences in exactly the
-/// bit-reversed block order the combine chain expects.
+/// One fused four-way pair deinterleave per quad of consecutive parent
+/// chunks yields one chunk of each subsequence at any width, and the
+/// network lands the four subsequences in exactly the bit-reversed block
+/// order the radix-4 sink expects.
 pub(crate) struct GatherBlocks<'a, T, const BLOCKS: usize, const BLOCK_LANES: usize> {
     pub(crate) src: &'a [T],
     pub(crate) dst: &'a mut [T],
@@ -100,39 +99,24 @@ impl<T: LaneScalar + MixedRadixScalar, const BLOCKS: usize, const BLOCK_LANES: u
         }
         // One bound for the whole pass, so the per-chunk compares vanish.
         assert!(
-            (BLOCKS == 2 || BLOCKS == 4)
+            BLOCKS == 4
                 && self.src.len() == BLOCKS * BLOCK_LANES
                 && self.dst.len() == self.src.len(),
-            "invariant: two or four blocks of one base length"
+            "invariant: four blocks of one base length"
         );
-        // Chunks per 128-sample block at the dispatched width.
+        // Chunks per block at the dispatched width; the outputs store in
+        // the bit-reversed block order [0, 2, 1, 3].
         let cpb = BLOCK_LANES / lanes;
-        if BLOCKS == 2 {
-            // One pair-deinterleave of two consecutive chunks splits their
-            // complex samples into the even and odd subsequences.
-            for g in 0..cpb {
-                let (even, odd) =
-                    chunk::<T, A>(self.src, 2 * g).deinterleave_pairs(chunk(self.src, 2 * g + 1));
-                put_chunk(even, self.dst, g);
-                put_chunk(odd, self.dst, cpb + g);
-            }
-        } else {
-            // Four blocks: one fused four-way pair deinterleave per quad of
-            // consecutive chunks yields one chunk of each stride-4
-            // subsequence at any width, and the outputs store in the
-            // bit-reversed block order [0, 2, 1, 3] the combine chain
-            // expects.
-            for k in 0..cpb {
-                let (b0, b1, b2, b3) = chunk::<T, A>(self.src, 4 * k).deinterleave_pairs4(
-                    chunk(self.src, 4 * k + 1),
-                    chunk(self.src, 4 * k + 2),
-                    chunk(self.src, 4 * k + 3),
-                );
-                put_chunk(b0, self.dst, k);
-                put_chunk(b2, self.dst, cpb + k);
-                put_chunk(b1, self.dst, 2 * cpb + k);
-                put_chunk(b3, self.dst, 3 * cpb + k);
-            }
+        for k in 0..cpb {
+            let (b0, b1, b2, b3) = chunk::<T, A>(self.src, 4 * k).deinterleave_pairs4(
+                chunk(self.src, 4 * k + 1),
+                chunk(self.src, 4 * k + 2),
+                chunk(self.src, 4 * k + 3),
+            );
+            put_chunk(b0, self.dst, k);
+            put_chunk(b2, self.dst, cpb + k);
+            put_chunk(b1, self.dst, 2 * cpb + k);
+            put_chunk(b3, self.dst, 3 * cpb + k);
         }
         true
     }

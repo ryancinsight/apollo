@@ -38,7 +38,7 @@ mod store;
 use plan::BaseLaneWidth;
 pub(crate) use plan::{BasePlan, BasePlanState};
 pub(crate) use rows::{BlockSource, ParentSplit, SelfSplit};
-pub(crate) use store::{CombineSink, DirectSink, FinalRadix4Sink, SplitSinks, StoreSink};
+pub(crate) use store::{DirectSink, FinalRadix4Sink, SplitSinks, StoreSink};
 
 /// Per-phase TSC accumulators for the separately instantiated attribution
 /// instrument.
@@ -134,7 +134,7 @@ pub(crate) const fn table_lanes(rows: usize, row_len: usize) -> usize {
 /// stride-`ROWS` subsequences of `ROW_LEN`, so `ROWS = 8` over sixteen is
 /// the 128-point transform, `ROWS = 4` the 64-point one, `ROWS = 8` over
 /// thirty-two the 256-point one (ADR 0061), and `ROWS = 16` over
-/// thirty-two the 512-point one at eight lanes. The row machinery is
+/// thirty-two the 512-point one. The row machinery is
 /// identical at every length; the column pass is a lane-wise DIF of length
 /// `ROWS`.
 ///
@@ -377,7 +377,7 @@ where
     )
 }
 
-/// The 512-point base plan: sixteen rows of thirty-two, eight lanes only.
+/// The 512-point base plan: sixteen rows of thirty-two.
 pub(crate) type Plan512<T> = BasePlan<T, 16, 32, { table_lanes(16, 32) }>;
 #[cfg(test)]
 pub(crate) type Plan256<T> = BasePlan<T, 8, 32, { table_lanes(8, 32) }>;
@@ -442,7 +442,7 @@ where
 #[cfg(test)]
 /// Runs the 512-point base butterfly: sixteen stride-16 subsequences of
 /// thirty-two, the row phases over `4 x 8` and the sixteen-point column
-/// pass, at eight lanes only.
+/// pass.
 ///
 /// # Panics
 ///
