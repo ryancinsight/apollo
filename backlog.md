@@ -331,6 +331,13 @@
 - **Scope:** the hook's clippy step and its reproduce line carry `--all-features -- -D warnings`; the comment states the reason. Non-goals: the nextest step, the workspace lint table.
 - **Acceptance:** the hook fails a push carrying a warning-level lint CI denies (verified against the executors import at `d655599d^`), and passes the current main.
 - **Dependencies:** none. **Verification:** `git push` of this change through the hook itself.
+<a id="apollo-rader-half-cyclic-f32"></a>
+## APOLLO-RADER-HALF-CYCLIC-F32 — The half-cyclic Rader composition at n = 101 runs scalar passes and slow 50-point convolutions [patch] [perf] — in-progress
+- **Integrator:** claude/fable; **last-update:** 2026-09-11; lane `D:/atlas/worktrees/apollo-route`; regions `crates/apollo-fft/src/application/execution/kernel/components/rader/**`, `docs/adr/`.
+- **Evidence (aligned probe and the composition attribution, 2026-09-11):** `f32` 101 reads 668 us against RustFFT's 350 (1.96), `f64` 584 against 541 (1.08), on the efficiency core 1.57 and 0.94; `f32` 100 reads 91 us (0.68), so the 101 transform costs seven of its own length-100 transforms. `half_cyclic_composition_attribution_by_core_type` (performance core, `f32`): plan 725 us a batch, the half-cyclic Rader 726, its composition 688 — the composition is the transform; its four split and recombine passes read 62 to 104 each (about 330 together, scalar loops over `mul_conj` and the negacyclic twiddles), and the remaining 360 are the four 50-point transforms of the two convolutions, routed through the coprime PFA (2 x 25) because 50 is not 2/3-smooth — 90 us each against the planned 100-point transform's 91.
+- **Scope:** (1) the 50-point sub-convolutions through the composite radices `[2, 5, 5]` the plan uses at that length instead of the PFA, measured on the attribution probe and the pinned probe at 101; (2) the split and recombine passes as register kernels over the contiguous halves with the twiddle table dup-split, both widths. Non-goals: the Bluestein path, the full-cyclic backend, other primes than the ones the probes carry (97, 101, 113, 151).
+- **Acceptance:** `f32` 101 not above 1.2 of RustFFT on the pinned probe (two runs) with `f64` 101 not above its current 1.08, the Rader oracles green at the affected primes in both directions; each slice recorded with its attribution numbers.
+- **Dependencies:** none; parent [beat the references](#atlas-apollo-beat-the-references). **Verification:** `half_cyclic_composition_attribution_by_core_type`, `small_sizes_against_the_references_by_core_type`, the Rader tests.
 
 <a id="apollo-base-table-alignment"></a>
 ## APOLLO-BASE-TABLE-ALIGNMENT — Align the base plan tables and the staging buffer to the cache line [patch] [perf] — review
