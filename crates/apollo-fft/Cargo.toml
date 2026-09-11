@@ -45,6 +45,10 @@ harness = false
 [[bench]]
 name = "engine_census"
 harness = false
+
+[[bench]]
+name = "lane_threshold"
+harness = false
 [features]
 wgpu = [
     "dep:hephaestus-wgpu",
