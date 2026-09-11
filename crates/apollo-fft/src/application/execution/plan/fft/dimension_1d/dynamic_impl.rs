@@ -1,5 +1,5 @@
 use crate::application::execution::kernel::components::base128::instance_major::{
-    Plan128, Plan64, State128, State256, State64,
+    Plan128, Plan512, Plan64, State128, State256, State512, State64,
 };
 use crate::application::execution::kernel::mixed_radix::MixedRadixScalar;
 use crate::domain::metadata::shape::Shape1D;
@@ -12,7 +12,8 @@ use std::sync::Arc;
 
 use super::executors::{
     exec_base128_forward, exec_base128_inverse, exec_base128_inverse_unnorm, exec_base256_forward,
-    exec_base256_inverse, exec_base256_inverse_unnorm, exec_base64_forward, exec_base64_inverse,
+    exec_base256_inverse, exec_base256_inverse_unnorm, exec_base512_forward, exec_base512_inverse,
+    exec_base512_inverse_unnorm, exec_base64_forward, exec_base64_inverse,
     exec_base64_inverse_unnorm, exec_bluestein_forward, exec_bluestein_inverse,
     exec_bluestein_inverse_unnorm, exec_composite_forward, exec_composite_inverse,
     exec_composite_inverse_unnorm, exec_four_step, exec_good_thomas_forward,
@@ -53,6 +54,10 @@ pub struct FftPlan1D<F: MixedRadixScalar> {
     /// The 256-point two-pass base (ADR 0061), built at n = 256 in place of
     /// the split state where its width runs.
     pub(crate) base256: Option<Arc<State256<F>>>,
+    /// The 512-point single-pass base (sixteen rows of thirty-two), built at
+    /// n = 512 where the plan is eight-lane; elsewhere 512 is the two-block
+    /// split over `base256`.
+    pub(crate) base512: Option<Arc<State512<F>>>,
     pub(crate) base64: Option<Arc<State64<F>>>,
 
     // Function pointers for execution routing:
@@ -74,6 +79,7 @@ impl<F: MixedRadixScalar> Clone for FftPlan1D<F> {
             twiddle_inv: self.twiddle_inv.clone(),
             base128: self.base128.clone(),
             base256: self.base256.clone(),
+            base512: self.base512.clone(),
             base64: self.base64.clone(),
             // `OnceLock: Clone` clones the initialized state, so a clone of a
             // plan that has run an inverse keeps the table handle.
@@ -127,6 +133,22 @@ impl<F: MixedRadixScalar<Complex = Complex<F>>> FftPlan1D<F> {
             .expect("invariant: the base-256 executor requires its plan state")
     }
 
+    #[inline]
+    pub(super) fn base512_forward_plan(&self) -> &Plan512<F> {
+        self.base512
+            .as_deref()
+            .expect("invariant: the base-512 executor requires its plan state")
+            .forward()
+    }
+
+    #[inline]
+    pub(super) fn base512_inverse_plan(&self) -> &Plan512<F> {
+        self.base512
+            .as_deref()
+            .expect("invariant: the base-512 executor requires its plan state")
+            .inverse()
+    }
+
     pub(super) fn base128_forward_plan(&self) -> &Plan128<F> {
         self.base128
             .as_deref()
@@ -156,7 +178,15 @@ impl<F: MixedRadixScalar<Complex = Complex<F>>> FftPlan1D<F> {
         // step above it. The 128 base serves its own length only: the split
         // over 128-blocks it once carried to 1024 is gone, since the 256 base
         // exists on every host the 128 one does.
-        let base256 = if (256..=1024).contains(&n) && n.is_power_of_two() {
+        // At eight lanes 512 is one sixteen-row block rather than two
+        // gathered 256-blocks under a combining sink; the four-lane width
+        // declines the sixteen-row form and keeps the split.
+        let base512 = if n == 512 {
+            State512::new_if_supported(n).map(Arc::new)
+        } else {
+            None
+        };
+        let base256 = if (256..=1024).contains(&n) && n.is_power_of_two() && base512.is_none() {
             State256::new_if_supported(n).map(Arc::new)
         } else {
             None
@@ -180,8 +210,11 @@ impl<F: MixedRadixScalar<Complex = Complex<F>>> FftPlan1D<F> {
         } else if n.is_power_of_two() {
             let log2 = n.trailing_zeros();
             PlanStrategy::PowerOfTwo {
-                twiddle_fwd: (base256.is_none() && base64.is_none() && base128.is_none())
-                    .then(|| F::cached_twiddle_fwd(n)),
+                twiddle_fwd: (base256.is_none()
+                    && base512.is_none()
+                    && base64.is_none()
+                    && base128.is_none())
+                .then(|| F::cached_twiddle_fwd(n)),
                 log2,
                 pot: PhantomData,
             }
@@ -452,7 +485,11 @@ impl<F: MixedRadixScalar<Complex = Complex<F>>> FftPlan1D<F> {
                         }
                     }
                     9 => {
-                        if base256.is_some() {
+                        if base512.is_some() {
+                            forward_impl = exec_base512_forward::<F>;
+                            inverse_impl = exec_base512_inverse::<F>;
+                            inverse_unnorm_impl = exec_base512_inverse_unnorm::<F>;
+                        } else if base256.is_some() {
                             forward_impl = exec_base256_forward::<F>;
                             inverse_impl = exec_base256_inverse::<F>;
                             inverse_unnorm_impl = exec_base256_inverse_unnorm::<F>;
@@ -519,6 +556,7 @@ impl<F: MixedRadixScalar<Complex = Complex<F>>> FftPlan1D<F> {
             twiddle_inv,
             base128,
             base256,
+            base512,
             base64,
             forward_impl,
             inverse_impl,
