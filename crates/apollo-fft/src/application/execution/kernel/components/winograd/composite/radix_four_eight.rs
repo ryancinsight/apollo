@@ -47,17 +47,57 @@ const fn twiddle<const INVERSE: bool, const INDEX: usize>() -> Complex32 {
     Complex::new((sign * value.re) as f32, (imaginary_sign * value.im) as f32)
 }
 
-/// One register of twiddles, loaded from a promoted constant row.
+/// One register of twiddles as its eight interleaved lanes, in the direct
+/// form and with each sample's real and imaginary lanes exchanged.
 ///
-/// The row is a constant, and left visible to the optimizer it folds the
-/// twiddle's negated half into the complex multiply's second constant,
-/// which breaks the `fmaddsub` pattern into a sign flip, a blend and a
-/// plain `fmadd` — six instructions for four. RustFFT keeps its twiddles in
-/// registers loaded from its plan; `black_box` on the row's reference gives
-/// this kernel the same one load a row, with the values opaque past it.
+/// The swapped row is the complex multiply's second operand
+/// ([`ComplexReg::mul_with_swapped`]); holding it beside the direct row
+/// spends one load where a swap per use spent a shuffle on the twiddle
+/// every transform. Lanes rather than samples so the load needs no slice
+/// cast: `cast_slice` checks the pointer's alignment at run time once the
+/// pointer is opaque, a compare, a branch and a trap per row.
+struct TwiddleRow {
+    direct: [f32; 8],
+    swapped: [f32; 8],
+}
+
+const fn twiddle_row<
+    const INVERSE: bool,
+    const I0: usize,
+    const I1: usize,
+    const I2: usize,
+    const I3: usize,
+>() -> TwiddleRow {
+    let samples = [
+        twiddle::<INVERSE, I0>(),
+        twiddle::<INVERSE, I1>(),
+        twiddle::<INVERSE, I2>(),
+        twiddle::<INVERSE, I3>(),
+    ];
+    let mut direct = [0.0; 8];
+    let mut swapped = [0.0; 8];
+    let mut sample = 0;
+    while sample < 4 {
+        direct[2 * sample] = samples[sample].re;
+        direct[2 * sample + 1] = samples[sample].im;
+        swapped[2 * sample] = samples[sample].im;
+        swapped[2 * sample + 1] = samples[sample].re;
+        sample += 1;
+    }
+    TwiddleRow { direct, swapped }
+}
+
+/// The direct and swapped twiddle registers for one row, loaded from a
+/// promoted constant through `black_box`.
+///
+/// Left visible to the optimizer, the row folds its negated half into the
+/// complex multiply's second constant and breaks the `fmaddsub` pattern into
+/// a sign flip, a blend and a plain `fmadd` — six instructions for four.
+/// RustFFT keeps its twiddles in registers loaded from its plan; the opaque
+/// reference gives this kernel the same one load a row.
 #[expect(
     clippy::inline_always,
-    reason = "the twiddle load must stay in the selected target-feature frame"
+    reason = "the twiddle loads must stay in the selected target-feature frame"
 )]
 #[inline(always)]
 fn twiddles<
@@ -69,19 +109,30 @@ fn twiddles<
     const I3: usize,
 >(
     simd: Simd<f32, A>,
-) -> ComplexReg<f32, A>
+) -> (ComplexReg<f32, A>, ComplexReg<f32, A>)
 where
     A: SimdArch + SimdKernel<f32>,
 {
-    let row: &'static [Complex32; 4] = &const {
-        [
-            twiddle::<INVERSE, I0>(),
-            twiddle::<INVERSE, I1>(),
-            twiddle::<INVERSE, I2>(),
-            twiddle::<INVERSE, I3>(),
-        ]
-    };
-    load::<A>(simd, core::hint::black_box(row))
+    let row: &'static TwiddleRow =
+        core::hint::black_box(&const { twiddle_row::<INVERSE, I0, I1, I2, I3>() });
+    (
+        load_lanes::<A>(simd, &row.direct),
+        load_lanes::<A>(simd, &row.swapped),
+    )
+}
+
+/// Loads eight interleaved lanes as one complex register.
+#[expect(
+    clippy::inline_always,
+    reason = "the load must stay in the selected target-feature frame"
+)]
+#[inline(always)]
+fn load_lanes<A>(simd: Simd<f32, A>, lanes: &[f32; 8]) -> ComplexReg<f32, A>
+where
+    A: SimdArch + SimdKernel<f32>,
+{
+    let view = simd.view(lanes);
+    ComplexReg::from_interleaved(Vector::from_view_chunk(&view, 0))
 }
 
 #[expect(
@@ -120,12 +171,18 @@ where
         load::<A>(simd, &data[20..24]),
         load::<A>(simd, &data[28..32]),
     ]);
-    first[1] = first[1] * twiddles::<A, INVERSE, 0, 1, 2, 3>(simd);
-    second[1] = second[1] * twiddles::<A, INVERSE, 4, 5, 6, 7>(simd);
-    first[2] = first[2] * twiddles::<A, INVERSE, 0, 2, 4, 6>(simd);
-    second[2] = second[2] * twiddles::<A, INVERSE, 8, 10, 12, 14>(simd);
-    first[3] = first[3] * twiddles::<A, INVERSE, 0, 3, 6, 9>(simd);
-    second[3] = second[3] * twiddles::<A, INVERSE, 12, 15, 18, 21>(simd);
+    let (direct, swapped) = twiddles::<A, INVERSE, 0, 1, 2, 3>(simd);
+    first[1] = first[1].mul_with_swapped(direct, swapped);
+    let (direct, swapped) = twiddles::<A, INVERSE, 4, 5, 6, 7>(simd);
+    second[1] = second[1].mul_with_swapped(direct, swapped);
+    let (direct, swapped) = twiddles::<A, INVERSE, 0, 2, 4, 6>(simd);
+    first[2] = first[2].mul_with_swapped(direct, swapped);
+    let (direct, swapped) = twiddles::<A, INVERSE, 8, 10, 12, 14>(simd);
+    second[2] = second[2].mul_with_swapped(direct, swapped);
+    let (direct, swapped) = twiddles::<A, INVERSE, 0, 3, 6, 9>(simd);
+    first[3] = first[3].mul_with_swapped(direct, swapped);
+    let (direct, swapped) = twiddles::<A, INVERSE, 12, 15, 18, 21>(simd);
+    second[3] = second[3].mul_with_swapped(direct, swapped);
     ComplexReg::transpose_square(&mut first);
     ComplexReg::transpose_square(&mut second);
     let output = radix8::<f32, A, INVERSE, _>(
@@ -166,9 +223,12 @@ where
         load::<A>(simd, &data[8..12]),
         load::<A>(simd, &data[12..16]),
     ]);
-    rows[1] = rows[1] * twiddles::<A, INVERSE, 0, 2, 4, 6>(simd);
-    rows[2] = rows[2] * twiddles::<A, INVERSE, 0, 4, 8, 12>(simd);
-    rows[3] = rows[3] * twiddles::<A, INVERSE, 0, 6, 12, 18>(simd);
+    let (direct, swapped) = twiddles::<A, INVERSE, 0, 2, 4, 6>(simd);
+    rows[1] = rows[1].mul_with_swapped(direct, swapped);
+    let (direct, swapped) = twiddles::<A, INVERSE, 0, 4, 8, 12>(simd);
+    rows[2] = rows[2].mul_with_swapped(direct, swapped);
+    let (direct, swapped) = twiddles::<A, INVERSE, 0, 6, 12, 18>(simd);
+    rows[3] = rows[3].mul_with_swapped(direct, swapped);
     ComplexReg::transpose_square(&mut rows);
     let output = radix4::<f32, A, INVERSE>(rows);
     store(output[0], &mut data[0..4]);
