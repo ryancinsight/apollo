@@ -308,3 +308,9 @@ measured first and gained nothing over the split at 256.
   1.04 to 1.07 from 1.13 to 1.17; `f32` 256 1.03 to 1.04, 512 1.06 to
   1.10, 1024 1.03 to 1.04
   (`output/apollo-base128/small_sizes_eighths_run{1,2}_2026-09-11.txt`).
+- **2026-09-11, the outer level's high twiddles by rotation.** The
+  radix-4 sink forms `W_{4 BASE}^{j + BASE}` as the quarter turn of
+  `W_{4 BASE}^j`, so one outer table serves both halves (4 KB at `f64`
+  1024 from 8). The meter reads the 1024 column phase at 571 to 589
+  cycles a block from 634 to 656; the wall clock inside drift
+  (`output/apollo-base128/small_sizes_outerrot_run{1,2}_2026-09-11.txt`).
