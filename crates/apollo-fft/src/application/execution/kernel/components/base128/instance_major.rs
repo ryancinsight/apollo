@@ -28,7 +28,7 @@
 //! its incumbent path.
 
 use crate::application::execution::kernel::components::register_butterfly::{
-    radix4, root2_twiddle, rot90,
+    radix4, radix8, root2_twiddle, rot90,
 };
 use crate::application::execution::kernel::mixed_radix::MixedRadixScalar;
 use core::mem::size_of;
@@ -114,16 +114,30 @@ const fn layer_ch(rows: usize, row_len: usize) -> usize {
     (rows - 1) * row_len
 }
 
+/// Chunks of the row layer's broadcasts: sixteen-sample rows carry
+/// `W_16^1`, `W_16^3`, `-W_16^1` and the real `sqrt(2)/2`; 32-sample rows
+/// carry `W_32^1`, `W_32^3`, `W_32^5`, `W_32^7`, `W_16^1`, `W_16^3` and the
+/// real `sqrt(2)/2`, every other `W_32^{b0 m}` being one of those under a
+/// rotation or a sign.
+const fn layer_chunks(row_len: usize) -> usize {
+    if row_len == 32 {
+        13
+    } else {
+        7
+    }
+}
+
 /// Lane count of the table for `rows` subsequences of `row_len` samples:
 /// `(rows - 1) * row_len / 2` mixed-radix dup-split pairs, then the row
-/// layer's broadcasts (three pairs and one real for sixteen-sample rows).
+/// layer's broadcasts ([`layer_chunks`]).
 pub(crate) const fn table_lanes(rows: usize, row_len: usize) -> usize {
-    ((rows - 1) * row_len + 7) * 4
+    ((rows - 1) * row_len + layer_chunks(row_len)) * 4
 }
 
 /// The base transform as a lane kernel over interleaved samples: `ROWS`
-/// stride-`ROWS` subsequences of sixteen, so `ROWS = 8` is the 128-point
-/// transform and `ROWS = 4` the 64-point one. The sixteen-sample row
+/// stride-`ROWS` subsequences of `ROW_LEN`, so `ROWS = 8` over sixteen is
+/// the 128-point transform, `ROWS = 4` the 64-point one, and `ROWS = 8`
+/// over thirty-two the 256-point one (ADR 0061). The sixteen-sample row
 /// machinery is identical at both; the column pass is a lane-wise DIF of
 /// length `ROWS`.
 pub(crate) struct BaseTransform<
@@ -245,7 +259,13 @@ where
         {
             let data_view = simd.view(self.data.as_slice());
             let mut stg = simd.view_mut(staging.as_mut_slice());
-            let half_root2 = hermes_simd::Vector::<T, A>::from_view_chunk(&tab_view, b16_1 + 6);
+            let half_root2 = hermes_simd::Vector::<T, A>::from_view_chunk(
+                &tab_view,
+                b16_1 + layer_chunks(ROW_LEN) - 1,
+            );
+            // The row's second stage is over `b0`, `ROW_LEN / 4` values per
+            // `m`; `zbuf` holds `z[b0][m]` at chunk `per_m * m + b0`.
+            let per_m = ROW_LEN / 4;
 
             // The two radix-4 stages run as separate passes over a
             // 512-byte spill plane. Holding all sixteen twiddled values in
@@ -255,7 +275,7 @@ where
             // Staging them deliberately costs the same traffic the deleted
             // redistribution pass used to pay, and keeps each stage inside
             // roughly a dozen live values.
-            let mut zbuf = [T::from_precise(0.0); 64];
+            let mut zbuf = [T::from_precise(0.0); 128];
             for p in 0..ROWS / 2 {
                 {
                     let mut zv = simd.view_mut(&mut zbuf);
@@ -265,7 +285,75 @@ where
                             (ROWS / 2) * b + p,
                         ))
                     };
-                    for b0 in 0..4usize {
+                    if ROW_LEN == 32 {
+                        // 32 = 4 x 8 with `b = 8 b1 + b0`: radix-4 over `b1`
+                        // within each stride-8 group, the `W_32^{b0 m}` layer,
+                        // then radix-8 over `b0`. The layer's general
+                        // multiplies are the six broadcasts of the table; the
+                        // others are those under `W_32^8` (a rotation) or
+                        // `W_32^16` (a sign), and the eighths are the
+                        // `sqrt(2)/2` scalings.
+                        let rot = rot90::<T, A, INVERSE>;
+                        let neg = |v: ComplexReg<T, A>| {
+                            ComplexReg::from_interleaved(-v.into_interleaved())
+                        };
+                        for b0 in 0..8usize {
+                            let y = radix4::<T, A, INVERSE>([
+                                load_r(b0),
+                                load_r(b0 + 8),
+                                load_r(b0 + 16),
+                                load_r(b0 + 24),
+                            ]);
+                            let (w1, w3, w5, w7, v1, v3) = (
+                                b16_1,
+                                b16_1 + 2,
+                                b16_1 + 4,
+                                b16_1 + 6,
+                                b16_1 + 8,
+                                b16_1 + 10,
+                            );
+                            let z = match b0 {
+                                0 => y,
+                                1 => [y[0], cmul(y[1], w1), cmul(y[2], v1), cmul(y[3], w3)],
+                                2 => [
+                                    y[0],
+                                    cmul(y[1], v1),
+                                    root2_twiddle::<T, A, INVERSE, false>(y[2], half_root2),
+                                    cmul(y[3], v3),
+                                ],
+                                3 => [y[0], cmul(y[1], w3), cmul(y[2], v3), rot(cmul(y[3], w1))],
+                                4 => [
+                                    y[0],
+                                    root2_twiddle::<T, A, INVERSE, false>(y[1], half_root2),
+                                    rot(y[2]),
+                                    root2_twiddle::<T, A, INVERSE, true>(y[3], half_root2),
+                                ],
+                                5 => [
+                                    y[0],
+                                    cmul(y[1], w5),
+                                    rot(cmul(y[2], v1)),
+                                    rot(cmul(y[3], w7)),
+                                ],
+                                6 => [
+                                    y[0],
+                                    cmul(y[1], v3),
+                                    root2_twiddle::<T, A, INVERSE, true>(y[2], half_root2),
+                                    neg(cmul(y[3], v1)),
+                                ],
+                                _ => [
+                                    y[0],
+                                    cmul(y[1], w7),
+                                    rot(cmul(y[2], v3)),
+                                    neg(cmul(y[3], w5)),
+                                ],
+                            };
+                            for (m, reg) in z.into_iter().enumerate() {
+                                reg.into_interleaved()
+                                    .store_to_view_chunk(&mut zv, per_m * m + b0);
+                            }
+                        }
+                    }
+                    for b0 in 0..(if ROW_LEN == 32 { 0 } else { 4usize }) {
                         let y = radix4::<T, A, INVERSE>([
                             load_r(b0),
                             load_r(b0 + 4),
@@ -298,7 +386,7 @@ where
                         };
                         for (m, reg) in z.into_iter().enumerate() {
                             reg.into_interleaved()
-                                .store_to_view_chunk(&mut zv, 4 * m + b0);
+                                .store_to_view_chunk(&mut zv, per_m * m + b0);
                         }
                     }
                 }
@@ -309,24 +397,39 @@ where
                 let load_z = |m: usize, b0: usize| {
                     ComplexReg::<T, A>::from_interleaved(hermes_simd::Vector::from_view_chunk(
                         &zv,
-                        4 * m + b0,
+                        per_m * m + b0,
                     ))
                 };
                 for mh in 0..2usize {
                     let m0 = 2 * mh;
-                    let o0 = radix4::<T, A, INVERSE>([
-                        load_z(m0, 0),
-                        load_z(m0, 1),
-                        load_z(m0, 2),
-                        load_z(m0, 3),
-                    ]);
-                    let o1 = radix4::<T, A, INVERSE>([
-                        load_z(m0 + 1, 0),
-                        load_z(m0 + 1, 1),
-                        load_z(m0 + 1, 2),
-                        load_z(m0 + 1, 3),
-                    ]);
-                    for q in 0..4usize {
+                    // Output `4 q + m` for `q` below `ROW_LEN / 4`; the two
+                    // `m` of a pair land as consecutive samples of a chunk.
+                    let mut o0 = [ComplexReg::from_interleaved(simd.zero()); 8];
+                    let mut o1 = [ComplexReg::from_interleaved(simd.zero()); 8];
+                    if ROW_LEN == 32 {
+                        o0 = radix8::<T, A, INVERSE>(
+                            core::array::from_fn(|b0| load_z(m0, b0)),
+                            half_root2,
+                        );
+                        o1 = radix8::<T, A, INVERSE>(
+                            core::array::from_fn(|b0| load_z(m0 + 1, b0)),
+                            half_root2,
+                        );
+                    } else {
+                        o0[..4].copy_from_slice(&radix4::<T, A, INVERSE>([
+                            load_z(m0, 0),
+                            load_z(m0, 1),
+                            load_z(m0, 2),
+                            load_z(m0, 3),
+                        ]));
+                        o1[..4].copy_from_slice(&radix4::<T, A, INVERSE>([
+                            load_z(m0 + 1, 0),
+                            load_z(m0 + 1, 1),
+                            load_z(m0 + 1, 2),
+                            load_z(m0 + 1, 3),
+                        ]));
+                    }
+                    for q in 0..per_m {
                         let g = 2 * q + mh;
                         let a = o0[q].into_interleaved();
                         let b = o1[q].into_interleaved();
@@ -489,10 +592,12 @@ where
 }
 
 /// The 128-point base plan: eight rows of sixteen.
+pub(crate) type Plan256<T> = BasePlan<T, 8, 32, { table_lanes(8, 32) }>;
 pub(crate) type Plan128<T> = BasePlan<T, 8, 16, { table_lanes(8, 16) }>;
 /// The 64-point base plan: four rows of sixteen.
 pub(crate) type Plan64<T> = BasePlan<T, 4, 16, { table_lanes(4, 16) }>;
 /// Directional state for the 128-point base.
+pub(crate) type State256<T> = BasePlanState<T, 8, 32, { table_lanes(8, 32) }>;
 pub(crate) type State128<T> = BasePlanState<T, 8, 16, { table_lanes(8, 16) }>;
 /// Directional state for the 64-point base.
 pub(crate) type State64<T> = BasePlanState<T, 4, 16, { table_lanes(4, 16) }>;
@@ -512,6 +617,26 @@ where
     Complex<T>: eunomia::layout::Pod,
 {
     transform_base::<T, INVERSE, MEASURE, 8, 16, 256, { table_lanes(8, 16) }, _>(
+        data, plan, DirectSink,
+    )
+}
+
+/// Runs the 256-point base butterfly: eight stride-8 subsequences of
+/// thirty-two, the row phases over `4 x 8` and the eight-point column pass
+/// (ADR 0061, the two-pass base under one radix step).
+///
+/// # Panics
+///
+/// If `data` is not exactly 256 samples.
+pub(crate) fn transform_256<T, const INVERSE: bool, const MEASURE: bool>(
+    data: &mut [Complex<T>],
+    plan: &Plan256<T>,
+) -> bool
+where
+    T: MixedRadixScalar,
+    Complex<T>: eunomia::layout::Pod,
+{
+    transform_base::<T, INVERSE, MEASURE, 8, 32, 512, { table_lanes(8, 32) }, _>(
         data, plan, DirectSink,
     )
 }

@@ -1,5 +1,5 @@
 use crate::application::execution::kernel::components::base128::instance_major::{
-    Plan128, Plan64, State128, State64,
+    Plan128, Plan256, Plan64, State128, State256, State64,
 };
 use crate::application::execution::kernel::mixed_radix::MixedRadixScalar;
 use crate::domain::metadata::shape::Shape1D;
@@ -11,21 +11,22 @@ use std::borrow::Cow;
 use std::sync::Arc;
 
 use super::executors::{
-    exec_base128_forward, exec_base128_inverse, exec_base128_inverse_unnorm, exec_base64_forward,
-    exec_base64_inverse, exec_base64_inverse_unnorm, exec_bluestein_forward,
-    exec_bluestein_inverse, exec_bluestein_inverse_unnorm, exec_composite_forward,
-    exec_composite_inverse, exec_composite_inverse_unnorm, exec_four_step,
-    exec_good_thomas_forward, exec_good_thomas_inverse, exec_good_thomas_inverse_unnorm,
-    exec_identity, exec_pot_forward_16, exec_pot_forward_2, exec_pot_forward_32,
-    exec_pot_forward_4, exec_pot_forward_512, exec_pot_forward_64, exec_pot_forward_8,
-    exec_pot_forward_generic, exec_pot_forward_sized, exec_pot_inverse_16, exec_pot_inverse_2,
-    exec_pot_inverse_32, exec_pot_inverse_4, exec_pot_inverse_512, exec_pot_inverse_64,
-    exec_pot_inverse_8, exec_pot_inverse_generic, exec_pot_inverse_sized,
-    exec_pot_inverse_unnorm_16, exec_pot_inverse_unnorm_2, exec_pot_inverse_unnorm_32,
-    exec_pot_inverse_unnorm_4, exec_pot_inverse_unnorm_512, exec_pot_inverse_unnorm_64,
-    exec_pot_inverse_unnorm_8, exec_pot_inverse_unnorm_generic, exec_pot_inverse_unnorm_sized,
-    exec_rader_forward, exec_rader_inverse, exec_rader_inverse_unnorm, exec_winograd_forward,
-    exec_winograd_inverse, exec_winograd_inverse_unnorm, runtime_tiny_direct_dispatch,
+    exec_base128_forward, exec_base128_inverse, exec_base128_inverse_unnorm, exec_base256_forward,
+    exec_base256_inverse, exec_base256_inverse_unnorm, exec_base64_forward, exec_base64_inverse,
+    exec_base64_inverse_unnorm, exec_bluestein_forward, exec_bluestein_inverse,
+    exec_bluestein_inverse_unnorm, exec_composite_forward, exec_composite_inverse,
+    exec_composite_inverse_unnorm, exec_four_step, exec_good_thomas_forward,
+    exec_good_thomas_inverse, exec_good_thomas_inverse_unnorm, exec_identity, exec_pot_forward_16,
+    exec_pot_forward_2, exec_pot_forward_32, exec_pot_forward_4, exec_pot_forward_512,
+    exec_pot_forward_64, exec_pot_forward_8, exec_pot_forward_generic, exec_pot_forward_sized,
+    exec_pot_inverse_16, exec_pot_inverse_2, exec_pot_inverse_32, exec_pot_inverse_4,
+    exec_pot_inverse_512, exec_pot_inverse_64, exec_pot_inverse_8, exec_pot_inverse_generic,
+    exec_pot_inverse_sized, exec_pot_inverse_unnorm_16, exec_pot_inverse_unnorm_2,
+    exec_pot_inverse_unnorm_32, exec_pot_inverse_unnorm_4, exec_pot_inverse_unnorm_512,
+    exec_pot_inverse_unnorm_64, exec_pot_inverse_unnorm_8, exec_pot_inverse_unnorm_generic,
+    exec_pot_inverse_unnorm_sized, exec_rader_forward, exec_rader_inverse,
+    exec_rader_inverse_unnorm, exec_winograd_forward, exec_winograd_inverse,
+    exec_winograd_inverse_unnorm, runtime_tiny_direct_dispatch,
 };
 use super::strategy::{arc_to_cow, generic_four_step_applies, PlanStrategy};
 use crate::application::execution::kernel::mixed_radix::scalar::plan_scratch::PlanScratch;
@@ -49,6 +50,9 @@ pub struct FftPlan1D<F: MixedRadixScalar> {
     /// consumers never touch (`gap_audit.md#retained-attribution`).
     pub(crate) twiddle_inv: std::sync::OnceLock<Arc<[F::Complex]>>,
     pub(crate) base128: Option<Arc<State128<F>>>,
+    /// The 256-point two-pass base (ADR 0061), built at n = 256 in place of
+    /// the split state where its width runs.
+    pub(crate) base256: Option<Arc<State256<F>>>,
     pub(crate) base64: Option<Arc<State64<F>>>,
 
     // Function pointers for execution routing:
@@ -69,6 +73,7 @@ impl<F: MixedRadixScalar> Clone for FftPlan1D<F> {
             twiddle_fwd: self.twiddle_fwd.clone(),
             twiddle_inv: self.twiddle_inv.clone(),
             base128: self.base128.clone(),
+            base256: self.base256.clone(),
             base64: self.base64.clone(),
             // `OnceLock: Clone` clones the initialized state, so a clone of a
             // plan that has run an inverse keeps the table handle.
@@ -110,6 +115,22 @@ impl<F: MixedRadixScalar<Complex = Complex<F>>> FftPlan1D<F> {
         self.base64
             .as_ref()
             .expect("invariant: the base-64 route is selected only when built")
+            .inverse()
+    }
+
+    #[inline]
+    pub(super) fn base256_forward_plan(&self) -> &Plan256<F> {
+        self.base256
+            .as_deref()
+            .expect("invariant: the base-256 executor requires its plan state")
+            .forward()
+    }
+
+    #[inline]
+    pub(super) fn base256_inverse_plan(&self) -> &Plan256<F> {
+        self.base256
+            .as_deref()
+            .expect("invariant: the base-256 executor requires its plan state")
             .inverse()
     }
 
@@ -164,9 +185,18 @@ impl<F: MixedRadixScalar<Complex = Complex<F>>> FftPlan1D<F> {
         // premise — a 33% regression — is gone either way. The 10 =>
         // dispatch arm still falls back to the stock power-of-two route when
         // the plan carries no base128 state.
+        // At n = 256 the eight-row form over 32-sample rows runs the length
+        // in one two-pass base (ADR 0061); its plan is built first so that the
+        // split state and its 4 KB table are not built beside it.
+        let base256 = if n == 256 {
+            State256::new_if_supported().map(Arc::new)
+        } else {
+            None
+        };
         let base128 =
             if crate::application::execution::kernel::components::base128::BASE_SPLIT_LENGTHS
                 .contains(&n)
+                && base256.is_none()
             {
                 State128::new_if_supported().map(Arc::new)
             } else {
@@ -186,7 +216,9 @@ impl<F: MixedRadixScalar<Complex = Complex<F>>> FftPlan1D<F> {
         } else if n.is_power_of_two() {
             let log2 = n.trailing_zeros();
             PlanStrategy::PowerOfTwo {
-                twiddle_fwd: (base64.is_none() && (base128.is_none() || n > 128))
+                twiddle_fwd: (base256.is_none()
+                    && base64.is_none()
+                    && (base128.is_none() || n > 128))
                     .then(|| F::cached_twiddle_fwd(n)),
                 log2,
                 pot: PhantomData,
@@ -447,7 +479,11 @@ impl<F: MixedRadixScalar<Complex = Complex<F>>> FftPlan1D<F> {
                         }
                     }
                     8 => {
-                        if base128.is_some() {
+                        if base256.is_some() {
+                            forward_impl = exec_base256_forward::<F>;
+                            inverse_impl = exec_base256_inverse::<F>;
+                            inverse_unnorm_impl = exec_base256_inverse_unnorm::<F>;
+                        } else if base128.is_some() {
                             forward_impl = exec_base128_forward::<F>;
                             inverse_impl = exec_base128_inverse::<F>;
                             inverse_unnorm_impl = exec_base128_inverse_unnorm::<F>;
@@ -524,6 +560,7 @@ impl<F: MixedRadixScalar<Complex = Complex<F>>> FftPlan1D<F> {
             twiddle_fwd,
             twiddle_inv,
             base128,
+            base256,
             base64,
             forward_impl,
             inverse_impl,

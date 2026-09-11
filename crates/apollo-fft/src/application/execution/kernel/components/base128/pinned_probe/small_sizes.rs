@@ -111,6 +111,28 @@ where
                 },
             );
         }
+        // The 32-sample rows decline the eight-lane width until their layout
+        // lands (ADR 0061), so the row is absent where the plan is.
+        if let Some(base_plan) = (n == 256)
+            .then(super::instance_major::Plan256::<T>::new_if_supported::<false>)
+            .flatten()
+        {
+            work.copy_from_slice(&src);
+            assert!(
+                super::instance_major::transform_256::<T, false, false>(&mut work, &base_plan),
+                "the pinned host must provide a native base capability"
+            );
+            suite.run(
+                BenchmarkCase::new(core, format!("base-256-{scalar}"), n),
+                || {
+                    work.copy_from_slice(&src);
+                    std::hint::black_box(super::instance_major::transform_256::<T, false, false>(
+                        std::hint::black_box(&mut work),
+                        &base_plan,
+                    ));
+                },
+            );
+        }
         let mut rust_work = rust_src.clone();
         suite.run(
             BenchmarkCase::new(core, format!("rustfft-{scalar}"), n),

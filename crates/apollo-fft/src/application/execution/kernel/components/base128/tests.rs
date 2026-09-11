@@ -2,9 +2,10 @@
 //! the analytical authority.
 
 use super::instance_major::{transform_128, Plan128};
+use super::instance_major::{transform_256, Plan256};
 use super::instance_major::{transform_64, Plan64};
 use crate::application::execution::kernel::mixed_radix::MixedRadixScalar;
-use eunomia::{Complex32, Complex64};
+use eunomia::{Complex, Complex32, Complex64};
 use std::f64::consts::TAU;
 
 fn dft(input: &[Complex64], inverse: bool) -> Vec<Complex64> {
@@ -109,6 +110,59 @@ fn assert_base64_matches_direct<const INVERSE: bool>() {
         error <= bound,
         "base-64 transform differs by {error:.3e} > {bound:.3e}"
     );
+}
+
+fn assert_base256_matches_direct<T, const INVERSE: bool>(unit_roundoff: f64, must_run: bool)
+where
+    T: crate::application::execution::kernel::mixed_radix::MixedRadixScalar
+        + eunomia::FloatElement
+        + Into<f64>,
+    Complex<T>: eunomia::layout::Pod,
+{
+    let source = signal(256);
+    let mut actual: Vec<Complex<T>> = source
+        .iter()
+        .map(|c| Complex::new(T::from_f64(c.re), T::from_f64(c.im)))
+        .collect();
+    let Some(plan) = Plan256::<T>::new_if_supported::<INVERSE>() else {
+        assert!(
+            !must_run,
+            "the pinned host must provide a native base capability"
+        );
+        return;
+    };
+    let untouched = actual.clone();
+    if !transform_256::<T, INVERSE, false>(&mut actual, &plan) {
+        assert!(!must_run, "the four-lane width must run the 32-sample rows");
+        assert_eq!(
+            actual, untouched,
+            "a width decline must not mutate the input"
+        );
+        return;
+    }
+    let expected = dft(&source, INVERSE);
+    let actual: Vec<Complex64> = actual
+        .iter()
+        .map(|c| Complex64::new(c.re.into(), c.im.into()))
+        .collect();
+    let error = worst(&actual, &expected);
+    // Eight levels of butterflies and two twiddle layers: sixteen roundings
+    // of the input scale, against the direct sum's own.
+    let bound = tolerance(&source) * (unit_roundoff / f64::EPSILON).max(1.0);
+    assert!(
+        error <= bound,
+        "base-256 transform differs by {error:.3e} > {bound:.3e}"
+    );
+}
+
+#[test]
+fn base256_matches_the_direct_transform_in_both_precisions_and_directions() {
+    assert_base256_matches_direct::<f64, false>(f64::EPSILON, true);
+    assert_base256_matches_direct::<f64, true>(f64::EPSILON, true);
+    // The eight-lane `f32` layout declines the 32-sample rows until its
+    // slice lands; the four-lane `f32` hosts run them.
+    assert_base256_matches_direct::<f32, false>(f64::from(f32::EPSILON), false);
+    assert_base256_matches_direct::<f32, true>(f64::from(f32::EPSILON), false);
 }
 
 #[test]
