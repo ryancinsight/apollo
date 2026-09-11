@@ -40,21 +40,24 @@ where
     ComplexReg::from_interleaved(Vector::from_view_chunk(&view, 0))
 }
 
-#[expect(
-    clippy::inline_always,
-    reason = "constant twiddles must fold into the selected target-feature frame"
-)]
-#[inline(always)]
-fn twiddle<const INVERSE: bool, const INDEX: usize>() -> Complex32 {
+const fn twiddle<const INVERSE: bool, const INDEX: usize>() -> Complex32 {
     let value = TWIDDLE32_FWD[INDEX & 15];
     let sign = if INDEX >= 16 { -1.0 } else { 1.0 };
     let imaginary_sign = if INVERSE { -sign } else { sign };
     Complex::new((sign * value.re) as f32, (imaginary_sign * value.im) as f32)
 }
 
+/// One register of twiddles, loaded from a promoted constant row.
+///
+/// The row is a constant, and left visible to the optimizer it folds the
+/// twiddle's negated half into the complex multiply's second constant,
+/// which breaks the `fmaddsub` pattern into a sign flip, a blend and a
+/// plain `fmadd` — six instructions for four. RustFFT keeps its twiddles in
+/// registers loaded from its plan; `black_box` on the row's reference gives
+/// this kernel the same one load a row, with the values opaque past it.
 #[expect(
     clippy::inline_always,
-    reason = "constant twiddle loads must fold into the selected target-feature frame"
+    reason = "the twiddle load must stay in the selected target-feature frame"
 )]
 #[inline(always)]
 fn twiddles<
@@ -70,15 +73,15 @@ fn twiddles<
 where
     A: SimdArch + SimdKernel<f32>,
 {
-    load::<A>(
-        simd,
-        &[
+    let row: &'static [Complex32; 4] = &const {
+        [
             twiddle::<INVERSE, I0>(),
             twiddle::<INVERSE, I1>(),
             twiddle::<INVERSE, I2>(),
             twiddle::<INVERSE, I3>(),
-        ],
-    )
+        ]
+    };
+    load::<A>(simd, core::hint::black_box(row))
 }
 
 #[expect(
