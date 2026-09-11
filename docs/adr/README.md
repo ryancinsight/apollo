@@ -67,4 +67,4 @@
 | [0059](0059-compact-four-step-fold.md) | The four-step fold from a two-level table | Accepted |
 | [0060](0060-planar-rectangular-odd-powers.md) | Odd powers of two on a rectangular planar four-step | Accepted |
 | [0061](0061-l1-base-two-pass.md) | A two-pass base of 256 for the L1-resident powers of two | Accepted |
-| [0062](0062-composite-bases-as-register-kernels.md) | Composite bases as register kernels under column passes | Proposed |
+| [0062](0062-composite-bases-as-register-kernels.md) | Composite bases as register kernels under column passes | Accepted |
