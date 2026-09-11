@@ -378,3 +378,24 @@ base); the two-block form of the step is deleted, and the step serves
   reads `f64` 128 1.03 to 1.05, 256 0.98 to 1.00, 512 0.94 to 0.98, 1024
   1.03 to 1.05 of RustFFT; `f32` 128 1.04 to 1.10, 256 1.01, 512 0.97,
   1024 0.99 to 1.02.
+- **2026-09-11, 1024 as two sixteen-row blocks (rejected;
+  `APOLLO-1024-AS-TWO-512-BLOCKS`).** The radix step generic over the
+  base's row count, 1024 as two 512-blocks under the combining sink over
+  `W_1024^j` — one block through scratch (8 KB at `f64`) against three
+  (12 KB), the outer table gone, the parent read directly at four lanes
+  and gathered at eight (`output/apollo-base128/two512_route_2026-09-11.patch`).
+  Pinned probe, two runs
+  (`output/apollo-base128/small_sizes_two512_run{1,2}_2026-09-11.txt`):
+  `f64` 1024 1267 / 1241 us against RustFFT's 1153 / 1106 (1.10 / 1.12,
+  from 1.03 to 1.05 on four blocks), `f32` 1024 644 / 633 against 575 /
+  582 (1.12 / 1.09, from 0.99 to 1.02); the efficiency core `f64` 1.06 /
+  1.08 (from 1.07) and `f32` 1.04 / 1.05 (from 1.07 to 1.10). The phase
+  meter reads the two-block route at 4561 to 5137 cycles a call against
+  the four-block route's 4794 to 5105 in the same runs — the meter and
+  the wall clock disagree again (as in the route work of 2026-09-11), and
+  the wall clock decides. What the two-block form saves in passes it
+  spends in the sixteen-point column: two 222-instruction groups a column
+  set against two 84-instruction ones and the radix-4 sink's level, and
+  at 1024 the 256-block's passes were already few (no gather at four
+  lanes, one radix-4 sink). The four-block route over the 256 base stays
+  for 1024; the two-block form of the step stays deleted.
