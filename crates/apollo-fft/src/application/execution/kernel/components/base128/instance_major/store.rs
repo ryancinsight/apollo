@@ -11,6 +11,7 @@
 
 use super::super::cmul::cmul_chunk;
 use crate::application::execution::kernel::mixed_radix::MixedRadixScalar;
+use core::mem::size_of;
 use eunomia::Complex;
 use hermes_simd::{ComplexReg, LaneScalar, Simd, SimdArch, SimdKernel, SimdStorage, Vector};
 
@@ -72,8 +73,42 @@ where
 /// The values are the process twiddle cache's, relaid, so the sinks compute
 /// exactly what they did from the interleaved table.
 pub(crate) struct SplitSinks<T> {
-    inner: Box<[T]>,
-    outer: Box<[T]>,
+    inner: AlignedLanes<T>,
+    outer: AlignedLanes<T>,
+}
+
+/// Lanes starting on a 64-byte boundary: a `Box<[T]>` lands at the
+/// allocator's 16, so a 32-byte table load could split a cache line by
+/// the heap's luck ([`super::plan::CacheLineAligned`]); the table starts
+/// at the first boundary inside its buffer instead.
+struct AlignedLanes<T> {
+    buffer: Box<[T]>,
+    start: usize,
+    len: usize,
+}
+
+impl<T: Copy> AlignedLanes<T> {
+    fn empty(zero: T) -> Self {
+        Self::new(&[], zero)
+    }
+
+    fn new(values: &[T], zero: T) -> Self {
+        let slack = 64 / size_of::<T>();
+        // `vec![x; n]` allocates exactly `n`, so the boxed slice is the
+        // same allocation and keeps the boundary found in it.
+        let mut buffer = vec![zero; values.len() + slack];
+        let start = buffer.as_ptr().align_offset(64);
+        buffer[start..start + values.len()].copy_from_slice(values);
+        Self {
+            buffer: buffer.into_boxed_slice(),
+            start,
+            len: values.len(),
+        }
+    }
+
+    fn as_slice(&self) -> &[T] {
+        &self.buffer[self.start..self.start + self.len]
+    }
 }
 
 impl<T: MixedRadixScalar<Complex = Complex<T>>> SplitSinks<T> {
@@ -81,47 +116,49 @@ impl<T: MixedRadixScalar<Complex = Complex<T>>> SplitSinks<T> {
     /// `samples` complex samples a register, from the stage-major table
     /// `twiddles` of `n` (the level of half-length `len` at `len - 1`).
     pub(crate) fn build(samples: usize, twiddles: &[Complex<T>], base: usize, n: usize) -> Self {
+        let zero = T::from_precise(0.0);
         let inner = if n >= 2 * base {
-            dup_split(samples, &twiddles[base - 1..2 * base - 1])
+            AlignedLanes::new(&dup_split(samples, &twiddles[base - 1..2 * base - 1]), zero)
         } else {
-            Box::default()
+            AlignedLanes::empty(zero)
         };
         let outer = if n >= 4 * base {
-            interleaved(&twiddles[2 * base - 1..3 * base - 1])
+            AlignedLanes::new(&interleaved(&twiddles[2 * base - 1..3 * base - 1]), zero)
         } else {
-            Box::default()
+            AlignedLanes::empty(zero)
         };
         Self { inner, outer }
     }
 
     /// No tables: the route is one block.
     pub(crate) fn empty() -> Self {
+        let zero = T::from_precise(0.0);
         Self {
-            inner: Box::default(),
-            outer: Box::default(),
+            inner: AlignedLanes::empty(zero),
+            outer: AlignedLanes::empty(zero),
         }
     }
 
     /// `W_{2 BASE}^j`, `j < BASE`, dup-split.
     pub(crate) fn inner(&self) -> &[T] {
-        &self.inner
+        self.inner.as_slice()
     }
 
     /// `W_{4 BASE}^j`, `j < BASE`, interleaved; empty below four blocks.
     pub(crate) fn outer(&self) -> &[T] {
-        &self.outer
+        self.outer.as_slice()
     }
 }
 
 /// `w` as interleaved lanes: the outer level's table, kept compact so the
 /// 1024 route's working set stays inside L1; the final sink duplicates
 /// each twiddle in registers.
-fn interleaved<T: Copy>(w: &[Complex<T>]) -> Box<[T]> {
+fn interleaved<T: Copy>(w: &[Complex<T>]) -> Vec<T> {
     w.iter().flat_map(|c| [c.re, c.im]).collect()
 }
 
 /// `w` relaid as dup-split chunk pairs of `samples` complex samples.
-fn dup_split<T: Copy>(samples: usize, w: &[Complex<T>]) -> Box<[T]> {
+fn dup_split<T: Copy>(samples: usize, w: &[Complex<T>]) -> Vec<T> {
     debug_assert_eq!(w.len() % samples, 0);
     let mut lanes = Vec::with_capacity(4 * w.len());
     for chunk in w.chunks_exact(samples) {
@@ -132,7 +169,7 @@ fn dup_split<T: Copy>(samples: usize, w: &[Complex<T>]) -> Box<[T]> {
             lanes.extend([c.im; 2]);
         }
     }
-    lanes.into_boxed_slice()
+    lanes
 }
 
 /// `v` times dup-split twiddle chunk `chunk` of `tw`.

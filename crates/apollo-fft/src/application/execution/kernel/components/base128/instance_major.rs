@@ -35,7 +35,7 @@ mod plan;
 mod rows;
 mod store;
 
-use plan::BaseLaneWidth;
+use plan::{BaseLaneWidth, CacheLineAligned};
 pub(crate) use plan::{BasePlan, BasePlanState};
 pub(crate) use rows::{BlockSource, ParentSplit, SelfSplit};
 pub(crate) use store::{DirectSink, FinalRadix4Sink, SplitSinks, StoreSink};
@@ -229,7 +229,7 @@ where
         // disassembly showed costing about 7% of the transform at every
         // size this kernel serves (gap_audit.md#base-kernel-memset).
         debug_assert!(LANES == 2 * ROW_LEN * ROWS && TABLE_LANES == table_lanes(ROWS, ROW_LEN));
-        let mut staging_uninit = core::mem::MaybeUninit::<[T; LANES]>::uninit();
+        let mut staging_uninit = core::mem::MaybeUninit::<CacheLineAligned<[T; LANES]>>::uninit();
         // SAFETY: the reference is used only for writes until every lane is
         // initialized. The row pass stores chunk `row * (ROW_LEN / S) + c`
         // for every row in `0..ROWS` and every `c in 0..ROW_LEN / S` — all
@@ -242,10 +242,10 @@ where
         // cannot reach this body (the dispatcher only selects it on AVX2
         // hardware); the NaN poison plus the analytical oracles are the
         // substitute coverage.
-        let staging: &mut [T; LANES] = unsafe { &mut *staging_uninit.as_mut_ptr() };
+        let staging: &mut [T; LANES] = unsafe { &mut (*staging_uninit.as_mut_ptr()).0 };
         #[cfg(debug_assertions)]
         staging.fill(T::from_precise(f64::NAN));
-        let table = self.plan.table.as_slice();
+        let table = self.plan.table.0.as_slice();
         if lanes == 4 {
             let tab = simd.view(table);
             let layer = rows::TableLayer {

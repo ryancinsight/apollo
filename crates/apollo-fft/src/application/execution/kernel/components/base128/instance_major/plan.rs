@@ -30,6 +30,15 @@ const fn select_lane_width(
     }
 }
 
+/// `A` placed on a 64-byte boundary. The allocator places a `Box` at 16
+/// bytes and the compiler a stack array at its scalar's alignment, so
+/// whether a 32-byte vector load from a table or the staging buffer
+/// splits a cache line is the heap's or the frame's luck: the pinned probe
+/// read the same kernel 8 to 30% apart through two allocations of one
+/// table. The wrapper makes the boundary a type fact.
+#[repr(C, align(64))]
+pub(super) struct CacheLineAligned<A>(pub(super) A);
+
 pub(crate) struct BasePlan<T, const ROWS: usize, const ROW_LEN: usize, const TABLE_LANES: usize> {
     /// Dup-split twiddles. The fixed-size type is load-bearing, not
     /// decoration: the checked view's `offset + LANE_COUNT <= len` assert
@@ -37,7 +46,8 @@ pub(crate) struct BasePlan<T, const ROWS: usize, const ROW_LEN: usize, const TAB
     /// kernel reads the table from inside its hot loops. The sample-major
     /// kernel learned the same lesson first (gap_audit.md#base128-bounds);
     /// this module was shelved before that fix landed and never received it.
-    pub(super) table: Box<[T; TABLE_LANES]>,
+    /// The cache-line alignment is load-bearing likewise ([`CacheLineAligned`]).
+    pub(super) table: Box<CacheLineAligned<[T; TABLE_LANES]>>,
     /// Register layout used to build `table` and execute this plan.
     pub(super) lane_width: BaseLaneWidth,
     /// The column network's twiddles as complex values for its splats:
@@ -140,12 +150,11 @@ impl<T: MixedRadixScalar, const ROWS: usize, const ROW_LEN: usize, const TABLE_L
 
         let col = [w(1, 8), w(3, 8), w(1, 16), w(3, 16), w(5, 16), w(7, 16)]
             .map(|v| [T::from_precise(v[0]), T::from_precise(v[1])]);
-        let table: Box<[T; TABLE_LANES]> = table
-            .into_boxed_slice()
+        let table: [T; TABLE_LANES] = table
             .try_into()
             .unwrap_or_else(|_| unreachable!("the pushes above emit exactly TABLE_LANES lanes"));
         Self {
-            table,
+            table: Box::new(CacheLineAligned(table)),
             lane_width,
             col,
         }
