@@ -1,10 +1,11 @@
 //! Where a 3-D forward spends its time: the lane loop, the transposes, or
 //! neither.
 //!
-//! A `FftPlan3D` forward is three axis passes. Axis 2's lanes are contiguous
-//! and run in place; axes 1 and 0 each transpose the volume into scratch, run
-//! their lanes there, and transpose back — four full-volume transposes per
-//! forward. The kwavers baseline (`#kw-fft3d-baseline`) measured the whole
+//! A `FftPlan3D` forward is three axis passes. The C-order chain uses three
+//! full-volume moves; the rotated order uses two and passes its layout to
+//! the inverse. The axis-isolation arms below also retain the gather/run/
+//! scatter form to separate lane and movement costs. The kwavers baseline
+//! (`#kw-fft3d-baseline`) measured the whole
 //! forward and *inferred* the split from a codelet extrapolation, then had to
 //! correct it when the codelet was measured directly. This probe measures the
 //! pieces themselves, on the same volume, so the split is read rather than
@@ -188,15 +189,32 @@ fn axis1_pass<const FORWARD: bool>(plan: &FftPlan3D<f64>, data: &mut [Complex64]
 }
 
 fn assert_returns_to_input(label: &str, n: usize, result: &[Complex64], input: &[Complex64]) {
+    assert!(matches!(n, 32 | 64));
+    assert!(is_x86_feature_detected!("avx") && is_x86_feature_detected!("fma"));
+    assert_eq!(result.len(), input.len());
     let error = result
         .iter()
         .zip(input)
-        .map(|(actual, start)| (actual.re - start.re).hypot(actual.im - start.im))
+        .map(|(actual, start)| {
+            let error = (actual.re - start.re).abs() + (actual.im - start.im).abs();
+            assert!(error.is_finite(), "{label}: non-finite round-trip error");
+            error
+        })
         .fold(0.0_f64, f64::max);
-    // A transpose pair is exact; a transform pair carries 2 log2(n) stages of
-    // pairwise addition over unit-scale inputs. 64 n eps sits far above either
-    // and far below the O(1) a routing error would show.
-    let bound = 64.0 * (n as f64) * f64::EPSILON;
+    // The AVX/FMA FFT64 in small_pot/precise.rs has six addition layers and
+    // three complex-twiddle layers. With u=eps/2 and coefficient error <=8u,
+    // each latter layer is bounded by 8u + sqrt(2)*gamma_2*(1+8u) <= gamma_12.
+    // Six axis transforms therefore contribute gamma_[6*(6+3*12)]=gamma_252.
+    // FFT32 needs only five addition and two twiddle layers. The combine
+    // literals were interval-checked at 200 bits against half-angle roots:
+    // maximum coefficient error <4.627u (64) and <3.077u (32).
+    // volume() has norm_2 <= sqrt(64^3)*(1+1/4)=640. Factor two bounds the
+    // component 1-norm by the complex 2-norm; two more rounding steps cover
+    // subtraction and addition. This is ONE pair, with normal-range IEEE
+    // rounding; inverse power-of-two normalization and permutations are exact.
+    let unit_roundoff = f64::EPSILON / 2.0;
+    let gamma = 254.0 * unit_roundoff / (1.0 - 254.0 * unit_roundoff);
+    let bound = (1280.0 * gamma).next_up();
     assert!(
         error <= bound,
         "{label} at {n}: round trip departs from its input by {error:e} against {bound:e}"
@@ -353,3 +371,6 @@ fn arms_for_extent(suite: &mut BenchmarkSuite, n: usize) {
 
 #[cfg(test)]
 mod report;
+
+#[cfg(test)]
+mod move_geometry;

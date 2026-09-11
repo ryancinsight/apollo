@@ -27,25 +27,15 @@
 
 <a id="apollo-rotated-move-geometry"></a>
 
-## APOLLO-ROTATED-MOVE-GEOMETRY-2026-09-10 — Two moves save a quarter of one move's time [patch] [perf] — in-progress
+## APOLLO-ROTATED-MOVE-GEOMETRY-2026-09-10 — Attribute tall moves to task partition [patch] [perf] — review
 
 - Integrator: root; branch: `perf/apollo-rotated-move-geometry`; last-update: 2026-09-11.
 - Scope: 64³ move and lane attribution; change production only when controlled measurements support it. Basis: `aaa11ddc` with committed Git providers.
 - Acceptance: isolated wide/tall moves and full/rotated pairs identify the cost; native gates and retained benchmark observations support any production change.
-
-- **Question (spike).** The rotated pair
-  ([`#apollo-rotated-order-handoff`](#apollo-rotated-order-handoff)) removes two
-  of a round trip's six full-volume moves and buys 4–7%, where equal-cost moves
-  would buy about 18%. Either the two moves it keeps cost more than the chain's
-  three, or the lane passes around them lost something (cache state, the
-  four-step companion) that the chain's ordering preserved.
-- **Method.** Probe arms timing each move geometry alone at 64³: the chain's
-  `[nx, ny*nz]`, `[ny, nz*nx]`, `[nz, nx*ny]` against the rotated inverse's
-  `[nz*nx, ny]` and `[ny*nz, nx]`. If a tall geometry is the cost, the fix is
-  leto's tile rule reading the destination stride as well as the source pitch
-  ([`leto #leto-strided-pitch-aliasing`](../leto/backlog.md#leto-strided-pitch-aliasing));
-  if the lane passes are the cost, the fix is in the schedule.
-- **Risk / change class:** [patch] [perf]; **dependencies:** none.
+- Finding: the provider already compares destination width and source pitch. One-column transpose tasks cause the measured tall-move penalty; FFT64 uses no four-step companion.
+- Production: [Leto PR 192](https://github.com/ryancinsight/leto/pull/192) groups a cache-line width of columns; no tile-loop or FFT lane-schedule change.
+- Evidence: [four-run reports, intervals, commands and limits](docs/experiments/rotated-moves/README.md). Tall moves 41–45 → 30–32 µs; stable rotated-pair medians fall 7.6–14.4%. No universal performance claim.
+- Dependencies: provider landing and exact standalone consumer gates; the changed provider graph keeps all other revisions fixed.
 
 <a id="APOLLO-WASM-DEPENDENCY-2026-09-10"></a>
 ## APOLLO-WASM-DEPENDENCY-2026-09-10 — Keep the FFT dependency graph portable on WebAssembly [patch]
