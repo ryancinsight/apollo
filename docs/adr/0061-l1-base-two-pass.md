@@ -184,3 +184,22 @@ measured first and gained nothing over the split at 256.
   zero comes from the dispatch token. The larger gap is now `f32` at 256
   and 512 (1.29 to 1.38 of RustFFT), where the eight-lane width declines
   32-sample rows.
+- **2026-09-11, the rows at eight lanes for every row length.** The row
+  module is generic over the register's sample count (`S = 2` at four
+  lanes, `S = 4` at eight): one first stage, the layer's broadcasts a
+  strategy (the four-lane dup-split table chunks, or eight-lane register
+  pairs splatted once per transform), the `S x S` sample transpose the
+  only other difference. The eight-lane kernel (`wide.rs`, sixteen-sample
+  rows over its own `zbuf`) is deleted and the plan no longer declines
+  32-sample rows on eight-lane hosts. Census at eight lanes: 594
+  instructions and 101 stack moves a four-row 32-sample group; `f64`
+  unchanged. Pinned probe, `f32` of RustFFT: 256 1.07 to 1.10 (from 1.29
+  to 1.32), 512 1.18 to 1.24 (from 1.33 to 1.38), 128 and 1024 about
+  1.07 (`output/apollo-base128/small_sizes_{wide32,aligned}_run*_2026-09-11.txt`).
+  The same runs moved `f64` 1024 wall clock 10% with its meter unchanged:
+  the probe's `Vec` buffers sit at 16 bytes and the new `f32` plans
+  shifted the heap, so the probe now works every arm in a 64-byte-aligned
+  range; aligned, `f64` reads 256 1.11, 512 1.16 to 1.21, 1024 1.33 to
+  1.34 (RustFFT itself had been misaligned before). Remaining levers in
+  order: the 1024 gather (15 to 19% of the route), the column phase, and
+  the row chain depth.
