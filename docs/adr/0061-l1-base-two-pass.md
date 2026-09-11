@@ -615,3 +615,45 @@ base); the two-block form of the step is deleted, and the step serves
   above RustFFT among the small lengths is `f64` 8 on the performance
   core (1.11 to 1.22, the scalar codelet against `Butterfly8Avx64`) and
   `f64` 32 on the efficiency core (1.04 to 1.07).
+
+- **2026-09-11, 2048 as eight 256-blocks under a radix-8 step at eight
+  lanes (`APOLLO-2048-F32-SINK`).** `f32` 2048 read 1.18 to 1.25 of
+  RustFFT on the performance core as four 512-blocks under the radix-4
+  sink while `f64` 2048 read at parity; RustFFT plans 2048 as its
+  256-point butterfly under one 8xn column pass. The 256 base takes
+  eight blocks under a radix-8 sink whose seven twiddle rows
+  `W_2048^{j k}` come from the stage-major table (RustFFT's table
+  shape; the 4096 attempt derived six powers a chunk on the sink's
+  chain), gathered at eight lanes by an eight-way pair deinterleave (the
+  four-way of each half of eight chunks, then one pair deinterleave
+  across the halves; 43 instructions per eight registers against the
+  four-way's 19 per four) and read at stride eight from the parent at
+  four; the plan selects the form by width, the 512 base keeping 2048
+  at four lanes. Pinned probe, two runs
+  (`output/apollo-base128/small_sizes_eight2048_run{1,2}_2026-09-11.txt`),
+  apollo / RustFFT: `f32` 2048 on the performance core 1.05 / 1.12
+  (1482, 1495 ns against 1419, 1335; the four-block form 1637 / 1637
+  against 1309 / 1381, 1.19 to 1.25), the efficiency core 1.03 / 1.03
+  (2867, 2873 against 2792, 2794; the four-block form 2806 to 2943,
+  inside its band); `f64` 2048 on the four-block form 2945 / 2953
+  inside its 2836 to 3078 band, no other length moved. Kept: 9.5%
+  under the four-block form on the performance core. Census
+  (`output/apollo-base128/base256_2026-09-11.md`): the whole `f32`
+  route about 21.9K instructions (the gather 2.8K, seven blocks 11.2K,
+  the last block 8.0K — its column-and-sink group 874 against the
+  four-block form's 938) against the four-block form's 22.6K and
+  RustFFT's 26K to 28K (eight 256 butterflies of about 2.2K, the 8xn
+  column loop 103 per eight registers, the transpose 31), so the route
+  spends fewer instructions than RustFFT and more time: the overhead
+  past eight standalone 256-blocks is 690 ns against RustFFT's 420 to
+  530 past its eight butterflies. The reading: the sink phase streams
+  seven spectra, seven twiddle rows, the staging buffer and eight output
+  slices, twenty-three streams at 2 KB stride of which sixteen alias 4
+  KB apart into one set group of the 48 KB twelve-way L1, where
+  RustFFT's column pass runs eight in-place streams and one twiddle
+  stream — and 1024, the same sink code over four 256-blocks with ten
+  streams, pays 0.14 ns a complex of overhead against 2048's 0.34.
+  Closed as a reading against its parity acceptance; the column-first
+  form (RustFFT's: the radix-8 pass over the parent in place ahead of
+  the blocks, the blocks out of place, one interleave pass) is filed as
+  `APOLLO-2048-COLUMN-FIRST`.
