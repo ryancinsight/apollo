@@ -472,3 +472,22 @@ base); the two-block form of the step is deleted, and the step serves
   outer `W_2048` table being the cost the 1024 route pays at half the
   size; the 4096 length (1.07 to 1.22) is the next step of the same
   ladder, eight or sixteen blocks under a deeper sink.
+
+- **2026-09-11, 384 as three 128-blocks under a radix-3 step
+  (`APOLLO-384-AS-THREE-128-BLOCKS`, slice 1).** The composite census
+  (`output/apollo-base128/composite_census_2026-09-11.md`) read the
+  composite route's butterflies at RustFFT's cost per register and its
+  pass count at five to their two: RustFFT runs 384 as its 128-point
+  butterfly under one 3xn column pass. The radix step over the base
+  takes three blocks: a three-block parent source at four lanes (two
+  windows and one interleave a register, the second window two samples
+  on so the last chunk stays inside the parent), a radix-3 sink over two
+  spectra and `W_384^j`, `W_384^{2 j}` (computed for the state, the
+  stage-major cache serving powers of two only), the 128 state built at
+  384 where its shape reads the parent at four lanes. Pinned probe, two
+  runs (`output/apollo-base128/small_sizes_384_run{1,2}_2026-09-11.txt`):
+  `f64` 384 345 / 341 us against RustFFT's 345 / 346 (1.00 / 0.99, from
+  1.26), the efficiency core 827 / 826 against 739 / 740 (1.12, from
+  1.29); `f32` unchanged at 1.37, the eight-lane shape declining the
+  three-block source (a stride-three gather or a three-window source at
+  eight lanes is the next slice). Kept.
