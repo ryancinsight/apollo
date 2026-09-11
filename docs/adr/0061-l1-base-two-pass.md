@@ -268,3 +268,13 @@ measured first and gained nothing over the split at 256.
   After slices 5 to 10 the `f64` route reads 512 at 1.12 and 1024 at 1.11
   to 1.12 of RustFFT, from 1.17 to 1.19 and 1.26 to 1.27 when the item
   opened; the row phase remains the lever.
+- **2026-09-11, the column pass's registers named.** The chain estimate
+  put one column group at about 67 cycles of critical path for 20 of
+  issue (RustFFT's eight-point set 57 for 26): the column phase is a
+  chain problem living on the out-of-order window, about two groups in
+  flight on the meter. The group as named bindings with constant indices
+  and dup-split `W_8^{1,3}` pairs is instruction-neutral (84 and 15
+  shuffles from 83 and 17, the eight stack moves unchanged) and kept for
+  the form; the wall clock read inside drift
+  (`output/apollo-base128/small_sizes_colreg_run{1,2}_2026-09-11.txt`).
+  The next reading is two groups interleaved in one iteration.
