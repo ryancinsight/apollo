@@ -399,3 +399,29 @@ base); the two-block form of the step is deleted, and the step serves
   at 1024 the 256-block's passes were already few (no gather at four
   lanes, one radix-4 sink). The four-block route over the 256 base stays
   for 1024; the two-block form of the step stays deleted.
+
+- **2026-09-11, the base tables and staging on the cache line
+  (`APOLLO-BASE-TABLE-ALIGNMENT`).** The plan's dup-split table was a
+  `Box<[T; N]>` and the split's sink tables `Box<[T]>`, at the
+  allocator's 16 bytes, and the staging buffer a stack array at the
+  scalar's alignment, so whether a 32-byte vector load split a cache line
+  was the heap's or the frame's luck. The pinned probe, carrying both
+  128 shapes as bare arms beside the plan-level arm, read the same
+  kernel 8 to 30% apart through two allocations of one table
+  (`f32` 128 plan 57.9 / 64.8 us against bare 50.3 / 49.8; `f64` 96.4
+  against 88.4), and the bare arms of the two shapes reversed between
+  runs. With the table in a 64-byte aligned wrapper, the sink tables
+  starting at the first boundary inside their buffer, and the staging
+  buffer in the same wrapper, two runs
+  (`output/apollo-base128/small_sizes_aligned_run{1,2}_2026-09-11.txt`)
+  read the plan-level and bare 128 arms within 1% (`f64` 87.3 / 88.0
+  against 87.3 / 87.5, `f32` 51.9 / 51.9 against 51.7 / 51.6), and
+  apollo's arms within 1.5% of themselves across the runs at every
+  length from 128 to 1024 where the earlier runs moved up to 8%:
+  `f64` 128 87.3 / 88.0, 256 200.5 / 197.4, 512 441 / 447, 1024 1190 /
+  1188; `f32` 128 51.9 / 51.9, 256 109.7 / 109.3, 512 236.4 / 236.0,
+  1024 596.1 / 596.8. RustFFT's arms, whose allocations are its own,
+  now carry the drift (`f64` 128 100.2 / 86.6, `f32` 128 50.6 / 60.6),
+  so a ratio against it is read from its better run. The run-to-run
+  band the earlier revisions called the probe's drift was, in this
+  measure, the tables' placement.
