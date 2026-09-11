@@ -687,3 +687,27 @@ base); the two-block form of the step is deleted, and the step serves
   efficiency core (1.02 at `f32`, 1.11 at `f64` on the four-block form)
   and at `f64` 4096 the four-step route (1.14 to 1.22), each its own
   item.
+
+- **2026-09-11, 4096 as eight 512-blocks under the radix-8 pass ahead of
+  them (`APOLLO-4096-COLUMN-FIRST`).** RustFFT plans 4096 as its 512
+  butterfly under one 8xn pass (`avx_planner`: `power2 % 3 == 0` takes
+  `butterfly(512)`); the column-first route is generic over the base, so
+  the plan builds the 512 state at 4096 and routes `log2 = 12` through
+  it at either width, the four-step boundary moving to 8192. The
+  eight-512-block sink form was rejected earlier today on its working
+  set and derived twiddles; the column-first form streams nine a pass
+  and reads its chunk-major table. Pinned probe, two runs on a quiet
+  host (`output/apollo-base128/small_sizes_eight4096_run{1,2}_2026-09-11.txt`),
+  apollo / RustFFT: `f64` 4096 on the performance core 0.74 / 0.78
+  (6233, 6407 ns against 8407, 8271; the four-step route 7962 to 8204),
+  `f32` 0.90 / 0.87 (3045, 3077 against 3374, 3557; the four-step 3956
+  to 4091); the efficiency core `f64` 0.94 / 0.93 (11663, 11444 against
+  12350, 12354; the four-step 12610 to 12775) and `f32` 0.96 / 0.97
+  (6174, 6178 against 6413, 6373; the four-step 7206 to 7257). 2048,
+  1024 and 32768 inside their bands. Kept: 20 to 24% under the four-step
+  route on the performance core and 8 to 14% on the efficiency core, at
+  both scalars, and under RustFFT on every row — the first length above
+  the base route to read under it at `f64` on the efficiency core. The
+  ladder's next step, 8192 and above, is the four-step route (`f32`
+  32768 1.06 to 1.10, `f64` 1.07 to 1.15 on the performance core), its
+  own item.
