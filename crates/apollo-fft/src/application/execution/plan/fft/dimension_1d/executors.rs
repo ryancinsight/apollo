@@ -5,6 +5,7 @@
 //! Extracted from `dimension_1d.rs` to honour SRP and keep the plan module
 //! focused on data structures and construction logic.
 
+use crate::application::execution::kernel::mixed_radix::scalar::simd::avx::vector_frame_available;
 use crate::application::execution::kernel::mixed_radix::traits::ShortDft;
 use crate::application::execution::kernel::mixed_radix::MixedRadixScalar;
 use crate::application::execution::kernel::pot::{FourStep, PotRoute, StockhamAutosort};
@@ -494,6 +495,113 @@ define_pot_executors!(
     exec_pot_forward_64,
     exec_pot_inverse_64,
     exec_pot_inverse_unnorm_64
+);
+
+/// The framed executor set for one small power-of-two size, and its selector.
+///
+/// Each framed executor carries the vector frame (`#[target_feature]` on
+/// `x86_64`), so the register codelet inlines into it and the plan's function
+/// pointer lands on the butterflies with no capability probe and no second
+/// call in front of them. The selector hands the plan this set when the host
+/// has the frame and the probing set otherwise, which is why the plan's
+/// executor pointers are `unsafe fn`: the selection is the contract.
+macro_rules! define_framed_pot_executors {
+    (
+        $size:expr,
+        $select:ident,
+        $fwd:ident,
+        $inv:ident,
+        $inv_un:ident,
+        $fwd_framed:ident,
+        $inv_framed:ident,
+        $inv_un_framed:ident
+    ) => {
+        /// # Safety
+        ///
+        /// `slice.len()` is the plan length and, on `x86_64`, the host
+        /// executes AVX2 and FMA; the plan assigns this executor only under
+        /// both.
+        #[cfg_attr(target_arch = "x86_64", target_feature(enable = "avx2,fma"))]
+        pub(super) unsafe fn $fwd_framed<F: MixedRadixScalar<Complex = Complex<F>>>(
+            _: &FftPlan1D<F>,
+            slice: &mut [F::Complex],
+        ) {
+            // SAFETY: both halves of the contract pass through from the caller.
+            unsafe { F::small_pot_inplace_sized_framed::<$size, false, false>(slice) }
+        }
+        /// # Safety
+        ///
+        /// As for the forward framed executor.
+        #[cfg_attr(target_arch = "x86_64", target_feature(enable = "avx2,fma"))]
+        pub(super) unsafe fn $inv_framed<F: MixedRadixScalar<Complex = Complex<F>>>(
+            _: &FftPlan1D<F>,
+            slice: &mut [F::Complex],
+        ) {
+            // SAFETY: both halves of the contract pass through from the caller.
+            unsafe { F::small_pot_inplace_sized_framed::<$size, true, true>(slice) }
+        }
+        /// # Safety
+        ///
+        /// As for the forward framed executor.
+        #[cfg_attr(target_arch = "x86_64", target_feature(enable = "avx2,fma"))]
+        pub(super) unsafe fn $inv_un_framed<F: MixedRadixScalar<Complex = Complex<F>>>(
+            _: &FftPlan1D<F>,
+            slice: &mut [F::Complex],
+        ) {
+            // SAFETY: both halves of the contract pass through from the caller.
+            unsafe { F::small_pot_inplace_sized_framed::<$size, true, false>(slice) }
+        }
+        /// The forward, normalized-inverse and unnormalized-inverse executors
+        /// for this size on this host.
+        pub(super) fn $select<F: MixedRadixScalar<Complex = Complex<F>>>(
+        ) -> [unsafe fn(&FftPlan1D<F>, &mut [F::Complex]); 3] {
+            if vector_frame_available() {
+                [$fwd_framed::<F>, $inv_framed::<F>, $inv_un_framed::<F>]
+            } else {
+                [$fwd::<F>, $inv::<F>, $inv_un::<F>]
+            }
+        }
+    };
+}
+define_framed_pot_executors!(
+    8,
+    pot_executors_8,
+    exec_pot_forward_8,
+    exec_pot_inverse_8,
+    exec_pot_inverse_unnorm_8,
+    exec_pot_forward_8_framed,
+    exec_pot_inverse_8_framed,
+    exec_pot_inverse_unnorm_8_framed
+);
+define_framed_pot_executors!(
+    16,
+    pot_executors_16,
+    exec_pot_forward_16,
+    exec_pot_inverse_16,
+    exec_pot_inverse_unnorm_16,
+    exec_pot_forward_16_framed,
+    exec_pot_inverse_16_framed,
+    exec_pot_inverse_unnorm_16_framed
+);
+define_framed_pot_executors!(
+    32,
+    pot_executors_32,
+    exec_pot_forward_32,
+    exec_pot_inverse_32,
+    exec_pot_inverse_unnorm_32,
+    exec_pot_forward_32_framed,
+    exec_pot_inverse_32_framed,
+    exec_pot_inverse_unnorm_32_framed
+);
+define_framed_pot_executors!(
+    64,
+    pot_executors_64,
+    exec_pot_forward_64,
+    exec_pot_inverse_64,
+    exec_pot_inverse_unnorm_64,
+    exec_pot_forward_64_framed,
+    exec_pot_inverse_64_framed,
+    exec_pot_inverse_unnorm_64_framed
 );
 
 /// ZST-wired sized PoT executor helper (monomorphizes the exact LOG2).

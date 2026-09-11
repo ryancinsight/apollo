@@ -173,6 +173,27 @@ pub trait MixedRadixScalar:
         data: &mut [Self::Complex],
     );
 
+    /// Sized small power-of-two transforms inside the caller's vector frame.
+    ///
+    /// The plan's small power-of-two executors carry the frame (AVX2 and FMA
+    /// on `x86_64`, as `#[target_feature]`), so the register codelets inline
+    /// into them and nothing stands between the plan's function pointer and
+    /// the butterflies. Sizes without a register form run their scalar
+    /// codelet. A caller that has not established the frame uses
+    /// [`Self::small_pot_inplace_sized`], which probes.
+    ///
+    /// # Safety
+    ///
+    /// Caller must guarantee `data.len()` matches N, and, on `x86_64`, that
+    /// the host executes AVX2 and FMA (`vector_frame_available`).
+    unsafe fn small_pot_inplace_sized_framed<
+        const N: usize,
+        const INVERSE: bool,
+        const NORMALIZE: bool,
+    >(
+        data: &mut [Self::Complex],
+    );
+
     fn composite_forward(data: &mut [Self::Complex], radices: &[usize]);
     fn composite_forward_with_pointwise(
         data: &mut [Self::Complex],

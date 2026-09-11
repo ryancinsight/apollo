@@ -17,17 +17,14 @@ use super::executors::{
     exec_base64_inverse_unnorm, exec_bluestein_forward, exec_bluestein_inverse,
     exec_bluestein_inverse_unnorm, exec_composite_forward, exec_composite_inverse,
     exec_composite_inverse_unnorm, exec_four_step, exec_good_thomas_forward,
-    exec_good_thomas_inverse, exec_good_thomas_inverse_unnorm, exec_identity, exec_pot_forward_16,
-    exec_pot_forward_2, exec_pot_forward_32, exec_pot_forward_4, exec_pot_forward_512,
-    exec_pot_forward_64, exec_pot_forward_8, exec_pot_forward_generic, exec_pot_forward_sized,
-    exec_pot_inverse_16, exec_pot_inverse_2, exec_pot_inverse_32, exec_pot_inverse_4,
-    exec_pot_inverse_512, exec_pot_inverse_64, exec_pot_inverse_8, exec_pot_inverse_generic,
-    exec_pot_inverse_sized, exec_pot_inverse_unnorm_16, exec_pot_inverse_unnorm_2,
-    exec_pot_inverse_unnorm_32, exec_pot_inverse_unnorm_4, exec_pot_inverse_unnorm_512,
-    exec_pot_inverse_unnorm_64, exec_pot_inverse_unnorm_8, exec_pot_inverse_unnorm_generic,
-    exec_pot_inverse_unnorm_sized, exec_rader_forward, exec_rader_inverse,
-    exec_rader_inverse_unnorm, exec_winograd_forward, exec_winograd_inverse,
-    exec_winograd_inverse_unnorm, runtime_tiny_direct_dispatch,
+    exec_good_thomas_inverse, exec_good_thomas_inverse_unnorm, exec_identity, exec_pot_forward_2,
+    exec_pot_forward_4, exec_pot_forward_512, exec_pot_forward_generic, exec_pot_forward_sized,
+    exec_pot_inverse_2, exec_pot_inverse_4, exec_pot_inverse_512, exec_pot_inverse_generic,
+    exec_pot_inverse_sized, exec_pot_inverse_unnorm_2, exec_pot_inverse_unnorm_4,
+    exec_pot_inverse_unnorm_512, exec_pot_inverse_unnorm_generic, exec_pot_inverse_unnorm_sized,
+    exec_rader_forward, exec_rader_inverse, exec_rader_inverse_unnorm, exec_winograd_forward,
+    exec_winograd_inverse, exec_winograd_inverse_unnorm, pot_executors_16, pot_executors_32,
+    pot_executors_64, pot_executors_8, runtime_tiny_direct_dispatch,
 };
 use super::strategy::{arc_to_cow, generic_four_step_applies, PlanStrategy};
 use crate::application::execution::kernel::mixed_radix::scalar::plan_scratch::PlanScratch;
@@ -60,10 +57,13 @@ pub struct FftPlan1D<F: MixedRadixScalar> {
     pub(crate) base512: Option<Arc<State512<F>>>,
     pub(crate) base64: Option<Arc<State64<F>>>,
 
-    // Function pointers for execution routing:
-    pub(crate) forward_impl: fn(&Self, &mut [F::Complex]),
-    pub(crate) inverse_impl: fn(&Self, &mut [F::Complex]),
-    pub(crate) inverse_unnorm_impl: fn(&Self, &mut [F::Complex]),
+    // Function pointers for execution routing, selected at construction for
+    // this length on this host. The framed small power-of-two executors carry
+    // `#[target_feature]`, so the pointer type is `unsafe fn` and each call
+    // site discharges the contract the selection established.
+    pub(crate) forward_impl: unsafe fn(&Self, &mut [F::Complex]),
+    pub(crate) inverse_impl: unsafe fn(&Self, &mut [F::Complex]),
+    pub(crate) inverse_unnorm_impl: unsafe fn(&Self, &mut [F::Complex]),
 }
 
 impl<F: MixedRadixScalar> Clone for FftPlan1D<F> {
@@ -304,9 +304,9 @@ impl<F: MixedRadixScalar<Complex = Complex<F>>> FftPlan1D<F> {
         // Lazy: no strategy populates the inverse table at construction.
         let twiddle_inv = std::sync::OnceLock::new();
 
-        let mut forward_impl: fn(&Self, &mut [F::Complex]) = exec_identity::<F>;
-        let mut inverse_impl: fn(&Self, &mut [F::Complex]) = exec_identity::<F>;
-        let mut inverse_unnorm_impl: fn(&Self, &mut [F::Complex]) = exec_identity::<F>;
+        let mut forward_impl: unsafe fn(&Self, &mut [F::Complex]) = exec_identity::<F>;
+        let mut inverse_impl: unsafe fn(&Self, &mut [F::Complex]) = exec_identity::<F>;
+        let mut inverse_unnorm_impl: unsafe fn(&Self, &mut [F::Complex]) = exec_identity::<F>;
 
         match &strategy {
             PlanStrategy::Identity => {}
@@ -429,19 +429,13 @@ impl<F: MixedRadixScalar<Complex = Complex<F>>> FftPlan1D<F> {
                         inverse_unnorm_impl = exec_pot_inverse_unnorm_4::<F>;
                     }
                     3 => {
-                        forward_impl = exec_pot_forward_8::<F>;
-                        inverse_impl = exec_pot_inverse_8::<F>;
-                        inverse_unnorm_impl = exec_pot_inverse_unnorm_8::<F>;
+                        [forward_impl, inverse_impl, inverse_unnorm_impl] = pot_executors_8::<F>();
                     }
                     4 => {
-                        forward_impl = exec_pot_forward_16::<F>;
-                        inverse_impl = exec_pot_inverse_16::<F>;
-                        inverse_unnorm_impl = exec_pot_inverse_unnorm_16::<F>;
+                        [forward_impl, inverse_impl, inverse_unnorm_impl] = pot_executors_16::<F>();
                     }
                     5 => {
-                        forward_impl = exec_pot_forward_32::<F>;
-                        inverse_impl = exec_pot_inverse_32::<F>;
-                        inverse_unnorm_impl = exec_pot_inverse_unnorm_32::<F>;
+                        [forward_impl, inverse_impl, inverse_unnorm_impl] = pot_executors_32::<F>();
                     }
                     6 => {
                         if base64.is_some() {
@@ -449,9 +443,8 @@ impl<F: MixedRadixScalar<Complex = Complex<F>>> FftPlan1D<F> {
                             inverse_impl = exec_base64_inverse::<F>;
                             inverse_unnorm_impl = exec_base64_inverse_unnorm::<F>;
                         } else {
-                            forward_impl = exec_pot_forward_64::<F>;
-                            inverse_impl = exec_pot_inverse_64::<F>;
-                            inverse_unnorm_impl = exec_pot_inverse_unnorm_64::<F>;
+                            [forward_impl, inverse_impl, inverse_unnorm_impl] =
+                                pot_executors_64::<F>();
                         }
                     }
                     7 => {
@@ -689,7 +682,10 @@ impl<F: MixedRadixScalar<Complex = Complex<F>>> FftPlan1D<F> {
         if runtime_tiny_direct_dispatch::<F, false, false>(self.n, slice) {
             return;
         }
-        (self.forward_impl)(self, slice);
+        // SAFETY: `assert_plan_length` established `slice.len() == self.n`, and
+        // the executor was selected at construction for this length on this
+        // host's detected feature set, which is the whole of its contract.
+        unsafe { (self.forward_impl)(self, slice) };
     }
 
     /// Inverse transform of a complex slice in-place with normalization.
@@ -704,7 +700,10 @@ impl<F: MixedRadixScalar<Complex = Complex<F>>> FftPlan1D<F> {
         if runtime_tiny_direct_dispatch::<F, true, true>(self.n, slice) {
             return;
         }
-        (self.inverse_impl)(self, slice);
+        // SAFETY: `assert_plan_length` established `slice.len() == self.n`, and
+        // the executor was selected at construction for this length on this
+        // host's detected feature set, which is the whole of its contract.
+        unsafe { (self.inverse_impl)(self, slice) };
     }
 
     /// Inverse transform of a complex slice in-place without normalization.
@@ -719,7 +718,10 @@ impl<F: MixedRadixScalar<Complex = Complex<F>>> FftPlan1D<F> {
         if runtime_tiny_direct_dispatch::<F, true, false>(self.n, slice) {
             return;
         }
-        (self.inverse_unnorm_impl)(self, slice);
+        // SAFETY: `assert_plan_length` established `slice.len() == self.n`, and
+        // the executor was selected at construction for this length on this
+        // host's detected feature set, which is the whole of its contract.
+        unsafe { (self.inverse_unnorm_impl)(self, slice) };
     }
 
     /// Forward transform of a complex signal (allocating).

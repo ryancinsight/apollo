@@ -11,7 +11,8 @@ use super::rader::{
 use super::simd::{pointwise_mul_precise, pointwise_mul_reduced};
 use super::small_pot::{
     small_pot_inplace_precise, small_pot_inplace_reduced, small_pot_inplace_sized_precise,
-    small_pot_inplace_sized_reduced,
+    small_pot_inplace_sized_precise_framed, small_pot_inplace_sized_reduced,
+    small_pot_inplace_sized_reduced_framed,
 };
 use super::trait_def::MixedRadixScalar;
 use super::twiddle_constants::{
@@ -207,6 +208,17 @@ impl MixedRadixScalar for f32 {
         data: &mut [Complex32],
     ) {
         small_pot_inplace_sized_reduced::<N, INVERSE, NORMALIZE>(data);
+    }
+
+    #[inline]
+    unsafe fn small_pot_inplace_sized_framed<
+        const N: usize,
+        const INVERSE: bool,
+        const NORMALIZE: bool,
+    >(
+        data: &mut [Complex32],
+    ) {
+        small_pot_inplace_sized_reduced_framed::<N, INVERSE, NORMALIZE>(data);
     }
 
     #[inline]
@@ -492,6 +504,17 @@ impl MixedRadixScalar for f64 {
         data: &mut [Complex64],
     ) {
         small_pot_inplace_sized_precise::<N, INVERSE, NORMALIZE>(data);
+    }
+
+    #[inline]
+    unsafe fn small_pot_inplace_sized_framed<
+        const N: usize,
+        const INVERSE: bool,
+        const NORMALIZE: bool,
+    >(
+        data: &mut [Complex64],
+    ) {
+        small_pot_inplace_sized_precise_framed::<N, INVERSE, NORMALIZE>(data);
     }
 
     #[inline]

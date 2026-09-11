@@ -124,19 +124,19 @@ unsafe fn twiddle(
     }
 }
 
-/// Runs the AVX/FMA length-8 codelet when the host supports its instructions.
+/// Runs the AVX/FMA length-8 codelet when the host has the vector frame.
 ///
-/// Returns `false` on a host without AVX and FMA, matching the shape of the
-/// arms that did ship ([`super::n16`], [`super::n32`]) so the probe measures
-/// the same call structure they would.
+/// Returns `false` on a host without the frame, the shape the probing sized
+/// entry gives its register sizes, so the probe measures the same call
+/// structure this arm would have if it were selected.
 pub(super) fn try_inplace<const INVERSE: bool, const NORMALIZE: bool>(
     data: &mut [Complex64],
 ) -> bool {
     #[cfg(target_arch = "x86_64")]
     {
-        if super::super::simd::avx::avx_fma_available() {
-            // SAFETY: the capability probe establishes AVX and FMA support, and
-            // the length-8 caller supplies the eight samples read below.
+        if super::super::simd::avx::vector_frame_available() {
+            // SAFETY: the frame probe establishes AVX and FMA, and the
+            // length-8 caller supplies the eight samples read below.
             unsafe { vector_arm::<INVERSE, NORMALIZE>(data) };
             return true;
         }

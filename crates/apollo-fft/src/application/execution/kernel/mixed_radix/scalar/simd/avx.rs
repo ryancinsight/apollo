@@ -192,18 +192,27 @@ pub(in crate::application::execution::kernel::mixed_radix::scalar) unsafe fn avx
     [res0, res1, res2, res3]
 }
 
-/// Whether this host executes AVX and FMA, probed once per process.
+/// Whether this host offers the vector frame the framed codelet entries run
+/// in, probed once per process.
 ///
-/// The sized small-transform arms dispatch on this at entry, so their vector
-/// bodies run on the hardware that has them regardless of how the crate was
-/// built; the compile-time `target_feature` cfg they replaced silently
-/// selected the scalar arm on every default x86-64 build.
-#[cfg(target_arch = "x86_64")]
+/// The frame is AVX2 and FMA — exactly what hermes' `Avx2` backend probes
+/// (`Avx2::is_runtime_supported`) — so every register arm (AVX and FMA) and
+/// every hermes eight-lane codelet the frame hosts is executable inside it.
+/// The plan's small power-of-two executors read this once at construction
+/// and take the framed entries; the probing entries read it per call.
+/// Off `x86_64` there is no frame.
 #[inline]
-pub(crate) fn avx_fma_available() -> bool {
-    use std::sync::OnceLock;
-    static AVX_FMA: OnceLock<bool> = OnceLock::new();
-    *AVX_FMA.get_or_init(|| {
-        std::is_x86_feature_detected!("avx") && std::is_x86_feature_detected!("fma")
-    })
+pub(crate) fn vector_frame_available() -> bool {
+    #[cfg(target_arch = "x86_64")]
+    {
+        use std::sync::OnceLock;
+        static FRAME: OnceLock<bool> = OnceLock::new();
+        *FRAME.get_or_init(|| {
+            std::is_x86_feature_detected!("avx2") && std::is_x86_feature_detected!("fma")
+        })
+    }
+    #[cfg(not(target_arch = "x86_64"))]
+    {
+        false
+    }
 }
