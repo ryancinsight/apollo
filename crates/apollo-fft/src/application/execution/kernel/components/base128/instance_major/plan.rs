@@ -101,10 +101,26 @@ impl<T: MixedRadixScalar, const ROWS: usize, const ROW_LEN: usize, const TABLE_L
             }
         };
         if ROW_LEN == 32 {
-            // `W_32^{1,3,5,7}` and `W_16^{1,3}`: every `W_32^{b0 m}` of the
-            // `4 x 8` layer is one of these under a rotation or a sign, or an
-            // eighth's `sqrt(2)/2` scaling.
-            for (j, n) in [(1, 32), (3, 32), (5, 32), (7, 32), (1, 16), (3, 16)] {
+            // Every general `W_32^{b0 m}` of the `8 x 4` layer, pre-rotated:
+            // `W_32^{1,3,5,7}` and `W_16^{1,3}` for the first group, then
+            // the odd multiples the later groups reach under a rotation or a
+            // sign (`W_32^{9,15,21}`, `W_16^{5,7,9}`), so no operation
+            // follows a layer multiply. The eighths are the `sqrt(2)/2`
+            // scaling.
+            for (j, n) in [
+                (1, 32),
+                (3, 32),
+                (5, 32),
+                (7, 32),
+                (1, 16),
+                (3, 16),
+                (9, 32),
+                (15, 32),
+                (21, 32),
+                (5, 16),
+                (7, 16),
+                (9, 16),
+            ] {
                 push_broadcast(w(j, n));
             }
         } else {
