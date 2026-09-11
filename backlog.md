@@ -325,6 +325,12 @@
 - **Acceptance:** 2048 below the generic route at both scalars on both runs and the direct oracle green at 2048 in both directions; otherwise rejected with its numbers on ADR 0061.
 - **Slice 1 (measured, kept):** the radix step generic over the row count, the 512 state at 512 and 2048, the plan taking it at 2048 ahead of the four-step; two runs (`../../output/apollo-base128/small_sizes_2048_run*_2026-09-11.txt`): `f64` 2048 1.24 / 1.11 of RustFFT from 1.38 to 1.40, `f32` 1.29 from 1.62, the efficiency core 1.19 / 1.18 and 1.07 / 1.05 from 1.22 and 1.28; the direct oracle green in both directions. Acceptance met; ADR 0061 revised. The remainder (1.1 to 1.3) is the four-block route's own sink and the next item.
 - **Dependencies:** [the alignment](#apollo-base-table-alignment) (review); parent [beat the references](#atlas-apollo-beat-the-references). **Verification:** `small_sizes_against_the_references_by_core_type`, the split tests at 2048.
+<a id="apollo-prepush-clippy-flags"></a>
+## APOLLO-PREPUSH-CLIPPY-FLAGS — The pre-push gate runs clippy without the CI flags [patch] [ci] — review
+- **Evidence:** `.githooks/pre-push` ran `cargo clippy -p <changed> --all-targets` while CI runs `cargo clippy --locked --workspace --all-targets --all-features -- -D warnings`; on 2026-09-11 an unused import in `plan/fft/dimension_1d/executors.rs` passed the gate ("local gate passed") and would have failed CI, caught only by the next local `-D warnings` run. The hook's comment justified the bare flags by pre-existing per-crate debt; main is green under the CI flags, so the premise no longer holds.
+- **Scope:** the hook's clippy step and its reproduce line carry `--all-features -- -D warnings`; the comment states the reason. Non-goals: the nextest step, the workspace lint table.
+- **Acceptance:** the hook fails a push carrying a warning-level lint CI denies (verified against the executors import at `d655599d^`), and passes the current main.
+- **Dependencies:** none. **Verification:** `git push` of this change through the hook itself.
 
 <a id="apollo-base-table-alignment"></a>
 ## APOLLO-BASE-TABLE-ALIGNMENT — Align the base plan tables and the staging buffer to the cache line [patch] [perf] — review
