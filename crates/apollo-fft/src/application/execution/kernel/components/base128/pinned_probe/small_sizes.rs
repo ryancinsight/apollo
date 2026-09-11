@@ -5,6 +5,7 @@ use super::{phase_attribution, split_attribution, ProbeScalar};
 use crate::application::execution::kernel::measurement_cores;
 use crate::application::execution::kernel::mixed_radix::MixedRadixScalar;
 use apollo_bench::{BenchmarkCase, BenchmarkConfig, BenchmarkSuite};
+use core::mem::size_of;
 use eunomia::Complex64;
 use hermes_simd::{ProcessorBinding, ProcessorIndex};
 use rustfft::num_complex::Complex as RustComplex;
@@ -50,6 +51,20 @@ const SMALL_SIZE_CASES: [usize; 17] = [
 ];
 const LIVENESS_CASES: [usize; 3] = [16, 32, 64];
 
+/// `n` copies of `fill` in a buffer whose returned range starts on a
+/// 64-byte boundary. The allocator places a `Vec` at 16 bytes, so whether a
+/// working buffer's 32-byte vector accesses split cache lines is luck of
+/// the heap state before it — a bimodal swing that moved `f64` at 1024 by
+/// 10% between builds whose kernels the meter read as identical. Every arm
+/// works in such a buffer, so the instrument measures the kernels, not the
+/// heap.
+fn aligned_work<T: Copy>(fill: T, n: usize) -> (Vec<T>, core::ops::Range<usize>) {
+    let slack = 64 / size_of::<T>();
+    let buffer = vec![fill; n + slack];
+    let misalignment = buffer.as_ptr().align_offset(64);
+    (buffer, misalignment..misalignment + n)
+}
+
 fn small_sizes_for_scalar<T>(suite: &mut BenchmarkSuite, core: &str, scalar: &str, sizes: &[usize])
 where
     T: ProbeScalar + MixedRadixScalar<Complex = eunomia::Complex<T>>,
@@ -84,12 +99,13 @@ where
         ];
         let phast = n.is_power_of_two().then(|| T::phast_planner(n));
 
-        let mut work = src.clone();
+        let (mut work_buffer, work_range) = aligned_work(src[0], n);
+        let work = &mut work_buffer[work_range];
         suite.run(
             BenchmarkCase::new(core, format!("apollo-{scalar}"), n),
             || {
                 work.copy_from_slice(&src);
-                plan.forward_complex_slice_inplace(std::hint::black_box(&mut work));
+                plan.forward_complex_slice_inplace(std::hint::black_box(&mut *work));
             },
         );
         if n == 128 {
@@ -97,7 +113,7 @@ where
                 .expect("the pinned host must provide a native base capability");
             work.copy_from_slice(&src);
             assert!(
-                super::instance_major::transform_128::<T, false, false>(&mut work, &base_plan),
+                super::instance_major::transform_128::<T, false, false>(work, &base_plan),
                 "the pinned host must provide a native base capability"
             );
             suite.run(
@@ -105,21 +121,19 @@ where
                 || {
                     work.copy_from_slice(&src);
                     std::hint::black_box(super::instance_major::transform_128::<T, false, false>(
-                        std::hint::black_box(&mut work),
+                        std::hint::black_box(&mut *work),
                         &base_plan,
                     ));
                 },
             );
         }
-        // The 32-sample rows decline the eight-lane width until their layout
-        // lands (ADR 0061), so the row is absent where the plan is.
         if let Some(base_plan) = (n == 256)
             .then(super::instance_major::Plan256::<T>::new_if_supported::<false>)
             .flatten()
         {
             work.copy_from_slice(&src);
             assert!(
-                super::instance_major::transform_256::<T, false, false>(&mut work, &base_plan),
+                super::instance_major::transform_256::<T, false, false>(work, &base_plan),
                 "the pinned host must provide a native base capability"
             );
             suite.run(
@@ -127,32 +141,36 @@ where
                 || {
                     work.copy_from_slice(&src);
                     std::hint::black_box(super::instance_major::transform_256::<T, false, false>(
-                        std::hint::black_box(&mut work),
+                        std::hint::black_box(&mut *work),
                         &base_plan,
                     ));
                 },
             );
         }
-        let mut rust_work = rust_src.clone();
+        let (mut rust_buffer, rust_range) = aligned_work(rust_src[0], n);
+        let rust_work = &mut rust_buffer[rust_range];
         suite.run(
             BenchmarkCase::new(core, format!("rustfft-{scalar}"), n),
             || {
                 rust_work.copy_from_slice(&rust_src);
-                rust.process_with_scratch(std::hint::black_box(&mut rust_work), &mut rust_scratch);
+                rust.process_with_scratch(std::hint::black_box(&mut *rust_work), &mut rust_scratch);
             },
         );
         // PhastFT's DIT planner is power-of-two only, so it has no arm at the
         // other lengths rather than a slow one.
         if let Some(phast) = &phast {
-            let (mut re, mut im) = (re_src.clone(), im_src.clone());
+            let (mut re_buffer, re_range) = aligned_work(re_src[0], n);
+            let (mut im_buffer, im_range) = aligned_work(im_src[0], n);
+            let re = &mut re_buffer[re_range];
+            let im = &mut im_buffer[im_range];
             suite.run(
                 BenchmarkCase::new(core, format!("phastft-{scalar}"), n),
                 || {
                     re.copy_from_slice(&re_src);
                     im.copy_from_slice(&im_src);
                     T::phast_forward(
-                        std::hint::black_box(&mut re),
-                        std::hint::black_box(&mut im),
+                        std::hint::black_box(&mut *re),
+                        std::hint::black_box(&mut *im),
                         phast,
                     );
                 },
