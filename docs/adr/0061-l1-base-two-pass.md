@@ -244,3 +244,13 @@ measured first and gained nothing over the split at 256.
   at 1.14 to 1.21 of RustFFT, from 1.17 to 1.19 and 1.26 to 1.27 when
   the item opened; the row phase, latency-bound on its butterfly chains,
   is the lever left.
+- **2026-09-11, the layer pre-rotated.** A critical-path estimate over
+  the row loop's asm (`output/apollo-base128/chain.py`) put the `f64` row
+  pair between its chain (about 114 cycles) and its issue bound (132 to
+  176), against RustFFT's 77 and 106 to 141 for 424 instructions: the
+  count and the chain both matter, and the excess is shuffle-class. The
+  32-sample layer's broadcasts are pre-rotated (twelve instead of six) so
+  no rotation or sign follows a layer multiply: 511 instructions and 114
+  shuffles a row pair from 532 and 122; the 256 base 2.5% faster at both
+  scalars on the pinned probe, the split lengths inside drift
+  (`output/apollo-base128/small_sizes_prerot_run{1,2}_2026-09-11.txt`).
