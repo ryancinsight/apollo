@@ -317,6 +317,14 @@
 ## APOLLO-BASE128-GATHER-IN-LOADS — Load the split's source directly in the base transform [patch] [perf] — done 2026-09-11
 - **Outcome:** delivered as slice 7 of [the two-pass base](#apollo-l1-base-two-pass): at four lanes every block reads its stride-`blocks` subsequence out of the parent and the gather pass is gone (`f64` 1024 from 1.33 to 1.15 to 1.23 of RustFFT); at eight lanes the in-register extraction measured 2 to 4% slower than the gather, so that width keeps it. The bound recorded here (the combining block must gather at 1024) fell to a scratch layout that keeps the even half's halves beside the peers.
 
+<a id="apollo-single-pass-512-four-lanes"></a>
+## APOLLO-SINGLE-PASS-512-FOUR-LANES — Measure the sixteen-row 512 base at four lanes [patch] [perf] — in-progress
+- **Integrator:** claude/fable; **last-update:** 2026-09-11; lane `D:/atlas/worktrees/apollo-route`; regions `crates/apollo-fft/src/application/execution/kernel/components/base128/instance_major/plan.rs`, `base128/tests.rs`, `docs/adr/0061-l1-base-two-pass.md`.
+- **Evidence:** at eight lanes the sixteen-row block cut `f32` 512 by 12% by removing passes, not instructions ([the single-pass base](#apollo-single-pass-512-base)). At four lanes the two-block route already reads the parent, so only the second block's scratch round trip and the combining sink's table reads remain to remove, against 8 KB of staging at `f64` and a column group spilling at half the register width; `f64` 512 reads 1.03 to 1.07 of RustFFT on the base512 runs, unmeasured either way.
+- **Scope:** lift the eight-lane restriction on the sixteen-row form, select its state at n = 512 for the four-lane plan, measure on the pinned probe (two runs, aligned buffers); keep or reject on the numbers. Non-goals: the kernel, the eight-lane route, 1024.
+- **Acceptance:** kept if `f64` 512 is not above the two-block route on both runs and the direct oracle is green at 512 in both directions at `f64`; rejected with its numbers on ADR 0061 and the restriction retained otherwise.
+- **Dependencies:** [the single-pass base](#apollo-single-pass-512-base) (review). **Verification:** `small_sizes_against_the_references_by_core_type`, `base512_runs_at_eight_lanes_and_matches_the_direct_transform` re-bounded.
+
 <a id="apollo-single-pass-512-base"></a>
 ## APOLLO-SINGLE-PASS-512-BASE — A 512-point base for the eight-lane width without the gather [minor] [perf] — review
 - **Integrator:** claude/fable; **last-update:** 2026-09-11; lane `D:/atlas/worktrees/apollo-route`; regions `crates/apollo-fft/src/application/execution/kernel/components/base128/**`, `plan/fft/dimension_1d/{dynamic_impl,executors}.rs`.
@@ -354,11 +362,8 @@
 - **Dependencies:** none; parent [beat the references](#atlas-apollo-beat-the-references). **Verification:** `small_sizes_against_the_references_by_core_type`, `rustfft_comparison` counterbalanced.
 
 <a id="apollo-base128-level-in-sink"></a>
-## APOLLO-BASE128-LEVEL-IN-SINK — Fold the 1024 combine level into the second half's final sink [patch] [perf] — todo
-- **Evidence:** at 1024 the last radix-2 level runs as its own pass over the data, 763 cycles (11%), where 512 pays no level because its `FinalCombineSink` combines as it stores ([attribution](#apollo-base128-attribution)).
-- **Scope:** a sink for the second half's block three that combines through the inner and outer twiddles as today and then through the 1024 twiddles against the completed first half, writing all four output slices; the first half keeps its sink. Non-goals: the gather, the base kernel.
-- **Acceptance:** the meter reads the level at zero and the second half's column phase within its former value plus the extra butterfly; 1024 not above the current route in either precision; the differential tests green.
-- **Dependencies:** none; parent [beat the references](#atlas-apollo-beat-the-references). **Verification:** `small_sizes_against_the_references_by_core_type`.
+## APOLLO-BASE128-LEVEL-IN-SINK — Fold the 1024 combine level into the second half's final sink [patch] [perf] — done
+- Delivered by the four-block radix-4 sink (`c4b3f1f7`, [the two-pass base](#apollo-l1-base-two-pass) slice 10): the level runs inside the fourth block's store, the meter reads `levels=0` at 1024 (`../../output/apollo-base128/small_sizes_base512_run*_2026-09-11.txt`), 1024 `f64` 1.00 to 1.09 and `f32` 0.96 to 1.05 of RustFFT.
 
 <a id="apollo-workspace-impulse-oracle-budget"></a>
 ## APOLLO-WORKSPACE-IMPULSE-ORACLE-BUDGET — Fit the workspace impulse oracle in the CI slow budget [patch] — done 2026-09-10
