@@ -87,7 +87,7 @@ impl<T: MixedRadixScalar<Complex = Complex<T>>> SplitSinks<T> {
             Box::default()
         };
         let outer = if n >= 4 * base {
-            dup_split(samples, &twiddles[2 * base - 1..4 * base - 1])
+            interleaved(&twiddles[2 * base - 1..4 * base - 1])
         } else {
             Box::default()
         };
@@ -111,6 +111,13 @@ impl<T: MixedRadixScalar<Complex = Complex<T>>> SplitSinks<T> {
     pub(crate) fn outer(&self) -> &[T] {
         &self.outer
     }
+}
+
+/// `w` as interleaved lanes: the outer level's table, kept compact so the
+/// 1024 route's working set stays inside L1; the final sink duplicates
+/// each twiddle in registers.
+fn interleaved<T: Copy>(w: &[Complex<T>]) -> Box<[T]> {
+    w.iter().flat_map(|c| [c.re, c.im]).collect()
 }
 
 /// `w` relaid as dup-split chunk pairs of `samples` complex samples.
@@ -264,8 +271,8 @@ fn final_combine<T, A, const LANES: usize, const TW_LANES: usize>(
     inner_tw: &[T; TW_LANES],
     even_low: ComplexReg<T, A>,
     even_high: ComplexReg<T, A>,
-    outer_low_tw: &[T; TW_LANES],
-    outer_high_tw: &[T; TW_LANES],
+    outer_low_tw: &[T; LANES],
+    outer_high_tw: &[T; LANES],
 ) where
     T: LaneScalar,
     A: SimdArch + SimdKernel<T>,
@@ -273,8 +280,8 @@ fn final_combine<T, A, const LANES: usize, const TW_LANES: usize>(
     let block = LANES / <A as SimdStorage<T>>::LANE_COUNT;
     let peer = input(simd, peer, chunk);
     let (odd_low, odd_high) = peer.butterfly(twiddled(simd, inner_tw, reg, chunk));
-    let (out0, out2) = even_low.butterfly(twiddled(simd, outer_low_tw, odd_low, chunk));
-    let (out1, out3) = even_high.butterfly(twiddled(simd, outer_high_tw, odd_high, chunk));
+    let (out0, out2) = even_low.butterfly(odd_low * input(simd, outer_low_tw, chunk));
+    let (out1, out3) = even_high.butterfly(odd_high * input(simd, outer_high_tw, chunk));
     put(simd, out0.into_interleaved(), out, chunk);
     put(simd, out1.into_interleaved(), out, block + chunk);
     put(simd, out2.into_interleaved(), out, 2 * block + chunk);
@@ -294,10 +301,10 @@ pub(crate) struct FinalCombineSink<'a, T, const LANES: usize, const TW_LANES: us
     pub(crate) even_low: &'a [T; LANES],
     /// The even pair's high half.
     pub(crate) even_high: &'a [T; LANES],
-    /// `W_{4 BASE}^j` per chunk, `j < BASE`, dup-split.
-    pub(crate) outer_low_tw: &'a [T; TW_LANES],
-    /// `W_{4 BASE}^{j + BASE}` per chunk, dup-split.
-    pub(crate) outer_high_tw: &'a [T; TW_LANES],
+    /// `W_{4 BASE}^j` per chunk, `j < BASE`, interleaved.
+    pub(crate) outer_low_tw: &'a [T; LANES],
+    /// `W_{4 BASE}^{j + BASE}` per chunk, interleaved.
+    pub(crate) outer_high_tw: &'a [T; LANES],
 }
 
 impl<T: LaneScalar, const LANES: usize, const TW_LANES: usize> StoreSink<T>
@@ -343,10 +350,10 @@ pub(crate) struct FinalCombineInPlaceSink<'a, T, const LANES: usize, const TW_LA
     pub(crate) peer: &'a [T; LANES],
     /// `W_{2 BASE}^j` per chunk, dup-split.
     pub(crate) inner_tw: &'a [T; TW_LANES],
-    /// `W_{4 BASE}^j` per chunk, `j < BASE`, dup-split.
-    pub(crate) outer_low_tw: &'a [T; TW_LANES],
-    /// `W_{4 BASE}^{j + BASE}` per chunk, dup-split.
-    pub(crate) outer_high_tw: &'a [T; TW_LANES],
+    /// `W_{4 BASE}^j` per chunk, `j < BASE`, interleaved.
+    pub(crate) outer_low_tw: &'a [T; LANES],
+    /// `W_{4 BASE}^{j + BASE}` per chunk, interleaved.
+    pub(crate) outer_high_tw: &'a [T; LANES],
 }
 
 impl<T: LaneScalar, const LANES: usize, const TW_LANES: usize> StoreSink<T>

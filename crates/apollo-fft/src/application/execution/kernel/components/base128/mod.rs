@@ -390,9 +390,9 @@ where
     eunomia::Complex<F>: eunomia::layout::Pod,
 {
     let inner = lane_array::<F, SINK_LANES>(sinks.inner());
-    let (outer_low, outer_high) = sinks.outer().split_at(SINK_LANES);
-    let outer_low = lane_array::<F, SINK_LANES>(outer_low);
-    let outer_high = lane_array::<F, SINK_LANES>(outer_high);
+    let (outer_low, outer_high) = sinks.outer().split_at(BLOCK_LANES);
+    let outer_low = lane_array::<F, BLOCK_LANES>(outer_low);
+    let outer_high = lane_array::<F, BLOCK_LANES>(outer_high);
     let (b0, rest) = scratch.split_at_mut(BASE);
     let (b1, even_pair) = rest.split_at_mut(BASE);
     let even_pair = &mut even_pair[..2 * BASE];
@@ -460,9 +460,9 @@ where
     eunomia::Complex<F>: eunomia::layout::Pod,
 {
     let inner = lane_array::<F, SINK_LANES>(sinks.inner());
-    let (outer_low, outer_high) = sinks.outer().split_at(SINK_LANES);
-    let outer_low = lane_array::<F, SINK_LANES>(outer_low);
-    let outer_high = lane_array::<F, SINK_LANES>(outer_high);
+    let (outer_low, outer_high) = sinks.outer().split_at(BLOCK_LANES);
+    let outer_low = lane_array::<F, BLOCK_LANES>(outer_low);
+    let outer_high = lane_array::<F, BLOCK_LANES>(outer_high);
     let (sub0, rest) = scratch.split_at_mut(BASE);
     let (sub2, rest) = rest.split_at_mut(BASE);
     let (sub1, sub3) = rest.split_at_mut(BASE);
