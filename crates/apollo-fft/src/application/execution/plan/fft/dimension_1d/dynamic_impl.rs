@@ -178,8 +178,15 @@ impl<F: MixedRadixScalar<Complex = Complex<F>>> FftPlan1D<F> {
         } else {
             None
         };
+        // 384 is three 128-blocks under a radix-3 step where the 128 state
+        // reads the parent at stride three (four lanes); the eight-lane
+        // shape keeps the composite route there (ADR 0061).
         let base128 = if n == 128 {
             State128::new_if_supported(n).map(Arc::new)
+        } else if n == 384 {
+            State128::new_if_supported(n)
+                .filter(State128::serves_three_blocks)
+                .map(Arc::new)
         } else {
             None
         };
@@ -524,9 +531,15 @@ impl<F: MixedRadixScalar<Complex = Complex<F>>> FftPlan1D<F> {
             }
             PlanStrategy::Composite { radices } => {
                 radices_field = Some(Cow::clone(radices));
-                forward_impl = exec_composite_forward::<F>;
-                inverse_impl = exec_composite_inverse::<F>;
-                inverse_unnorm_impl = exec_composite_inverse_unnorm::<F>;
+                if base128.is_some() {
+                    forward_impl = exec_base128_forward::<F>;
+                    inverse_impl = exec_base128_inverse::<F>;
+                    inverse_unnorm_impl = exec_base128_inverse_unnorm::<F>;
+                } else {
+                    forward_impl = exec_composite_forward::<F>;
+                    inverse_impl = exec_composite_inverse::<F>;
+                    inverse_unnorm_impl = exec_composite_inverse_unnorm::<F>;
+                }
             }
             PlanStrategy::Rader => {
                 forward_impl = exec_rader_forward::<F>;

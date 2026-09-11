@@ -96,6 +96,59 @@ where
     >(data, plan, sinks)
 }
 
+/// The 128 base in the shape its state selected and, at four lanes, the
+/// radix-3 step over three of its blocks for 384 samples.
+pub(crate) fn transform_via_base_128<F, const INVERSE: bool, const MEASURE: bool>(
+    data: &mut [F::Complex],
+    state: &instance_major::State128<F>,
+) -> bool
+where
+    F: crate::application::execution::kernel::mixed_radix::MixedRadixScalar<
+        Complex = eunomia::Complex<F>,
+    >,
+    eunomia::Complex<F>: eunomia::layout::Pod,
+{
+    match state {
+        instance_major::State128::EightRows(state) => {
+            let (plan, sinks) = if INVERSE {
+                (state.inverse(), state.inverse_sinks())
+            } else {
+                (state.forward(), state.sinks())
+            };
+            transform_via_base::<
+                F,
+                INVERSE,
+                MEASURE,
+                8,
+                16,
+                128,
+                256,
+                512,
+                { instance_major::table_lanes(8, 16) },
+            >(data, plan, sinks)
+        }
+        instance_major::State128::FourRows(state) => {
+            if data.len() != 128 {
+                return false;
+            }
+            let plan = if INVERSE {
+                state.inverse()
+            } else {
+                state.forward()
+            };
+            instance_major::transform_block::<
+                F,
+                INVERSE,
+                MEASURE,
+                4,
+                32,
+                256,
+                { instance_major::table_lanes(4, 32) },
+            >(data, plan)
+        }
+    }
+}
+
 /// The 512 base and one radix-4 step over it for 512 and 2048 samples,
 /// from the plan state that owns its tables.
 pub(crate) fn transform_via_base_512<F, const INVERSE: bool, const MEASURE: bool>(
@@ -173,7 +226,7 @@ where
     debug_assert!(
         BASE == ROWS * ROW_LEN && BLOCK_LANES == 2 * BASE && SINK_LANES == 2 * BLOCK_LANES
     );
-    debug_assert!(n == BASE || n == 4 * BASE);
+    debug_assert!(n == BASE || n == 3 * BASE || n == 4 * BASE);
     if n == BASE {
         return instance_major::transform_block::<
             F,
@@ -192,7 +245,10 @@ where
         0
     };
     debug_assert_eq!(sinks.inner().len(), SINK_LANES);
-    let gathered_width = plan.native_eight_lanes();
+    let blocks = n / BASE;
+    // Three blocks read the parent directly at every width the plan
+    // selects them (the eight-lane state never does).
+    let gathered_width = blocks == 4 && plan.native_eight_lanes();
     let scratch_len = n;
     <F as crate::application::execution::kernel::mixed_radix::MixedRadixScalar>::with_scratch(
         scratch_len,
@@ -221,7 +277,19 @@ where
             } else {
                 0
             };
-            let ran = if gathered_width {
+            let ran = if blocks == 3 {
+                three_blocks_direct::<
+                    F,
+                    INVERSE,
+                    MEASURE,
+                    ROWS,
+                    ROW_LEN,
+                    BASE,
+                    BLOCK_LANES,
+                    SINK_LANES,
+                    TABLE_LANES,
+                >(data, scratch, plan, sinks)
+            } else if gathered_width {
                 four_blocks_gathered::<
                     F,
                     INVERSE,
@@ -294,6 +362,57 @@ where
         Src,
         S,
     >(out, source, plan, sink)
+}
+
+/// Three blocks, each reading the parent: subsequences 0 and 1 into
+/// scratch, subsequence 2 over the parent with the radix-3 sink.
+fn three_blocks_direct<
+    F,
+    const INVERSE: bool,
+    const MEASURE: bool,
+    const ROWS: usize,
+    const ROW_LEN: usize,
+    const BASE: usize,
+    const BLOCK_LANES: usize,
+    const SINK_LANES: usize,
+    const TABLE_LANES: usize,
+>(
+    data: &mut [F::Complex],
+    scratch: &mut [F::Complex],
+    plan: &instance_major::BasePlan<F, ROWS, ROW_LEN, TABLE_LANES>,
+    sinks: &instance_major::SplitSinks<F>,
+) -> bool
+where
+    F: crate::application::execution::kernel::mixed_radix::MixedRadixScalar<
+        Complex = eunomia::Complex<F>,
+    >,
+    eunomia::Complex<F>: eunomia::layout::Pod,
+{
+    let (sub0, rest) = scratch.split_at_mut(BASE);
+    let sub1 = &mut rest[..BASE];
+    block::<F, INVERSE, MEASURE, ROWS, ROW_LEN, BLOCK_LANES, TABLE_LANES, _, _>(
+        sub0,
+        instance_major::ParentSplit::<F, 3, 0>(lanes::<F>(data)),
+        plan,
+        instance_major::DirectSink,
+    ) && block::<F, INVERSE, MEASURE, ROWS, ROW_LEN, BLOCK_LANES, TABLE_LANES, _, _>(
+        sub1,
+        instance_major::ParentSplit::<F, 3, 1>(lanes::<F>(data)),
+        plan,
+        instance_major::DirectSink,
+    ) && block::<F, INVERSE, MEASURE, ROWS, ROW_LEN, BLOCK_LANES, TABLE_LANES, _, _>(
+        data,
+        instance_major::SelfSplit::<3, 2>,
+        plan,
+        instance_major::FinalRadix3Sink::<F, BLOCK_LANES, SINK_LANES, INVERSE> {
+            sub0: base_lanes::<F, BLOCK_LANES>(sub0),
+            sub1: base_lanes::<F, BLOCK_LANES>(sub1),
+            first_tw: lane_array::<F, SINK_LANES>(sinks.inner()),
+            second_tw: lane_array::<F, SINK_LANES>(sinks.second()),
+            half_negative: F::from_precise(-0.5),
+            sine: F::from_precise(0.866_025_403_784_438_6),
+        },
+    )
 }
 
 /// Four blocks, each reading the parent: subsequences 0, 1, and 2 into
