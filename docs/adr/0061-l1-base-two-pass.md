@@ -451,3 +451,24 @@ base); the two-block form of the step is deleted, and the step serves
   so a ratio against it is read from its better run. The run-to-run
   band the earlier revisions called the probe's drift was, in this
   measure, the tables' placement.
+
+- **2026-09-11, 2048 as four sixteen-row blocks
+  (`APOLLO-2048-AS-FOUR-512-BLOCKS`).** The scoreboard's widest gap was
+  past the base route: 2048 on the generic power-of-two route read
+  `f64` 1.38 to 1.40 of RustFFT and PhastFT and `f32` 1.62 of RustFFT.
+  The radix step over the base is generic over the base's row count,
+  so the 512 base serves 2048 as four blocks under the radix-4 sink
+  with no new kernel (the parent read directly at four lanes, gathered
+  at eight, three blocks through scratch: 24 KB at `f64`, 12 KB at
+  `f32`), the plan taking it ahead of the four-step route. Pinned probe,
+  two runs
+  (`output/apollo-base128/small_sizes_2048_run{1,2}_2026-09-11.txt`):
+  `f64` 2048 3459 / 3204 us against RustFFT's 2795 / 2898 (1.24 / 1.11),
+  `f32` 1693 / 1686 against 1310 / 1307 (1.29); the efficiency core
+  `f64` 1.19 / 1.18, `f32` 1.07 / 1.05. Kept: below the generic route at
+  both scalars, and the remainder is the route's own — the meter reads
+  each 512-block's column-and-sink phase at about 1900 cycles against
+  1150 for its rows, the radix-4 sink over four 512-spectra and the
+  outer `W_2048` table being the cost the 1024 route pays at half the
+  size; the 4096 length (1.07 to 1.22) is the next step of the same
+  ladder, eight or sixteen blocks under a deeper sink.
