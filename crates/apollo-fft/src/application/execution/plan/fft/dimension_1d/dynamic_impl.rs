@@ -150,8 +150,10 @@ impl<F: MixedRadixScalar<Complex = Complex<F>>> FftPlan1D<F> {
     }
 
     #[inline]
-    pub(super) fn base128_twiddles<const INVERSE: bool>(&self) -> &[F::Complex] {
-        if self.n <= 128 {
+    /// The split route's combine twiddles over a base of `base` samples:
+    /// none at the base length itself, the complete table above it.
+    pub(super) fn split_twiddles<const INVERSE: bool>(&self, base: usize) -> &[F::Complex] {
+        if self.n <= base {
             &[]
         } else if INVERSE {
             self.inverse_twiddles().as_ref()
@@ -185,10 +187,11 @@ impl<F: MixedRadixScalar<Complex = Complex<F>>> FftPlan1D<F> {
         // premise — a 33% regression — is gone either way. The 10 =>
         // dispatch arm still falls back to the stock power-of-two route when
         // the plan carries no base128 state.
-        // At n = 256 the eight-row form over 32-sample rows runs the length
-        // in one two-pass base (ADR 0061); its plan is built first so that the
-        // split state and its 4 KB table are not built beside it.
-        let base256 = if n == 256 {
+        // From 256 to 1024 the eight-row form over 32-sample rows is the base
+        // (ADR 0061): one kernel at 256, two and four blocks under one radix
+        // step above it; its plan is built first so that the 128 split state
+        // is not built beside it.
+        let base256 = if (256..=1024).contains(&n) && n.is_power_of_two() {
             State256::new_if_supported().map(Arc::new)
         } else {
             None
@@ -216,9 +219,10 @@ impl<F: MixedRadixScalar<Complex = Complex<F>>> FftPlan1D<F> {
         } else if n.is_power_of_two() {
             let log2 = n.trailing_zeros();
             PlanStrategy::PowerOfTwo {
-                twiddle_fwd: (base256.is_none()
-                    && base64.is_none()
-                    && (base128.is_none() || n > 128))
+                twiddle_fwd: ((base256.is_some() && n > 256)
+                    || (base256.is_none()
+                        && base64.is_none()
+                        && (base128.is_none() || n > 128)))
                     .then(|| F::cached_twiddle_fwd(n)),
                 log2,
                 pot: PhantomData,
@@ -494,7 +498,11 @@ impl<F: MixedRadixScalar<Complex = Complex<F>>> FftPlan1D<F> {
                         }
                     }
                     9 => {
-                        if base128.is_some() {
+                        if base256.is_some() {
+                            forward_impl = exec_base256_forward::<F>;
+                            inverse_impl = exec_base256_inverse::<F>;
+                            inverse_unnorm_impl = exec_base256_inverse_unnorm::<F>;
+                        } else if base128.is_some() {
                             forward_impl = exec_base128_forward::<F>;
                             inverse_impl = exec_base128_inverse::<F>;
                             inverse_unnorm_impl = exec_base128_inverse_unnorm::<F>;
@@ -505,7 +513,11 @@ impl<F: MixedRadixScalar<Complex = Complex<F>>> FftPlan1D<F> {
                         }
                     }
                     10 => {
-                        if base128.is_some() {
+                        if base256.is_some() {
+                            forward_impl = exec_base256_forward::<F>;
+                            inverse_impl = exec_base256_inverse::<F>;
+                            inverse_unnorm_impl = exec_base256_inverse_unnorm::<F>;
+                        } else if base128.is_some() {
                             forward_impl = exec_base128_forward::<F>;
                             inverse_impl = exec_base128_inverse::<F>;
                             inverse_unnorm_impl = exec_base128_inverse_unnorm::<F>;

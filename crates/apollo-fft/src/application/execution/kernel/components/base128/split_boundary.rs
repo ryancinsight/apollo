@@ -75,13 +75,13 @@ where
 /// network. `BLOCKS = 2` pairs neighbours; `BLOCKS = 4` pairs at distance
 /// two, and the network lands the four subsequences in exactly the
 /// bit-reversed block order the combine chain expects.
-pub(crate) struct GatherBlocks<'a, T, const BLOCKS: usize> {
+pub(crate) struct GatherBlocks<'a, T, const BLOCKS: usize, const BLOCK_LANES: usize> {
     pub(crate) src: &'a [T],
     pub(crate) dst: &'a mut [T],
 }
 
-impl<T: LaneScalar + MixedRadixScalar, const BLOCKS: usize> LaneKernel<T>
-    for GatherBlocks<'_, T, BLOCKS>
+impl<T: LaneScalar + MixedRadixScalar, const BLOCKS: usize, const BLOCK_LANES: usize> LaneKernel<T>
+    for GatherBlocks<'_, T, BLOCKS, BLOCK_LANES>
 {
     /// Whether the dispatched width handled the pass.
     type Output = bool;
@@ -101,12 +101,12 @@ impl<T: LaneScalar + MixedRadixScalar, const BLOCKS: usize> LaneKernel<T>
         // One bound for the whole pass, so the per-chunk compares vanish.
         assert!(
             (BLOCKS == 2 || BLOCKS == 4 || BLOCKS == 8)
-                && self.src.len() == BLOCKS * 256
+                && self.src.len() == BLOCKS * BLOCK_LANES
                 && self.dst.len() == self.src.len(),
-            "invariant: two, four or eight 128-sample blocks"
+            "invariant: two, four or eight blocks of one base length"
         );
         // Chunks per 128-sample block at the dispatched width.
-        let cpb = 256 / lanes;
+        let cpb = BLOCK_LANES / lanes;
         if BLOCKS == 2 {
             // One pair-deinterleave of two consecutive chunks splits their
             // complex samples into the even and odd subsequences.

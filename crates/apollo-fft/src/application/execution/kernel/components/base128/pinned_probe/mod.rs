@@ -11,7 +11,10 @@ use eunomia::Complex64;
 use crate::application::execution::kernel::mixed_radix::MixedRadixScalar;
 // Re-imported here so each probe module reaches them as `super::…` rather
 // than climbing two levels; they are the parent module's own items.
-use super::{instance_major, split_boundary, transform_via_base_128, BASE};
+use super::{instance_major, split_boundary, transform_via_base_128, transform_via_base_256};
+
+/// The 128-point base's block length; this probe covers the 128 route.
+const BASE: usize = 128;
 
 type BenchTransform =
     fn(&mut [Complex64], &super::instance_major::Plan128<f64>, &[Complex64]) -> bool;
@@ -67,8 +70,7 @@ fn phase_attribution(
 fn split_attribution(
     src: &[Complex64],
     work: &mut [Complex64],
-    plan: &super::instance_major::Plan128<f64>,
-    twiddles: &[Complex64],
+    run: impl Fn(&mut [Complex64]) -> bool,
 ) -> SplitPhases {
     use std::sync::atomic::Ordering;
 
@@ -83,11 +85,7 @@ fn split_attribution(
     super::instance_major::phase_meter::OUTER_CALLS.store(0, Ordering::Relaxed);
     for _ in 0..calls {
         work.copy_from_slice(src);
-        assert!(super::transform_via_base_128::<f64, false, true>(
-            std::hint::black_box(work),
-            plan,
-            twiddles,
-        ));
+        assert!(run(std::hint::black_box(work)));
     }
     let inner_calls = super::instance_major::phase_meter::CALLS
         .load(Ordering::Relaxed)
@@ -181,10 +179,12 @@ where
         n,
         |scratch| {
             let gathered =
-                hermes_simd::vectorize_lanes::<4, F, _>(split_boundary::GatherBlocks::<F, 4> {
-                    src: eunomia::layout::cast_slice(&*data),
-                    dst: eunomia::layout::cast_slice_mut(&mut scratch[..n]),
-                })
+                hermes_simd::vectorize_lanes::<4, F, _>(
+                    split_boundary::GatherBlocks::<F, 4, 256> {
+                        src: eunomia::layout::cast_slice(&*data),
+                        dst: eunomia::layout::cast_slice_mut(&mut scratch[..n]),
+                    },
+                )
                 .unwrap_or(false);
             if !gathered {
                 for (block_index, block) in scratch.chunks_exact_mut(BASE).enumerate().take(4) {
