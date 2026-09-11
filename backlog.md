@@ -382,7 +382,7 @@
 - **Basis:** `6e7d0031`; prior trial, rejection and artifact provenance in [ADR 0061](docs/adr/0061-l1-base-two-pass.md). Entry native baseline: 644 tests, fmt, clippy, doctest and rustdoc pass at this source.
 - **Acceptance:** two counterbalanced, core-pinned replications improve the target with no supported control regression; identical-code controls validate instrument stability. Native value oracles and configured gates pass. An inconclusive trial is removed and recorded.
 - **Plan:** inspect shared-kernel closure and measurement bias; implement one bounded schedule change and paired instrument; run native oracles, then measure; independently judge retention, synchronize ADR and remove rejected paths.
-- **Contributors:** paired_probe owns measurement design (read-only); column_review independently examines schedule closure (read-only); root owns integration and production edits. PR auto-merge paused during this increment.
+- **Contributors:** paired_probe owns the temporary paired instrument and measurements; column_review independently reviews source and evidence; root owns production, tests, ADR and integration. PR auto-merge is paused during this increment.
 
 <a id="apollo-ci-workspace-job-killed"></a>
 ## APOLLO-CI-WORKSPACE-JOB-KILLED — The workspace test job dies in a runner shutdown at its parallel test compile [patch] [ci] — done
