@@ -1,11 +1,13 @@
 # 0062 — Composite bases as register kernels under column passes
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-09-11
 - Item: `backlog.md#apollo-codelets-over-lanes` (parent
   `backlog.md#atlas-apollo-beat-the-references`)
 - Evidence: `output/apollo-base128/composite_census_2026-09-11.md`,
   `output/apollo-base128/small_sizes_kernelgap2_run{1,2}_2026-09-11.txt`
+  (before), `output/apollo-base128/small_sizes_column180_run{3,4}_2026-09-11.txt`
+  (the route), `output/apollo-base128/base256_2026-09-11.md` (the census)
 
 ## Context
 
@@ -81,9 +83,25 @@ registers) is its own layout and follows as the second increment.
 
 ## Measured route
 
-Pending: the 180 route on the pinned probe, two runs, against the composite
-route at both scalars and both cores. This record moves to Accepted or
-Rejected on that reading.
+The 180 route at `f32` (`kernel/components/column_route`, the 36-point
+kernel in `winograd/composite/radix_four_nine.rs`), on hermes' five-way
+pair interleave and in-frame lane-kernel entry (hermes PR #174). Pinned
+probe, two runs on the rebased tree, apollo / RustFFT:
+
+| core | before (composite) | the route |
+| --- | --- | --- |
+| performance `f32` 180 | 1.47 / 1.43 (131 us) | 0.94 / 1.03 (94.1, 93.5 us against 100.4, 90.7) |
+| efficiency `f32` 180 | 1.25 / 1.25 (256 us) | 0.98 / 0.98 (199.8, 199.9 us against 204.8, 204.6) |
+
+Every other length holds its reading. Census of the route (`chain.py`):
+499 instructions in one frame — the 36-point body 189 against RustFFT's
+`Butterfly36Avx` body of 178 (apollo 22 multiplies and 10 fused
+multiply-adds against 10 and 28, thirteen stack moves in the body), the
+column pass 51 against RustFFT's 5xn body of 63. Kept: 28% under the
+composite route on the performance core and at RustFFT on the efficiency
+core, the residue the kernel's fused-multiply count. `f64` 180 stays on the
+composite route (1.27 to 1.52) until the two-complexes-a-register layout
+lands (`backlog.md#apollo-column-route-f64-180`).
 
 ## Alternatives
 
