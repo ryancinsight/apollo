@@ -411,7 +411,7 @@ where
         data,
         instance_major::SelfSplit::<4, 3>,
         plan,
-        radix4_sink::<F, BASE, BLOCK_LANES, SINK_LANES>(sub0, sub1, sub2, sinks),
+        radix4_sink::<F, INVERSE, BASE, BLOCK_LANES, SINK_LANES>(sub0, sub1, sub2, sinks),
     )
 }
 
@@ -462,30 +462,35 @@ where
         data,
         instance_major::ParentSplit::<F, 1, 0>(lanes::<F>(sub3)),
         plan,
-        radix4_sink::<F, BASE, BLOCK_LANES, SINK_LANES>(sub0, sub1, sub2, sinks),
+        radix4_sink::<F, INVERSE, BASE, BLOCK_LANES, SINK_LANES>(sub0, sub1, sub2, sinks),
     )
 }
 
 /// The radix-4 sink over three transformed blocks and the split's tables.
-fn radix4_sink<'a, F, const BASE: usize, const BLOCK_LANES: usize, const SINK_LANES: usize>(
+fn radix4_sink<
+    'a,
+    F,
+    const INVERSE: bool,
+    const BASE: usize,
+    const BLOCK_LANES: usize,
+    const SINK_LANES: usize,
+>(
     sub0: &'a [F::Complex],
     sub1: &'a [F::Complex],
     sub2: &'a [F::Complex],
     sinks: &'a instance_major::SplitSinks<F>,
-) -> instance_major::FinalRadix4Sink<'a, F, BLOCK_LANES, SINK_LANES>
+) -> instance_major::FinalRadix4Sink<'a, F, BLOCK_LANES, SINK_LANES, INVERSE>
 where
     F: crate::application::execution::kernel::mixed_radix::MixedRadixScalar<
         Complex = eunomia::Complex<F>,
     >,
     eunomia::Complex<F>: eunomia::layout::Pod,
 {
-    let (outer_low, outer_high) = sinks.outer().split_at(BLOCK_LANES);
     instance_major::FinalRadix4Sink {
         sub0: base_lanes::<F, BLOCK_LANES>(sub0),
         sub2: base_lanes::<F, BLOCK_LANES>(sub2),
         sub1: base_lanes::<F, BLOCK_LANES>(sub1),
         inner_tw: lane_array::<F, SINK_LANES>(sinks.inner()),
-        outer_low_tw: lane_array::<F, BLOCK_LANES>(outer_low),
-        outer_high_tw: lane_array::<F, BLOCK_LANES>(outer_high),
+        outer_tw: lane_array::<F, BLOCK_LANES>(sinks.outer()),
     }
 }
