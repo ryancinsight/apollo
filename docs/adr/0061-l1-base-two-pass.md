@@ -549,8 +549,9 @@ base); the two-block form of the step is deleted, and the step serves
   executor carrying the frame so the sized entry and its register arm
   inline into it, and the `f32` 16 and 32 executors holding the hermes
   eight-lane codelets through the backend token. After: the `f32`
-  eight-point executor is one frame of 29 instructions with no calls,
-  the 16 and 32 executors 71 and 164 (RustFFT 96 + 5 and 191 + 5).
+  eight-point executor is one frame of 29 instructions with no calls
+  (RustFFT: a 5-instruction entry and a 27-instruction body), the 16
+  and 32 executors 71 and 164 against RustFFT's 52 and 119 bodies.
   Pinned probe, three runs
   (`output/apollo-base128/small_sizes_frame_run{1,2,3}_2026-09-11.txt`):
   `f32` 8 1.07 / 1.07 / 1.07 on the performance core and 0.93 / 0.93 /
@@ -558,4 +559,8 @@ base); the two-block form of the step is deleted, and the step serves
   inside its eleven-run band. Kept. The remaining small-length gaps are
   the kernels, not the chain — `f32` 16 on the efficiency core 1.27 and
   `f32` 32 on the performance core 1.15 to 1.23 with the frame in
-  place — filed as `APOLLO-F32-16-32-KERNEL-GAP`.
+  place, the hermes primitives spending a rotation as four
+  instructions (swap, add and subtract against zero, blend) against
+  RustFFT's two (sign mask, swap) and a twiddle multiply as six against
+  four (a sign flip and blend where RustFFT's `fmaddsub` folds the
+  signs) — filed as `APOLLO-F32-16-32-KERNEL-GAP`.
