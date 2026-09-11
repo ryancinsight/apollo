@@ -282,6 +282,31 @@ fn small_sizes_against_the_references_by_core_type() {
             );
         }
         {
+            let n = 2048usize;
+            let src: Vec<Complex64> = (0..n)
+                .map(|i| {
+                    let x = i as f64;
+                    Complex64::new((0.017 * x).sin(), 0.25 * (0.031 * x).cos())
+                })
+                .collect();
+            let mut work = src.clone();
+            let state = super::instance_major::State512::<f64>::new_if_supported(n)
+                .expect("the pinned host must provide a native base capability");
+            let split = split_attribution(&src, &mut work, |work| {
+                super::transform_via_base_512::<f64, false, true>(work, &state)
+            });
+            println!(
+                "B512 split n={n}: gather={} blocks={} levels={} total={} | per block ({}): load_and_rows={} columns_and_sink={}",
+                split.gather,
+                split.blocks,
+                split.levels,
+                split.gather + split.blocks + split.levels,
+                split.blocks_per_call,
+                split.rows,
+                split.columns
+            );
+        }
+        {
             let n = 1024usize;
             let src: Vec<Complex64> = (0..n)
                 .map(|i| {

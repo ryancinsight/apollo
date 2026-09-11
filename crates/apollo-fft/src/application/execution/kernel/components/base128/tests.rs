@@ -534,6 +534,43 @@ fn single_block_512_plans_keep_no_split_table() {
 }
 
 #[test]
+fn four_block_2048_plans_keep_their_sink_tables_in_the_512_state() {
+    // 2048 is four sixteen-row blocks under the radix-4 sink: the 512
+    // state carries the inner and outer sink tables, dup-split and
+    // interleaved at the plan's width, and no 256 base is built beside it.
+    let plan = crate::FftPlan1D::<f64>::new(
+        crate::Shape1D::new(2048).expect("invariant: shape lengths are non-zero"),
+    );
+    let Some(state) = plan.base512.as_ref() else {
+        assert_incumbent_route_round_trips(&plan, 2048);
+        return;
+    };
+    assert!(plan.base256.is_none(), "2048 routes through the 512 base");
+    assert!(plan.twiddle_fwd.is_none() && plan.twiddle_inv.get().is_none());
+    assert_eq!(state.sinks().inner().len(), 4 * 512);
+    assert_eq!(state.sinks().outer().len(), 2 * 512);
+    assert!(!state.inverse_is_initialized() && !state.inverse_sinks_initialized());
+    let source = signal(2048);
+    let mut data = source.clone();
+    plan.forward_complex_slice_inplace(&mut data);
+    let expected = dft(&source, false);
+    let error = worst(&data, &expected);
+    let bound = tolerance(&source);
+    assert!(
+        error <= bound,
+        "N=2048 four-block forward differs by {error:.3e} > {bound:.3e}"
+    );
+    plan.inverse_complex_slice_inplace(&mut data);
+    assert!(state.inverse_is_initialized() && state.inverse_sinks_initialized());
+    let error = worst(&data, &source);
+    let bound = 2.0 * tolerance(&source);
+    assert!(
+        error <= bound,
+        "N=2048 four-block round trip differs by {error:.3e} > {bound:.3e}"
+    );
+}
+
+#[test]
 fn dynamic_split_plans_keep_their_sink_tables_in_the_base_state() {
     // The 256 base splits 1024; 256 itself is one block and keeps no split
     // table. The sink twiddles live in the base state, dup-split at the
@@ -588,7 +625,7 @@ fn dynamic_split_plans_keep_their_sink_tables_in_the_base_state() {
 
 #[test]
 fn dynamic_split_plans_normalize_by_full_length() {
-    for n in [128usize, 256, 512, 1024] {
+    for n in [128usize, 256, 512, 1024, 2048] {
         let plan = crate::FftPlan1D::<f64>::new(
             crate::Shape1D::new(n).expect("invariant: shape lengths are non-zero"),
         );
@@ -596,7 +633,7 @@ fn dynamic_split_plans_normalize_by_full_length() {
         let mut actual = source.clone();
         let selected = match n {
             128 => plan.base128.is_some(),
-            512 => plan.base512.is_some(),
+            512 | 2048 => plan.base512.is_some(),
             _ => plan.base256.is_some(),
         };
         if !selected {

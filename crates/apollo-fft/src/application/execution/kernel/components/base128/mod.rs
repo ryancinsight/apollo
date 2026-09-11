@@ -4,8 +4,8 @@
 //! One instance-major kernel serves 64, 128, 256, and 512 points (128 as
 //! eight 16-sample rows at four lanes and four 32-sample rows at eight,
 //! 512 as sixteen 32-sample rows, the column pass a sixteen-point DIF);
-//! 1024 is four 256-blocks whose radix-4 step rides the last block's
-//! column pass.
+//! 1024 is four 256-blocks and 2048 four 512-blocks, the radix-4 step
+//! riding the last block's column pass in both.
 //! At four lanes every block loads its samples straight out of the
 //! parent, so the route is the blocks' own passes and nothing else; at
 //! eight lanes the blocks are gathered first, the measured better of the
@@ -87,11 +87,42 @@ where
         F,
         INVERSE,
         MEASURE,
+        8,
         32,
         256,
         512,
         1024,
         { instance_major::table_lanes(8, 32) },
+    >(data, plan, sinks)
+}
+
+/// The 512 base and one radix-4 step over it for 512 and 2048 samples,
+/// from the plan state that owns its tables.
+pub(crate) fn transform_via_base_512<F, const INVERSE: bool, const MEASURE: bool>(
+    data: &mut [F::Complex],
+    state: &instance_major::State512<F>,
+) -> bool
+where
+    F: crate::application::execution::kernel::mixed_radix::MixedRadixScalar<
+        Complex = eunomia::Complex<F>,
+    >,
+    eunomia::Complex<F>: eunomia::layout::Pod,
+{
+    let (plan, sinks) = if INVERSE {
+        (state.inverse(), state.inverse_sinks())
+    } else {
+        (state.forward(), state.sinks())
+    };
+    transform_via_base::<
+        F,
+        INVERSE,
+        MEASURE,
+        16,
+        32,
+        512,
+        1024,
+        2048,
+        { instance_major::table_lanes(16, 32) },
     >(data, plan, sinks)
 }
 
@@ -121,6 +152,7 @@ fn transform_via_base<
     F,
     const INVERSE: bool,
     const MEASURE: bool,
+    const ROWS: usize,
     const ROW_LEN: usize,
     const BASE: usize,
     const BLOCK_LANES: usize,
@@ -128,7 +160,7 @@ fn transform_via_base<
     const TABLE_LANES: usize,
 >(
     data: &mut [F::Complex],
-    plan: &instance_major::BasePlan<F, 8, ROW_LEN, TABLE_LANES>,
+    plan: &instance_major::BasePlan<F, ROWS, ROW_LEN, TABLE_LANES>,
     sinks: &instance_major::SplitSinks<F>,
 ) -> bool
 where
@@ -138,14 +170,16 @@ where
     eunomia::Complex<F>: eunomia::layout::Pod,
 {
     let n = data.len();
-    debug_assert!(BASE == 8 * ROW_LEN && BLOCK_LANES == 2 * BASE && SINK_LANES == 2 * BLOCK_LANES);
+    debug_assert!(
+        BASE == ROWS * ROW_LEN && BLOCK_LANES == 2 * BASE && SINK_LANES == 2 * BLOCK_LANES
+    );
     debug_assert!(n == BASE || n == 4 * BASE);
     if n == BASE {
         return instance_major::transform_block::<
             F,
             INVERSE,
             MEASURE,
-            8,
+            ROWS,
             ROW_LEN,
             BLOCK_LANES,
             TABLE_LANES,
@@ -192,6 +226,7 @@ where
                     F,
                     INVERSE,
                     MEASURE,
+                    ROWS,
                     ROW_LEN,
                     BASE,
                     BLOCK_LANES,
@@ -203,6 +238,7 @@ where
                     F,
                     INVERSE,
                     MEASURE,
+                    ROWS,
                     ROW_LEN,
                     BASE,
                     BLOCK_LANES,
@@ -227,6 +263,7 @@ fn block<
     F,
     const INVERSE: bool,
     const MEASURE: bool,
+    const ROWS: usize,
     const ROW_LEN: usize,
     const BLOCK_LANES: usize,
     const TABLE_LANES: usize,
@@ -235,7 +272,7 @@ fn block<
 >(
     out: &mut [F::Complex],
     source: Src,
-    plan: &instance_major::BasePlan<F, 8, ROW_LEN, TABLE_LANES>,
+    plan: &instance_major::BasePlan<F, ROWS, ROW_LEN, TABLE_LANES>,
     sink: S,
 ) -> bool
 where
@@ -250,7 +287,7 @@ where
         F,
         INVERSE,
         MEASURE,
-        8,
+        ROWS,
         ROW_LEN,
         BLOCK_LANES,
         TABLE_LANES,
@@ -265,6 +302,7 @@ fn four_blocks_direct<
     F,
     const INVERSE: bool,
     const MEASURE: bool,
+    const ROWS: usize,
     const ROW_LEN: usize,
     const BASE: usize,
     const BLOCK_LANES: usize,
@@ -273,7 +311,7 @@ fn four_blocks_direct<
 >(
     data: &mut [F::Complex],
     scratch: &mut [F::Complex],
-    plan: &instance_major::BasePlan<F, 8, ROW_LEN, TABLE_LANES>,
+    plan: &instance_major::BasePlan<F, ROWS, ROW_LEN, TABLE_LANES>,
     sinks: &instance_major::SplitSinks<F>,
 ) -> bool
 where
@@ -285,22 +323,22 @@ where
     let (sub0, rest) = scratch.split_at_mut(BASE);
     let (sub1, sub2) = rest.split_at_mut(BASE);
     let sub2 = &mut sub2[..BASE];
-    block::<F, INVERSE, MEASURE, ROW_LEN, BLOCK_LANES, TABLE_LANES, _, _>(
+    block::<F, INVERSE, MEASURE, ROWS, ROW_LEN, BLOCK_LANES, TABLE_LANES, _, _>(
         sub0,
         instance_major::ParentSplit::<F, 4, 0>(lanes::<F>(data)),
         plan,
         instance_major::DirectSink,
-    ) && block::<F, INVERSE, MEASURE, ROW_LEN, BLOCK_LANES, TABLE_LANES, _, _>(
+    ) && block::<F, INVERSE, MEASURE, ROWS, ROW_LEN, BLOCK_LANES, TABLE_LANES, _, _>(
         sub1,
         instance_major::ParentSplit::<F, 4, 1>(lanes::<F>(data)),
         plan,
         instance_major::DirectSink,
-    ) && block::<F, INVERSE, MEASURE, ROW_LEN, BLOCK_LANES, TABLE_LANES, _, _>(
+    ) && block::<F, INVERSE, MEASURE, ROWS, ROW_LEN, BLOCK_LANES, TABLE_LANES, _, _>(
         sub2,
         instance_major::ParentSplit::<F, 4, 2>(lanes::<F>(data)),
         plan,
         instance_major::DirectSink,
-    ) && block::<F, INVERSE, MEASURE, ROW_LEN, BLOCK_LANES, TABLE_LANES, _, _>(
+    ) && block::<F, INVERSE, MEASURE, ROWS, ROW_LEN, BLOCK_LANES, TABLE_LANES, _, _>(
         data,
         instance_major::SelfSplit::<4, 3>,
         plan,
@@ -315,6 +353,7 @@ fn four_blocks_gathered<
     F,
     const INVERSE: bool,
     const MEASURE: bool,
+    const ROWS: usize,
     const ROW_LEN: usize,
     const BASE: usize,
     const BLOCK_LANES: usize,
@@ -323,7 +362,7 @@ fn four_blocks_gathered<
 >(
     data: &mut [F::Complex],
     scratch: &mut [F::Complex],
-    plan: &instance_major::BasePlan<F, 8, ROW_LEN, TABLE_LANES>,
+    plan: &instance_major::BasePlan<F, ROWS, ROW_LEN, TABLE_LANES>,
     sinks: &instance_major::SplitSinks<F>,
 ) -> bool
 where
@@ -336,22 +375,22 @@ where
     let (sub2, rest) = rest.split_at_mut(BASE);
     let (sub1, sub3) = rest.split_at_mut(BASE);
     let sub3 = &sub3[..BASE];
-    block::<F, INVERSE, MEASURE, ROW_LEN, BLOCK_LANES, TABLE_LANES, _, _>(
+    block::<F, INVERSE, MEASURE, ROWS, ROW_LEN, BLOCK_LANES, TABLE_LANES, _, _>(
         sub0,
         instance_major::SelfSplit::<1, 0>,
         plan,
         instance_major::DirectSink,
-    ) && block::<F, INVERSE, MEASURE, ROW_LEN, BLOCK_LANES, TABLE_LANES, _, _>(
+    ) && block::<F, INVERSE, MEASURE, ROWS, ROW_LEN, BLOCK_LANES, TABLE_LANES, _, _>(
         sub1,
         instance_major::SelfSplit::<1, 0>,
         plan,
         instance_major::DirectSink,
-    ) && block::<F, INVERSE, MEASURE, ROW_LEN, BLOCK_LANES, TABLE_LANES, _, _>(
+    ) && block::<F, INVERSE, MEASURE, ROWS, ROW_LEN, BLOCK_LANES, TABLE_LANES, _, _>(
         sub2,
         instance_major::SelfSplit::<1, 0>,
         plan,
         instance_major::DirectSink,
-    ) && block::<F, INVERSE, MEASURE, ROW_LEN, BLOCK_LANES, TABLE_LANES, _, _>(
+    ) && block::<F, INVERSE, MEASURE, ROWS, ROW_LEN, BLOCK_LANES, TABLE_LANES, _, _>(
         data,
         instance_major::ParentSplit::<F, 1, 0>(lanes::<F>(sub3)),
         plan,
