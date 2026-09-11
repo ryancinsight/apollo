@@ -220,3 +220,17 @@ measured first and gained nothing over the split at 256.
   exists on every host the 128 one does, is deleted with its eight-block
   arm, its level pass, and the probe's incumbent comparison
   (`output/apollo-base128/base256_2026-09-11.md`).
+- **2026-09-11, the sink twiddles dup-split in the base state.** The
+  base plan state owns the split's sink tables for its route length
+  (`SplitSinks`: `W_{2 BASE}^j` and `W_{4 BASE}^j` in the dup-split
+  chunk-pair layout at the plan's register width, per direction on first
+  use, relaid from the process twiddle cache), so a sink's complex
+  multiply is one swap, one multiply, and one `fmaddsub` where the
+  interleaved form paid three shuffles; the plan keeps no interleaved
+  table for the split. Pinned probe: `f64` 512 1.12 to 1.13 of RustFFT
+  from 1.20 to 1.25 (514 us from 556 to 566), 1024 1.14 to 1.18 from
+  1.22 to 1.23; `f32` 512 288 to 290 us from 295 to 296, 1024 645 to 658
+  from 655 to 662. The meter's 1024 column phase reads higher (668 to 714
+  a block from 630) while the production wall clock improved: the doubled
+  tables take the 1024 working set past the 48 KB L1D, the hypothesis the
+  next slice tests (`output/apollo-base128/small_sizes_sinktables_run{1,2}_2026-09-11.txt`).
