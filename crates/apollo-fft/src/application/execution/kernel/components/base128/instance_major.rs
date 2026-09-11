@@ -114,12 +114,12 @@ const fn layer_ch(rows: usize, row_len: usize) -> usize {
 
 /// Chunks of the row layer's broadcasts: sixteen-sample rows carry
 /// `W_16^1`, `W_16^3`, `-W_16^1` and the real `sqrt(2)/2`; 32-sample rows
-/// carry `W_32^1`, `W_32^3`, `W_32^5`, `W_32^7`, `W_16^1`, `W_16^3` and the
-/// real `sqrt(2)/2`, every other `W_32^{b0 m}` being one of those under a
-/// rotation or a sign.
+/// carry the twelve pre-rotated general twiddles of the `8 x 4` layer
+/// (`W_32^{1,3,5,7,9,15,21}`, `W_16^{1,3,5,7,9}`) and the real
+/// `sqrt(2)/2`.
 const fn layer_chunks(row_len: usize) -> usize {
     if row_len == 32 {
-        13
+        25
     } else {
         7
     }

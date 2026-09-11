@@ -210,9 +210,9 @@ where
 }
 
 /// The layer's broadcast twiddles: index `k` names the `k`th broadcast the
-/// plan pushes (`W_32^{1,3,5,7}`, `W_16^{1,3}` for 32-sample rows;
-/// `W_16^1`, `W_16^3`, `-W_16^1` for sixteen), and the real `sqrt(2)/2`
-/// broadcast follows them.
+/// plan pushes (`W_32^{1,3,5,7}`, `W_16^{1,3}`, `W_32^{9,15,21}`,
+/// `W_16^{5,7,9}` for 32-sample rows; `W_16^1`, `W_16^3`, `-W_16^1` for
+/// sixteen), and the real `sqrt(2)/2` broadcast follows them.
 pub(super) trait LayerTwiddles<T, A>
 where
     T: LaneScalar,
@@ -277,8 +277,8 @@ where
     T: LaneScalar,
     A: SimdArch + SimdKernel<T>,
 {
-    re: [Vector<T, A>; 6],
-    im: [Vector<T, A>; 6],
+    re: [Vector<T, A>; 12],
+    im: [Vector<T, A>; 12],
     half_root2: Vector<T, A>,
 }
 
@@ -296,8 +296,8 @@ where
     )]
     #[inline(always)]
     pub(super) fn new(simd: Simd<T, A>, table: &[T], layer_lane: usize, count: usize) -> Self {
-        let mut re = [simd.zero(); 6];
-        let mut im = [simd.zero(); 6];
+        let mut re = [simd.zero(); 12];
+        let mut im = [simd.zero(); 12];
         for k in 0..count {
             re[k] = simd.splat(table[layer_lane + 8 * k]);
             im[k] = simd.splat(table[layer_lane + 8 * k + 4]);
@@ -418,28 +418,14 @@ where
     ComplexReg::from_interleaved(source.chunk::<A, S>(simd, own, (ROWS / S) * (B0 + 4 * b1) + g))
 }
 
-/// The register negated: the `W^{ROW_LEN / 2}` twiddle.
-#[expect(
-    clippy::inline_always,
-    reason = "register kernels must retain their caller's target-feature scope"
-)]
-#[inline(always)]
-fn negate<T, A>(v: ComplexReg<T, A>) -> ComplexReg<T, A>
-where
-    T: LaneScalar,
-    A: SimdArch + SimdKernel<T>,
-{
-    ComplexReg::from_interleaved(-v.into_interleaved())
-}
-
 /// First stage of one row group for `B0`: the radix-`ROW_LEN / 4` over
 /// `b1` on samples `B0 + 4 b1`, then the `W_ROW_LEN^{B0 m}` layer.
 /// Sixteen-sample rows fill the first four slots and leave the rest zero,
 /// which the constant-indexed second stage never reads.
 ///
-/// The layer's general multiplies are the broadcasts; every other twiddle
-/// is one of those under `W^{ROW_LEN / 4}` (a rotation) or
-/// `W^{ROW_LEN / 2}` (a sign), or an eighth's `sqrt(2)/2` scaling.
+/// The layer's general multiplies are the broadcasts, pre-rotated so no
+/// rotation or sign follows one; the remaining twiddles are the pure
+/// rotation `W^{ROW_LEN / 4}` and the eighths' `sqrt(2)/2` scaling.
 #[expect(
     clippy::inline_always,
     reason = "register kernels must retain their caller's target-feature scope"
@@ -473,8 +459,10 @@ where
     let three_eighths = root2_twiddle::<T, A, INVERSE, true>;
     let half_root2 = layer.half_root2();
     if ROW_LEN == 32 {
-        // Broadcasts `W_32^{1,3,5,7}` then `W_16^{1,3}`.
+        // Broadcasts `W_32^{1,3,5,7}`, `W_16^{1,3}`, then the pre-rotated
+        // `W_32^{9,15,21}` and `W_16^{5,7,9}` the later groups reach.
         let (w1, w3, w5, w7, v1, v3) = (0, 1, 2, 3, 4, 5);
+        let (w9, w15, w21, v5, v7, v9) = (6, 7, 8, 9, 10, 11);
         let y = radix8::<T, A, INVERSE>(
             [
                 sample::<T, A, Src, ROWS, S, B0>(simd, source, own, g, 0),
@@ -506,19 +494,19 @@ where
                 eighth(y[2], half_root2),
                 layer.mul(y[3], v3),
                 rot(y[4]),
-                rot(layer.mul(y[5], v1)),
+                layer.mul(y[5], v5),
                 three_eighths(y[6], half_root2),
-                rot(layer.mul(y[7], v3)),
+                layer.mul(y[7], v7),
             ],
             _ => [
                 y[0],
                 layer.mul(y[1], w3),
                 layer.mul(y[2], v3),
-                rot(layer.mul(y[3], w1)),
+                layer.mul(y[3], w9),
                 three_eighths(y[4], half_root2),
-                rot(layer.mul(y[5], w7)),
-                negate(layer.mul(y[6], v1)),
-                negate(layer.mul(y[7], w5)),
+                layer.mul(y[5], w15),
+                layer.mul(y[6], v9),
+                layer.mul(y[7], w21),
             ],
         }
     } else {
