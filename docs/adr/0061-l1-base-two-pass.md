@@ -296,3 +296,15 @@ measured first and gained nothing over the split at 256.
   instructions against RustFFT's 424 (the pair transpose 32 of them, the
   eighths 12) and the column group's 67-cycle chain — and is the
   follow-up item's, not a shape decision.
+- **2026-09-11, the eighths as dup-split multiplies.** The radix-8 is
+  generic over an `Eighths` strategy: `HalfRoot2` keeps the
+  `sqrt(2)/2` form (a rotation, a butterfly arm, a real multiply — four
+  operations, a chain of twelve) for the Stockham and Winograd kernels,
+  and the base rows take `DupSplitEighths` from two more plan broadcasts
+  (three operations, a chain of nine). Census, `f64` row pair: 493
+  instructions from 511, chain 127 from 147. Pinned probe: rows per
+  256-block 532 to 549 cycles from 578 to 588; `f64` 256 1.00 to 1.01 of
+  RustFFT from 1.05 to 1.06, 512 1.00 to 1.08 from 1.11 to 1.15, 1024
+  1.04 to 1.07 from 1.13 to 1.17; `f32` 256 1.03 to 1.04, 512 1.06 to
+  1.10, 1024 1.03 to 1.04
+  (`output/apollo-base128/small_sizes_eighths_run{1,2}_2026-09-11.txt`).
