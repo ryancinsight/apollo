@@ -1,5 +1,37 @@
 # Apollo Backlog
 
+<a id="apollo-native-real-3d"></a>
+
+## APOLLO-NATIVE-REAL-3D-2026-09-11 — A real 3-D field is transformed as if it were complex [minor] [perf] — in-progress
+
+- **Integrator:** claude-opus-5; **branch:** `perf/apollo-native-real-3d`; regions
+  `crates/apollo-fft/src/application/execution/kernel/real_fft.rs`,
+  `.../plan/fft/real_storage/`, `.../plan/fft/dimension_3d/`. **Last-update:** 2026-09-11.
+- **Finding.** `RealFftData::forward_3d_into` widens the real field to complex
+  across the whole volume and runs the full complex plan; `inverse_3d_into`
+  copies the spectrum to scratch and runs the full complex inverse. Neither
+  uses the real split apollo already has per lane (`forward_1d_half_into`: pack
+  N reals as N/2 complex, a half-length transform, `untangle_real_half`).
+  kwavers emulates a half-spectrum pair on top of that, and its PSTD path —
+  `forward_r2c_into` + `inverse_c2r_into` — costs **1.8–2.0x** the plain complex
+  pair at 64³ (2.63 / 3.29 ms against 1.45 / 1.66, same process, two rounds at
+  30% and 14% host load), 1.2–1.3x at 32³ and 1.7x at 16³.
+- **Shape.** `FftPlan3D` gains a half-spectrum pair: a forward that runs the z
+  lanes through the existing per-lane real kernel into `(nx, ny, nz/2+1)` and
+  then the y and x passes on that half volume, and an inverse that runs x and y
+  on the half volume and the z lanes through a **new** per-lane inverse — the
+  retangle `Fe[k] = (X[k] + conj X[M-k])/2`, `Fo[k] = (X[k] - conj X[M-k])·conj(W^k)/2`,
+  `Z = Fe + i·Fo`, a size-`M` inverse, and the pair unpack — which apollo does
+  not have (its 1-D inverse takes only a full spectrum). Lengths the split does
+  not admit (`nz % 4 != 0`) take the widening path and say so in the contract.
+- **Acceptance oracle.** The forward equals the first `nz/2+1` bins of the full
+  complex spectrum within the derived bound; the pair round-trips to 1e-10;
+  shapes include an extent of one on each axis and an `nz` the split refuses;
+  the per-lane inverse round-trips every length the split admits up to 1024.
+  kwavers' r2c round trip, moved onto the pair, falls below its complex pair.
+- **Consumer:** [`kwavers #kw-native-r2c`](../kwavers/backlog.md#kw-native-r2c).
+  **Risk / change class:** [minor] [perf]; **dependencies:** none.
+
 <a id="apollo-rotated-order-handoff"></a>
 
 ## APOLLO-ROTATED-ORDER-HANDOFF-2026-09-10 — The third move of a 3-D transform only restores the caller's layout [minor] [perf] — done 2026-09-10
