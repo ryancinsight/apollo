@@ -44,11 +44,12 @@ Recommended shape (option B below, after the revision of 2026-09-11):
 eight 32-point rows through the row phases widened from sixteen to
 thirty-two samples, then the eight-point column pass unchanged. Option A
 (sixteen 16-point rows, the column pass widened to sixteen) was built and
-measured first and gained nothing over the split at 256. At eight lanes
-512 is the same kernel as sixteen 32-point rows in one pass — the
-sixteen-point column network in registers, spilling — rather than two
-256-blocks under the step (the revision of 2026-09-11, the single-pass
-512 base); the four-lane width keeps the two-block split.
+measured first and gained nothing over the split at 256. 512 is the same
+kernel as sixteen 32-point rows in one pass — the sixteen-point column
+network in registers, spilling — rather than two 256-blocks under the
+step, at both widths (the revisions of 2026-09-11, the single-pass 512
+base); the two-block form of the step is deleted, and the step serves
+1024 as four blocks under the radix-4 sink.
 
 ## Options
 
@@ -356,3 +357,24 @@ sixteen-point column network in registers, spilling — rather than two
   eight-lane; the four-lane width keeps the two-block split, its own
   sixteen-row form (8 KB of staging at `f64`) unmeasured and out of the
   item's scope.
+- **2026-09-11, the sixteen-row form at four lanes
+  (`APOLLO-SINGLE-PASS-512-FOUR-LANES`).** The restriction lifted and
+  measured: the four-lane two-block route already read the parent, so
+  what the single pass removes there is the second block's round trip
+  through scratch and the combining sink's table reads. Pinned probe,
+  two runs
+  (`output/apollo-base128/small_sizes_base512four_run{1,2}_2026-09-11.txt`):
+  `f64` 512 434 / 441 us against RustFFT's 461 / 452 (0.94 / 0.98, from
+  1.03 to 1.05 on the two-block route in the base512 runs), on the
+  efficiency core 1013 / 1008 against 1045 / 1043 (0.97, from 1.11);
+  `f32` 512 unchanged at 0.97, every other length inside its drift. The
+  census reads the four-lane sixteen-row column group at 222
+  instructions and 34 stack moves (chain about 104 for 54 of issue) over
+  sixteen groups, the row group 493 over eight — the same shape as at
+  eight lanes. Kept at both widths; the two-block form of the radix step
+  (`two_blocks_direct`, `two_blocks_gathered`, `CombineSink`, the
+  two-block gather and strided arms) is deleted as superseded, the step
+  serving 1024 as four blocks under the radix-4 sink. The route now
+  reads `f64` 128 1.03 to 1.05, 256 0.98 to 1.00, 512 0.94 to 0.98, 1024
+  1.03 to 1.05 of RustFFT; `f32` 128 1.04 to 1.10, 256 1.01, 512 0.97,
+  1024 0.99 to 1.02.

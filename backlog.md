@@ -318,12 +318,13 @@
 - **Outcome:** delivered as slice 7 of [the two-pass base](#apollo-l1-base-two-pass): at four lanes every block reads its stride-`blocks` subsequence out of the parent and the gather pass is gone (`f64` 1024 from 1.33 to 1.15 to 1.23 of RustFFT); at eight lanes the in-register extraction measured 2 to 4% slower than the gather, so that width keeps it. The bound recorded here (the combining block must gather at 1024) fell to a scratch layout that keeps the even half's halves beside the peers.
 
 <a id="apollo-single-pass-512-four-lanes"></a>
-## APOLLO-SINGLE-PASS-512-FOUR-LANES — Measure the sixteen-row 512 base at four lanes [patch] [perf] — in-progress
+## APOLLO-SINGLE-PASS-512-FOUR-LANES — Measure the sixteen-row 512 base at four lanes [patch] [perf] — review
 - **Integrator:** claude/fable; **last-update:** 2026-09-11; lane `D:/atlas/worktrees/apollo-route`; regions `crates/apollo-fft/src/application/execution/kernel/components/base128/instance_major/plan.rs`, `base128/tests.rs`, `docs/adr/0061-l1-base-two-pass.md`.
 - **Evidence:** at eight lanes the sixteen-row block cut `f32` 512 by 12% by removing passes, not instructions ([the single-pass base](#apollo-single-pass-512-base)). At four lanes the two-block route already reads the parent, so only the second block's scratch round trip and the combining sink's table reads remain to remove, against 8 KB of staging at `f64` and a column group spilling at half the register width; `f64` 512 reads 1.03 to 1.07 of RustFFT on the base512 runs, unmeasured either way.
 - **Scope:** lift the eight-lane restriction on the sixteen-row form, select its state at n = 512 for the four-lane plan, measure on the pinned probe (two runs, aligned buffers); keep or reject on the numbers. Non-goals: the kernel, the eight-lane route, 1024.
 - **Acceptance:** kept if `f64` 512 is not above the two-block route on both runs and the direct oracle is green at 512 in both directions at `f64`; rejected with its numbers on ADR 0061 and the restriction retained otherwise.
-- **Dependencies:** [the single-pass base](#apollo-single-pass-512-base) (review). **Verification:** `small_sizes_against_the_references_by_core_type`, `base512_runs_at_eight_lanes_and_matches_the_direct_transform` re-bounded.
+- **Slice 1 (measured, kept):** the restriction lifted; `f64` 512 434 / 441 us against RustFFT's 461 / 452 (0.94 / 0.98, from 1.03 to 1.05), the efficiency core 0.97 from 1.11 (`../../output/apollo-base128/small_sizes_base512four_run*_2026-09-11.txt`); the direct oracle green at 512 in both directions at both scalars. The two-block form of the radix step deleted as superseded (the step serves 1024 only). Acceptance met; ADR 0061 revised.
+- **Dependencies:** [the single-pass base](#apollo-single-pass-512-base) (review). **Verification:** `small_sizes_against_the_references_by_core_type`, `base512_matches_the_direct_transform_in_both_precisions_and_directions`.
 
 <a id="apollo-single-pass-512-base"></a>
 ## APOLLO-SINGLE-PASS-512-BASE — A 512-point base for the eight-lane width without the gather [minor] [perf] — review
