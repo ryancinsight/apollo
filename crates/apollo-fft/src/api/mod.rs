@@ -18,16 +18,16 @@ pub mod shift;
 pub use rfft::{
     fft_1d_array, fft_1d_array_into, fft_1d_array_static_into, fft_1d_leto, fft_1d_slice,
     fft_1d_slice_half, fft_1d_slice_half_into, fft_2d_array, fft_2d_array_into,
-    fft_2d_array_static_into, fft_2d_leto, fft_3d_array, fft_3d_array_into,
+    fft_2d_array_static_into, fft_2d_leto, fft_3d_array, fft_3d_array_half_into, fft_3d_array_into,
     fft_3d_array_static_into, fft_3d_leto,
 };
 
 pub use irfft::{
     ifft_1d_array, ifft_1d_array_into, ifft_1d_array_into_spectrum_scratch,
-    ifft_1d_array_static_into, ifft_1d_leto, ifft_1d_slice, ifft_2d_array, ifft_2d_array_into,
-    ifft_2d_array_into_spectrum_scratch, ifft_2d_array_static_into, ifft_2d_leto, ifft_3d_array,
-    ifft_3d_array_into, ifft_3d_array_into_spectrum_scratch, ifft_3d_array_static_into,
-    ifft_3d_leto,
+    ifft_1d_array_static_into, ifft_1d_leto, ifft_1d_slice, ifft_1d_slice_half_into, ifft_2d_array,
+    ifft_2d_array_into, ifft_2d_array_into_spectrum_scratch, ifft_2d_array_static_into,
+    ifft_2d_leto, ifft_3d_array, ifft_3d_array_half_into, ifft_3d_array_into,
+    ifft_3d_array_into_spectrum_scratch, ifft_3d_array_static_into, ifft_3d_leto,
 };
 
 pub use cfft::{

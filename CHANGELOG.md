@@ -69,6 +69,19 @@ Change-class tags: [patch] backward-compatible fix, [minor] additive non-breakin
 
 ### Added
 
+- [minor] `apollo-fft` transforms a real 3-D field through its half spectrum.
+  `fft_3d_array_half_into` writes the `(nx, ny, nz/2 + 1)` bins a real field's
+  spectrum does not repeat: each z lane goes through the real split (`nz` reals
+  packed as `nz/2` complex samples, a half-length transform, the untangle) and
+  x and y then run on the half volume, so every pass moves half the data the
+  widened complex transform moves. `ifft_3d_array_half_into` inverts it,
+  returning the real part of the full inverse of the half spectrum's Hermitian
+  completion. `RealFftData` carries the pair for callers holding a plan
+  (`forward_3d_half_into`, `inverse_3d_half_into`). The per-lane inverse is
+  new: `ifft_1d_slice_half_into` and `RealFftData::inverse_1d_half_into`
+  retangle the `n/2 + 1` bins and run a half-length inverse, allocating nothing
+  where the split applies; lengths it does not admit widen to complex.
+
 - [minor] `apollo-fft` 3-D plans gain a transform pair that keeps the
   spectrum in `(z, x, y)` order: `FftPlan3D::forward_complex_rotated` returns a
   `RotatedSpectrum` borrowing the caller's storage, and

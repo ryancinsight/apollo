@@ -9,9 +9,7 @@
 
 use crate::application::execution::kernel::mixed_radix::scalar::plan_scratch::PlanScratch;
 use crate::application::execution::kernel::mixed_radix::MixedRadixScalar;
-use crate::application::execution::kernel::real_fft::{
-    mirror_half_spectrum_in_place, untangle_real_half,
-};
+use crate::application::execution::kernel::real_fft::mirror_half_spectrum_in_place;
 use crate::application::execution::plan::fft::dimension_1d::{FftPlan1D, StaticFftPlan1D};
 use crate::application::execution::plan::fft::dimension_2d::{FftPlan2D, StaticFftPlan2D};
 use crate::application::execution::plan::fft::dimension_3d::{FftPlan3D, StaticFftPlan3D};
@@ -20,8 +18,10 @@ use leto::{Array1, Array2, Array3};
 
 mod compact;
 pub(super) mod fill;
+mod half_volume;
 mod precise;
 mod reduced;
+mod split;
 
 use fill::{fill_real, fill_spectrum};
 
@@ -146,16 +146,34 @@ where
         input: &[Self],
         out: &mut [Complex<Self::PlanScalar>],
     ) {
-        let n = input.len();
-        assert!(
-            Self::real_split_applies(n),
-            "real split does not apply to length {n}"
-        );
-        let m = n / 2;
-        assert!(out.len() > m, "real spectrum needs n/2 + 1 slots");
-        Self::pack_real_pairs(input, &mut out[..m]);
-        half_plan.forward_complex_slice_inplace(&mut out[..m]);
-        untangle_real_half(out, n);
+        split::forward(input, out, |packed| {
+            half_plan.forward_complex_slice_inplace(packed);
+        });
+    }
+
+    /// Inverse of [`RealFftData::forward_1d_half_into`]: the `n/2 + 1` bins
+    /// back to `n = out.len()` reals through a transform of length `n / 2`.
+    ///
+    /// `half_plan` must be a complex plan of that length. `input` is consumed
+    /// as scratch, so nothing is allocated. Normalized like
+    /// [`RealFftData::inverse_1d_slice_owned`]; the imaginary parts of the zero
+    /// and Nyquist bins, which a real signal's spectrum does not have, are
+    /// ignored.
+    ///
+    /// # Panics
+    ///
+    /// Panics if [`RealFftData::real_split_applies`] is false for the output
+    /// length, or if `input.len() < out.len() / 2 + 1`.
+    fn inverse_1d_half_into(
+        half_plan: &FftPlan1D<Self::PlanScalar>,
+        input: &mut [Complex<Self::PlanScalar>],
+        out: &mut [Self],
+    ) {
+        let n = out.len();
+        split::inverse_packed::<Self>(input, n, |packed| {
+            half_plan.inverse_complex_slice_inplace(packed);
+        });
+        split::unpack(&input[..n / 2], out);
     }
 
     /// Forward transform of a real array into caller-owned spectrum storage,
@@ -380,6 +398,48 @@ where
     {
         plan.inverse_complex_inplace(spectrum);
         fill_real(spectrum, output);
+    }
+    /// Forward 3D transform of a real field into its `(nx, ny, nz/2 + 1)` half
+    /// spectrum, the bins the full transform does not repeat.
+    ///
+    /// The z lanes go through the real split straight into `output`, and x and
+    /// y then run on the half volume. An `nz` the split does not admit
+    /// ([`RealFftData::real_split_applies`]) widens each lane to complex
+    /// instead, with one lane of workspace per scheduled task. A strided
+    /// `input` is copied once.
+    ///
+    /// # Panics
+    ///
+    /// Panics if `input` is not the plan's shape, or `output` is not a
+    /// C-contiguous `(nx, ny, nz/2 + 1)` array.
+    fn forward_3d_half_into(
+        plan: &FftPlan3D<Self::PlanScalar>,
+        input: &Array3<Self>,
+        output: &mut Array3<Complex<Self::PlanScalar>>,
+    ) where
+        Complex<Self::PlanScalar>: PlanScratch,
+    {
+        half_volume::forward(plan, input, output);
+    }
+    /// Inverse of [`RealFftData::forward_3d_half_into`], consuming `spectrum`
+    /// as scratch and normalized like [`RealFftData::inverse_3d_into`].
+    ///
+    /// The result is the real part of the full inverse of the spectrum's
+    /// Hermitian completion, so the imaginary parts a real field's spectrum
+    /// cannot carry are ignored rather than rejected.
+    ///
+    /// # Panics
+    ///
+    /// Panics if `spectrum` is not a C-contiguous `(nx, ny, nz/2 + 1)` array or
+    /// `output` is not a C-contiguous array of the plan's shape.
+    fn inverse_3d_half_into(
+        plan: &FftPlan3D<Self::PlanScalar>,
+        spectrum: &mut Array3<Complex<Self::PlanScalar>>,
+        output: &mut Array3<Self>,
+    ) where
+        Complex<Self::PlanScalar>: PlanScratch,
+    {
+        half_volume::inverse(plan, spectrum, output);
     }
     /// Forward 3D transform into caller-owned spectrum storage using a
     /// compile-time-known shape and zero-sized static plan.

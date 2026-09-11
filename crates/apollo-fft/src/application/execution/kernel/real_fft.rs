@@ -170,6 +170,101 @@ where
     }
 }
 
+/// Retangles the `N/2 + 1` real-input bins into the packed half-length
+/// spectrum, in place: the inverse of [`untangle_real_half`].
+///
+/// With `M = N/2` and `W = W_N`, the untangle wrote `X[k] = Fe[k] + W^k·Fo[k]`
+/// and `X[M-k] = conj(Fe[k] - W^k·Fo[k])`. Adding and subtracting the conjugate
+/// of the paired bin recovers both halves, since `|W^k| = 1`:
+///
+/// ```text
+/// Fe[k] = (X[k] + conj(X[M-k])) / 2
+/// Fo[k] = (X[k] - conj(X[M-k])) · conj(W^k) / 2
+/// Z[k]  = Fe[k] + i·Fo[k]
+/// ```
+///
+/// and a size-`M` inverse of `Z`, normalized by `1/M`, yields
+/// `z[j] = x[2j] + i·x[2j+1]`. The paired bin needs no second twiddle:
+/// `Fe[M-k] = conj(Fe[k])` and `Fo[M-k] = conj(Fo[k])`, so
+/// `Z[M-k] = conj(Fe[k]) + i·conj(Fo[k])`.
+///
+/// The ends mirror the untangle's: `X[0]` and `X[M]` are taken as real and give
+/// `Z[0] = (X[0] + X[M])/2 + i·(X[0] - X[M])/2`, and when `M` is even the
+/// midpoint is `Z[M/2] = conj(X[M/2])`. Their imaginary parts, which the
+/// spectrum of a real signal does not have, are ignored.
+///
+/// ## Allocation
+///
+/// None: `bins[..=M]` arrives holding `X` and `bins[..M]` leaves holding `Z`.
+/// The twiddle advances by the untangle's block-restarted recurrence, so the
+/// two directions carry the same rounding.
+///
+/// ## Panics
+///
+/// Panics if `bins.len() < n / 2 + 1` or if `n` is odd.
+pub(crate) fn retangle_real_half<T>(bins: &mut [eunomia::Complex<T>], n: usize)
+where
+    T: crate::application::execution::kernel::mixed_radix::MixedRadixScalar<
+        Complex = eunomia::Complex<T>,
+    >,
+{
+    assert!(
+        n % 2 == 0,
+        "real transform requires an even length, got {n}"
+    );
+    let m = n / 2;
+    assert!(
+        bins.len() > m,
+        "real spectrum needs n/2 + 1 slots, got {}",
+        bins.len()
+    );
+    if m == 0 {
+        return;
+    }
+
+    let two = T::from_precise(2.0);
+    let (first, last) = (bins[0].re, bins[m].re);
+    bins[0] = eunomia::Complex::new((first + last) / two, (first - last) / two);
+
+    // The untangle's schedule: seed each eight-bin block directly and advance
+    // in native precision, so the recurrence error is bounded by eight steps.
+    const TWIDDLE_RESTART_INTERVAL: usize = 8;
+    let scale = -core::f64::consts::TAU / n as f64;
+    let (step_sin, step_cos) = scale.sin_cos();
+    let (step_re, step_im) = (T::from_precise(step_cos), T::from_precise(step_sin));
+    let limit = m.div_ceil(2);
+    for block_start in (1..limit).step_by(TWIDDLE_RESTART_INTERVAL) {
+        let block_end = block_start
+            .saturating_add(TWIDDLE_RESTART_INTERVAL)
+            .min(limit);
+        let (seed_sin, seed_cos) = (scale * block_start as f64).sin_cos();
+        let (mut wr, mut wi) = (T::from_precise(seed_cos), T::from_precise(seed_sin));
+
+        for k in block_start..block_end {
+            let a = bins[k];
+            let b = bins[m - k];
+
+            let fe_re = (a.re + b.re) / two;
+            let fe_im = (a.im - b.im) / two;
+            // (a - conj(b)) · conj(w) / 2
+            let d_re = a.re - b.re;
+            let d_im = a.im + b.im;
+            let fo_re = (d_re * wr + d_im * wi) / two;
+            let fo_im = (d_im * wr - d_re * wi) / two;
+
+            bins[k] = eunomia::Complex::new(fe_re - fo_im, fe_im + fo_re);
+            bins[m - k] = eunomia::Complex::new(fe_re + fo_im, fo_re - fe_im);
+
+            (wr, wi) = (wr * step_re - wi * step_im, wr * step_im + wi * step_re);
+        }
+    }
+
+    if m % 2 == 0 && m >= 2 {
+        let mid = bins[m / 2];
+        bins[m / 2] = eunomia::Complex::new(mid.re, -mid.im);
+    }
+}
+
 /// Mirrors the `N/2 + 1` independent bins over the upper half, in place.
 ///
 /// `X[N-k] = conj(X[k])` for a real input signal, so the upper half is a
@@ -192,3 +287,6 @@ where
         full[n - k] = eunomia::Complex::new(v.re, -v.im);
     }
 }
+
+#[cfg(test)]
+mod tests;

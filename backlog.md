@@ -1,5 +1,31 @@
 # Apollo Backlog
 
+<a id="apollo-lane-parallel-threshold"></a>
+
+## APOLLO-LANE-PARALLEL-THRESHOLD-2026-09-11 — Lane passes under 32,768 elements run on one thread whether or not that is faster [patch] [perf] — todo
+
+- **Finding.** `lanes::PARALLEL_THRESHOLD = 32_768` total complex elements decides
+  serial against moirai-parallel for every lane pass, and no measurement is recorded
+  for it (it arrived as the "existing multidimensional crossover", 9db2f6ea). The real
+  half-spectrum pair at 32³ runs its passes on the 32·32·17 = 17,408-element half
+  volume, so they run serially: fastest sample 103 and 122 µs per transform in two
+  probe rounds, against 88 and 98 µs for the complex pair, which sits exactly at the
+  threshold. With the constant at 16,384 the same probe read 66 µs, at 82% host load.
+- **Acceptance.** A quiet or pinned sweep of the threshold over 4,096, 8,192, 16,384
+  and 32,768 against the complex and real pairs at 16³, 24³, 32×32×16, 32³ and 48³
+  sets the constant, its derivation recorded beside it; the real pair at 32³ then reads
+  below the complex pair, and no swept complex size regresses.
+- **Risk / change class:** [patch] [perf]; regions
+  `crates/apollo-fft/src/application/execution/plan/fft/lanes.rs` and the 3-D probe;
+  **dependencies:** [#apollo-native-real-3d](#apollo-native-real-3d).
+
+<a id="apollo-native-real-3d"></a>
+
+## APOLLO-NATIVE-REAL-3D-2026-09-11 — A real 3-D field is transformed as if it were complex [minor] [perf] — done 2026-09-11
+
+- a8cd1c94: `fft_3d_array_half_into`/`ifft_3d_array_half_into` and the per-lane real inverse; oracles in `tests/real_half_api/`. Fastest sample per transform at 64³ 205–210 µs against the complex pair's 271 (two probe rounds, 9–39% host load).
+- At 32³ the pair reads 103–122 µs against 88–98: its half volume runs serially under the lane threshold, filed as [#apollo-lane-parallel-threshold](#apollo-lane-parallel-threshold). The kwavers r2c-against-complex measurement moves to [`KW-NATIVE-R2C`](../kwavers/backlog.md#kw-native-r2c), where the routing it measures lands.
+
 <a id="apollo-rotated-order-handoff"></a>
 
 ## APOLLO-ROTATED-ORDER-HANDOFF-2026-09-10 — The third move of a 3-D transform only restores the caller's layout [minor] [perf] — done 2026-09-10
