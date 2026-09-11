@@ -741,12 +741,20 @@ where
     let mut wide = vec![T::from_precise(0.0); 2 * n];
     let (narrow_handled, wide_handled) = if blocks == 2 {
         (
-            hermes_simd::vectorize_lanes::<4, T, _>(super::split_boundary::GatherBlocks::<T, 2> {
+            hermes_simd::vectorize_lanes::<4, T, _>(super::split_boundary::GatherBlocks::<
+                T,
+                2,
+                256,
+            > {
                 src: &lanes,
                 dst: &mut narrow,
             })
             .unwrap_or(false),
-            hermes_simd::vectorize_lanes::<8, T, _>(super::split_boundary::GatherBlocks::<T, 2> {
+            hermes_simd::vectorize_lanes::<8, T, _>(super::split_boundary::GatherBlocks::<
+                T,
+                2,
+                256,
+            > {
                 src: &lanes,
                 dst: &mut wide,
             })
@@ -754,12 +762,20 @@ where
         )
     } else {
         (
-            hermes_simd::vectorize_lanes::<4, T, _>(super::split_boundary::GatherBlocks::<T, 4> {
+            hermes_simd::vectorize_lanes::<4, T, _>(super::split_boundary::GatherBlocks::<
+                T,
+                4,
+                256,
+            > {
                 src: &lanes,
                 dst: &mut narrow,
             })
             .unwrap_or(false),
-            hermes_simd::vectorize_lanes::<8, T, _>(super::split_boundary::GatherBlocks::<T, 4> {
+            hermes_simd::vectorize_lanes::<8, T, _>(super::split_boundary::GatherBlocks::<
+                T,
+                4,
+                256,
+            > {
                 src: &lanes,
                 dst: &mut wide,
             })

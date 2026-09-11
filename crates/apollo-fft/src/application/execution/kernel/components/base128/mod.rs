@@ -45,26 +45,62 @@ mod pinned_probe;
 pub(crate) const BASE_SPLIT_LENGTHS: [usize; 4] = [128, 256, 512, 1024];
 
 /// Length of the base transform every split bottoms out in.
-const BASE: usize = 128;
-
-fn base_lanes<T>(data: &[eunomia::Complex<T>]) -> &[T; 2 * BASE]
+/// The lanes of one base block of `LANES / 2` samples.
+fn base_lanes<T, const LANES: usize>(data: &[eunomia::Complex<T>]) -> &[T; LANES]
 where
     T: eunomia::layout::Pod,
     eunomia::Complex<T>: eunomia::layout::Pod,
 {
     eunomia::layout::cast_slice(data)
         .try_into()
-        .expect("invariant: one base block is exactly 256 scalar lanes")
+        .expect("invariant: one base block is exactly LANES scalar lanes")
 }
 
-fn base_lanes_mut<T>(data: &mut [eunomia::Complex<T>]) -> &mut [T; 2 * BASE]
+fn base_lanes_mut<T, const LANES: usize>(data: &mut [eunomia::Complex<T>]) -> &mut [T; LANES]
 where
     T: eunomia::layout::Pod,
     eunomia::Complex<T>: eunomia::layout::Pod,
 {
     eunomia::layout::cast_slice_mut(data)
         .try_into()
-        .expect("invariant: one base block is exactly 256 scalar lanes")
+        .expect("invariant: one base block is exactly LANES scalar lanes")
+}
+
+/// The split route over the 128-point base: [`transform_via_base`] at
+/// sixteen-sample rows.
+pub(crate) fn transform_via_base_128<F, const INVERSE: bool, const MEASURE: bool>(
+    data: &mut [F::Complex],
+    plan: &instance_major::Plan128<F>,
+    twiddles: &[F::Complex],
+) -> bool
+where
+    F: crate::application::execution::kernel::mixed_radix::MixedRadixScalar<
+        Complex = eunomia::Complex<F>,
+    >,
+    eunomia::Complex<F>: eunomia::layout::Pod,
+{
+    transform_via_base::<F, INVERSE, MEASURE, 16, 128, 256, { instance_major::table_lanes(8, 16) }>(
+        data, plan, twiddles,
+    )
+}
+
+/// The split route over the 256-point base (ADR 0061): [`transform_via_base`]
+/// at 32-sample rows, so 512 and 1024 are two and four blocks under one
+/// radix step.
+pub(crate) fn transform_via_base_256<F, const INVERSE: bool, const MEASURE: bool>(
+    data: &mut [F::Complex],
+    plan: &instance_major::Plan256<F>,
+    twiddles: &[F::Complex],
+) -> bool
+where
+    F: crate::application::execution::kernel::mixed_radix::MixedRadixScalar<
+        Complex = eunomia::Complex<F>,
+    >,
+    eunomia::Complex<F>: eunomia::layout::Pod,
+{
+    transform_via_base::<F, INVERSE, MEASURE, 32, 256, 512, { instance_major::table_lanes(8, 32) }>(
+        data, plan, twiddles,
+    )
 }
 
 /// Transforms `data` by decimating down to the 128-point base.
@@ -87,9 +123,17 @@ where
 ///
 /// Reports whether the dispatched width ran it, matching
 /// [`instance_major::transform_128`].
-pub(crate) fn transform_via_base_128<F, const INVERSE: bool, const MEASURE: bool>(
+fn transform_via_base<
+    F,
+    const INVERSE: bool,
+    const MEASURE: bool,
+    const ROW_LEN: usize,
+    const BASE: usize,
+    const BLOCK_LANES: usize,
+    const TABLE_LANES: usize,
+>(
     data: &mut [F::Complex],
-    plan: &instance_major::Plan128<F>,
+    plan: &instance_major::BasePlan<F, 8, ROW_LEN, TABLE_LANES>,
     twiddles: &[F::Complex],
 ) -> bool
 where
@@ -99,9 +143,17 @@ where
     eunomia::Complex<F>: eunomia::layout::Pod,
 {
     let n = data.len();
-    debug_assert!(BASE_SPLIT_LENGTHS.contains(&n));
+    debug_assert!(BASE == 8 * ROW_LEN && BLOCK_LANES == 2 * BASE);
+    debug_assert!(n % BASE == 0 && (n / BASE).is_power_of_two() && n / BASE <= 8);
     if n == BASE {
-        return instance_major::transform_128::<F, INVERSE, MEASURE>(data, plan);
+        return instance_major::transform_block::<
+            F,
+            INVERSE,
+            MEASURE,
+            ROW_LEN,
+            BLOCK_LANES,
+            TABLE_LANES,
+        >(data, plan);
     }
     #[cfg(all(test, windows, target_arch = "x86_64"))]
     let t0 = if MEASURE {
@@ -129,6 +181,7 @@ where
                         hermes_simd::vectorize_lanes::<4, F, _>(split_boundary::GatherBlocks::<
                             F,
                             2,
+                            BLOCK_LANES,
                         > {
                             src,
                             dst,
@@ -138,6 +191,7 @@ where
                         hermes_simd::vectorize_lanes::<8, F, _>(split_boundary::GatherBlocks::<
                             F,
                             2,
+                            BLOCK_LANES,
                         > {
                             src,
                             dst,
@@ -147,6 +201,7 @@ where
                         hermes_simd::vectorize_lanes::<4, F, _>(split_boundary::GatherBlocks::<
                             F,
                             4,
+                            BLOCK_LANES,
                         > {
                             src,
                             dst,
@@ -156,6 +211,7 @@ where
                         hermes_simd::vectorize_lanes::<8, F, _>(split_boundary::GatherBlocks::<
                             F,
                             4,
+                            BLOCK_LANES,
                         > {
                             src,
                             dst,
@@ -165,6 +221,7 @@ where
                         hermes_simd::vectorize_lanes::<4, F, _>(split_boundary::GatherBlocks::<
                             F,
                             8,
+                            BLOCK_LANES,
                         > {
                             src,
                             dst,
@@ -174,6 +231,7 @@ where
                         hermes_simd::vectorize_lanes::<8, F, _>(split_boundary::GatherBlocks::<
                             F,
                             8,
+                            BLOCK_LANES,
                         > {
                             src,
                             dst,
@@ -210,26 +268,56 @@ where
             // sink falls back to the two-pass form.
             if blocks == 2 {
                 let (even, odd) = scratch.split_at_mut(BASE);
-                if !instance_major::transform_128::<F, INVERSE, MEASURE>(even, plan) {
+                if !instance_major::transform_block::<
+                    F,
+                    INVERSE,
+                    MEASURE,
+                    ROW_LEN,
+                    BLOCK_LANES,
+                    TABLE_LANES,
+                >(even, plan)
+                {
                     return false;
                 }
                 let combine = &twiddles[BASE - 1..2 * BASE - 1];
                 {
                     let (low, high) = data.split_at_mut(BASE);
-                    if instance_major::transform_128_combining::<F, INVERSE, MEASURE>(
+                    if instance_major::transform_block_combining::<
+                        F,
+                        INVERSE,
+                        MEASURE,
+                        ROW_LEN,
+                        BLOCK_LANES,
+                        TABLE_LANES,
+                    >(
                         odd,
                         plan,
                         instance_major::CombineSink {
-                            peer: base_lanes(even),
-                            tw: base_lanes(combine),
-                            low: base_lanes_mut(low),
-                            high: base_lanes_mut(high),
+                            peer: base_lanes::<F, BLOCK_LANES>(even),
+                            tw: base_lanes::<F, BLOCK_LANES>(combine),
+                            low: base_lanes_mut::<F, BLOCK_LANES>(low),
+                            high: base_lanes_mut::<F, BLOCK_LANES>(high),
                         },
                     ) {
+                        #[cfg(all(test, windows, target_arch = "x86_64"))]
+                        if MEASURE {
+                            let t = instance_major::phase_meter::stamp();
+                            instance_major::phase_meter::add_outer(1, t - t1);
+                            instance_major::phase_meter::OUTER_CALLS
+                                .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+                        }
                         return true;
                     }
                 }
-                if !instance_major::transform_128::<F, INVERSE, MEASURE>(odd, plan) {
+                if !instance_major::transform_block::<
+                    F,
+                    INVERSE,
+                    MEASURE,
+                    ROW_LEN,
+                    BLOCK_LANES,
+                    TABLE_LANES,
+                >(odd, plan)
+                {
                     return false;
                 }
                 combine_final::<F>(data, scratch, twiddles, BASE);
@@ -263,12 +351,16 @@ where
                     .chunks_exact_mut(quarter)
                     .zip(scratch[..n].chunks_exact_mut(quarter))
                 {
-                    if !combine_four_blocks::<F, INVERSE, MEASURE>(
-                        data_group,
-                        scratch_group,
-                        plan,
-                        twiddles,
-                    ) {
+                    if !combine_four_blocks::<
+                        F,
+                        INVERSE,
+                        MEASURE,
+                        ROW_LEN,
+                        BASE,
+                        BLOCK_LANES,
+                        TABLE_LANES,
+                    >(data_group, scratch_group, plan, twiddles)
+                    {
                         combined = false;
                         break;
                     }
@@ -305,8 +397,15 @@ where
             // butterfly and the outer level as its registers leave the base
             // kernel, replacing the intermediates and filling the last two
             // quarters. The detached scalar final pass disappears.
-            let combined =
-                combine_four_blocks::<F, INVERSE, MEASURE>(data, &mut scratch[..n], plan, twiddles);
+            let combined = combine_four_blocks::<
+                F,
+                INVERSE,
+                MEASURE,
+                ROW_LEN,
+                BASE,
+                BLOCK_LANES,
+                TABLE_LANES,
+            >(data, &mut scratch[..n], plan, twiddles);
             #[cfg(all(test, windows, target_arch = "x86_64"))]
             if MEASURE {
                 let t = instance_major::phase_meter::stamp();
@@ -327,10 +426,18 @@ where
 /// rather than an inline block. The twiddle slices are the same either way:
 /// a half of the eight-block split is a 512-point sub-problem whose levels
 /// have half-lengths `BASE` and `2 * BASE`, exactly the four-block case.
-fn combine_four_blocks<F, const INVERSE: bool, const MEASURE: bool>(
+fn combine_four_blocks<
+    F,
+    const INVERSE: bool,
+    const MEASURE: bool,
+    const ROW_LEN: usize,
+    const BASE: usize,
+    const BLOCK_LANES: usize,
+    const TABLE_LANES: usize,
+>(
     data: &mut [F::Complex],
     scratch: &mut [F::Complex],
-    plan: &instance_major::Plan128<F>,
+    plan: &instance_major::BasePlan<F, 8, ROW_LEN, TABLE_LANES>,
     twiddles: &[F::Complex],
 ) -> bool
 where
@@ -349,22 +456,31 @@ where
     // Establish that both ordinary base calls run before the first output
     // mutation. The plan's one selected native width makes the following two
     // sink calls the same capability decision.
-    if !instance_major::transform_128::<F, INVERSE, MEASURE>(b0, plan)
-        || !instance_major::transform_128::<F, INVERSE, MEASURE>(b2, plan)
-    {
+    if !instance_major::transform_block::<F, INVERSE, MEASURE, ROW_LEN, BLOCK_LANES, TABLE_LANES>(
+        b0, plan,
+    ) || !instance_major::transform_block::<F, INVERSE, MEASURE, ROW_LEN, BLOCK_LANES, TABLE_LANES>(
+        b2, plan,
+    ) {
         return false;
     }
     {
         let (even, _) = data.split_at_mut(2 * BASE);
         let (even_low, even_high) = even.split_at_mut(BASE);
-        if !instance_major::transform_128_combining::<F, INVERSE, MEASURE>(
+        if !instance_major::transform_block_combining::<
+            F,
+            INVERSE,
+            MEASURE,
+            ROW_LEN,
+            BLOCK_LANES,
+            TABLE_LANES,
+        >(
             b1,
             plan,
             instance_major::CombineSink {
-                peer: base_lanes(b0),
-                tw: base_lanes(inner),
-                low: base_lanes_mut(even_low),
-                high: base_lanes_mut(even_high),
+                peer: base_lanes::<F, BLOCK_LANES>(b0),
+                tw: base_lanes::<F, BLOCK_LANES>(inner),
+                low: base_lanes_mut::<F, BLOCK_LANES>(even_low),
+                high: base_lanes_mut::<F, BLOCK_LANES>(even_high),
             },
         ) {
             return false;
@@ -373,18 +489,25 @@ where
     let (low, high) = data.split_at_mut(2 * BASE);
     let (even_low, even_high) = low.split_at_mut(BASE);
     let (high_low, high_high) = high.split_at_mut(BASE);
-    instance_major::transform_128_combining_final::<F, INVERSE, MEASURE>(
+    instance_major::transform_block_combining_final::<
+        F,
+        INVERSE,
+        MEASURE,
+        ROW_LEN,
+        BLOCK_LANES,
+        TABLE_LANES,
+    >(
         b3,
         plan,
         instance_major::FinalCombineSink {
-            peer: base_lanes(b2),
-            inner_tw: base_lanes(inner),
-            even_low: base_lanes_mut(even_low),
-            even_high: base_lanes_mut(even_high),
-            outer_low_tw: base_lanes(outer_low),
-            outer_high_tw: base_lanes(outer_high),
-            high_low: base_lanes_mut(high_low),
-            high_high: base_lanes_mut(high_high),
+            peer: base_lanes::<F, BLOCK_LANES>(b2),
+            inner_tw: base_lanes::<F, BLOCK_LANES>(inner),
+            even_low: base_lanes_mut::<F, BLOCK_LANES>(even_low),
+            even_high: base_lanes_mut::<F, BLOCK_LANES>(even_high),
+            outer_low_tw: base_lanes::<F, BLOCK_LANES>(outer_low),
+            outer_high_tw: base_lanes::<F, BLOCK_LANES>(outer_high),
+            high_low: base_lanes_mut::<F, BLOCK_LANES>(high_low),
+            high_high: base_lanes_mut::<F, BLOCK_LANES>(high_high),
         },
     )
 }

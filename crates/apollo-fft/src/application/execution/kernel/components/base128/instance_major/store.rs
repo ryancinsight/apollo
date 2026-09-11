@@ -10,15 +10,15 @@ use hermes_simd::{ComplexReg, LaneScalar, Simd, SimdArch, SimdKernel};
 /// and `peer[j] - W^j reg` into `high[j]`. The separate combine pass — and
 /// the store of this block's spectrum that it would have reloaded — cease
 /// to exist (gap_audit.md#combine-sink).
-pub(crate) struct CombineSink<'a, T> {
+pub(crate) struct CombineSink<'a, T, const LANES: usize> {
     /// The even block's transformed spectrum, one chunk per output index.
-    pub(crate) peer: &'a [T; 256],
+    pub(crate) peer: &'a [T; LANES],
     /// Interleaved `W^j` twiddles from the split's cached table.
-    pub(crate) tw: &'a [T; 256],
+    pub(crate) tw: &'a [T; LANES],
     /// The parent transform's low output half.
-    pub(crate) low: &'a mut [T; 256],
+    pub(crate) low: &'a mut [T; LANES],
     /// The parent transform's high output half.
-    pub(crate) high: &'a mut [T; 256],
+    pub(crate) high: &'a mut [T; LANES],
 }
 
 /// The four-block split's final butterfly, applied by block three as it stores.
@@ -28,23 +28,23 @@ pub(crate) struct CombineSink<'a, T> {
 /// combines with its corresponding even value through the two halves of the
 /// outer twiddle table. The first two output quarters replace the even
 /// intermediates in place; the last two land in `high_low` and `high_high`.
-pub(crate) struct FinalCombineSink<'a, T> {
+pub(crate) struct FinalCombineSink<'a, T, const LANES: usize> {
     /// The transformed spectrum of block two.
-    pub(crate) peer: &'a [T; 256],
+    pub(crate) peer: &'a [T; LANES],
     /// Interleaved inner twiddles for the block-two/block-three pair.
-    pub(crate) inner_tw: &'a [T; 256],
+    pub(crate) inner_tw: &'a [T; LANES],
     /// Block one's low pair result, replaced by output quarter zero.
-    pub(crate) even_low: &'a mut [T; 256],
+    pub(crate) even_low: &'a mut [T; LANES],
     /// Block one's high pair result, replaced by output quarter one.
-    pub(crate) even_high: &'a mut [T; 256],
+    pub(crate) even_high: &'a mut [T; LANES],
     /// Outer twiddles for output quarters zero and two.
-    pub(crate) outer_low_tw: &'a [T; 256],
+    pub(crate) outer_low_tw: &'a [T; LANES],
     /// Outer twiddles for output quarters one and three.
-    pub(crate) outer_high_tw: &'a [T; 256],
+    pub(crate) outer_high_tw: &'a [T; LANES],
     /// Output quarter two.
-    pub(crate) high_low: &'a mut [T; 256],
+    pub(crate) high_low: &'a mut [T; LANES],
     /// Output quarter three.
-    pub(crate) high_high: &'a mut [T; 256],
+    pub(crate) high_high: &'a mut [T; LANES],
 }
 
 pub(super) trait StoreSink<T: LaneScalar> {
@@ -73,7 +73,7 @@ impl<T: LaneScalar> StoreSink<T> for DirectSink {
     }
 }
 
-impl<T: LaneScalar> StoreSink<T> for CombineSink<'_, T> {
+impl<T: LaneScalar, const LANES: usize> StoreSink<T> for CombineSink<'_, T, LANES> {
     const DIRECT: bool = false;
 
     #[expect(
@@ -104,7 +104,7 @@ impl<T: LaneScalar> StoreSink<T> for CombineSink<'_, T> {
     }
 }
 
-impl<T: LaneScalar> StoreSink<T> for FinalCombineSink<'_, T> {
+impl<T: LaneScalar, const LANES: usize> StoreSink<T> for FinalCombineSink<'_, T, LANES> {
     const DIRECT: bool = false;
 
     #[expect(

@@ -40,7 +40,8 @@ mod plan;
 mod store;
 mod wide;
 
-use plan::{BaseLaneWidth, BasePlan, BasePlanState};
+use plan::BaseLaneWidth;
+pub(crate) use plan::{BasePlan, BasePlanState};
 pub(crate) use store::{CombineSink, FinalCombineSink};
 use store::{DirectSink, StoreSink};
 
@@ -562,16 +563,23 @@ where
 /// # Panics
 ///
 /// If `data.len() * 2` is not the base lane count.
-pub(crate) fn transform_128_combining<T, const INVERSE: bool, const MEASURE: bool>(
+pub(crate) fn transform_block_combining<
+    T,
+    const INVERSE: bool,
+    const MEASURE: bool,
+    const ROW_LEN: usize,
+    const LANES: usize,
+    const TABLE_LANES: usize,
+>(
     data: &mut [Complex<T>],
-    plan: &Plan128<T>,
-    sink: CombineSink<'_, T>,
+    plan: &BasePlan<T, 8, ROW_LEN, TABLE_LANES>,
+    sink: CombineSink<'_, T, LANES>,
 ) -> bool
 where
     T: MixedRadixScalar,
     Complex<T>: eunomia::layout::Pod,
 {
-    transform_base::<T, INVERSE, MEASURE, 8, 16, 256, { table_lanes(8, 16) }, _>(data, plan, sink)
+    transform_base::<T, INVERSE, MEASURE, 8, ROW_LEN, LANES, TABLE_LANES, _>(data, plan, sink)
 }
 
 /// Runs block three of a four-block split and stores the final four quarters.
@@ -579,16 +587,43 @@ where
 /// # Panics
 ///
 /// If `data.len() * 2` is not the base lane count.
-pub(crate) fn transform_128_combining_final<T, const INVERSE: bool, const MEASURE: bool>(
+pub(crate) fn transform_block_combining_final<
+    T,
+    const INVERSE: bool,
+    const MEASURE: bool,
+    const ROW_LEN: usize,
+    const LANES: usize,
+    const TABLE_LANES: usize,
+>(
     data: &mut [Complex<T>],
-    plan: &Plan128<T>,
-    sink: FinalCombineSink<'_, T>,
+    plan: &BasePlan<T, 8, ROW_LEN, TABLE_LANES>,
+    sink: FinalCombineSink<'_, T, LANES>,
 ) -> bool
 where
     T: MixedRadixScalar,
     Complex<T>: eunomia::layout::Pod,
 {
-    transform_base::<T, INVERSE, MEASURE, 8, 16, 256, { table_lanes(8, 16) }, _>(data, plan, sink)
+    transform_base::<T, INVERSE, MEASURE, 8, ROW_LEN, LANES, TABLE_LANES, _>(data, plan, sink)
+}
+
+/// Runs one eight-row base block of `ROW_LEN` samples per row in place:
+/// the 128-point form at sixteen, the 256-point form at thirty-two.
+pub(crate) fn transform_block<
+    T,
+    const INVERSE: bool,
+    const MEASURE: bool,
+    const ROW_LEN: usize,
+    const LANES: usize,
+    const TABLE_LANES: usize,
+>(
+    data: &mut [Complex<T>],
+    plan: &BasePlan<T, 8, ROW_LEN, TABLE_LANES>,
+) -> bool
+where
+    T: MixedRadixScalar,
+    Complex<T>: eunomia::layout::Pod,
+{
+    transform_base::<T, INVERSE, MEASURE, 8, ROW_LEN, LANES, TABLE_LANES, _>(data, plan, DirectSink)
 }
 
 /// The 128-point base plan: eight rows of sixteen.
@@ -602,6 +637,7 @@ pub(crate) type State128<T> = BasePlanState<T, 8, 16, { table_lanes(8, 16) }>;
 /// Directional state for the 64-point base.
 pub(crate) type State64<T> = BasePlanState<T, 4, 16, { table_lanes(4, 16) }>;
 
+#[cfg(test)]
 /// Runs the 128-point base butterfly when a supported native layout is
 /// available.
 ///
@@ -621,6 +657,7 @@ where
     )
 }
 
+#[cfg(test)]
 /// Runs the 256-point base butterfly: eight stride-8 subsequences of
 /// thirty-two, the row phases over `4 x 8` and the eight-point column pass
 /// (ADR 0061, the two-pass base under one radix step).
