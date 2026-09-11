@@ -7,8 +7,10 @@
 //! kernel is the same construction over four rows of four: four lane-wise
 //! DFT-4s, three twiddle vectors (the `W_16` powers are the even `W_32`
 //! powers), one 4×4 transpose, and four lane-wise DFT-4s. Both stay register
-//! resident and store natural order. Unsupported native widths decline
-//! before either kernel observes the mutable operand.
+//! resident and store natural order. The probing entries decline on an
+//! unsupported native width before the kernel observes the mutable operand;
+//! the framed entries run the kernel on the eight-lane backend inside a
+//! frame the caller has already established.
 
 use super::power::TWIDDLE32_FWD;
 use crate::application::execution::kernel::components::register_butterfly::{
@@ -16,10 +18,6 @@ use crate::application::execution::kernel::components::register_butterfly::{
 };
 use eunomia::{Complex, Complex32};
 use hermes_simd::{ComplexReg, LaneKernel, Simd, SimdArch, SimdKernel, Vector};
-
-struct Dft16<'data, const INVERSE: bool> {
-    data: &'data mut [Complex32; 16],
-}
 
 struct Dft32<'data, const INVERSE: bool> {
     data: &'data mut [Complex32; 32],
@@ -176,18 +174,6 @@ where
     store(output[3], &mut data[12..16]);
 }
 
-impl<const INVERSE: bool> LaneKernel<f32> for Dft16<'_, INVERSE> {
-    type Output = ();
-    #[expect(
-        clippy::inline_always,
-        reason = "the codelet must remain in the selected target-feature frame"
-    )]
-    #[inline(always)]
-    fn call<A: SimdArch + SimdKernel<f32>>(self, simd: Simd<f32, A>) {
-        dft16_kernel::<A, INVERSE>(simd, self.data);
-    }
-}
-
 impl<const INVERSE: bool> LaneKernel<f32> for Dft32<'_, INVERSE> {
     type Output = ();
 
@@ -216,9 +202,34 @@ impl<const ROWS: usize, const INVERSE: bool> LaneKernel<f32> for Dft32Rows<'_, R
     }
 }
 
-/// Runs the DFT-16 codelet only when a native eight-lane backend exists.
-pub(crate) fn try_dft16_hardware<const INVERSE: bool>(data: &mut [Complex32; 16]) -> bool {
-    hermes_simd::vectorize_hardware_lanes::<8, f32, _>(Dft16::<INVERSE> { data }).is_some()
+/// Runs the DFT-16 codelet on the eight-lane backend inside the caller's frame.
+///
+/// # Safety
+///
+/// The caller has established AVX2 and FMA on this host.
+#[cfg(target_arch = "x86_64")]
+#[target_feature(enable = "avx2,fma")]
+#[inline]
+pub(crate) unsafe fn dft16_framed<const INVERSE: bool>(data: &mut [Complex32; 16]) {
+    // SAFETY: the caller's frame establishes AVX2 and FMA, which is every
+    // feature `Avx2` requires (`Avx2::is_runtime_supported` probes exactly
+    // those two).
+    let simd = unsafe { Simd::<f32, hermes_simd::Avx2>::assume_supported() };
+    dft16_kernel::<hermes_simd::Avx2, INVERSE>(simd, data);
+}
+
+/// Runs the DFT-32 codelet on the eight-lane backend inside the caller's frame.
+///
+/// # Safety
+///
+/// The caller has established AVX2 and FMA on this host.
+#[cfg(target_arch = "x86_64")]
+#[target_feature(enable = "avx2,fma")]
+#[inline]
+pub(crate) unsafe fn dft32_framed<const INVERSE: bool>(data: &mut [Complex32; 32]) {
+    // SAFETY: as for `dft16_framed`.
+    let simd = unsafe { Simd::<f32, hermes_simd::Avx2>::assume_supported() };
+    dft32_kernel::<hermes_simd::Avx2, INVERSE>(simd, data);
 }
 
 /// Runs the DFT-32 codelet only when a native eight-lane backend exists.
