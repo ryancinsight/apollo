@@ -1,41 +1,14 @@
 //! Register-pressure-aware length-32 precise codelet.
 
-#[cfg(target_arch = "x86_64")]
 use core::mem::MaybeUninit;
 
 use eunomia::Complex64;
 
-#[cfg(target_arch = "x86_64")]
 use super::super::simd::avx::{
-    avx_cmul_precise, avx_fft4_parallel_precise, avx_fft8_parallel_precise, avx_fma_available,
+    avx_cmul_precise, avx_fft4_parallel_precise, avx_fft8_parallel_precise,
 };
-#[cfg(target_arch = "x86_64")]
 use super::super::twiddle_constants::{TWIDDLES_COMBINE_FWD_32, TWIDDLES_COMBINE_INV_32};
 
-/// Runs the AVX/FMA codelet over exactly 32 complex values when supported.
-///
-/// The array borrow establishes the complete span required by the vector loads
-/// and stores. An unsupported host leaves the array unchanged.
-pub(super) fn try_inplace<const INVERSE: bool, const NORMALIZE: bool>(
-    data: &mut [Complex64; 32],
-) -> bool {
-    #[cfg(target_arch = "x86_64")]
-    {
-        if avx_fma_available() {
-            // SAFETY: the probe establishes AVX and FMA support; the exclusive
-            // array borrow establishes 32 initialized, writable complex values.
-            unsafe { vector_arm::<INVERSE, NORMALIZE>(data) };
-            return true;
-        }
-    }
-
-    #[cfg(not(target_arch = "x86_64"))]
-    let _ = data;
-
-    false
-}
-
-#[cfg(target_arch = "x86_64")]
 #[target_feature(enable = "avx,fma")]
 #[inline]
 unsafe fn stage_group<const GROUP: usize, const INVERSE: bool>(
@@ -73,7 +46,6 @@ unsafe fn stage_group<const GROUP: usize, const INVERSE: bool>(
     [c0, c1, c2, c3]
 }
 
-#[cfg(target_arch = "x86_64")]
 #[target_feature(enable = "avx,fma")]
 #[inline]
 unsafe fn transpose_pair(
@@ -86,7 +58,6 @@ unsafe fn transpose_pair(
     ]
 }
 
-#[cfg(target_arch = "x86_64")]
 #[target_feature(enable = "avx,fma")]
 #[inline]
 unsafe fn store_stage_group<const GROUP: usize>(
@@ -100,7 +71,6 @@ unsafe fn store_stage_group<const GROUP: usize>(
     }
 }
 
-#[cfg(target_arch = "x86_64")]
 #[target_feature(enable = "avx,fma")]
 #[inline]
 unsafe fn load_stage_half<const GROUP: usize, const HALF: usize>(
@@ -116,7 +86,6 @@ unsafe fn load_stage_half<const GROUP: usize, const HALF: usize>(
     }
 }
 
-#[cfg(target_arch = "x86_64")]
 #[target_feature(enable = "avx,fma")]
 #[inline]
 unsafe fn store_output_half<const INVERSE: bool, const NORMALIZE: bool, const OFFSET: usize>(
@@ -137,10 +106,19 @@ unsafe fn store_output_half<const INVERSE: bool, const NORMALIZE: bool, const OF
     }
 }
 
-#[cfg(target_arch = "x86_64")]
+/// The AVX/FMA length-32 codelet.
+///
+/// The exclusive array borrow establishes the complete span the vector loads
+/// and stores read.
+///
+/// # Safety
+///
+/// Requires AVX and FMA.
 #[target_feature(enable = "avx,fma")]
 #[inline]
-unsafe fn vector_arm<const INVERSE: bool, const NORMALIZE: bool>(data: &mut [Complex64; 32]) {
+pub(super) unsafe fn vector_arm<const INVERSE: bool, const NORMALIZE: bool>(
+    data: &mut [Complex64; 32],
+) {
     let ptr = data.as_mut_ptr().cast::<f64>();
     let tw_table = if INVERSE {
         &TWIDDLES_COMBINE_INV_32
@@ -225,11 +203,9 @@ mod tests {
     fn assert_matches_reference<const INVERSE: bool, const NORMALIZE: bool>(
         input: &[Complex64; 32],
     ) {
-        #[cfg(target_arch = "x86_64")]
-        let supported =
-            std::is_x86_feature_detected!("avx") && std::is_x86_feature_detected!("fma");
-        #[cfg(not(target_arch = "x86_64"))]
-        let supported = false;
+        if !super::super::super::simd::avx::vector_frame_available() {
+            return;
+        }
 
         let mut expected = *input;
         crate::application::execution::kernel::components::winograd::dft32_impl::<f64, INVERSE>(
@@ -274,20 +250,17 @@ mod tests {
             let got: &mut [Complex64; 32] = values.try_into().expect("exact codelet span");
             got.copy_from_slice(input);
 
-            let executed = super::try_inplace::<INVERSE, NORMALIZE>(got);
-            assert_eq!(executed, supported, "dispatch must match host capabilities");
-            if executed {
-                for (index, (actual, reference)) in got.iter().zip(&expected).enumerate() {
-                    let error = (*actual - *reference).norm();
-                    // Elementwise comparison also rejects NaN; a max reduction
-                    // can discard it and report a finite error for bad output.
-                    assert!(
-                        error <= bound,
-                        "n=32 codelet index={index} error={error:e} bound={bound:e}"
-                    );
-                }
-            } else {
-                assert_eq!(got, input, "unsupported host must preserve the input");
+            // SAFETY: the frame was probed above, and `got` is the exact
+            // thirty-two-sample span the arm reads.
+            unsafe { super::vector_arm::<INVERSE, NORMALIZE>(got) };
+            for (index, (actual, reference)) in got.iter().zip(&expected).enumerate() {
+                let error = (*actual - *reference).norm();
+                // Elementwise comparison also rejects NaN; a max reduction
+                // can discard it and report a finite error for bad output.
+                assert!(
+                    error <= bound,
+                    "n=32 codelet index={index} error={error:e} bound={bound:e}"
+                );
             }
             assert_eq!(prefix, &[sentinel; 2][..offset]);
             assert_eq!(suffix, &[sentinel; 3][..4 - offset]);

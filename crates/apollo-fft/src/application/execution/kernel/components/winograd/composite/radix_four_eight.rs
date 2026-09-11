@@ -7,8 +7,10 @@
 //! kernel is the same construction over four rows of four: four lane-wise
 //! DFT-4s, three twiddle vectors (the `W_16` powers are the even `W_32`
 //! powers), one 4×4 transpose, and four lane-wise DFT-4s. Both stay register
-//! resident and store natural order. Unsupported native widths decline
-//! before either kernel observes the mutable operand.
+//! resident and store natural order. The probing entries decline on an
+//! unsupported native width before the kernel observes the mutable operand;
+//! the framed entries run the kernel on the eight-lane backend inside a
+//! frame the caller has already established.
 
 use super::power::TWIDDLE32_FWD;
 use crate::application::execution::kernel::components::register_butterfly::{
@@ -16,10 +18,6 @@ use crate::application::execution::kernel::components::register_butterfly::{
 };
 use eunomia::{Complex, Complex32};
 use hermes_simd::{ComplexReg, LaneKernel, Simd, SimdArch, SimdKernel, Vector};
-
-struct Dft16<'data, const INVERSE: bool> {
-    data: &'data mut [Complex32; 16],
-}
 
 struct Dft32<'data, const INVERSE: bool> {
     data: &'data mut [Complex32; 32],
@@ -42,21 +40,64 @@ where
     ComplexReg::from_interleaved(Vector::from_view_chunk(&view, 0))
 }
 
-#[expect(
-    clippy::inline_always,
-    reason = "constant twiddles must fold into the selected target-feature frame"
-)]
-#[inline(always)]
-fn twiddle<const INVERSE: bool, const INDEX: usize>() -> Complex32 {
+const fn twiddle<const INVERSE: bool, const INDEX: usize>() -> Complex32 {
     let value = TWIDDLE32_FWD[INDEX & 15];
     let sign = if INDEX >= 16 { -1.0 } else { 1.0 };
     let imaginary_sign = if INVERSE { -sign } else { sign };
     Complex::new((sign * value.re) as f32, (imaginary_sign * value.im) as f32)
 }
 
+/// One register of twiddles as its eight interleaved lanes, in the direct
+/// form and with each sample's real and imaginary lanes exchanged.
+///
+/// The swapped row is the complex multiply's second operand
+/// ([`ComplexReg::mul_with_swapped`]); holding it beside the direct row
+/// spends one load where a swap per use spent a shuffle on the twiddle
+/// every transform. Lanes rather than samples so the load needs no slice
+/// cast: `cast_slice` checks the pointer's alignment at run time once the
+/// pointer is opaque, a compare, a branch and a trap per row.
+struct TwiddleRow {
+    direct: [f32; 8],
+    swapped: [f32; 8],
+}
+
+const fn twiddle_row<
+    const INVERSE: bool,
+    const I0: usize,
+    const I1: usize,
+    const I2: usize,
+    const I3: usize,
+>() -> TwiddleRow {
+    let samples = [
+        twiddle::<INVERSE, I0>(),
+        twiddle::<INVERSE, I1>(),
+        twiddle::<INVERSE, I2>(),
+        twiddle::<INVERSE, I3>(),
+    ];
+    let mut direct = [0.0; 8];
+    let mut swapped = [0.0; 8];
+    let mut sample = 0;
+    while sample < 4 {
+        direct[2 * sample] = samples[sample].re;
+        direct[2 * sample + 1] = samples[sample].im;
+        swapped[2 * sample] = samples[sample].im;
+        swapped[2 * sample + 1] = samples[sample].re;
+        sample += 1;
+    }
+    TwiddleRow { direct, swapped }
+}
+
+/// The direct and swapped twiddle registers for one row, loaded from a
+/// promoted constant through `black_box`.
+///
+/// Left visible to the optimizer, the row folds its negated half into the
+/// complex multiply's second constant and breaks the `fmaddsub` pattern into
+/// a sign flip, a blend and a plain `fmadd` — six instructions for four.
+/// RustFFT keeps its twiddles in registers loaded from its plan; the opaque
+/// reference gives this kernel the same one load a row.
 #[expect(
     clippy::inline_always,
-    reason = "constant twiddle loads must fold into the selected target-feature frame"
+    reason = "the twiddle loads must stay in the selected target-feature frame"
 )]
 #[inline(always)]
 fn twiddles<
@@ -68,19 +109,30 @@ fn twiddles<
     const I3: usize,
 >(
     simd: Simd<f32, A>,
-) -> ComplexReg<f32, A>
+) -> (ComplexReg<f32, A>, ComplexReg<f32, A>)
 where
     A: SimdArch + SimdKernel<f32>,
 {
-    load::<A>(
-        simd,
-        &[
-            twiddle::<INVERSE, I0>(),
-            twiddle::<INVERSE, I1>(),
-            twiddle::<INVERSE, I2>(),
-            twiddle::<INVERSE, I3>(),
-        ],
+    let row: &'static TwiddleRow =
+        core::hint::black_box(&const { twiddle_row::<INVERSE, I0, I1, I2, I3>() });
+    (
+        load_lanes::<A>(simd, &row.direct),
+        load_lanes::<A>(simd, &row.swapped),
     )
+}
+
+/// Loads eight interleaved lanes as one complex register.
+#[expect(
+    clippy::inline_always,
+    reason = "the load must stay in the selected target-feature frame"
+)]
+#[inline(always)]
+fn load_lanes<A>(simd: Simd<f32, A>, lanes: &[f32; 8]) -> ComplexReg<f32, A>
+where
+    A: SimdArch + SimdKernel<f32>,
+{
+    let view = simd.view(lanes);
+    ComplexReg::from_interleaved(Vector::from_view_chunk(&view, 0))
 }
 
 #[expect(
@@ -119,12 +171,18 @@ where
         load::<A>(simd, &data[20..24]),
         load::<A>(simd, &data[28..32]),
     ]);
-    first[1] = first[1] * twiddles::<A, INVERSE, 0, 1, 2, 3>(simd);
-    second[1] = second[1] * twiddles::<A, INVERSE, 4, 5, 6, 7>(simd);
-    first[2] = first[2] * twiddles::<A, INVERSE, 0, 2, 4, 6>(simd);
-    second[2] = second[2] * twiddles::<A, INVERSE, 8, 10, 12, 14>(simd);
-    first[3] = first[3] * twiddles::<A, INVERSE, 0, 3, 6, 9>(simd);
-    second[3] = second[3] * twiddles::<A, INVERSE, 12, 15, 18, 21>(simd);
+    let (direct, swapped) = twiddles::<A, INVERSE, 0, 1, 2, 3>(simd);
+    first[1] = first[1].mul_with_swapped(direct, swapped);
+    let (direct, swapped) = twiddles::<A, INVERSE, 4, 5, 6, 7>(simd);
+    second[1] = second[1].mul_with_swapped(direct, swapped);
+    let (direct, swapped) = twiddles::<A, INVERSE, 0, 2, 4, 6>(simd);
+    first[2] = first[2].mul_with_swapped(direct, swapped);
+    let (direct, swapped) = twiddles::<A, INVERSE, 8, 10, 12, 14>(simd);
+    second[2] = second[2].mul_with_swapped(direct, swapped);
+    let (direct, swapped) = twiddles::<A, INVERSE, 0, 3, 6, 9>(simd);
+    first[3] = first[3].mul_with_swapped(direct, swapped);
+    let (direct, swapped) = twiddles::<A, INVERSE, 12, 15, 18, 21>(simd);
+    second[3] = second[3].mul_with_swapped(direct, swapped);
     ComplexReg::transpose_square(&mut first);
     ComplexReg::transpose_square(&mut second);
     let output = radix8::<f32, A, INVERSE, _>(
@@ -165,27 +223,18 @@ where
         load::<A>(simd, &data[8..12]),
         load::<A>(simd, &data[12..16]),
     ]);
-    rows[1] = rows[1] * twiddles::<A, INVERSE, 0, 2, 4, 6>(simd);
-    rows[2] = rows[2] * twiddles::<A, INVERSE, 0, 4, 8, 12>(simd);
-    rows[3] = rows[3] * twiddles::<A, INVERSE, 0, 6, 12, 18>(simd);
+    let (direct, swapped) = twiddles::<A, INVERSE, 0, 2, 4, 6>(simd);
+    rows[1] = rows[1].mul_with_swapped(direct, swapped);
+    let (direct, swapped) = twiddles::<A, INVERSE, 0, 4, 8, 12>(simd);
+    rows[2] = rows[2].mul_with_swapped(direct, swapped);
+    let (direct, swapped) = twiddles::<A, INVERSE, 0, 6, 12, 18>(simd);
+    rows[3] = rows[3].mul_with_swapped(direct, swapped);
     ComplexReg::transpose_square(&mut rows);
     let output = radix4::<f32, A, INVERSE>(rows);
     store(output[0], &mut data[0..4]);
     store(output[1], &mut data[4..8]);
     store(output[2], &mut data[8..12]);
     store(output[3], &mut data[12..16]);
-}
-
-impl<const INVERSE: bool> LaneKernel<f32> for Dft16<'_, INVERSE> {
-    type Output = ();
-    #[expect(
-        clippy::inline_always,
-        reason = "the codelet must remain in the selected target-feature frame"
-    )]
-    #[inline(always)]
-    fn call<A: SimdArch + SimdKernel<f32>>(self, simd: Simd<f32, A>) {
-        dft16_kernel::<A, INVERSE>(simd, self.data);
-    }
 }
 
 impl<const INVERSE: bool> LaneKernel<f32> for Dft32<'_, INVERSE> {
@@ -216,9 +265,34 @@ impl<const ROWS: usize, const INVERSE: bool> LaneKernel<f32> for Dft32Rows<'_, R
     }
 }
 
-/// Runs the DFT-16 codelet only when a native eight-lane backend exists.
-pub(crate) fn try_dft16_hardware<const INVERSE: bool>(data: &mut [Complex32; 16]) -> bool {
-    hermes_simd::vectorize_hardware_lanes::<8, f32, _>(Dft16::<INVERSE> { data }).is_some()
+/// Runs the DFT-16 codelet on the eight-lane backend inside the caller's frame.
+///
+/// # Safety
+///
+/// The caller has established AVX2 and FMA on this host.
+#[cfg(target_arch = "x86_64")]
+#[target_feature(enable = "avx2,fma")]
+#[inline]
+pub(crate) unsafe fn dft16_framed<const INVERSE: bool>(data: &mut [Complex32; 16]) {
+    // SAFETY: the caller's frame establishes AVX2 and FMA, which is every
+    // feature `Avx2` requires (`Avx2::is_runtime_supported` probes exactly
+    // those two).
+    let simd = unsafe { Simd::<f32, hermes_simd::Avx2>::assume_supported() };
+    dft16_kernel::<hermes_simd::Avx2, INVERSE>(simd, data);
+}
+
+/// Runs the DFT-32 codelet on the eight-lane backend inside the caller's frame.
+///
+/// # Safety
+///
+/// The caller has established AVX2 and FMA on this host.
+#[cfg(target_arch = "x86_64")]
+#[target_feature(enable = "avx2,fma")]
+#[inline]
+pub(crate) unsafe fn dft32_framed<const INVERSE: bool>(data: &mut [Complex32; 32]) {
+    // SAFETY: as for `dft16_framed`.
+    let simd = unsafe { Simd::<f32, hermes_simd::Avx2>::assume_supported() };
+    dft32_kernel::<hermes_simd::Avx2, INVERSE>(simd, data);
 }
 
 /// Runs the DFT-32 codelet only when a native eight-lane backend exists.

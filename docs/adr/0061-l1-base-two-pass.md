@@ -529,3 +529,89 @@ base); the two-block form of the step is deleted, and the step serves
   4096; a base route there needs an L2-aware shape (a 1024-point base
   under a radix-4 step, or blocks that finish inside L1 before the step),
   filed as the reading left.
+
+- **2026-09-11, the per-call fixed cost of the lengths under 64
+  (`APOLLO-SMALL-LENGTH-FIXED-COST`).** Attribution by asm census of
+  the release test binary
+  (`output/apollo-base128/base256_2026-09-11.md`): the `f32` eight-point
+  call path was an executor of two instructions tail-jumping into the
+  trait hop, which probed the host per call and called the register arm
+  (63 instructions) — three frames for a 3 ns transform, against
+  RustFFT's virtual call into one frame (5 + 43); the `f32` 32 executor
+  carried two feature-detect calls and hermes' lane dispatch in front
+  of the codelet. Two slices. The reduced eight-point arm in 256-bit
+  registers (two registers, one fused multiply-add against `W_8`, the
+  pair layout running both four-point transforms at once): `f32` 8 on
+  the performance core 1.21 from 1.52, the efficiency core 1.15 to 1.21
+  from 1.11 — the cross-lane permutes cost there. Then the vector frame
+  entered once: the plan selects a framed executor set at construction
+  when the host has AVX2 and FMA (hermes' `Avx2` contract), each
+  executor carrying the frame so the sized entry and its register arm
+  inline into it, and the `f32` 16 and 32 executors holding the hermes
+  eight-lane codelets through the backend token. After: the `f32`
+  eight-point executor is one frame of 29 instructions with no calls
+  (RustFFT: a 5-instruction entry and a 27-instruction body), the 16
+  and 32 executors 71 and 164 against RustFFT's 52 and 119 bodies.
+  Pinned probe, three runs
+  (`output/apollo-base128/small_sizes_frame_run{1,2,3}_2026-09-11.txt`):
+  `f32` 8 1.07 / 1.07 / 1.07 on the performance core and 0.93 / 0.93 /
+  0.94 on the efficiency core; no length under 128 slower, `f64` 8
+  inside its eleven-run band. Kept. The remaining small-length gaps are
+  the kernels, not the chain — `f32` 16 on the efficiency core 1.27 and
+  `f32` 32 on the performance core 1.15 to 1.23 with the frame in
+  place, the hermes primitives spending a rotation as four
+  instructions (swap, add and subtract against zero, blend) against
+  RustFFT's two (sign mask, swap) and a twiddle multiply as six against
+  four (a sign flip and blend where RustFFT's `fmaddsub` folds the
+  signs) — filed as `APOLLO-F32-16-32-KERNEL-GAP`.
+
+- **2026-09-11, the rotation and the twiddle rows
+  (`APOLLO-F32-16-32-KERNEL-GAP`, slice 1).** Two forms, one upstream
+  and one here. hermes' `ComplexReg::mul_i` / `mul_neg_i` spent the
+  quarter turn as an alternating fused multiply-add against zero, which
+  LLVM expands to an add and a subtract against zero and a blend (it
+  cannot fold `0 - c` to `-c` under signed zeros): four instructions per
+  rotation in every radix-4 stage of every register kernel; now the swap
+  and one xor against a sign-mask pair (hermes PR #172). And this
+  crate's DFT-16 and DFT-32 twiddle rows were compile-time constants,
+  whose negated half LLVM folded into the complex multiply's second
+  constant and so broke the `fmaddsub` pattern into a sign flip, a blend
+  and a plain `fmadd`; the rows are promoted constants loaded through
+  `black_box`, one load a row, and the fused form returns. Census: the
+  `f32` 16 body 68 vector instructions on a 33-cycle estimated chain
+  (from 51), the 32 body 163 on 55 (from 66), against RustFFT's 48 / 34
+  and 115 / 56. Pinned probe, two runs
+  (`output/apollo-base128/small_sizes_kernelgap_run{1,2}_2026-09-11.txt`),
+  apollo / RustFFT: `f32` 16 on the efficiency core 1.04 / 1.04 (from
+  1.27), `f32` 32 on the performance core 1.01 / 1.11 (from 1.15 to
+  1.23) — and the rotation form reaches every register kernel, so the
+  base routes moved with it: 64 through 512 at both scalars and both
+  cores 8 to 13% under their frame-run readings, `f64` 512 0.81 / 0.85
+  on the performance core and 0.88 on the efficiency core, `f32` 256
+  0.88 / 0.90, `f64` 128 0.89 / 0.92 (RustFFT's readings unchanged
+  between the run pairs). The residue at 16 and 32 is the row loads'
+  alignment checks (`cast_slice` on an opaque pointer, three at 16 and
+  six at 32, each a compare, a branch and a trap) and the swap of each
+  row for the multiply's second operand, where RustFFT holds both rows;
+  slice 2.
+
+- **2026-09-11, the twiddle rows as direct and swapped lanes
+  (`APOLLO-F32-16-32-KERNEL-GAP`, slice 2; closed).** Each DFT-16 and
+  DFT-32 row is a promoted constant of eight interleaved lanes in its
+  direct form and with every sample's real and imaginary lanes
+  exchanged, loaded opaque and multiplied through hermes'
+  `ComplexReg::mul_with_swapped` (hermes PR #173): one load a row where
+  the multiply had swapped the twiddle per use, and no slice cast, whose
+  alignment check on an opaque pointer had cost a compare, a branch and
+  a trap per row. Census: the `f32` 16 body 57 vector instructions
+  (from 68; RustFFT 48), the 32 body 133 (from 163; RustFFT 115), no
+  checks left. Pinned probe, two runs
+  (`output/apollo-base128/small_sizes_kernelgap2_run{1,2}_2026-09-11.txt`),
+  apollo / RustFFT: `f32` 16 on the efficiency core 0.97 / 0.96 (1.27
+  before the item), `f32` 32 on the performance core 0.95 / 0.96 (1.15
+  to 1.23 before), `f32` 32 on the efficiency core 0.77, `f32` 16 on
+  the performance core 1.01 / 0.99; 64 through 512 hold their slice-1
+  readings. Kept, and the item closed on its acceptance. What remains
+  above RustFFT among the small lengths is `f64` 8 on the performance
+  core (1.11 to 1.22, the scalar codelet against `Butterfly8Avx64`) and
+  `f64` 32 on the efficiency core (1.04 to 1.07).

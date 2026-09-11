@@ -4,8 +4,6 @@
 //! wiring and the unrolled codelet bodies occupy separate leaf modules.
 
 #[cfg(target_arch = "x86_64")]
-use super::super::simd::avx::{rotate_minus_i_ps, rotate_plus_i_ps, sse_cmul_ps};
-#[cfg(target_arch = "x86_64")]
 use super::super::trait_def::MixedRadixScalar;
 #[cfg(target_arch = "x86_64")]
 use crate::application::execution::kernel::radix_stage::normalize_inplace;
@@ -230,11 +228,179 @@ pub(in crate::application::execution::kernel::mixed_radix::scalar) unsafe fn sma
 
 /// Applies the unrolled codelet for the const-selected size `N`.
 ///
+/// Probes the host once for the vector frame and routes the sizes with a
+/// register form through [`small_pot_inplace_sized_reduced_framed`]; every
+/// other size, and every size on a host without the frame, runs its scalar
+/// codelet. The plan's small power-of-two executors skip this probe: they
+/// carry the frame themselves and enter the framed entry directly.
+///
 /// # Safety
 ///
 /// Carries the `MixedRadixScalar::small_pot_inplace_sized` contract unchanged.
 #[inline]
 pub(in crate::application::execution::kernel::mixed_radix::scalar) unsafe fn small_pot_inplace_sized_reduced<
+    const N: usize,
+    const INVERSE: bool,
+    const NORMALIZE: bool,
+>(
+    data: &mut [Complex32],
+) {
+    #[cfg(target_arch = "x86_64")]
+    {
+        if matches!(N, 8 | 16 | 32 | 64) && super::super::simd::avx::vector_frame_available() {
+            // SAFETY: the probe proved the frame on this host, and the caller's
+            // length contract passes through unchanged.
+            return small_pot_inplace_sized_reduced_framed::<N, INVERSE, NORMALIZE>(data);
+        }
+    }
+    small_pot_inplace_sized_reduced_scalar::<N, INVERSE, NORMALIZE>(data);
+}
+
+/// Applies the codelet for `N` inside the caller's vector frame.
+///
+/// The frame is AVX2 and FMA: the register arms at 8 and 64 need AVX and
+/// FMA, and the eight-lane hermes codelets the frame hosts at 16 and 32 need
+/// AVX2. A caller carrying the same frame — the plan's small power-of-two
+/// executors — inlines every arm, so no capability check and no call boundary
+/// stands between its function pointer and the butterflies. Sizes without a
+/// register form run their scalar codelet.
+///
+/// # Safety
+///
+/// Carries the `MixedRadixScalar::small_pot_inplace_sized_framed` contract
+/// unchanged: `data.len()` is `N`, and on `x86_64` the host executes AVX2
+/// and FMA.
+#[cfg_attr(target_arch = "x86_64", target_feature(enable = "avx2,fma"))]
+#[inline]
+pub(in crate::application::execution::kernel::mixed_radix::scalar) unsafe fn small_pot_inplace_sized_reduced_framed<
+    const N: usize,
+    const INVERSE: bool,
+    const NORMALIZE: bool,
+>(
+    data: &mut [Complex32],
+) {
+    match N {
+        #[cfg(target_arch = "x86_64")]
+        8 => {
+            // One 256-bit register holds four complexes, so the eight
+            // samples are two registers: `u = lo + hi` and
+            // `v = (lo - hi) W_8^n` are the even and odd four-point
+            // transforms' inputs, and each four-point transform runs on
+            // both at once through the pair layout `[a_0 b_0 | a_2 b_2]`
+            // (`unpack`), which lands the outputs contiguous:
+            // `P = [t_0 t_0' | r_0 r_0']`, `Q = [t_1 t_1' | -+ i r_1,
+            // -+ i r_1']`, `X[0..4] = P + Q`, `X[4..8] = P - Q`.
+            // The SSE form this replaces ran four 128-bit registers and
+            // read no faster than the eight-byte scalar codelet.
+            use std::arch::x86_64::{
+                _mm256_add_ps, _mm256_castpd_ps, _mm256_castps_pd, _mm256_fmaddsub_ps,
+                _mm256_loadu_ps, _mm256_mul_ps, _mm256_permute2f128_ps, _mm256_permute_ps,
+                _mm256_set1_ps, _mm256_setr_ps, _mm256_storeu_ps, _mm256_sub_ps,
+                _mm256_unpackhi_pd, _mm256_unpacklo_pd, _mm256_xor_ps,
+            };
+            let ptr = data.as_mut_ptr().cast::<f32>();
+            let lo = _mm256_loadu_ps(ptr);
+            let hi = _mm256_loadu_ps(ptr.add(8));
+            let u = _mm256_add_ps(lo, hi);
+            let d = _mm256_sub_ps(lo, hi);
+            // `d` times `[W_8^0, W_8^1, W_8^2, W_8^3]`, the twiddles as
+            // real and imaginary parts duplicated over each sample's
+            // two lanes; one swap, one multiply, one fused multiply-add
+            // with alternating signs.
+            let s = core::f32::consts::FRAC_1_SQRT_2;
+            let w_re = _mm256_setr_ps(1.0, 1.0, s, s, 0.0, 0.0, -s, -s);
+            let w_im = if INVERSE {
+                _mm256_setr_ps(0.0, 0.0, s, s, 1.0, 1.0, s, s)
+            } else {
+                _mm256_setr_ps(0.0, 0.0, -s, -s, -1.0, -1.0, -s, -s)
+            };
+            let d_swapped = _mm256_permute_ps(d, 0b1011_0001);
+            let v = _mm256_fmaddsub_ps(d, w_re, _mm256_mul_ps(d_swapped, w_im));
+            // The pair layout: `g = [u_0 v_0 | u_2 v_2]`, `h = [u_1 v_1 |
+            // u_3 v_3]`, and their half swaps.
+            let g = _mm256_castpd_ps(_mm256_unpacklo_pd(_mm256_castps_pd(u), _mm256_castps_pd(v)));
+            let h = _mm256_castpd_ps(_mm256_unpackhi_pd(_mm256_castps_pd(u), _mm256_castps_pd(v)));
+            let g_swapped = _mm256_permute2f128_ps(g, g, 0x01);
+            let h_swapped = _mm256_permute2f128_ps(h, h, 0x01);
+            let tg = _mm256_add_ps(g, g_swapped);
+            let rg = _mm256_sub_ps(g, g_swapped);
+            let th = _mm256_add_ps(h, h_swapped);
+            let rh = _mm256_sub_ps(h, h_swapped);
+            // `-+ i rh`: swap real and imaginary, negate the imaginary
+            // lanes forward and the real lanes inverse.
+            let rh_swapped = _mm256_permute_ps(rh, 0b1011_0001);
+            let sign = if INVERSE {
+                _mm256_setr_ps(-0.0, 0.0, -0.0, 0.0, -0.0, 0.0, -0.0, 0.0)
+            } else {
+                _mm256_setr_ps(0.0, -0.0, 0.0, -0.0, 0.0, -0.0, 0.0, -0.0)
+            };
+            let rh_turned = _mm256_xor_ps(rh_swapped, sign);
+            let p = _mm256_permute2f128_ps(tg, rg, 0x20);
+            let q = _mm256_permute2f128_ps(th, rh_turned, 0x20);
+            let mut out_lo = _mm256_add_ps(p, q);
+            let mut out_hi = _mm256_sub_ps(p, q);
+            if INVERSE && NORMALIZE {
+                let scale = _mm256_set1_ps(0.125);
+                out_lo = _mm256_mul_ps(out_lo, scale);
+                out_hi = _mm256_mul_ps(out_hi, scale);
+            }
+            _mm256_storeu_ps(ptr, out_lo);
+            _mm256_storeu_ps(ptr.add(8), out_hi);
+        }
+        #[cfg(target_arch = "x86_64")]
+        16 => {
+            let data_ref = &mut *data.as_mut_ptr().cast::<[Complex32; 16]>();
+            // SAFETY: this frame establishes AVX2 and FMA, and the caller's
+            // length contract supplies the sixteen samples.
+            crate::application::execution::kernel::components::winograd::composite::dft16_framed::<
+                INVERSE,
+            >(data_ref);
+            if INVERSE && NORMALIZE {
+                let scale = Complex32::new(0.0625, 0.0);
+                for x in data_ref.iter_mut() {
+                    *x *= scale;
+                }
+            }
+        }
+        #[cfg(target_arch = "x86_64")]
+        32 => {
+            let data_ref = &mut *data.as_mut_ptr().cast::<[Complex32; 32]>();
+            // SAFETY: this frame establishes AVX2 and FMA, and the caller's
+            // length contract supplies the thirty-two samples.
+            crate::application::execution::kernel::components::winograd::composite::dft32_framed::<
+                INVERSE,
+            >(data_ref);
+            if INVERSE && NORMALIZE {
+                let scale = Complex32::new(1.0 / 32.0, 0.0);
+                for x in data_ref.iter_mut() {
+                    *x *= scale;
+                }
+            }
+        }
+        #[cfg(target_arch = "x86_64")]
+        64 => {
+            let mut scratch = [Complex32::new(0.0, 0.0); 64];
+            let twiddles = <f32 as MixedRadixScalar>::small_pot_twiddles::<INVERSE>(64);
+            <f32 as crate::application::execution::kernel::components::stockham::StockhamKernel>::forward_with_scratch(
+                data,
+                &mut scratch,
+                twiddles,
+            );
+            if INVERSE && NORMALIZE {
+                normalize_inplace(data, 1.0 / 64.0);
+            }
+        }
+        _ => small_pot_inplace_sized_reduced_scalar::<N, INVERSE, NORMALIZE>(data),
+    }
+}
+
+/// The scalar codelet for `N`, on every host.
+///
+/// # Safety
+///
+/// Carries the `MixedRadixScalar::small_pot_inplace_sized` contract unchanged.
+#[inline]
+unsafe fn small_pot_inplace_sized_reduced_scalar<
     const N: usize,
     const INVERSE: bool,
     const NORMALIZE: bool,
@@ -289,162 +455,24 @@ pub(in crate::application::execution::kernel::mixed_radix::scalar) unsafe fn sma
             }
         }
         8 => {
-            #[cfg(target_arch = "x86_64")]
-            #[target_feature(enable = "avx,fma")]
-            #[inline]
-            unsafe fn vector_arm<const INVERSE: bool, const NORMALIZE: bool>(
-                data: &mut [Complex32],
-            ) {
-                use std::arch::x86_64::{
-                    _mm_add_ps, _mm_castpd_ps, _mm_castps_pd, _mm_loadu_ps, _mm_mul_ps,
-                    _mm_set1_ps, _mm_setr_ps, _mm_shuffle_pd, _mm_shuffle_ps, _mm_storeu_ps,
-                    _mm_sub_ps,
-                };
-                let ptr = data.as_mut_ptr().cast::<f32>();
-                let d01 = _mm_loadu_ps(ptr);
-                let d23 = _mm_loadu_ps(ptr.add(4));
-                let d45 = _mm_loadu_ps(ptr.add(8));
-                let d67 = _mm_loadu_ps(ptr.add(12));
-
-                let d01_d = _mm_castps_pd(d01);
-                let d23_d = _mm_castps_pd(d23);
-                let d45_d = _mm_castps_pd(d45);
-                let d67_d = _mm_castps_pd(d67);
-
-                // Bit-reversed loading into SSE registers
-                let r0 = _mm_castpd_ps(_mm_shuffle_pd(d01_d, d45_d, 0)); // holds [x[0], x[4]]
-                let r1 = _mm_castpd_ps(_mm_shuffle_pd(d23_d, d67_d, 0)); // holds [x[2], x[6]]
-                let r2 = _mm_castpd_ps(_mm_shuffle_pd(d01_d, d45_d, 3)); // holds [x[1], x[5]]
-                let r3 = _mm_castpd_ps(_mm_shuffle_pd(d23_d, d67_d, 3)); // holds [x[3], x[7]]
-
-                // Stage 1: Size-2 butterflies within registers
-                let a_reg0 = _mm_shuffle_ps(r0, r0, 0x44);
-                let b_reg0 = _mm_shuffle_ps(r0, r0, 0xEE);
-                let sum0 = _mm_add_ps(a_reg0, b_reg0);
-                let diff0 = _mm_sub_ps(a_reg0, b_reg0);
-                let s1_0 = _mm_shuffle_ps(sum0, diff0, 0xE4); // holds [x[0]+x[4], x[0]-x[4]] = [a0, a1]
-
-                let a_reg1 = _mm_shuffle_ps(r1, r1, 0x44);
-                let b_reg1 = _mm_shuffle_ps(r1, r1, 0xEE);
-                let sum1 = _mm_add_ps(a_reg1, b_reg1);
-                let diff1 = _mm_sub_ps(a_reg1, b_reg1);
-                let s1_1 = _mm_shuffle_ps(sum1, diff1, 0xE4); // holds [x[2]+x[6], x[2]-x[6]] = [a2, a3]
-
-                let a_reg2 = _mm_shuffle_ps(r2, r2, 0x44);
-                let b_reg2 = _mm_shuffle_ps(r2, r2, 0xEE);
-                let sum2 = _mm_add_ps(a_reg2, b_reg2);
-                let diff2 = _mm_sub_ps(a_reg2, b_reg2);
-                let s1_2 = _mm_shuffle_ps(sum2, diff2, 0xE4); // holds [x[1]+x[5], x[1]-x[5]] = [a4, a5]
-
-                let a_reg3 = _mm_shuffle_ps(r3, r3, 0x44);
-                let b_reg3 = _mm_shuffle_ps(r3, r3, 0xEE);
-                let sum3 = _mm_add_ps(a_reg3, b_reg3);
-                let diff3 = _mm_sub_ps(a_reg3, b_reg3);
-                let s1_3 = _mm_shuffle_ps(sum3, diff3, 0xE4); // holds [x[3]+x[7], x[3]-x[7]] = [a6, a7]
-
-                // Stage 2: Size-4 butterflies between s1_0, s1_1 and s1_2, s1_3
-                let s1_1_tw = if INVERSE {
-                    rotate_plus_i_ps(s1_1)
-                } else {
-                    rotate_minus_i_ps(s1_1)
-                };
-                let s1_1_mixed = _mm_castpd_ps(_mm_shuffle_pd(
-                    _mm_castps_pd(s1_1),
-                    _mm_castps_pd(s1_1_tw),
-                    2,
-                )); // holds [a2, a3_rot]
-
-                let s1_3_tw = if INVERSE {
-                    rotate_plus_i_ps(s1_3)
-                } else {
-                    rotate_minus_i_ps(s1_3)
-                };
-                let s1_3_mixed = _mm_castpd_ps(_mm_shuffle_pd(
-                    _mm_castps_pd(s1_3),
-                    _mm_castps_pd(s1_3_tw),
-                    2,
-                )); // holds [a6, a7_rot]
-
-                let b0_1 = _mm_add_ps(s1_0, s1_1_mixed); // holds [b0, b1]
-                let b2_3 = _mm_sub_ps(s1_0, s1_1_mixed); // holds [b2, b3]
-                let b4_5 = _mm_add_ps(s1_2, s1_3_mixed); // holds [b4, b5]
-                let b6_7 = _mm_sub_ps(s1_2, s1_3_mixed); // holds [b6, b7]
-
-                // Stage 3: Size-8 butterflies
-                let c = std::f32::consts::FRAC_1_SQRT_2;
-                let w0_1 = if INVERSE {
-                    _mm_setr_ps(1.0, 0.0, c, c)
-                } else {
-                    _mm_setr_ps(1.0, 0.0, c, -c)
-                };
-                let w2_3 = if INVERSE {
-                    _mm_setr_ps(0.0, 1.0, -c, c)
-                } else {
-                    _mm_setr_ps(0.0, -1.0, -c, -c)
-                };
-
-                let b4_5_tw = sse_cmul_ps(b4_5, w0_1);
-                let b6_7_tw = sse_cmul_ps(b6_7, w2_3);
-
-                let mut out0_1 = _mm_add_ps(b0_1, b4_5_tw);
-                let mut out4_5 = _mm_sub_ps(b0_1, b4_5_tw);
-                let mut out2_3 = _mm_add_ps(b2_3, b6_7_tw);
-                let mut out6_7 = _mm_sub_ps(b2_3, b6_7_tw);
-
-                if INVERSE && NORMALIZE {
-                    let scale = _mm_set1_ps(0.125);
-                    out0_1 = _mm_mul_ps(out0_1, scale);
-                    out2_3 = _mm_mul_ps(out2_3, scale);
-                    out4_5 = _mm_mul_ps(out4_5, scale);
-                    out6_7 = _mm_mul_ps(out6_7, scale);
-                }
-
-                _mm_storeu_ps(ptr, out0_1);
-                _mm_storeu_ps(ptr.add(4), out2_3);
-                _mm_storeu_ps(ptr.add(8), out4_5);
-                _mm_storeu_ps(ptr.add(12), out6_7);
-            }
-            let vector_done = {
-                #[cfg(target_arch = "x86_64")]
-                {
-                    if super::super::simd::avx::avx_fma_available() {
-                        // SAFETY: the probe proved AVX and FMA on this host, and the
-                        // caller's contract supplies at least this arm's lanes.
-                        vector_arm::<INVERSE, NORMALIZE>(data);
-                        true
-                    } else {
-                        false
-                    }
-                }
-                #[cfg(not(target_arch = "x86_64"))]
-                {
-                    false
-                }
-            };
-            if !vector_done {
-                let data_ref = &mut *data.as_mut_ptr().cast::<[Complex32; 8]>();
-                crate::application::execution::kernel::components::winograd::dft8_array_impl::<
-                    f32,
-                    INVERSE,
-                    false,
-                >(data_ref);
-                if INVERSE && NORMALIZE {
-                    let scale = Complex32::new(0.125, 0.0);
-                    for x in data_ref.iter_mut() {
-                        *x *= scale;
-                    }
+            let data_ref = &mut *data.as_mut_ptr().cast::<[Complex32; 8]>();
+            crate::application::execution::kernel::components::winograd::dft8_array_impl::<
+                f32,
+                INVERSE,
+                false,
+            >(data_ref);
+            if INVERSE && NORMALIZE {
+                let scale = Complex32::new(0.125, 0.0);
+                for x in data_ref.iter_mut() {
+                    *x *= scale;
                 }
             }
         }
         16 => {
-            // The eight-lane register kernel when the host has that width, the
-            // Winograd codelet otherwise; both leave natural order in place.
             let data_ref = &mut *data.as_mut_ptr().cast::<[Complex32; 16]>();
-            if !crate::application::execution::kernel::components::winograd::composite::try_dft16_hardware::<INVERSE>(data_ref) {
-                crate::application::execution::kernel::components::winograd::dft16_impl::<f32, INVERSE>(
-                    data_ref,
-                );
-            }
+            crate::application::execution::kernel::components::winograd::dft16_impl::<f32, INVERSE>(
+                data_ref,
+            );
             if INVERSE && NORMALIZE {
                 let scale = Complex32::new(0.0625, 0.0);
                 for x in data_ref.iter_mut() {
@@ -453,13 +481,10 @@ pub(in crate::application::execution::kernel::mixed_radix::scalar) unsafe fn sma
             }
         }
         32 => {
-            // Scalar by measurement: n = 32: the vector body measured 5x slower than the scalar arm (240 vs 47 ns pinned); kept scalar, kernel filed.
             let data_ref = &mut *data.as_mut_ptr().cast::<[Complex32; 32]>();
-            if !crate::application::execution::kernel::components::winograd::composite::try_dft32_hardware::<INVERSE>(data_ref) {
-                crate::application::execution::kernel::components::winograd::dft32_impl::<f32, INVERSE>(
-                    data_ref,
-                );
-            }
+            crate::application::execution::kernel::components::winograd::dft32_impl::<f32, INVERSE>(
+                data_ref,
+            );
             if INVERSE && NORMALIZE {
                 let scale = Complex32::new(1.0 / 32.0, 0.0);
                 for x in data_ref.iter_mut() {
@@ -468,54 +493,19 @@ pub(in crate::application::execution::kernel::mixed_radix::scalar) unsafe fn sma
             }
         }
         64 => {
-            #[cfg(target_arch = "x86_64")]
-            #[target_feature(enable = "avx,fma")]
-            #[inline]
-            unsafe fn vector_arm<const INVERSE: bool, const NORMALIZE: bool>(
-                data: &mut [Complex32],
-            ) {
-                let mut scratch = [Complex32::new(0.0, 0.0); 64];
-                let twiddles = <f32 as MixedRadixScalar>::small_pot_twiddles::<INVERSE>(64);
-                <f32 as crate::application::execution::kernel::components::stockham::StockhamKernel>::forward_with_scratch(
-                    data,
-                    &mut scratch,
-                    twiddles,
-                );
-                if INVERSE && NORMALIZE {
-                    normalize_inplace(data, 1.0 / 64.0);
-                }
-            }
-            let vector_done = {
-                #[cfg(target_arch = "x86_64")]
-                {
-                    if super::super::simd::avx::avx_fma_available() {
-                        // SAFETY: the probe proved AVX and FMA on this host, and the
-                        // caller's contract supplies at least this arm's lanes.
-                        vector_arm::<INVERSE, NORMALIZE>(data);
-                        true
-                    } else {
-                        false
-                    }
-                }
-                #[cfg(not(target_arch = "x86_64"))]
-                {
-                    false
-                }
-            };
-            if !vector_done {
-                let data_ref = &mut *data.as_mut_ptr().cast::<[Complex32; 64]>();
-                crate::application::execution::kernel::components::winograd::dft64_impl::<
-                    f32,
-                    INVERSE,
-                >(data_ref);
-                if INVERSE && NORMALIZE {
-                    let scale = Complex32::new(1.0 / 64.0, 0.0);
-                    for x in data_ref.iter_mut() {
-                        *x *= scale;
-                    }
+            let data_ref = &mut *data.as_mut_ptr().cast::<[Complex32; 64]>();
+            crate::application::execution::kernel::components::winograd::dft64_impl::<f32, INVERSE>(
+                data_ref,
+            );
+            if INVERSE && NORMALIZE {
+                let scale = Complex32::new(1.0 / 64.0, 0.0);
+                for x in data_ref.iter_mut() {
+                    *x *= scale;
                 }
             }
         }
-        _ => unreachable!(),
+        _ => unreachable!(
+            "invariant: the sized small power-of-two arms cover N in 2, 4, 8, 16, 32, 64"
+        ),
     }
 }

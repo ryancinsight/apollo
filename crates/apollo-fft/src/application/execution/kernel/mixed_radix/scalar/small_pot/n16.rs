@@ -16,17 +16,13 @@
 
 use eunomia::Complex64;
 
-#[cfg(target_arch = "x86_64")]
 use super::super::simd::avx::{avx_cmul_precise, avx_fft4_parallel_precise};
 
 /// `cos(pi/8)`, exactly rounded.
-#[cfg(target_arch = "x86_64")]
 const COS_PI_8: f64 = 0.923_879_532_511_286_7;
 /// `sin(pi/8)`, exactly rounded.
-#[cfg(target_arch = "x86_64")]
 const SIN_PI_8: f64 = 0.382_683_432_365_089_8;
 /// `cos(pi/4) = sin(pi/4)`.
-#[cfg(target_arch = "x86_64")]
 const COS_PI_4: f64 = core::f64::consts::FRAC_1_SQRT_2;
 
 /// Second-stage twiddles, one register per `(k2, half)` pair.
@@ -36,7 +32,6 @@ const COS_PI_4: f64 = core::f64::consts::FRAC_1_SQRT_2;
 /// and `n1 = 3`. `k2 = 0` is the identity and is not stored.
 /// `W = exp(-2 pi i / 16)` forward; `n16_twiddles_match_the_analytic_values`
 /// checks every entry against that definition.
-#[cfg(target_arch = "x86_64")]
 const TWIDDLES_FWD_16: [[f64; 4]; 6] = [
     [1.0, 0.0, COS_PI_8, -SIN_PI_8],
     [1.0, 0.0, COS_PI_4, -COS_PI_4],
@@ -47,7 +42,6 @@ const TWIDDLES_FWD_16: [[f64; 4]; 6] = [
 ];
 
 /// [`TWIDDLES_FWD_16`] conjugated, for the inverse direction.
-#[cfg(target_arch = "x86_64")]
 const TWIDDLES_INV_16: [[f64; 4]; 6] = [
     [1.0, 0.0, COS_PI_8, SIN_PI_8],
     [1.0, 0.0, COS_PI_4, COS_PI_4],
@@ -57,28 +51,16 @@ const TWIDDLES_INV_16: [[f64; 4]; 6] = [
     [-COS_PI_4, COS_PI_4, -COS_PI_8, -SIN_PI_8],
 ];
 
-/// Runs the AVX/FMA length-16 codelet when the host supports its instructions.
-pub(super) fn try_inplace<const INVERSE: bool, const NORMALIZE: bool>(
-    data: &mut [Complex64],
-) -> bool {
-    #[cfg(target_arch = "x86_64")]
-    {
-        if super::super::simd::avx::avx_fma_available() {
-            // SAFETY: the capability probe establishes AVX and FMA support, and
-            // the length-16 caller supplies the sixteen samples read below.
-            unsafe { vector_arm::<INVERSE, NORMALIZE>(data) };
-            return true;
-        }
-    }
-
-    let _ = data;
-    false
-}
-
-#[cfg(target_arch = "x86_64")]
+/// The AVX/FMA length-16 codelet.
+///
+/// # Safety
+///
+/// Requires AVX and FMA, and `data.len() == 16`.
 #[target_feature(enable = "avx,fma")]
 #[inline]
-unsafe fn vector_arm<const INVERSE: bool, const NORMALIZE: bool>(data: &mut [Complex64]) {
+pub(super) unsafe fn vector_arm<const INVERSE: bool, const NORMALIZE: bool>(
+    data: &mut [Complex64],
+) {
     use std::arch::x86_64::{
         _mm256_loadu_pd, _mm256_mul_pd, _mm256_permute2f128_pd, _mm256_set1_pd, _mm256_storeu_pd,
     };
@@ -174,7 +156,7 @@ unsafe fn vector_arm<const INVERSE: bool, const NORMALIZE: bool>(data: &mut [Com
 /// Direct entry to the vector arm, bypassing the per-call capability check.
 ///
 /// The `small_pot_arms` probe uses this to separate the body's cost from the
-/// cost of the `OnceLock` check [`try_inplace`] reads first. It does *not*
+/// cost of the frame probe the sized entry reads first. It does *not*
 /// remove the `#[target_feature]` call boundary — this entry does not carry
 /// the attribute either, so [`vector_arm`] cannot inline into it — which is
 /// why the two arms read the same and the check is what the difference bounds.
@@ -260,9 +242,12 @@ mod tests {
         let mut got = input;
         let mut expected = input;
 
-        if !super::try_inplace::<INVERSE, NORMALIZE>(&mut got) {
+        if !super::super::super::simd::avx::vector_frame_available() {
             return;
         }
+        // SAFETY: the frame was probed above, and `got` is the sixteen
+        // samples the arm reads.
+        unsafe { super::vector_arm::<INVERSE, NORMALIZE>(&mut got) };
         crate::application::execution::kernel::components::winograd::dft16_impl::<f64, INVERSE>(
             &mut expected,
         );
@@ -311,9 +296,12 @@ mod tests {
             crate::application::execution::kernel::components::winograd::dft16_impl::<f64, false>(
                 &mut expected,
             );
-            if !super::try_inplace::<false, false>(&mut data) {
+            if !super::super::super::simd::avx::vector_frame_available() {
                 return;
             }
+            // SAFETY: the frame was probed above, and `data` is the sixteen
+            // samples the arm reads.
+            unsafe { super::vector_arm::<false, false>(&mut data) };
             for (index, value) in data.into_iter().enumerate() {
                 assert!(
                     (value - expected[index]).norm() < 1.0e-12,
@@ -326,7 +314,6 @@ mod tests {
     }
 
     /// The table is literals, so it needs an oracle that is not itself a table.
-    #[cfg(target_arch = "x86_64")]
     #[test]
     fn n16_twiddles_match_the_analytic_values() {
         // Row `k2 - 1` holds `W^0, W^{k2}`; row `k2 + 2` holds

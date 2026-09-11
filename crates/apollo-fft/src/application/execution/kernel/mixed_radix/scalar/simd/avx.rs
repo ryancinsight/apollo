@@ -192,58 +192,27 @@ pub(in crate::application::execution::kernel::mixed_radix::scalar) unsafe fn avx
     [res0, res1, res2, res3]
 }
 
-#[cfg(target_arch = "x86_64")]
-#[target_feature(enable = "avx,fma")]
-#[inline]
-pub(in crate::application::execution::kernel::mixed_radix::scalar) unsafe fn sse_cmul_ps(
-    a: std::arch::x86_64::__m128,
-    b: std::arch::x86_64::__m128,
-) -> std::arch::x86_64::__m128 {
-    use std::arch::x86_64::{
-        _mm_addsub_ps, _mm_movehdup_ps, _mm_moveldup_ps, _mm_mul_ps, _mm_shuffle_ps,
-    };
-    let re_a = _mm_moveldup_ps(a);
-    let im_a = _mm_movehdup_ps(a);
-    let b_shuf = _mm_shuffle_ps(b, b, 0xB1);
-    let prod1 = _mm_mul_ps(re_a, b);
-    let prod2 = _mm_mul_ps(im_a, b_shuf);
-    _mm_addsub_ps(prod1, prod2)
-}
-
-#[cfg(target_arch = "x86_64")]
-#[target_feature(enable = "avx,fma")]
-#[inline]
-pub(in crate::application::execution::kernel::mixed_radix::scalar) unsafe fn rotate_minus_i_ps(
-    v: std::arch::x86_64::__m128,
-) -> std::arch::x86_64::__m128 {
-    use std::arch::x86_64::{_mm_setr_ps, _mm_shuffle_ps, _mm_xor_ps};
-    let perm = _mm_shuffle_ps(v, v, 0xB1);
-    _mm_xor_ps(perm, _mm_setr_ps(0.0, -0.0, 0.0, -0.0))
-}
-
-#[cfg(target_arch = "x86_64")]
-#[target_feature(enable = "avx,fma")]
-#[inline]
-pub(in crate::application::execution::kernel::mixed_radix::scalar) unsafe fn rotate_plus_i_ps(
-    v: std::arch::x86_64::__m128,
-) -> std::arch::x86_64::__m128 {
-    use std::arch::x86_64::{_mm_setr_ps, _mm_shuffle_ps, _mm_xor_ps};
-    let perm = _mm_shuffle_ps(v, v, 0xB1);
-    _mm_xor_ps(perm, _mm_setr_ps(-0.0, 0.0, -0.0, 0.0))
-}
-
-/// Whether this host executes AVX and FMA, probed once per process.
+/// Whether this host offers the vector frame the framed codelet entries run
+/// in, probed once per process.
 ///
-/// The sized small-transform arms dispatch on this at entry, so their vector
-/// bodies run on the hardware that has them regardless of how the crate was
-/// built; the compile-time `target_feature` cfg they replaced silently
-/// selected the scalar arm on every default x86-64 build.
-#[cfg(target_arch = "x86_64")]
+/// The frame is AVX2 and FMA — exactly what hermes' `Avx2` backend probes
+/// (`Avx2::is_runtime_supported`) — so every register arm (AVX and FMA) and
+/// every hermes eight-lane codelet the frame hosts is executable inside it.
+/// The plan's small power-of-two executors read this once at construction
+/// and take the framed entries; the probing entries read it per call.
+/// Off `x86_64` there is no frame.
 #[inline]
-pub(crate) fn avx_fma_available() -> bool {
-    use std::sync::OnceLock;
-    static AVX_FMA: OnceLock<bool> = OnceLock::new();
-    *AVX_FMA.get_or_init(|| {
-        std::is_x86_feature_detected!("avx") && std::is_x86_feature_detected!("fma")
-    })
+pub(crate) fn vector_frame_available() -> bool {
+    #[cfg(target_arch = "x86_64")]
+    {
+        use std::sync::OnceLock;
+        static FRAME: OnceLock<bool> = OnceLock::new();
+        *FRAME.get_or_init(|| {
+            std::is_x86_feature_detected!("avx2") && std::is_x86_feature_detected!("fma")
+        })
+    }
+    #[cfg(not(target_arch = "x86_64"))]
+    {
+        false
+    }
 }
