@@ -88,9 +88,9 @@ where
         assert_spectrum::<F, N>(&static_output, direction, unit_roundoff);
     }
 
-    // 2048 is four sixteen-row blocks under the 512 base where that base
-    // builds (ADR 0061); the four-step route starts past it there.
-    if N == 1024 || (N == 2048 && dynamic.base512.is_some()) {
+    // 2048 is blocks under a radix step over the width's base where that
+    // base builds (ADR 0061); the four-step route starts past it there.
+    if N == 1024 || (N == 2048 && (dynamic.base512.is_some() || dynamic.base256.is_some())) {
         assert!(matches!(dynamic.strategy, PlanStrategy::PowerOfTwo { .. }));
         assert_eq!(dynamic.twiddle_fwd.as_deref().map_or(0, <[_]>::len), 0);
     } else {

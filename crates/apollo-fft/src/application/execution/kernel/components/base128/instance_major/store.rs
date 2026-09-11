@@ -10,6 +10,9 @@
 //! combining blocks load the parent directly and no gather pass exists.
 
 use super::super::cmul::cmul_chunk;
+use crate::application::execution::kernel::components::register_butterfly::{
+    radix8, DupSplitEighths,
+};
 use crate::application::execution::kernel::mixed_radix::MixedRadixScalar;
 use core::mem::size_of;
 use eunomia::Complex;
@@ -78,6 +81,10 @@ pub(crate) struct SplitSinks<T> {
     /// second twiddle; empty elsewhere.
     second: AlignedLanes<T>,
     outer: AlignedLanes<T>,
+    /// `W_{8 BASE}^{j k}` for `j` in `1..8`, `k < BASE`, interleaved row by
+    /// row: the radix-8 step's seven twiddle rows, RustFFT's table shape,
+    /// so no power is derived on the sink's critical path; empty elsewhere.
+    rows: AlignedLanes<T>,
 }
 
 /// Lanes starting on a 64-byte boundary: a `Box<[T]>` lands at the
@@ -134,6 +141,7 @@ impl<T: MixedRadixScalar<Complex = Complex<T>>> SplitSinks<T> {
             inner,
             second: AlignedLanes::empty(zero),
             outer,
+            rows: AlignedLanes::empty(zero),
         }
     }
 
@@ -155,6 +163,39 @@ impl<T: MixedRadixScalar<Complex = Complex<T>>> SplitSinks<T> {
             inner: AlignedLanes::new(&dup_split(samples, &first), zero),
             second: AlignedLanes::new(&dup_split(samples, &second), zero),
             outer: AlignedLanes::empty(zero),
+            rows: AlignedLanes::empty(zero),
+        }
+    }
+
+    /// The tables for the radix-8 step over eight `base`-blocks: the seven
+    /// rows `W_{8 base}^{j k}`, `j` in `1..8`, `k < base`, interleaved, from
+    /// the stage-major table `twiddles` of `8 base` — its last level holds
+    /// `W_{8 base}^m` for `m < 4 base`, and the upper half of the circle is
+    /// that level negated — so the sink multiplies by exactly the cache's
+    /// values.
+    pub(crate) fn build_radix8(twiddles: &[Complex<T>], base: usize) -> Self {
+        let zero = T::from_precise(0.0);
+        let n = 8 * base;
+        let half = n / 2;
+        let level = &twiddles[half - 1..n - 1];
+        let power = |m: usize| -> Complex<T> {
+            let m = m % n;
+            if m < half {
+                level[m]
+            } else {
+                let w = level[m - half];
+                Complex::new(-w.re, -w.im)
+            }
+        };
+        let rows: Vec<Complex<T>> = (1..8)
+            .flat_map(|j| (0..base).map(move |k| (j, k)))
+            .map(|(j, k)| power(j * k))
+            .collect();
+        Self {
+            inner: AlignedLanes::empty(zero),
+            second: AlignedLanes::empty(zero),
+            outer: AlignedLanes::empty(zero),
+            rows: AlignedLanes::new(&interleaved(&rows), zero),
         }
     }
 
@@ -165,6 +206,7 @@ impl<T: MixedRadixScalar<Complex = Complex<T>>> SplitSinks<T> {
             inner: AlignedLanes::empty(zero),
             second: AlignedLanes::empty(zero),
             outer: AlignedLanes::empty(zero),
+            rows: AlignedLanes::empty(zero),
         }
     }
 
@@ -182,6 +224,12 @@ impl<T: MixedRadixScalar<Complex = Complex<T>>> SplitSinks<T> {
     /// `W_{4 BASE}^j`, `j < BASE`, interleaved; empty below four blocks.
     pub(crate) fn outer(&self) -> &[T] {
         self.outer.as_slice()
+    }
+
+    /// `W_{8 BASE}^{j k}` for `j` in `1..8`, `k < BASE`, interleaved row by
+    /// row; empty except under the radix-8 step.
+    pub(crate) fn rows(&self) -> &[T] {
+        self.rows.as_slice()
     }
 }
 
@@ -261,6 +309,74 @@ impl<T: LaneScalar> StoreSink<T> for DirectSink {
         out: &mut [T],
     ) {
         put(simd, reg.into_interleaved(), out, chunk);
+    }
+}
+
+/// The last block of eight: the radix-8 step over the eight block spectra
+/// as its registers leave the kernel. `subs` are blocks 0 to 6 in natural
+/// order and `reg` block 7; block `j` is twiddled by its row
+/// `W_{8 BASE}^{j k}` from the table (`rows[j - 1]`), then the eight-point
+/// butterfly across the blocks writes output slice `q` at `chunk` — the
+/// one column pass RustFFT runs over its 256-point butterfly at 2048.
+pub(crate) struct FinalRadix8Sink<'a, T, const LANES: usize, const INVERSE: bool> {
+    /// Blocks 0 to 6, transformed.
+    pub(crate) subs: [&'a [T; LANES]; 7],
+    /// `W_{8 BASE}^{j k}` per chunk for `j` in `1..8`, interleaved
+    /// ([`SplitSinks::rows`]).
+    pub(crate) rows: [&'a [T; LANES]; 7],
+    /// `W_8^1` as `(re, im)` for the eighths.
+    pub(crate) eighth_one: [T; 2],
+    /// `W_8^3` as `(re, im)` for the eighths.
+    pub(crate) eighth_three: [T; 2],
+}
+
+impl<T: LaneScalar, const LANES: usize, const INVERSE: bool> StoreSink<T>
+    for FinalRadix8Sink<'_, T, LANES, INVERSE>
+{
+    const OUT_BLOCKS: usize = 8;
+
+    #[expect(
+        clippy::inline_always,
+        reason = "the base kernel invokes this concrete sink once per SIMD chunk"
+    )]
+    #[inline(always)]
+    fn store<A: SimdArch + SimdKernel<T>>(
+        &mut self,
+        simd: &Simd<T, A>,
+        reg: ComplexReg<T, A>,
+        chunk: usize,
+        out: &mut [T],
+    ) {
+        let block = LANES / <A as SimdStorage<T>>::LANE_COUNT;
+        let eighths = DupSplitEighths {
+            one: (
+                simd.splat(self.eighth_one[0]),
+                simd.splat(self.eighth_one[1]),
+            ),
+            three: (
+                simd.splat(self.eighth_three[0]),
+                simd.splat(self.eighth_three[1]),
+            ),
+        };
+        let values = [
+            input(simd, self.subs[0], chunk),
+            input(simd, self.subs[1], chunk) * input(simd, self.rows[0], chunk),
+            input(simd, self.subs[2], chunk) * input(simd, self.rows[1], chunk),
+            input(simd, self.subs[3], chunk) * input(simd, self.rows[2], chunk),
+            input(simd, self.subs[4], chunk) * input(simd, self.rows[3], chunk),
+            input(simd, self.subs[5], chunk) * input(simd, self.rows[4], chunk),
+            input(simd, self.subs[6], chunk) * input(simd, self.rows[5], chunk),
+            reg * input(simd, self.rows[6], chunk),
+        ];
+        let outs = radix8::<T, A, INVERSE, _>(values, &eighths);
+        put(simd, outs[0].into_interleaved(), out, chunk);
+        put(simd, outs[1].into_interleaved(), out, block + chunk);
+        put(simd, outs[2].into_interleaved(), out, 2 * block + chunk);
+        put(simd, outs[3].into_interleaved(), out, 3 * block + chunk);
+        put(simd, outs[4].into_interleaved(), out, 4 * block + chunk);
+        put(simd, outs[5].into_interleaved(), out, 5 * block + chunk);
+        put(simd, outs[6].into_interleaved(), out, 6 * block + chunk);
+        put(simd, outs[7].into_interleaved(), out, 7 * block + chunk);
     }
 }
 
