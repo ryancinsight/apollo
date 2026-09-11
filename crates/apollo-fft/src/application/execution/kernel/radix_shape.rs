@@ -160,6 +160,21 @@ pub(crate) fn factorize_composite(n: usize) -> Option<Vec<usize>> {
 
 /// Test if a number is prime23-smooth (only prime factors 2, 3, 5, 7, 11, 13, 17, 23).
 #[inline]
+/// Whether every prime factor of `n` is at most seven: the lengths the
+/// composite tables and the short codelets serve directly, without a
+/// prime-factor step over a large Winograd prime.
+pub(crate) fn is_seven_smooth(mut n: usize) -> bool {
+    if n == 0 {
+        return false;
+    }
+    for &p in &[2, 3, 5, 7] {
+        while n % p == 0 {
+            n /= p;
+        }
+    }
+    n == 1
+}
+
 pub(crate) fn is_prime23_smooth(mut n: usize) -> bool {
     if n == 0 {
         return false;

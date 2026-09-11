@@ -252,6 +252,18 @@ fn rader_bluestein_policy_follows_the_convolution_shape() {
         assert!(super::prefers_half_cyclic_for_rader::<f64>(n));
     }
 
+    // Where n - 1 is 7-smooth the full-cyclic form wins both scalars by 22
+    // to 60% (2026-09-11); the selector must leave these to it.
+    for n in [97usize, 101, 113, 151] {
+        assert!(
+            !super::prefers_half_cyclic_for_rader::<f32>(n),
+            "length {n}: a 7-smooth convolution length takes the full form"
+        );
+        assert!(!super::prefers_half_cyclic_for_rader::<f64>(n));
+        assert_rader_forward_matches_direct(n);
+        assert_rader_forward32_matches_direct(n);
+    }
+
     assert!(super::prefers_bluestein_for_rader(167)); // m = 166 = 2*83
     assert!(super::prefers_bluestein_for_rader(2053)); // m exceeds 2,048
     assert!(!super::prefers_bluestein_for_rader(193)); // m = 192 = 2^6*3

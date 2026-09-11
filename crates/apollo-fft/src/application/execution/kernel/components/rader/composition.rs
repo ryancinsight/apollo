@@ -8,7 +8,7 @@
 
 use super::convolution::rader_negacyclic_convolve_inplace;
 use super::generator;
-use super::{rader_fft_with_convolution_backend, HalfCyclicWinograd};
+use super::{rader_fft_with_convolution_backend, FullCyclic, HalfCyclicWinograd};
 use crate::application::execution::kernel::components::butterflies;
 use crate::application::execution::kernel::measurement_cores;
 use crate::application::execution::kernel::mixed_radix::MixedRadixScalar;
@@ -34,6 +34,11 @@ struct PhaseInput {
     second: Vec<Complex32>,
     twiddles: Arc<[Complex32]>,
 }
+
+/// The primes the backend comparison reads, both scalars: the ones the
+/// half-cyclic threshold and its named exceptions were set from (59, 67,
+/// 83, 107) and the ones the probes carry (97, 101, 113, 151).
+const BACKEND_PRIMES: &[usize] = &[59, 67, 83, 97, 101, 107, 113, 151];
 
 fn signal(len: usize) -> Vec<Complex32> {
     (0..len)
@@ -371,6 +376,85 @@ fn half_cyclic_composition_attribution_by_core_type() {
                 std::hint::black_box(work.as_slice());
             },
         );
+
+        // The short Winograd codelets the convolutions take at these
+        // lengths (50 is a codelet size), against the 100-point codelet the
+        // plan runs at 91 us a batch.
+        suite.run_batched(
+            BenchmarkCase::new(label, "phase/short-winograd-50", TARGET),
+            || half.first.clone(),
+            |work| {
+                let data = std::hint::black_box(work.as_mut_slice());
+                assert!(<f32 as MixedRadixScalar>::short_winograd::<false, false>(
+                    data
+                ));
+                std::hint::black_box(work.as_slice());
+            },
+        );
+        // The full-cyclic backend at the same prime: one 100-point
+        // convolution through the composite route instead of two 50-point
+        // ones through the codelet plus the four passes.
+        suite.run_batched(
+            BenchmarkCase::new(label, "dispatch/rader-full", TARGET),
+            || target_source.clone(),
+            |work| {
+                rader_fft_with_convolution_backend::<f32, false, FullCyclic>(std::hint::black_box(
+                    work,
+                ));
+                std::hint::black_box(work[0]);
+            },
+        );
+
+        // The two backends at every prime the probes carry, both scalars:
+        // the selection between them is a per-scalar threshold and must
+        // read from a within-run comparison.
+        for &n in BACKEND_PRIMES {
+            let source = signal(n);
+            suite.run_batched(
+                BenchmarkCase::new(label, "backend/half-cyclic-f32", n),
+                || source.clone(),
+                |work| {
+                    rader_fft_with_convolution_backend::<f32, false, HalfCyclicWinograd>(
+                        std::hint::black_box(work),
+                    );
+                    std::hint::black_box(work[0]);
+                },
+            );
+            suite.run_batched(
+                BenchmarkCase::new(label, "backend/full-cyclic-f32", n),
+                || source.clone(),
+                |work| {
+                    rader_fft_with_convolution_backend::<f32, false, FullCyclic>(
+                        std::hint::black_box(work),
+                    );
+                    std::hint::black_box(work[0]);
+                },
+            );
+            let wide: Vec<eunomia::Complex64> = source
+                .iter()
+                .map(|c| eunomia::Complex64::new(f64::from(c.re), f64::from(c.im)))
+                .collect();
+            suite.run_batched(
+                BenchmarkCase::new(label, "backend/half-cyclic-f64", n),
+                || wide.clone(),
+                |work| {
+                    rader_fft_with_convolution_backend::<f64, false, HalfCyclicWinograd>(
+                        std::hint::black_box(work),
+                    );
+                    std::hint::black_box(work[0]);
+                },
+            );
+            suite.run_batched(
+                BenchmarkCase::new(label, "backend/full-cyclic-f64", n),
+                || wide.clone(),
+                |work| {
+                    rader_fft_with_convolution_backend::<f64, false, FullCyclic>(
+                        std::hint::black_box(work),
+                    );
+                    std::hint::black_box(work[0]);
+                },
+            );
+        }
 
         println!("RADER COMPOSITION cpu={landed} ({label})");
         print!("{}", suite.report());
