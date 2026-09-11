@@ -133,7 +133,7 @@ where
     };
     let untouched = actual.clone();
     if !transform_256::<T, INVERSE, false>(&mut actual, &plan) {
-        assert!(!must_run, "the four-lane width must run the 32-sample rows");
+        assert!(!must_run, "either native width must run the 32-sample rows");
         assert_eq!(
             actual, untouched,
             "a width decline must not mutate the input"
@@ -159,10 +159,8 @@ where
 fn base256_matches_the_direct_transform_in_both_precisions_and_directions() {
     assert_base256_matches_direct::<f64, false>(f64::EPSILON, true);
     assert_base256_matches_direct::<f64, true>(f64::EPSILON, true);
-    // The eight-lane `f32` layout declines the 32-sample rows until its
-    // slice lands; the four-lane `f32` hosts run them.
-    assert_base256_matches_direct::<f32, false>(f64::from(f32::EPSILON), false);
-    assert_base256_matches_direct::<f32, true>(f64::from(f32::EPSILON), false);
+    assert_base256_matches_direct::<f32, false>(f64::from(f32::EPSILON), true);
+    assert_base256_matches_direct::<f32, true>(f64::from(f32::EPSILON), true);
 }
 
 #[test]
