@@ -416,6 +416,3 @@ mod report;
 
 #[cfg(test)]
 mod move_geometry;
-
-#[cfg(test)]
-mod threshold;

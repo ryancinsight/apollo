@@ -11,7 +11,9 @@ use crate::application::execution::kernel::real_fft::{retangle_real_half, untang
 use eunomia::Complex;
 
 /// Packs `input`, runs `transform` on the `n/2` packed samples, and untangles
-/// them into the `n/2 + 1` bins of `out`, allocating nothing.
+/// them into the `n/2 + 1` bins of `out` with `twiddles` (the `W_n^k` of
+/// [`split_twiddles`](crate::application::execution::kernel::real_fft::split_twiddles)
+/// or a plan's table), allocating nothing.
 ///
 /// # Panics
 ///
@@ -20,6 +22,7 @@ use eunomia::Complex;
 pub(super) fn forward<T: RealFftData>(
     input: &[T],
     out: &mut [Complex<T::PlanScalar>],
+    twiddles: impl IntoIterator<Item = Complex<T::PlanScalar>>,
     transform: impl FnOnce(&mut [Complex<T::PlanScalar>]),
 ) {
     let n = input.len();
@@ -31,7 +34,7 @@ pub(super) fn forward<T: RealFftData>(
     assert!(out.len() > m, "real spectrum needs n/2 + 1 slots");
     T::pack_real_pairs(input, &mut out[..m]);
     transform(&mut out[..m]);
-    untangle_real_half(out, n);
+    untangle_real_half(out, n, twiddles);
 }
 
 /// Retangles one lane's `n/2 + 1` bins in place and runs `transform`, a
@@ -44,6 +47,7 @@ pub(super) fn forward<T: RealFftData>(
 pub(super) fn inverse_packed<T: RealFftData>(
     bins: &mut [Complex<T::PlanScalar>],
     n: usize,
+    twiddles: impl IntoIterator<Item = Complex<T::PlanScalar>>,
     transform: impl FnOnce(&mut [Complex<T::PlanScalar>]),
 ) {
     assert!(
@@ -52,7 +56,7 @@ pub(super) fn inverse_packed<T: RealFftData>(
     );
     let m = n / 2;
     assert!(bins.len() > m, "real spectrum needs n/2 + 1 slots");
-    retangle_real_half(bins, n);
+    retangle_real_half(bins, n, twiddles);
     transform(&mut bins[..m]);
 }
 

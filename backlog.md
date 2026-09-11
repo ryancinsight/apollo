@@ -1,30 +1,27 @@
 # Apollo Backlog
 
+<a id="apollo-real-split-twiddles"></a>
+
+## APOLLO-REAL-SPLIT-TWIDDLES-2026-09-11 — The real split recomputes its twiddles per lane [patch] [perf] — done 2026-09-11
+
+- a07d0a56: untangle and retangle take their twiddles from an iterator; `FftPlan3D` keeps the table for its lanes. Quiet crossover runs, complex arms flat as control: real pair 9.9 to 8.2 µs at 16³, 36.1 to 31.4 at 24³, 40.9 to 37.1–38.3 at 32×32×16; 32³ and 48³ within noise.
+- The acceptance set the serial 32³ real pair against the serial complex 32×32×16 pair as equal work, but the real pair splits 32,768 reals, twice that volume: its premise was wrong. The 32³ gap stays with [#apollo-lane-parallel-threshold](#apollo-lane-parallel-threshold).
+
 <a id="apollo-lane-parallel-threshold"></a>
 
-## APOLLO-LANE-PARALLEL-THRESHOLD-2026-09-11 — Lane passes under 32,768 elements run on one thread whether or not that is faster [patch] [perf] — in-progress
+## APOLLO-LANE-PARALLEL-THRESHOLD-2026-09-11 — Derive lane parallelism from task geometry [patch] [perf] — done
 
-- **Integrator:** claude-opus-5; **branch:** `perf/apollo-lane-parallel-threshold`, stacked on #436. **Last-update:** 2026-09-11.
-- **Sweep, 2026-09-11** (`pass_attribution::threshold::lane_threshold_crossover`, d868ccb3; fastest sample
-  per transform). At 4–9% host load the 32³ real pair reads 99.5 µs at 32,768 and 67.0 µs at 16,384 —
-  consistent over four runs — while the complex 32×32×16 pair reads 45.2 µs serial and 52.1 µs once its
-  16,384-element passes go parallel (46.4 against 54.5 in a loaded run). One element count cannot serve both,
-  so the constant stays at 32,768. **Next:** a decision keyed to each pass's lane length and task count, read
-  by the same probe.
-- **Finding.** `lanes::PARALLEL_THRESHOLD = 32_768` total complex elements decides
-  serial against moirai-parallel for every lane pass, and no measurement is recorded
-  for it (it arrived as the "existing multidimensional crossover", 9db2f6ea). The real
-  half-spectrum pair at 32³ runs its passes on the 32·32·17 = 17,408-element half
-  volume, so they run serially: fastest sample 103 and 122 µs per transform in two
-  probe rounds, against 88 and 98 µs for the complex pair, which sits exactly at the
-  threshold. With the constant at 16,384 the same probe read 66 µs, at 82% host load.
-- **Acceptance.** A quiet or pinned sweep of the threshold over 4,096, 8,192, 16,384
-  and 32,768 against the complex and real pairs at 16³, 24³, 32×32×16, 32³ and 48³
-  sets the constant, its derivation recorded beside it; the real pair at 32³ then reads
-  below the complex pair, and no swept complex size regresses.
-- **Risk / change class:** [patch] [perf]; regions
-  `crates/apollo-fft/src/application/execution/plan/fft/lanes.rs` and the 3-D probe;
-  **dependencies:** [#apollo-native-real-3d](#apollo-native-real-3d).
+- [PR #442](https://github.com/ryancinsight/apollo/pull/442): preserve the element floor and admit five wide lane groups through the chunk-aware policy from [Moirai #328](https://github.com/ryancinsight/Moirai/pull/328); production probe and runner: ef794330.
+- Core Ultra 9 285K evidence: real f64 32³ pair improves 12–20%; all 20 cases pass replicated counterbalanced regression checks without spread suppression. Gates: 644 native, 37 optimized and 37 standalone integration tests; clippy, format, doctest, rustdoc and standalone lock checks pass. Full evidence is in the PR; rejected multi-dispatch variants are not retained.
+
+<a id="apollo-melinoe-executor-receiver"></a>
+
+## APOLLO-MELINOE-EXECUTOR-RECEIVER-2026-09-11 — Track unpublished provider receiver construction [patch] — blocked
+
+- Scope: upstream Melinoe executor registration at local `af052fc`; independent of the lane-policy change and absent from its standalone dependency pins.
+- Finding: `shared_instance<E>` casts a static unit value to `&E`; `E: ParallelExecutor + 'static` does not establish size, alignment or validity for that reference. Source inspection establishes the unsound generic construction; no Miri reproduction has run.
+- Acceptance: upstream constructs a valid receiver or removes the receiver requirement, with an adversarial implementation test and Miri evidence; Apollo advances only to a corrected published commit.
+- Blocker: separate unpublished provider migration; re-open when its corrected Git revision is available. Basis: `src/sync/scoped/partition/executor.rs:149–215` in Melinoe `af052fc`.
 
 <a id="apollo-native-real-3d"></a>
 

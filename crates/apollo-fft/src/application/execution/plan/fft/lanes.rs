@@ -9,6 +9,11 @@ use eunomia::Complex;
 /// Existing multidimensional crossover, measured in total complex elements.
 const PARALLEL_THRESHOLD: usize = 32_768;
 
+/// The same crossover in bytes of complex f64 lane data, for a pass whose two
+/// sides differ in element type and length: a real field beside its half
+/// spectrum moves more than its output's element count says.
+const PARALLEL_BYTES: usize = PARALLEL_THRESHOLD * core::mem::size_of::<[f64; 2]>();
+
 /// Bytes of lane data one scheduled task carries when lanes need no workspace.
 ///
 /// One lane per task — the previous shape — made a 64³ pass 3.3x *slower*
@@ -21,6 +26,28 @@ const PARALLEL_THRESHOLD: usize = 32_768;
 /// serial (`dimension_3d::pass_attribution`, 2026-09-09). A lane at or above
 /// this size is one task, as before.
 const TASK_BYTES: usize = 64 * 1024;
+
+/// Five logical lane groups expose the packed 32³ inverse's parallel work while
+/// keeping the four-task complex 32×32×16 control serial. The element floor
+/// remains sufficient: replacing it would also serialize the four-task
+/// single-precision 32³ control. See `benches/lane_threshold.rs`.
+const PARALLEL_TASKS: usize = 5;
+
+struct LaneTasks<T>(core::marker::PhantomData<fn() -> T>);
+
+impl<T: 'static> moirai::ExecutionPolicy for LaneTasks<T> {
+    fn parallelize(len: usize) -> bool {
+        len >= PARALLEL_THRESHOLD
+    }
+
+    fn parallelize_chunks(len: usize, chunks: usize) -> bool {
+        // Confine the extension to representations whose element floor spans
+        // more than four full tasks; narrower types keep their established rule.
+        Self::parallelize(len)
+            || (core::mem::size_of::<T>() > (PARALLEL_TASKS - 1) * TASK_BYTES / PARALLEL_THRESHOLD
+                && chunks >= PARALLEL_TASKS)
+    }
+}
 
 /// Lanes per scheduled task for `lane_len`, never fewer than one.
 fn lanes_per_task<T>(lane_len: usize) -> usize {
@@ -113,29 +140,26 @@ pub(super) fn execute<F, const FORWARD: bool>(
 /// A task is a whole number of lanes, and `data` is a whole number of lanes,
 /// so every task boundary is a lane boundary and the shorter final task moirai
 /// may hand out still divides exactly.
-pub(super) fn each<T: Send>(
+pub(super) fn each<T: Send + 'static>(
     data: &mut [T],
     lane_len: usize,
     lane: impl Fn(&mut [T]) + Send + Sync,
 ) {
     assert!(lane_len > 0 && data.len().is_multiple_of(lane_len));
     let task_len = lane_len * lanes_per_task::<T>(lane_len);
-    moirai::for_each_chunk_mut_with::<moirai::AdaptiveWithThreshold<PARALLEL_THRESHOLD>, _, _>(
-        data,
-        task_len,
-        |task| {
-            #[cfg(all(test, not(miri)))]
-            crate::application::execution::kernel::worker_quiescence::record_worker();
-            let mut lanes = task.chunks_exact_mut(lane_len);
-            for one in &mut lanes {
-                lane(one);
-            }
-            debug_assert!(
-                lanes.into_remainder().is_empty(),
-                "invariant: task boundaries fall on lane boundaries"
-            );
-        },
-    );
+    let run = |task: &mut [T]| {
+        #[cfg(all(test, not(miri)))]
+        crate::application::execution::kernel::worker_quiescence::record_worker();
+        let mut lanes = task.chunks_exact_mut(lane_len);
+        for one in &mut lanes {
+            lane(one);
+        }
+        debug_assert!(
+            lanes.into_remainder().is_empty(),
+            "invariant: task boundaries fall on lane boundaries"
+        );
+    };
+    moirai::for_each_chunk_mut_with::<LaneTasks<T>, _, _>(data, task_len, run);
 }
 
 /// Runs `lane(state, output_lane, input_lane)` over the paired lanes of two
@@ -167,11 +191,7 @@ pub(super) fn paired<A, B, S>(
     let pair_bytes =
         output_lane * core::mem::size_of::<A>() + input_lane * core::mem::size_of::<B>();
     let lanes_per_task = (TASK_BYTES / pair_bytes.max(1)).max(1);
-    moirai::for_each_chunk_mut_enumerated_with::<
-        moirai::AdaptiveWithThreshold<PARALLEL_THRESHOLD>,
-        _,
-        _,
-    >(output, output_lane * lanes_per_task, |task, outputs| {
+    let run_task = |task: usize, outputs: &mut [A]| {
         #[cfg(all(test, not(miri)))]
         crate::application::execution::kernel::worker_quiescence::record_worker();
         let mut state = init();
@@ -179,7 +199,22 @@ pub(super) fn paired<A, B, S>(
         for (target, source) in outputs.chunks_exact_mut(output_lane).zip(inputs) {
             lane(&mut state, target, source);
         }
-    });
+    };
+    // Both sides count: the output's element count alone undercounts a pass
+    // that also reads a wider input.
+    if lanes * pair_bytes >= PARALLEL_BYTES {
+        moirai::for_each_chunk_mut_enumerated_with::<moirai::Parallel, _, _>(
+            output,
+            output_lane * lanes_per_task,
+            run_task,
+        );
+    } else {
+        moirai::for_each_chunk_mut_enumerated_with::<moirai::Sequential, _, _>(
+            output,
+            output_lane * lanes_per_task,
+            run_task,
+        );
+    }
 }
 
 fn transform<F, const FORWARD: bool>(lane: &mut [F::Complex], scratch: &mut [F::Complex])

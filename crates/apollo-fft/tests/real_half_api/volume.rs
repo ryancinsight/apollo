@@ -8,9 +8,11 @@ use leto::Array3;
 /// Shapes exercising the split (`nz` a multiple of four), each refusal (an odd
 /// `nz`, an even one that is not a multiple of four, one below four), and an
 /// extent of one on each axis in turn.
-const SHAPES: [[usize; 3]; 9] = [
+const SHAPES: [[usize; 3]; 11] = [
     [8, 6, 12],
     [16, 16, 16],
+    [32, 32, 16],
+    [32, 32, 32],
     [3, 5, 8],
     [7, 5, 9],
     [6, 4, 10],

@@ -9,7 +9,9 @@
 
 use crate::application::execution::kernel::mixed_radix::scalar::plan_scratch::PlanScratch;
 use crate::application::execution::kernel::mixed_radix::MixedRadixScalar;
-use crate::application::execution::kernel::real_fft::mirror_half_spectrum_in_place;
+use crate::application::execution::kernel::real_fft::{
+    mirror_half_spectrum_in_place, split_twiddles,
+};
 use crate::application::execution::plan::fft::dimension_1d::{FftPlan1D, StaticFftPlan1D};
 use crate::application::execution::plan::fft::dimension_2d::{FftPlan2D, StaticFftPlan2D};
 use crate::application::execution::plan::fft::dimension_3d::{FftPlan3D, StaticFftPlan3D};
@@ -146,7 +148,7 @@ where
         input: &[Self],
         out: &mut [Complex<Self::PlanScalar>],
     ) {
-        split::forward(input, out, |packed| {
+        split::forward(input, out, split_twiddles(input.len()), |packed| {
             half_plan.forward_complex_slice_inplace(packed);
         });
     }
@@ -170,7 +172,7 @@ where
         out: &mut [Self],
     ) {
         let n = out.len();
-        split::inverse_packed::<Self>(input, n, |packed| {
+        split::inverse_packed::<Self>(input, n, split_twiddles(n), |packed| {
             half_plan.inverse_complex_slice_inplace(packed);
         });
         split::unpack(&input[..n / 2], out);
