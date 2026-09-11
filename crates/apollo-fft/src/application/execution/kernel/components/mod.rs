@@ -1,7 +1,9 @@
 // The production-owned mixed-radix 8x16 base and its test-only probe.
+pub(crate) mod aligned;
 pub(crate) mod base128;
 pub(crate) mod batched;
 pub(crate) mod bluestein;
+pub(crate) mod column_route;
 // Test-gated: correct on every oracle but slower than the batched route as
 // built; its pinned probe is the same-process comparison instrument.
 pub(crate) mod butterflies;

@@ -25,10 +25,10 @@ use crate::application::execution::kernel::components::winograd::WinogradScalar;
 use eunomia::Complex;
 use hermes_simd::{LaneKernel, LaneScalar, Simd, SimdArch, SimdKernel, SimdStorage, Vector};
 
-const C1: f64 = 0.309_016_994_374_947_45;
-const C2: f64 = -0.809_016_994_374_947_5;
-const S1: f64 = 0.951_056_516_295_153_5;
-const S2: f64 = 0.587_785_252_292_473_1;
+use crate::application::execution::kernel::components::register_butterfly::{
+    radix5, Fifths, FIFTH_C1 as C1, FIFTH_C2 as C2, FIFTH_S1 as S1, FIFTH_S2 as S2,
+};
+use hermes_simd::ComplexReg;
 
 /// One radix-5 pass: `g_count` groups of `prev_len` butterflies over five
 /// source rows `g_count * prev_len` complexes apart, each group's five
@@ -43,28 +43,15 @@ pub(in super::super) struct FlatPassR5<'a, T, const INVERSE: bool> {
     pub(in super::super) pointwise: Option<&'a [Complex<T>]>,
 }
 
-/// The register constants of the butterfly: the cosines, and the sines
-/// signed by direction times the `(-1, 1)` of a quarter turn.
-#[derive(Clone, Copy)]
-struct Constants<T, A>
-where
-    T: LaneScalar,
-    A: SimdArch + SimdKernel<T>,
-{
-    c1: Vector<T, A>,
-    c2: Vector<T, A>,
-    s1_turn: Vector<T, A>,
-    s2_turn: Vector<T, A>,
-}
-
-/// The five-point butterfly on one register of complexes per arm.
+/// The five-point butterfly on one register of complexes per arm, on the
+/// shared register form ([`radix5`]).
 #[expect(
     clippy::inline_always,
     reason = "must fold into the caller's target-feature scope; an out-of-line butterfly reintroduces the ADR 009 penalty"
 )]
 #[inline(always)]
 fn dft5<T, A>(
-    k: Constants<T, A>,
+    k: &Fifths<T, A>,
     a0: Vector<T, A>,
     a1: Vector<T, A>,
     a2: Vector<T, A>,
@@ -75,17 +62,23 @@ where
     T: LaneScalar,
     A: SimdArch + SimdKernel<T>,
 {
-    let t1 = a1 + a4;
-    let t3 = a2 + a3;
-    let t2s = (a1 - a4).swap_adjacent();
-    let t4s = (a2 - a3).swap_adjacent();
-    let m1 = t3.mul_add(k.c2, t1 * k.c1);
-    let m2 = t3.mul_add(k.c1, t1 * k.c2);
-    let iq3 = t4s.mul_add(k.s2_turn, t2s * k.s1_turn);
-    let iq4 = t2s.mul_sub(k.s2_turn, t4s * k.s1_turn);
-    let a1c = a0 + m1;
-    let a2c = a0 + m2;
-    [a0 + (t1 + t3), a1c + iq3, a2c + iq4, a2c - iq4, a1c - iq3]
+    let out = radix5::<T, A>(
+        [
+            ComplexReg::from_interleaved(a0),
+            ComplexReg::from_interleaved(a1),
+            ComplexReg::from_interleaved(a2),
+            ComplexReg::from_interleaved(a3),
+            ComplexReg::from_interleaved(a4),
+        ],
+        k,
+    );
+    [
+        out[0].into_interleaved(),
+        out[1].into_interleaved(),
+        out[2].into_interleaved(),
+        out[3].into_interleaved(),
+        out[4].into_interleaved(),
+    ]
 }
 
 /// The scalar five-point butterfly on twiddled arms.
@@ -151,7 +144,7 @@ where
         // `i q` on the swapped `q` is `(-qi, qr)`: the sign pair `(-1, 1)`,
         // folded into the direction-signed sines.
         let (s1, s2) = if INVERSE { (S1, S2) } else { (-S1, -S2) };
-        let k = Constants {
+        let k = Fifths {
             c1: simd.splat(T::from_f64(C1)),
             c2: simd.splat(T::from_f64(C2)),
             s1_turn: Vector::<T, A>::splat_pair(T::from_f64(-s1), T::from_f64(s1)),
@@ -170,7 +163,7 @@ where
                 // stays inside `src`, and `5 (g + per) + spill <= dst.len()`.
                 unsafe {
                     let b = dft5(
-                        k,
+                        &k,
                         load::<T, A>(src, g),
                         load::<T, A>(src, stride + g),
                         load::<T, A>(src, 2 * stride + g),
@@ -210,7 +203,7 @@ where
                     let a2 = cmul(load::<T, A>(src, 2 * stride + at), w2);
                     let a3 = cmul(load::<T, A>(src, 3 * stride + at), w3);
                     let a4 = cmul(load::<T, A>(src, 4 * stride + at), w4);
-                    store_arm_halves::<T, A, 5>(dft5(k, a0, a1, a2, a3, a4), dst, g * stage_chunk);
+                    store_arm_halves::<T, A, 5>(dft5(&k, a0, a1, a2, a3, a4), dst, g * stage_chunk);
                 }
                 g += 2;
             }
@@ -240,7 +233,7 @@ where
                         load_prefix::<T, A>(src, 4 * stride + at, prev_len, m),
                         load_prefix::<T, A>(tw, 3 * prev_len, prev_len, m),
                     );
-                    let b = dft5(k, a0, a1, a2, a3, a4);
+                    let b = dft5(&k, a0, a1, a2, a3, a4);
                     for arm in 0..5 {
                         store_prefix(b[arm], dst, g * stage_chunk + arm * prev_len, prev_len, m);
                     }
@@ -299,7 +292,7 @@ where
                             let a2 = cmul(load::<T, A>(src, 2 * stride + at), t2);
                             let a3 = cmul(load::<T, A>(src, 3 * stride + at), t3);
                             let a4 = cmul(load::<T, A>(src, 4 * stride + at), t4);
-                            let b = dft5(k, a0, a1, a2, a3, a4);
+                            let b = dft5(&k, a0, a1, a2, a3, a4);
                             for arm in 0..5 {
                                 store(b[arm], dst, dst_base + j + arm * prev_len);
                             }
@@ -328,7 +321,7 @@ where
                                 load_prefix::<T, A>(src, 4 * stride + at, c, m),
                                 load_prefix::<T, A>(tw, 3 * prev_len + j, c, m),
                             );
-                            let b = dft5(k, a0, a1, a2, a3, a4);
+                            let b = dft5(&k, a0, a1, a2, a3, a4);
                             for arm in 0..5 {
                                 store_prefix(b[arm], dst, dst_base + j + arm * prev_len, c, m);
                             }
@@ -358,7 +351,7 @@ where
                             load::<T, A>(src, 4 * stride + at),
                             load::<T, A>(tw, 3 * prev_len + j),
                         );
-                        let b = dft5(k, a0, a1, a2, a3, a4);
+                        let b = dft5(&k, a0, a1, a2, a3, a4);
                         for arm in 0..5 {
                             store(b[arm], dst, dst_base + j + arm * prev_len);
                         }

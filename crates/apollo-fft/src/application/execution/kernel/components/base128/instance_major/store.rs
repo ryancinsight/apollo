@@ -82,7 +82,7 @@ pub(crate) struct SplitSinks<T> {
 
 /// Lanes starting on a 64-byte boundary: a `Box<[T]>` lands at the
 /// allocator's 16, so a 32-byte table load could split a cache line by
-/// the heap's luck ([`super::plan::CacheLineAligned`]); the table starts
+/// the heap's luck ([`crate::application::execution::kernel::components::aligned::CacheLineAligned`]); the table starts
 /// at the first boundary inside its buffer instead.
 struct AlignedLanes<T> {
     buffer: Box<[T]>,
