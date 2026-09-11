@@ -87,7 +87,7 @@ impl<T: MixedRadixScalar<Complex = Complex<T>>> SplitSinks<T> {
             Box::default()
         };
         let outer = if n >= 4 * base {
-            interleaved(&twiddles[2 * base - 1..4 * base - 1])
+            interleaved(&twiddles[2 * base - 1..3 * base - 1])
         } else {
             Box::default()
         };
@@ -107,7 +107,7 @@ impl<T: MixedRadixScalar<Complex = Complex<T>>> SplitSinks<T> {
         &self.inner
     }
 
-    /// `W_{4 BASE}^j`, `j < 2 BASE`, dup-split; empty below four blocks.
+    /// `W_{4 BASE}^j`, `j < BASE`, interleaved; empty below four blocks.
     pub(crate) fn outer(&self) -> &[T] {
         &self.outer
     }
@@ -234,7 +234,16 @@ impl<T: LaneScalar, const LANES: usize, const TW_LANES: usize> StoreSink<T>
 /// `W_{4 BASE}^j` combining them into the four quarters of `out` at
 /// `chunk`. No block writes an intermediate pair: the even half that the
 /// two-level form stored and reloaded is formed here from the spectra.
-pub(crate) struct FinalRadix4Sink<'a, T, const LANES: usize, const TW_LANES: usize> {
+/// The high half of the outer level is the low half rotated a quarter
+/// turn (`W_{4 BASE}^{j + BASE} = -+ i W_{4 BASE}^j`), so one table serves
+/// both and the route holds half the outer twiddles.
+pub(crate) struct FinalRadix4Sink<
+    'a,
+    T,
+    const LANES: usize,
+    const TW_LANES: usize,
+    const INVERSE: bool,
+> {
     /// Subsequence 0's spectrum.
     pub(crate) sub0: &'a [T; LANES],
     /// Subsequence 2's spectrum, the even half's odd block.
@@ -244,13 +253,11 @@ pub(crate) struct FinalRadix4Sink<'a, T, const LANES: usize, const TW_LANES: usi
     /// `W_{2 BASE}^j` per chunk, dup-split.
     pub(crate) inner_tw: &'a [T; TW_LANES],
     /// `W_{4 BASE}^j` per chunk, `j < BASE`, interleaved.
-    pub(crate) outer_low_tw: &'a [T; LANES],
-    /// `W_{4 BASE}^{j + BASE}` per chunk, interleaved.
-    pub(crate) outer_high_tw: &'a [T; LANES],
+    pub(crate) outer_tw: &'a [T; LANES],
 }
 
-impl<T: LaneScalar, const LANES: usize, const TW_LANES: usize> StoreSink<T>
-    for FinalRadix4Sink<'_, T, LANES, TW_LANES>
+impl<T: LaneScalar, const LANES: usize, const TW_LANES: usize, const INVERSE: bool> StoreSink<T>
+    for FinalRadix4Sink<'_, T, LANES, TW_LANES, INVERSE>
 {
     const OUT_BLOCKS: usize = 4;
 
@@ -272,8 +279,14 @@ impl<T: LaneScalar, const LANES: usize, const TW_LANES: usize> StoreSink<T>
         let (even_low, even_high) = sub0.butterfly(twiddled(simd, self.inner_tw, sub2, chunk));
         let sub1 = input(simd, self.sub1, chunk);
         let (odd_low, odd_high) = sub1.butterfly(twiddled(simd, self.inner_tw, reg, chunk));
-        let (out0, out2) = even_low.butterfly(odd_low * input(simd, self.outer_low_tw, chunk));
-        let (out1, out3) = even_high.butterfly(odd_high * input(simd, self.outer_high_tw, chunk));
+        let outer = input(simd, self.outer_tw, chunk);
+        let odd_high = if INVERSE {
+            odd_high.mul_i()
+        } else {
+            odd_high.mul_neg_i()
+        };
+        let (out0, out2) = even_low.butterfly(odd_low * outer);
+        let (out1, out3) = even_high.butterfly(odd_high * outer);
         put(simd, out0.into_interleaved(), out, chunk);
         put(simd, out1.into_interleaved(), out, block + chunk);
         put(simd, out2.into_interleaved(), out, 2 * block + chunk);

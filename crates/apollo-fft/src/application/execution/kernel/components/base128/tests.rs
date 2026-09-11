@@ -453,10 +453,7 @@ fn dynamic_split_plans_keep_their_sink_tables_in_the_base_state() {
         );
         assert!(plan.twiddle_inv.get().is_none());
         assert_eq!(state.sinks().inner().len(), 2 * 512);
-        assert_eq!(
-            state.sinks().outer().len(),
-            if n == 1024 { 2 * 512 } else { 0 }
-        );
+        assert_eq!(state.sinks().outer().len(), if n == 1024 { 512 } else { 0 });
         assert!(!state.inverse_is_initialized() && !state.inverse_sinks_initialized());
         let clone = plan.clone();
         assert!(std::sync::Arc::ptr_eq(
