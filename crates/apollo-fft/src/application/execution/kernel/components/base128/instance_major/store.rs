@@ -227,127 +227,20 @@ impl<T: LaneScalar, const LANES: usize, const TW_LANES: usize> StoreSink<T>
     }
 }
 
-/// Chunk `chunk` of `out` as a complex register.
-#[expect(
-    clippy::inline_always,
-    reason = "the base kernel invokes this once per SIMD chunk"
-)]
-#[inline(always)]
-fn take<T, A>(simd: &Simd<T, A>, out: &[T], chunk: usize) -> ComplexReg<T, A>
-where
-    T: LaneScalar,
-    A: SimdArch + SimdKernel<T>,
-{
-    let lanes = <A as SimdStorage<T>>::LANE_COUNT;
-    let offset = chunk * lanes;
-    debug_assert!(
-        offset + lanes <= out.len(),
-        "invariant: sink chunk in bounds"
-    );
-    let _ = simd;
-    // SAFETY: as `put` — the kernel's entry assertion on `out.len()` and
-    // the chunk arithmetic keep the load in bounds; `simd` proves the host.
-    ComplexReg::from_interleaved(unsafe { Vector::load_unaligned(out.as_ptr().add(offset)) })
-}
-
-/// The last block of four: its pair butterfly against `peer`, then the
-/// outer level against the even pair's halves, the four outputs stored to
-/// the four quarters of `out` at `chunk`.
-#[expect(
-    clippy::inline_always,
-    reason = "the base kernel invokes this once per SIMD chunk"
-)]
-#[expect(
-    clippy::too_many_arguments,
-    reason = "one butterfly's operands; bundling them would be the sink itself"
-)]
-#[inline(always)]
-fn final_combine<T, A, const LANES: usize, const TW_LANES: usize>(
-    simd: &Simd<T, A>,
-    reg: ComplexReg<T, A>,
-    chunk: usize,
-    out: &mut [T],
-    peer: &[T; LANES],
-    inner_tw: &[T; TW_LANES],
-    even_low: ComplexReg<T, A>,
-    even_high: ComplexReg<T, A>,
-    outer_low_tw: &[T; LANES],
-    outer_high_tw: &[T; LANES],
-) where
-    T: LaneScalar,
-    A: SimdArch + SimdKernel<T>,
-{
-    let block = LANES / <A as SimdStorage<T>>::LANE_COUNT;
-    let peer = input(simd, peer, chunk);
-    let (odd_low, odd_high) = peer.butterfly(twiddled(simd, inner_tw, reg, chunk));
-    let (out0, out2) = even_low.butterfly(odd_low * input(simd, outer_low_tw, chunk));
-    let (out1, out3) = even_high.butterfly(odd_high * input(simd, outer_high_tw, chunk));
-    put(simd, out0.into_interleaved(), out, chunk);
-    put(simd, out1.into_interleaved(), out, block + chunk);
-    put(simd, out2.into_interleaved(), out, 2 * block + chunk);
-    put(simd, out3.into_interleaved(), out, 3 * block + chunk);
-}
-
-/// The last block of four applies its pair butterfly against `peer` and
-/// the outer level against the even pair's halves, held apart from `out`,
-/// as its registers leave the kernel: `out` is the four-block spectrum,
-/// filled in one pass. The form for a block that reads `out` itself.
-pub(crate) struct FinalCombineSink<'a, T, const LANES: usize, const TW_LANES: usize> {
-    /// The third block's spectrum.
-    pub(crate) peer: &'a [T; LANES],
-    /// `W_{2 BASE}^j` per chunk, dup-split.
-    pub(crate) inner_tw: &'a [T; TW_LANES],
-    /// The even pair's low half.
-    pub(crate) even_low: &'a [T; LANES],
-    /// The even pair's high half.
-    pub(crate) even_high: &'a [T; LANES],
-    /// `W_{4 BASE}^j` per chunk, `j < BASE`, interleaved.
-    pub(crate) outer_low_tw: &'a [T; LANES],
-    /// `W_{4 BASE}^{j + BASE}` per chunk, interleaved.
-    pub(crate) outer_high_tw: &'a [T; LANES],
-}
-
-impl<T: LaneScalar, const LANES: usize, const TW_LANES: usize> StoreSink<T>
-    for FinalCombineSink<'_, T, LANES, TW_LANES>
-{
-    const OUT_BLOCKS: usize = 4;
-
-    #[expect(
-        clippy::inline_always,
-        reason = "the base kernel invokes this concrete sink once per SIMD chunk"
-    )]
-    #[inline(always)]
-    fn store<A: SimdArch + SimdKernel<T>>(
-        &mut self,
-        simd: &Simd<T, A>,
-        reg: ComplexReg<T, A>,
-        chunk: usize,
-        out: &mut [T],
-    ) {
-        let even_low = input(simd, self.even_low, chunk);
-        let even_high = input(simd, self.even_high, chunk);
-        final_combine(
-            simd,
-            reg,
-            chunk,
-            out,
-            self.peer,
-            self.inner_tw,
-            even_low,
-            even_high,
-            self.outer_low_tw,
-            self.outer_high_tw,
-        );
-    }
-}
-
-/// [`FinalCombineSink`] with the even pair's halves already in the first
-/// two quarters of `out`, read at `chunk` before the four outputs overwrite
-/// them: the form for a block whose samples were gathered, so `out` holds
-/// nothing it still needs.
-pub(crate) struct FinalCombineInPlaceSink<'a, T, const LANES: usize, const TW_LANES: usize> {
-    /// The third block's spectrum.
-    pub(crate) peer: &'a [T; LANES],
+/// The last block of four: the radix-4 step over the four block spectra
+/// as its registers leave the kernel. `sub0`, `sub2`, and `sub1` are the
+/// other three blocks' spectra; the even half is `sub0 -+ W_{2 BASE}^j
+/// sub2` and the odd half `sub1 -+ W_{2 BASE}^j reg`, the outer level
+/// `W_{4 BASE}^j` combining them into the four quarters of `out` at
+/// `chunk`. No block writes an intermediate pair: the even half that the
+/// two-level form stored and reloaded is formed here from the spectra.
+pub(crate) struct FinalRadix4Sink<'a, T, const LANES: usize, const TW_LANES: usize> {
+    /// Subsequence 0's spectrum.
+    pub(crate) sub0: &'a [T; LANES],
+    /// Subsequence 2's spectrum, the even half's odd block.
+    pub(crate) sub2: &'a [T; LANES],
+    /// Subsequence 1's spectrum, the odd half's even block.
+    pub(crate) sub1: &'a [T; LANES],
     /// `W_{2 BASE}^j` per chunk, dup-split.
     pub(crate) inner_tw: &'a [T; TW_LANES],
     /// `W_{4 BASE}^j` per chunk, `j < BASE`, interleaved.
@@ -357,7 +250,7 @@ pub(crate) struct FinalCombineInPlaceSink<'a, T, const LANES: usize, const TW_LA
 }
 
 impl<T: LaneScalar, const LANES: usize, const TW_LANES: usize> StoreSink<T>
-    for FinalCombineInPlaceSink<'_, T, LANES, TW_LANES>
+    for FinalRadix4Sink<'_, T, LANES, TW_LANES>
 {
     const OUT_BLOCKS: usize = 4;
 
@@ -374,19 +267,16 @@ impl<T: LaneScalar, const LANES: usize, const TW_LANES: usize> StoreSink<T>
         out: &mut [T],
     ) {
         let block = LANES / <A as SimdStorage<T>>::LANE_COUNT;
-        let even_low = take(simd, out, chunk);
-        let even_high = take(simd, out, block + chunk);
-        final_combine(
-            simd,
-            reg,
-            chunk,
-            out,
-            self.peer,
-            self.inner_tw,
-            even_low,
-            even_high,
-            self.outer_low_tw,
-            self.outer_high_tw,
-        );
+        let sub0 = input(simd, self.sub0, chunk);
+        let sub2 = input(simd, self.sub2, chunk);
+        let (even_low, even_high) = sub0.butterfly(twiddled(simd, self.inner_tw, sub2, chunk));
+        let sub1 = input(simd, self.sub1, chunk);
+        let (odd_low, odd_high) = sub1.butterfly(twiddled(simd, self.inner_tw, reg, chunk));
+        let (out0, out2) = even_low.butterfly(odd_low * input(simd, self.outer_low_tw, chunk));
+        let (out1, out3) = even_high.butterfly(odd_high * input(simd, self.outer_high_tw, chunk));
+        put(simd, out0.into_interleaved(), out, chunk);
+        put(simd, out1.into_interleaved(), out, block + chunk);
+        put(simd, out2.into_interleaved(), out, 2 * block + chunk);
+        put(simd, out3.into_interleaved(), out, 3 * block + chunk);
     }
 }
