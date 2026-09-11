@@ -99,9 +99,27 @@ Every other length holds its reading. Census of the route (`chain.py`):
 multiply-adds against 10 and 28, thirteen stack moves in the body), the
 column pass 51 against RustFFT's 5xn body of 63. Kept: 28% under the
 composite route on the performance core and at RustFFT on the efficiency
-core, the residue the kernel's fused-multiply count. `f64` 180 stays on the
-composite route (1.27 to 1.52) until the two-complexes-a-register layout
-lands (`backlog.md#apollo-column-route-f64-180`).
+core, the residue the kernel's fused-multiply count.
+
+- **2026-09-11, the layout at two complexes a register
+  (`APOLLO-COLUMN-ROUTE-F64-180`).** The 36-point kernel gains the six-by-six
+  form (a row of six as three registers of two, a radix-6 as a three-by-two
+  Good-Thomas across the six row registers, nine 2x2 transposes, the
+  radix-6 across the six column registers — RustFFT's `Butterfly36Avx64`
+  shape) selected by the register's complex count, and the column pass and
+  interleave run at either width from tables built for the frame's lane
+  count; the plan builds the route wherever `LaneScalar::FRAME_LANES` is
+  four or eight. Pinned probe, two runs
+  (`output/apollo-base128/small_sizes_column180f64_run{1,2}_2026-09-11.txt`),
+  apollo / RustFFT: `f64` 180 on the performance core 1.06 / 0.68 (155.6,
+  148.8 us against RustFFT's 146.5 / 218.7, the composite route's 222) and
+  0.95 / 0.94 on the efficiency core (329.7, 329.1 against 348.2 / 348.5,
+  the composite route's 443). Kept. Census: the `f64` route 339
+  instructions in one frame, the kernel body 178 with 52 stack moves
+  against RustFFT's `Butterfly36Avx64`; the `f32` route unchanged. The
+  `f32` 32 efficiency-core row moved 18.1 to 20.9 us between the run pairs
+  with its body's census identical (133 vector instructions, every class
+  the same): code placement, not the kernel.
 
 ## Alternatives
 
