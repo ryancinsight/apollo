@@ -96,8 +96,9 @@ where
     >(data, plan, sinks)
 }
 
-/// The 128 base in the shape its state selected and, at four lanes, the
-/// radix-3 step over three of its blocks for 384 samples.
+/// The 128 base in the shape its state selected and the radix-3 step over
+/// three of its blocks for 384 samples, the blocks reading the parent at
+/// either width.
 pub(crate) fn transform_via_base_128<F, const INVERSE: bool, const MEASURE: bool>(
     data: &mut [F::Complex],
     state: &instance_major::State128<F>,
@@ -128,23 +129,22 @@ where
             >(data, plan, sinks)
         }
         instance_major::State128::FourRows(state) => {
-            if data.len() != 128 {
-                return false;
-            }
-            let plan = if INVERSE {
-                state.inverse()
+            let (plan, sinks) = if INVERSE {
+                (state.inverse(), state.inverse_sinks())
             } else {
-                state.forward()
+                (state.forward(), state.sinks())
             };
-            instance_major::transform_block::<
+            transform_via_base::<
                 F,
                 INVERSE,
                 MEASURE,
                 4,
                 32,
+                128,
                 256,
+                512,
                 { instance_major::table_lanes(4, 32) },
-            >(data, plan)
+            >(data, plan, sinks)
         }
     }
 }
@@ -246,8 +246,8 @@ where
     };
     debug_assert_eq!(sinks.inner().len(), SINK_LANES);
     let blocks = n / BASE;
-    // Three blocks read the parent directly at every width the plan
-    // selects them (the eight-lane state never does).
+    // Three blocks read the parent directly at either width (a stride-three
+    // register from three-sample-apart windows); four gather at eight.
     let gathered_width = blocks == 4 && plan.native_eight_lanes();
     let scratch_len = n;
     <F as crate::application::execution::kernel::mixed_radix::MixedRadixScalar>::with_scratch(

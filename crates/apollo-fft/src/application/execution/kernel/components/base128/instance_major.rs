@@ -417,13 +417,6 @@ where
         }
     }
 
-    /// Whether this state serves 384 as three 128-blocks: the three-block
-    /// source reads the parent at four lanes only (`rows::strided`), the
-    /// eight-row shape's width.
-    pub(crate) const fn serves_three_blocks(&self) -> bool {
-        matches!(self, Self::EightRows(_))
-    }
-
     #[cfg(test)]
     pub(crate) fn inverse_is_initialized(&self) -> bool {
         match self {
