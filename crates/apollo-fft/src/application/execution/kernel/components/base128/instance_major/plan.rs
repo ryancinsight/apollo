@@ -55,6 +55,12 @@ impl<T: MixedRadixScalar, const ROWS: usize, const ROW_LEN: usize, const TABLE_L
         let four_lanes_supported = !eight_lanes_supported && native_lanes_supported::<4, T>();
         let lane_width =
             select_lane_width(size_of::<T>(), eight_lanes_supported, four_lanes_supported)?;
+        // The 32-sample row's eight-lane layout is ADR 0061's next slice; an
+        // eight-lane host keeps the split rather than a plan whose kernel
+        // declines.
+        if ROW_LEN == 32 && matches!(lane_width, BaseLaneWidth::Eight) {
+            return None;
+        }
         Some(Self::new::<INVERSE>(lane_width))
     }
 
@@ -72,16 +78,12 @@ impl<T: MixedRadixScalar, const ROWS: usize, const ROW_LEN: usize, const TABLE_L
             [c, s]
         };
         debug_assert_eq!(TABLE_LANES, table_lanes(ROWS, ROW_LEN));
-        assert!(
-            ROW_LEN == 16,
-            "invariant: the row layer below is the sixteen-sample one; ADR 0061's 32-sample rows follow"
-        );
         let n = ROW_LEN * ROWS;
         let mut table = Vec::with_capacity(TABLE_LANES);
         for a in 1..ROWS {
             let groups = match lane_width {
-                BaseLaneWidth::Four => 8,
-                BaseLaneWidth::Eight => 4,
+                BaseLaneWidth::Four => ROW_LEN / 2,
+                BaseLaneWidth::Eight => ROW_LEN / 4,
             };
             let samples_per_group = match lane_width {
                 BaseLaneWidth::Four => 2,
@@ -103,12 +105,21 @@ impl<T: MixedRadixScalar, const ROWS: usize, const ROW_LEN: usize, const TABLE_L
                 table.extend([c; 4].map(T::from_precise));
             }
         };
-        let row1 = w(1, 16);
-        let row3 = w(3, 16);
-        push_broadcast(row1);
-        push_broadcast(row3);
-        let neg1 = row1;
-        push_broadcast([-neg1[0], -neg1[1]]);
+        if ROW_LEN == 32 {
+            // `W_32^{1,3,5,7}` and `W_16^{1,3}`: every `W_32^{b0 m}` of the
+            // `4 x 8` layer is one of these under a rotation or a sign, or an
+            // eighth's `sqrt(2)/2` scaling.
+            for (j, n) in [(1, 32), (3, 32), (5, 32), (7, 32), (1, 16), (3, 16)] {
+                push_broadcast(w(j, n));
+            }
+        } else {
+            let row1 = w(1, 16);
+            let row3 = w(3, 16);
+            push_broadcast(row1);
+            push_broadcast(row3);
+            let neg1 = row1;
+            push_broadcast([-neg1[0], -neg1[1]]);
+        }
         table.extend([core::f64::consts::FRAC_1_SQRT_2; 4].map(T::from_precise));
 
         let col = [w(1, 8), w(3, 8)].map(|v| [T::from_precise(v[0]), T::from_precise(v[1])]);

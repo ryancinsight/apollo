@@ -13,6 +13,7 @@ use eunomia::Complex;
 
 use super::strategy::generic_four_step_applies;
 use super::FftPlan1D;
+use crate::application::execution::kernel::components::base128::instance_major::transform_256;
 use crate::application::execution::kernel::components::base128::instance_major::transform_64;
 use crate::application::execution::kernel::components::base128::transform_via_base_128;
 
@@ -327,6 +328,39 @@ pub(super) fn exec_base64_inverse_unnorm<F: MixedRadixScalar<Complex = Complex<F
     assert!(
         transform_64::<F, true>(slice, plan.base64_inverse_plan()),
         "invariant: the selected base-64 capability remains available"
+    );
+}
+
+/// The 256-point two-pass base (ADR 0061): one kernel where the split
+/// makes a gather, two 128-blocks and a combine.
+pub(super) fn exec_base256_forward<F: MixedRadixScalar<Complex = Complex<F>>>(
+    plan: &FftPlan1D<F>,
+    slice: &mut [F::Complex],
+) {
+    assert!(
+        transform_256::<F, false, false>(slice, plan.base256_forward_plan()),
+        "invariant: the selected base-256 capability remains available"
+    );
+}
+
+pub(super) fn exec_base256_inverse<F: MixedRadixScalar<Complex = Complex<F>>>(
+    plan: &FftPlan1D<F>,
+    slice: &mut [F::Complex],
+) {
+    assert!(
+        transform_256::<F, true, false>(slice, plan.base256_inverse_plan()),
+        "invariant: the selected base-256 capability remains available"
+    );
+    F::normalize(slice, plan.len());
+}
+
+pub(super) fn exec_base256_inverse_unnorm<F: MixedRadixScalar<Complex = Complex<F>>>(
+    plan: &FftPlan1D<F>,
+    slice: &mut [F::Complex],
+) {
+    assert!(
+        transform_256::<F, true, false>(slice, plan.base256_inverse_plan()),
+        "invariant: the selected base-256 capability remains available"
     );
 }
 
