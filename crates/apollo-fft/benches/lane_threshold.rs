@@ -4,7 +4,7 @@
 //! The CSV preserves all observations and median intervals; minima alone
 //! cannot establish a crossover or exclude control regressions.
 //!
-//! Reports; asserts only that each round trip returns to its input. Run with
+//! Checks an analytical spectrum and dense round trips before reporting. Run with
 //! `cargo bench -p apollo-fft --bench lane_threshold`. Rows are round trips.
 
 use apollo_bench::{
