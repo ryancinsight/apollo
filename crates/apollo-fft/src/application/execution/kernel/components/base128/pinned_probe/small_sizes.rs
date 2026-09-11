@@ -109,20 +109,80 @@ where
             },
         );
         if n == 128 {
-            let base_plan = super::instance_major::Plan128::<T>::new_if_supported::<false>()
-                .expect("the pinned host must provide a native base capability");
+            // Both shapes of the 128 base as bare arms in one run: the
+            // plan's form and the other, so their comparison is within the
+            // run and not across the probe's run-to-run drift.
+            let eight_rows = super::instance_major::BasePlan::<
+                T,
+                8,
+                16,
+                { super::instance_major::table_lanes(8, 16) },
+            >::new_if_supported::<false>()
+            .expect("the pinned host must provide a native base capability");
+            let four_rows = super::instance_major::BasePlan::<
+                T,
+                4,
+                32,
+                { super::instance_major::table_lanes(4, 32) },
+            >::new_if_supported::<false>()
+            .expect("the pinned host must provide a native base capability");
             work.copy_from_slice(&src);
             assert!(
-                super::instance_major::transform_128::<T, false, false>(work, &base_plan),
+                super::instance_major::transform_block::<
+                    T,
+                    false,
+                    false,
+                    8,
+                    16,
+                    256,
+                    { super::instance_major::table_lanes(8, 16) },
+                >(work, &eight_rows),
                 "the pinned host must provide a native base capability"
             );
             suite.run(
-                BenchmarkCase::new(core, format!("base-128-{scalar}"), n),
+                BenchmarkCase::new(core, format!("base-128-8x16-{scalar}"), n),
                 || {
                     work.copy_from_slice(&src);
-                    std::hint::black_box(super::instance_major::transform_128::<T, false, false>(
-                        std::hint::black_box(&mut *work),
-                        &base_plan,
+                    std::hint::black_box(super::instance_major::transform_block::<
+                        T,
+                        false,
+                        false,
+                        8,
+                        16,
+                        256,
+                        { super::instance_major::table_lanes(8, 16) },
+                    >(
+                        std::hint::black_box(&mut *work), &eight_rows
+                    ));
+                },
+            );
+            work.copy_from_slice(&src);
+            assert!(
+                super::instance_major::transform_block::<
+                    T,
+                    false,
+                    false,
+                    4,
+                    32,
+                    256,
+                    { super::instance_major::table_lanes(4, 32) },
+                >(work, &four_rows),
+                "the pinned host must provide a native base capability"
+            );
+            suite.run(
+                BenchmarkCase::new(core, format!("base-128-4x32-{scalar}"), n),
+                || {
+                    work.copy_from_slice(&src);
+                    std::hint::black_box(super::instance_major::transform_block::<
+                        T,
+                        false,
+                        false,
+                        4,
+                        32,
+                        256,
+                        { super::instance_major::table_lanes(4, 32) },
+                    >(
+                        std::hint::black_box(&mut *work), &four_rows
                     ));
                 },
             );
