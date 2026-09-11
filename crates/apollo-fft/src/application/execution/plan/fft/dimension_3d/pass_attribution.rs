@@ -23,6 +23,10 @@
 //!   runs instead, `(x, y, z)` to `(y, z, x)` to `(z, x, y)` and back.
 //! - `rotated-pair` — the same round trip through the entry points that leave
 //!   and accept `(z, x, y)`: four moves against `full`'s six.
+//! - `real-half-pair` — the real half-spectrum pair on the real part of the
+//!   volume: z lanes through the real split, x and y on the `(n, n, n/2 + 1)`
+//!   half volume. `full` is what a real field pays when it is widened to
+//!   complex instead.
 //!
 //! Every arm is a round trip so its buffer returns to its input and no
 //! per-iteration reseed is charged to the reading. A forward is then
@@ -54,7 +58,7 @@ use super::super::lanes;
 use super::super::layout::transpose_matrices;
 use crate::application::execution::kernel::mixed_radix::dispatch_inplace;
 use crate::application::execution::kernel::mixed_radix::scalar::plan_scratch::with_3d_y_scratch;
-use crate::{FftPlan3D, Shape3D};
+use crate::{FftPlan3D, RealFftData, Shape3D};
 
 /// Extents the consumers plan; the same two the kwavers baseline reads.
 const EXTENTS: [usize; 2] = [32, 64];
@@ -221,6 +225,25 @@ fn assert_returns_to_input(label: &str, n: usize, result: &[Complex64], input: &
     );
 }
 
+/// The real pair's round trip against its input: the forward and the
+/// normalized inverse each within `16 log2(N) u ||x||_1` per sample, the bound
+/// `tests/real_half_api` derives for the same pair.
+fn assert_real_returns_to_input(n: usize, result: &[f64], input: &[f64]) {
+    assert_eq!(result.len(), input.len());
+    let total = n * n * n;
+    let l1: f64 = input.iter().map(|value| value.abs()).sum();
+    let bound = 2.0 * 16.0 * (total as f64).log2() * (f64::EPSILON / 2.0) * l1;
+    let error = result
+        .iter()
+        .zip(input)
+        .map(|(actual, start)| (actual - start).abs())
+        .fold(0.0_f64, f64::max);
+    assert!(
+        error <= bound,
+        "real-half-pair at {n}: round trip departs from its input by {error:e} against {bound:e}"
+    );
+}
+
 /// A column of the named case, read from the suite's CSV report.
 ///
 /// The report is the suite's stable surface (`case,min_ps,median_ps,...`); the
@@ -352,6 +375,25 @@ fn arms_for_extent(suite: &mut BenchmarkSuite, n: usize) {
     suite.run(BenchmarkCase::new("unpinned", "rotated-pair", n), || {
         let rotated = plan.forward_complex_rotated(std::hint::black_box(&mut array));
         plan.inverse_complex_rotated(rotated);
+    });
+
+    // The real half-spectrum pair on the real part of the same volume. The
+    // input is only read and the spectrum is consumed and rewritten, so every
+    // round trip starts from the same field.
+    let real = Array3::from_shape_vec([n, n, n], input.iter().map(|z| z.re).collect())
+        .expect("invariant: the volume has n^3 elements");
+    let mut half = Array3::from_elem([n, n, n / 2 + 1], Complex64::default());
+    let mut back = Array3::from_elem([n, n, n], 0.0_f64);
+    f64::forward_3d_half_into(&plan, &real, &mut half);
+    f64::inverse_3d_half_into(&plan, &mut half, &mut back);
+    assert_real_returns_to_input(
+        n,
+        back.as_slice().expect("C order"),
+        real.as_slice().expect("C order"),
+    );
+    suite.run(BenchmarkCase::new("unpinned", "real-half-pair", n), || {
+        f64::forward_3d_half_into(&plan, std::hint::black_box(&real), &mut half);
+        f64::inverse_3d_half_into(&plan, &mut half, std::hint::black_box(&mut back));
     });
 
     // The chain the full transform runs: `(x, y, z)` to `(y, z, x)` to

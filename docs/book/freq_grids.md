@@ -27,13 +27,14 @@ let (fx, fy, fz) = freq_grid_3d(Nx, Ny, Nz, dx, dy, dz)?;
 
 ## `HalfSpectrum3D`
 
-`HalfSpectrum3D` carries the output shape of a 3D real FFT,
-exploiting Hermitian symmetry. Given input shape `[Nx, Ny, Nz]`,
-the half-spectrum shape is `[Nx/2+1, Ny, Nz]`:
+`HalfSpectrum3D` describes the half spectrum of a 3D real transform. Given a
+real shape `[Nx, Ny, Nz]`, the bins a real field's spectrum does not repeat are
+`[Nx, Ny, Nz/2 + 1]`: the last axis is the one halved, which is the layout
+`fft_3d_array_half_into` writes.
 
 ```rust,ignore
-let hs = HalfSpectrum3D::from_input_shape([256, 256, 256])?;
-// hs.shape() == [129, 256, 256]
+let hs = HalfSpectrum3D::from_shape(Shape3D::new(256, 256, 256)?);
+assert_eq!(hs.nz_c, 129);
 ```
 
 ## Parseval's Theorem

@@ -126,6 +126,13 @@ fn axis_pass_attribution() {
                 full / 1e6,
                 100.0 * (rotated - full) / full,
             );
+            let real = read(&report, &format!("unpinned/real-half-pair/{n}")) / 2.0;
+            println!(
+                "REAL n={n} {statistic}: half-spectrum transform {:.1} us against the complex {:.1} us ({:+.0}%)",
+                real / 1e6,
+                full / 1e6,
+                100.0 * (real - full) / full,
+            );
         }
         let lanes = median_ps(&report, &format!("unpinned/lanes-z/{n}")) / 2.0;
         for (statistic, read) in [

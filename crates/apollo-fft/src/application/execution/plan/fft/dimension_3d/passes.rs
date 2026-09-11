@@ -92,12 +92,11 @@ pub(super) fn axis0<F, const FORWARD: bool>(
 
 /// Transforms a C-order `[nx, ny, nz]` volume along all three axes in place.
 ///
-/// With two non-contiguous axes of length above one the passes chain through
-/// both scratch roles in three moves; with one, that axis takes its own pass;
-/// axis 2 runs in place first for a forward and last for an inverse.
+/// Axes 0 and 1 run through [`xy_axes`]; axis 2 runs in place first for a
+/// forward and last for an inverse.
 pub(super) fn all_axes<F, const FORWARD: bool, X, Y, Z>(
     data: &mut [F::Complex],
-    shape @ [nx, ny, nz]: [usize; 3],
+    shape @ [_, _, nz]: [usize; 3],
     lanes: AxisLanes<X, Y, Z>,
 ) where
     F: MixedRadixScalar<Complex = Complex<F>>,
@@ -109,14 +108,32 @@ pub(super) fn all_axes<F, const FORWARD: bool, X, Y, Z>(
     if FORWARD {
         axis2::<F, FORWARD>(data, nz, &lanes.z);
     }
-    match (nx > 1, ny > 1) {
-        (false, false) => {}
-        (true, false) => axis0::<F, FORWARD>(data, shape, &lanes.x),
-        (false, true) => axis1::<F, FORWARD>(data, shape, &lanes.y),
-        (true, true) => chain::<F, FORWARD>(data, shape, &lanes.x, &lanes.y),
-    }
+    xy_axes::<F, FORWARD>(data, shape, &lanes.x, &lanes.y);
     if !FORWARD {
         axis2::<F, FORWARD>(data, nz, &lanes.z);
+    }
+}
+
+/// Transforms axes 0 and 1 of a C-order `[nx, ny, depth]` volume in place.
+///
+/// With both of length above one the passes chain through both scratch roles
+/// in three moves; with one, that axis takes its own pass. `depth` need not be
+/// the plan's `nz`: the half-spectrum pair runs x and y on the
+/// `(nx, ny, nz/2 + 1)` volume its z lanes leave.
+pub(super) fn xy_axes<F, const FORWARD: bool>(
+    data: &mut [F::Complex],
+    shape @ [nx, ny, _]: [usize; 3],
+    lane_x: impl Fn(&mut [F::Complex]) + Send + Sync,
+    lane_y: impl Fn(&mut [F::Complex]) + Send + Sync,
+) where
+    F: MixedRadixScalar<Complex = Complex<F>>,
+    F::Complex: PlanScratch,
+{
+    match (nx > 1, ny > 1) {
+        (false, false) => {}
+        (true, false) => axis0::<F, FORWARD>(data, shape, lane_x),
+        (false, true) => axis1::<F, FORWARD>(data, shape, lane_y),
+        (true, true) => chain::<F, FORWARD>(data, shape, lane_x, lane_y),
     }
 }
 

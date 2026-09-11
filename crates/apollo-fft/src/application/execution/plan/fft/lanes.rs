@@ -76,26 +76,7 @@ pub(super) fn execute<F, const FORWARD: bool>(
     assert!(lane_len > 0 && active.len().is_multiple_of(lane_len));
     crate::ensure_thread_local_scratch_hook_registered();
     let Some(required) = workspace(lane_len).filter(|&required| required <= companion.len()) else {
-        // A task is a whole number of lanes, and `active` is a whole number of
-        // lanes, so every task boundary is a lane boundary and the shorter
-        // final task moirai may hand out still divides exactly.
-        let task_len = lane_len * lanes_per_task::<F::Complex>(lane_len);
-        moirai::for_each_chunk_mut_with::<moirai::AdaptiveWithThreshold<PARALLEL_THRESHOLD>, _, _>(
-            active,
-            task_len,
-            |task| {
-                #[cfg(all(test, not(miri)))]
-                crate::application::execution::kernel::worker_quiescence::record_worker();
-                let mut lanes = task.chunks_exact_mut(lane_len);
-                for lane in &mut lanes {
-                    direct(lane);
-                }
-                debug_assert!(
-                    lanes.into_remainder().is_empty(),
-                    "invariant: task boundaries fall on lane boundaries"
-                );
-            },
-        );
+        each(active, lane_len, direct);
         return;
     };
     assert!(companion.len() >= active.len());
@@ -124,6 +105,81 @@ pub(super) fn execute<F, const FORWARD: bool>(
     for lane in remainder.chunks_exact_mut(lane_len) {
         transform::<F, FORWARD>(lane, &mut companion[..required]);
     }
+}
+
+/// Runs `lane` over every `lane_len`-element lane of `data`, several lanes to a
+/// scheduled task.
+///
+/// A task is a whole number of lanes, and `data` is a whole number of lanes,
+/// so every task boundary is a lane boundary and the shorter final task moirai
+/// may hand out still divides exactly.
+pub(super) fn each<T: Send>(
+    data: &mut [T],
+    lane_len: usize,
+    lane: impl Fn(&mut [T]) + Send + Sync,
+) {
+    assert!(lane_len > 0 && data.len().is_multiple_of(lane_len));
+    let task_len = lane_len * lanes_per_task::<T>(lane_len);
+    moirai::for_each_chunk_mut_with::<moirai::AdaptiveWithThreshold<PARALLEL_THRESHOLD>, _, _>(
+        data,
+        task_len,
+        |task| {
+            #[cfg(all(test, not(miri)))]
+            crate::application::execution::kernel::worker_quiescence::record_worker();
+            let mut lanes = task.chunks_exact_mut(lane_len);
+            for one in &mut lanes {
+                lane(one);
+            }
+            debug_assert!(
+                lanes.into_remainder().is_empty(),
+                "invariant: task boundaries fall on lane boundaries"
+            );
+        },
+    );
+}
+
+/// Runs `lane(state, output_lane, input_lane)` over the paired lanes of two
+/// volumes holding the same number of lanes at different lengths — a real
+/// field beside its half spectrum.
+///
+/// Parallel over `output`, with a task sized by the bytes both sides of its
+/// lanes carry. `init` runs once per task, so a lane that needs workspace pays
+/// one allocation per task rather than one per lane.
+pub(super) fn paired<A, B, S>(
+    output: &mut [A],
+    output_lane: usize,
+    input: &[B],
+    input_lane: usize,
+    init: impl Fn() -> S + Send + Sync,
+    lane: impl Fn(&mut S, &mut [A], &[B]) + Send + Sync,
+) where
+    A: Send,
+    B: Sync,
+{
+    assert!(output_lane > 0 && input_lane > 0);
+    let lanes = output.len() / output_lane;
+    assert!(
+        output.len() == lanes * output_lane && input.len() == lanes * input_lane,
+        "paired lanes: {} and {} elements are not {lanes} lanes of {output_lane} and {input_lane}",
+        output.len(),
+        input.len()
+    );
+    let pair_bytes =
+        output_lane * core::mem::size_of::<A>() + input_lane * core::mem::size_of::<B>();
+    let lanes_per_task = (TASK_BYTES / pair_bytes.max(1)).max(1);
+    moirai::for_each_chunk_mut_enumerated_with::<
+        moirai::AdaptiveWithThreshold<PARALLEL_THRESHOLD>,
+        _,
+        _,
+    >(output, output_lane * lanes_per_task, |task, outputs| {
+        #[cfg(all(test, not(miri)))]
+        crate::application::execution::kernel::worker_quiescence::record_worker();
+        let mut state = init();
+        let inputs = input.chunks_exact(input_lane).skip(task * lanes_per_task);
+        for (target, source) in outputs.chunks_exact_mut(output_lane).zip(inputs) {
+            lane(&mut state, target, source);
+        }
+    });
 }
 
 fn transform<F, const FORWARD: bool>(lane: &mut [F::Complex], scratch: &mut [F::Complex])

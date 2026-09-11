@@ -121,6 +121,54 @@ where
     )
 }
 
+/// Inverse 1D FFT of the `n/2 + 1` bins of a real signal's spectrum into `n`
+/// reals.
+///
+/// The inverse of [`fft_1d_slice_half_into`](crate::fft_1d_slice_half_into):
+/// a caller holding only the non-redundant half of a spectrum transforms it
+/// back without mirroring it to full length first. `spectrum` is consumed as
+/// scratch. Lengths the real split does not admit mirror the bins to a full
+/// spectrum and take the full inverse, allocating it, so every length is
+/// served. The imaginary parts of the zero and Nyquist bins are ignored.
+///
+/// # Panics
+///
+/// If `out` is empty or `spectrum` is not exactly `out.len() / 2 + 1` long.
+pub fn ifft_1d_slice_half_into<T>(spectrum: &mut [Complex<T::PlanScalar>], out: &mut [T])
+where
+    T: RealFftData + PlanCacheProvider,
+    Complex<T::PlanScalar>: PlanScratch,
+    <T as RealFftData>::PlanScalar: PlanCacheProvider,
+{
+    let n = out.len();
+    assert!(n > 0, "ifft_1d_slice_half_into requires a non-empty output");
+    assert_eq!(
+        spectrum.len(),
+        n / 2 + 1,
+        "ifft_1d_slice_half_into: spectrum must hold exactly n/2 + 1 bins"
+    );
+    if T::real_split_applies(n) {
+        let half_plan = T::get_1d_plan(
+            Shape1D::new(n / 2).expect("half length is non-zero when the split applies"),
+        );
+        T::inverse_1d_half_into(half_plan.as_ref(), spectrum, out);
+        return;
+    }
+    let mut full = Vec::with_capacity(n);
+    full.extend_from_slice(spectrum);
+    full.extend(
+        spectrum[1..=n - spectrum.len()]
+            .iter()
+            .rev()
+            .map(|bin| Complex::new(bin.re, -bin.im)),
+    );
+    let values = T::inverse_1d_slice_owned(
+        T::get_1d_plan(Shape1D::new(n).expect("a non-empty output has a non-zero length")).as_ref(),
+        &full,
+    );
+    out.copy_from_slice(&values);
+}
+
 /// Inverse 1D FFT of a Leto spectrum view using generic storage dispatch.
 ///
 /// C-contiguous Leto views are consumed through a borrowed slice. Strided views
@@ -298,6 +346,37 @@ pub fn ifft_3d_array_into_spectrum_scratch<T>(
         T::get_3d_plan(
             Shape3D::new(nx, ny, nz)
                 .expect("ifft_3d_array_into_spectrum_scratch requires non-zero dimensions"),
+        )
+        .as_ref(),
+        field_hat,
+        out,
+    );
+}
+
+/// Inverse 3D FFT of a `(nx, ny, nz/2 + 1)` half spectrum into real storage.
+///
+/// The inverse of [`fft_3d_array_half_into`](crate::fft_3d_array_half_into),
+/// normalized like [`ifft_3d_array_into`]. `field_hat` is consumed as scratch.
+/// The result is the real part of the full inverse of the half spectrum's
+/// Hermitian completion, so the imaginary parts a real field's spectrum cannot
+/// carry are ignored.
+///
+/// # Panics
+///
+/// If `field_hat` is not a C-contiguous `(nx, ny, nz/2 + 1)` array for `out`'s
+/// shape, or `out` is not C-contiguous.
+pub fn ifft_3d_array_half_into<T>(
+    field_hat: &mut Array3<Complex<T::PlanScalar>>,
+    out: &mut Array3<T>,
+) where
+    T: RealFftData + PlanCacheProvider,
+    Complex<T::PlanScalar>: PlanScratch,
+    <T as RealFftData>::PlanScalar: PlanCacheProvider,
+{
+    let [nx, ny, nz] = out.shape();
+    T::inverse_3d_half_into(
+        T::get_3d_plan(
+            Shape3D::new(nx, ny, nz).expect("ifft_3d_array_half_into requires non-zero dimensions"),
         )
         .as_ref(),
         field_hat,

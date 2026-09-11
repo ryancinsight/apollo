@@ -285,6 +285,35 @@ where
     );
 }
 
+/// Forward 3D FFT of a real array into its `(nx, ny, nz/2 + 1)` half spectrum.
+///
+/// The bins with `k > nz/2` are conjugates of the others, so the half spectrum
+/// is the whole spectrum at half the storage. Each z lane goes through the
+/// real split and the x and y passes run on the half volume, so the transform
+/// also moves half the data [`fft_3d_array_into`] does.
+/// [`ifft_3d_array_half_into`](crate::ifft_3d_array_half_into) is the inverse.
+///
+/// # Panics
+///
+/// If `out` is not a C-contiguous `(nx, ny, nz/2 + 1)` array for `field`'s
+/// shape.
+pub fn fft_3d_array_half_into<T>(field: &Array3<T>, out: &mut Array3<Complex<T::PlanScalar>>)
+where
+    T: RealFftData + PlanCacheProvider,
+    Complex<T::PlanScalar>: PlanScratch,
+    <T as RealFftData>::PlanScalar: PlanCacheProvider,
+{
+    let [nx, ny, nz] = field.shape();
+    T::forward_3d_half_into(
+        T::get_3d_plan(
+            Shape3D::new(nx, ny, nz).expect("fft_3d_array_half_into requires non-zero dimensions"),
+        )
+        .as_ref(),
+        field,
+        out,
+    );
+}
+
 /// Forward 3D FFT of a real array into caller-owned typed spectrum storage for
 /// a compile-time-known shape.
 pub fn fft_3d_array_static_into<T, const NX: usize, const NY: usize, const NZ: usize>(

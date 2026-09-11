@@ -24,6 +24,10 @@ pub struct FftPlan3D<F: MixedRadixScalar> {
     pub(crate) twiddle_y_inv: Option<Arc<[F::Complex]>>,
     pub(crate) twiddle_x_fwd: Option<Arc<[F::Complex]>>,
     pub(crate) twiddle_x_inv: Option<Arc<[F::Complex]>>,
+    /// Tables for the packed z lanes of the real split: a real lane of `nz`
+    /// samples is `nz/2` complex ones.
+    pub(crate) twiddle_half_z_fwd: Option<Arc<[F::Complex]>>,
+    pub(crate) twiddle_half_z_inv: Option<Arc<[F::Complex]>>,
 }
 
 impl<F: MixedRadixScalar> std::fmt::Debug for FftPlan3D<F> {
@@ -60,6 +64,8 @@ where
             twiddle_y_inv: cached_power_of_two_twiddle::<F, false>(ny),
             twiddle_x_fwd: cached_power_of_two_twiddle::<F, true>(nx),
             twiddle_x_inv: cached_power_of_two_twiddle::<F, false>(nx),
+            twiddle_half_z_fwd: cached_power_of_two_twiddle::<F, true>(m),
+            twiddle_half_z_inv: cached_power_of_two_twiddle::<F, false>(m),
         }
     }
 
@@ -226,6 +232,44 @@ where
         );
     }
 
+    /// One direction's transform of a packed z lane: the `nz/2` complex
+    /// samples that carry a real lane's `nz` values in the real split.
+    pub(crate) fn half_z_lane<const FORWARD: bool>(
+        &self,
+    ) -> impl Fn(&mut [F::Complex]) + Send + Sync + '_ {
+        let twiddles = if FORWARD {
+            &self.twiddle_half_z_fwd
+        } else {
+            &self.twiddle_half_z_inv
+        };
+        lane_over::<F, FORWARD>(twiddles.as_deref())
+    }
+
+    /// One direction's transform of a full z lane, for real lanes the split
+    /// does not admit.
+    pub(crate) fn z_lane<const FORWARD: bool>(
+        &self,
+    ) -> impl Fn(&mut [F::Complex]) + Send + Sync + '_ {
+        self.lane::<FORWARD>(2)
+    }
+
+    /// Transforms axes 0 and 1 of a C-order `[nx, ny, depth]` volume in place.
+    ///
+    /// The half-spectrum pair runs x and y on the `(nx, ny, nz/2 + 1)` volume
+    /// its z lanes leave, so `depth` is the volume's, not the plan's.
+    pub(crate) fn xy_axes_inplace<const FORWARD: bool>(
+        &self,
+        data: &mut [F::Complex],
+        depth: usize,
+    ) {
+        passes::xy_axes::<F, FORWARD>(
+            data,
+            [self.nx, self.ny, depth],
+            self.lane::<FORWARD>(0),
+            self.lane::<FORWARD>(1),
+        );
+    }
+
     fn axis_pass_complex<const FORWARD: bool>(
         &self,
         mut data: ArrayViewMut3<'_, F::Complex>,
@@ -274,11 +318,24 @@ where
             _ => unreachable!("invariant: the entry points validate the axis"),
         }
         .as_deref();
-        move |lane: &mut [F::Complex]| match (FORWARD, twiddles) {
-            (true, Some(twiddles)) => dispatch_inplace::<F, false, false>(lane, Some(twiddles)),
-            (false, Some(twiddles)) => dispatch_inplace::<F, true, true>(lane, Some(twiddles)),
-            (true, None) => forward_inplace::<F>(lane),
-            (false, None) => inverse_inplace::<F>(lane),
-        }
+        lane_over::<F, FORWARD>(twiddles)
+    }
+}
+
+/// One direction's transform of a lane of the table's length: the cached
+/// power-of-two twiddles where the length has them, the generic mixed radix
+/// otherwise.
+fn lane_over<F, const FORWARD: bool>(
+    twiddles: Option<&[F::Complex]>,
+) -> impl Fn(&mut [F::Complex]) + Send + Sync + '_
+where
+    F: MixedRadixScalar<Complex = Complex<F>>,
+    F::Complex: PlanScratch,
+{
+    move |lane: &mut [F::Complex]| match (FORWARD, twiddles) {
+        (true, Some(twiddles)) => dispatch_inplace::<F, false, false>(lane, Some(twiddles)),
+        (false, Some(twiddles)) => dispatch_inplace::<F, true, true>(lane, Some(twiddles)),
+        (true, None) => forward_inplace::<F>(lane),
+        (false, None) => inverse_inplace::<F>(lane),
     }
 }
