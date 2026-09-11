@@ -27,7 +27,6 @@ use crate::application::execution::kernel::components::register_butterfly::{
     radix4, radix8, root2_twiddle, rot90,
 };
 use crate::application::execution::kernel::mixed_radix::MixedRadixScalar;
-use core::mem::size_of;
 use eunomia::Complex;
 use hermes_simd::{LaneKernel, LaneScalar, Simd, SimdArch, SimdKernel, SimdStorage};
 
@@ -35,7 +34,6 @@ mod column;
 mod plan;
 mod rows;
 mod store;
-mod wide;
 
 use plan::BaseLaneWidth;
 pub(crate) use plan::{BasePlan, BasePlanState};
@@ -184,9 +182,15 @@ where
     )]
     #[inline(always)]
     fn call<A: SimdArch + SimdKernel<T>>(self, simd: Simd<T, A>) -> bool {
-        if <A as SimdStorage<T>>::LANE_COUNT != 4 {
+        let lanes = <A as SimdStorage<T>>::LANE_COUNT;
+        if lanes != 4 && lanes != 8 {
             return false;
         }
+        debug_assert_eq!(
+            lanes == 8,
+            matches!(self.plan.lane_width, BaseLaneWidth::Eight),
+            "the plan's table geometry is the dispatched width's"
+        );
         // The dispatch token proves support before this kernel begins, while
         // views hoist bounds reasoning once per slice. Every offset below is
         // a multiple of the four-lane width, so chunk indices are exact. The
@@ -219,13 +223,36 @@ where
         let staging: &mut [T; LANES] = unsafe { &mut *staging_uninit.as_mut_ptr() };
         #[cfg(debug_assertions)]
         staging.fill(T::from_precise(f64::NAN));
-        rows::row_pass::<T, A, INVERSE, ROWS, ROW_LEN>(
-            simd,
-            self.data.as_slice(),
-            self.plan.table.as_slice(),
-            staging.as_mut_slice(),
-            layer_ch(ROWS, ROW_LEN),
-        );
+        let table = self.plan.table.as_slice();
+        if lanes == 4 {
+            let tab = simd.view(table);
+            let layer = rows::TableLayer {
+                table: &tab,
+                layer: layer_ch(ROWS, ROW_LEN),
+                chunks: layer_chunks(ROW_LEN),
+            };
+            rows::row_pass::<T, A, _, INVERSE, ROWS, ROW_LEN, 2>(
+                simd,
+                self.data.as_slice(),
+                staging.as_mut_slice(),
+                &layer,
+            );
+        } else {
+            // The broadcasts are four-lane chunks whatever the width; the
+            // eight-lane layer splats their scalars once per transform.
+            let layer = rows::SplatLayer::new(
+                simd,
+                table,
+                layer_ch(ROWS, ROW_LEN) * 4,
+                layer_chunks(ROW_LEN) / 2,
+            );
+            rows::row_pass::<T, A, _, INVERSE, ROWS, ROW_LEN, 4>(
+                simd,
+                self.data.as_slice(),
+                staging.as_mut_slice(),
+                &layer,
+            );
+        }
 
         // Counter 0 now carries the fused load-and-rows pass; counter 1 is
         // retired with the separate redistribution it used to time.
@@ -284,58 +311,16 @@ where
     let flat: &mut [T; LANES] = eunomia::layout::cast_slice_mut(data)
         .try_into()
         .expect("invariant: the assertion above fixes the lane count");
-    // `MixedRadixScalar` is sealed to f32/f64. Keeping the eight-byte route
-    // outside the runtime width match preserves its pre-existing monomorphic
-    // kernel body; four-byte hosts still select between NEON-width and AVX2-
-    // width layouts once per base invocation.
-    if size_of::<T>() != 4 {
-        return hermes_simd::vectorize_lanes::<4, T, _>(BaseTransform::<
-            T,
-            INVERSE,
-            MEASURE_PHASES,
-            ROWS,
-            ROW_LEN,
-            LANES,
-            TABLE_LANES,
-            S,
-        > {
-            data: flat,
-            plan,
-            sink,
-        })
-        .unwrap_or(false);
-    }
+    // One kernel body at either width: the plan fixed the register layout
+    // (and its table geometry) once, before execution.
+    let kernel = BaseTransform::<T, INVERSE, MEASURE_PHASES, ROWS, ROW_LEN, LANES, TABLE_LANES, S> {
+        data: flat,
+        plan,
+        sink,
+    };
     match plan.lane_width {
-        BaseLaneWidth::Four => hermes_simd::vectorize_lanes::<4, T, _>(BaseTransform::<
-            T,
-            INVERSE,
-            MEASURE_PHASES,
-            ROWS,
-            ROW_LEN,
-            LANES,
-            TABLE_LANES,
-            S,
-        > {
-            data: flat,
-            plan,
-            sink,
-        })
-        .unwrap_or(false),
-        BaseLaneWidth::Eight => hermes_simd::vectorize_lanes::<8, T, _>(wide::BaseTransform::<
-            T,
-            INVERSE,
-            MEASURE_PHASES,
-            ROWS,
-            ROW_LEN,
-            LANES,
-            TABLE_LANES,
-            S,
-        > {
-            data: flat,
-            plan,
-            sink,
-        })
-        .unwrap_or(false),
+        BaseLaneWidth::Four => hermes_simd::vectorize_lanes::<4, T, _>(kernel).unwrap_or(false),
+        BaseLaneWidth::Eight => hermes_simd::vectorize_lanes::<8, T, _>(kernel).unwrap_or(false),
     }
 }
 

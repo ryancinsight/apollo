@@ -55,12 +55,6 @@ impl<T: MixedRadixScalar, const ROWS: usize, const ROW_LEN: usize, const TABLE_L
         let four_lanes_supported = !eight_lanes_supported && native_lanes_supported::<4, T>();
         let lane_width =
             select_lane_width(size_of::<T>(), eight_lanes_supported, four_lanes_supported)?;
-        // The 32-sample row's eight-lane layout is ADR 0061's next slice; an
-        // eight-lane host keeps the split rather than a plan whose kernel
-        // declines.
-        if ROW_LEN == 32 && matches!(lane_width, BaseLaneWidth::Eight) {
-            return None;
-        }
         Some(Self::new::<INVERSE>(lane_width))
     }
 
