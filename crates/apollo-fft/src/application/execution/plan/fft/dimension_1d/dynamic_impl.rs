@@ -1,5 +1,5 @@
 use crate::application::execution::kernel::components::base128::instance_major::{
-    Plan128, Plan512, Plan64, State128, State256, State512, State64,
+    Plan512, Plan64, State128, State256, State512, State64,
 };
 use crate::application::execution::kernel::mixed_radix::MixedRadixScalar;
 use crate::domain::metadata::shape::Shape1D;
@@ -148,19 +148,13 @@ impl<F: MixedRadixScalar<Complex = Complex<F>>> FftPlan1D<F> {
             .inverse()
     }
 
-    pub(super) fn base128_forward_plan(&self) -> &Plan128<F> {
-        self.base128
-            .as_deref()
-            .expect("invariant: base-128 executor requires its plan state")
-            .forward()
-    }
-
+    /// The base-128 route's state: both directions' plans in the shape
+    /// the plan width selected.
     #[inline]
-    pub(super) fn base128_inverse_plan(&self) -> &Plan128<F> {
+    pub(super) fn base128_state(&self) -> &State128<F> {
         self.base128
             .as_deref()
             .expect("invariant: base-128 executor requires its plan state")
-            .inverse()
     }
 
     /// Create a new 1D plan.

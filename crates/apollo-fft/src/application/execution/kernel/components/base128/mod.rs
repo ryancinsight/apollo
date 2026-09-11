@@ -1,9 +1,11 @@
 //! The register-resident bases and the radix step over them —
 //! `ATLAS-APOLLO-BASE-BUTTERFLY-128`, ADR 0061.
 //!
-//! One instance-major kernel serves 64, 128, 256, and 512 points (512 as
-//! sixteen 32-sample rows, the column pass a sixteen-point DIF); 1024 is
-//! four 256-blocks whose radix-4 step rides the last block's column pass.
+//! One instance-major kernel serves 64, 128, 256, and 512 points (128 as
+//! eight 16-sample rows at four lanes and four 32-sample rows at eight,
+//! 512 as sixteen 32-sample rows, the column pass a sixteen-point DIF);
+//! 1024 is four 256-blocks whose radix-4 step rides the last block's
+//! column pass.
 //! At four lanes every block loads its samples straight out of the
 //! parent, so the route is the blocks' own passes and nothing else; at
 //! eight lanes the blocks are gathered first, the measured better of the
