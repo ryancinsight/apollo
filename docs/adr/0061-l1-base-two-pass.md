@@ -400,6 +400,32 @@ base); the two-block form of the step is deleted, and the step serves
   lanes, one radix-4 sink). The four-block route over the 256 base stays
   for 1024; the two-block form of the step stays deleted.
 
+- **2026-09-11, the 128 base as four 32-sample rows
+  (`APOLLO-128-AS-FOUR-ROWS`).** The census read the 8 x 16 kernel
+  latency-bound in its column pass (84 instructions a group at a chain
+  of about 67 cycles for 20 of issue, RustFFT's `Butterfly128Avx` loops
+  at 1.3 to 1.9 times issue) with two (`f32`) or four (`f64`) row groups
+  to overlap. The same kernel at `ROWS = 4` over 32-sample rows runs one
+  or two 32-sample row groups and eight or sixteen four-row column groups
+  (two levels, one rotation, no multiply). Measured as bare arms in one
+  probe run beside the 8 x 16 form, two runs
+  (`output/apollo-base128/small_sizes_128ab_run{1,2}_2026-09-11.txt`):
+  at eight lanes (`f32`) 49.8 / 50.3 us against 53.1 / 53.8 (6% faster;
+  RustFFT 49.6 / 47.9), at four lanes (`f64`) 89.1 / 88.4 against 85.8 /
+  86.9 (2 to 4% slower; RustFFT 84.2 / 84.8); the efficiency core reads
+  the two forms equal at both scalars. The 128 state is an enum over
+  the two shapes, selected by the native width once at plan build. The
+  phase meter read the four-row form 19% under the 8 x 16 one at `f64`
+  while the wall clock read it slower — the third meter-against-clock
+  divergence of the day, all decided by the clock. The plan-level probe
+  arm at `f32` 128 read 57.9 / 64.8 us against the bare arm's 50.3 /
+  49.8 in the same runs, while earlier runs read the two equal: the
+  same kernel through a different table allocation, the alignment
+  question the work buffers were already cured of, filed as its own
+  item. Re-measured under aligned tables (the next revision), two runs:
+  4 x 32 49.9 / 50.3 us against 8 x 16 51.7 / 51.6 at `f32` (3% faster),
+  88.1 / 89.2 against 87.3 / 87.5 at `f64` (1 to 2% slower) — the
+  width-selected shape at its true margin.
 - **2026-09-11, the base tables and staging on the cache line
   (`APOLLO-BASE-TABLE-ALIGNMENT`).** The plan's dup-split table was a
   `Box<[T; N]>` and the split's sink tables `Box<[T]>`, at the
