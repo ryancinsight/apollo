@@ -435,59 +435,57 @@ fn dynamic_plan_owns_forward_and_lazily_initializes_inverse() {
 }
 
 #[test]
-fn dynamic_split_plans_share_complete_twiddle_tables() {
+fn dynamic_split_plans_keep_their_sink_tables_in_the_base_state() {
     // The 256 base splits 512 and 1024; 256 itself is one block and keeps
-    // no split table.
+    // no split table. The sink twiddles live in the base state, dup-split
+    // at the plan's width, so the plan retains no interleaved table.
     for n in [512usize, 1024] {
         let plan = crate::FftPlan1D::<f64>::new(
             crate::Shape1D::new(n).expect("invariant: shape lengths are non-zero"),
         );
-        let Some(_) = plan.base256.as_ref() else {
+        let Some(state) = plan.base256.as_ref() else {
             assert_incumbent_route_round_trips(&plan, n);
             continue;
         };
-        let forward = plan
-            .twiddle_fwd
-            .as_ref()
-            .expect("a split base route retains its complete forward table");
-        assert_eq!(forward.len(), n - 1);
-        let cached = <f64 as crate::application::execution::kernel::mixed_radix::MixedRadixScalar>::cached_twiddle_fwd(n);
         assert!(
-            std::sync::Arc::ptr_eq(forward, &cached),
-            "the plan must share the process cache allocation"
+            plan.twiddle_fwd.is_none(),
+            "the split keeps no interleaved table"
         );
         assert!(plan.twiddle_inv.get().is_none());
-
+        assert_eq!(state.sinks().inner().len(), 2 * 512);
+        assert_eq!(
+            state.sinks().outer().len(),
+            if n == 1024 { 4 * 512 } else { 0 }
+        );
+        assert!(!state.inverse_is_initialized() && !state.inverse_sinks_initialized());
         let clone = plan.clone();
         assert!(std::sync::Arc::ptr_eq(
-            forward,
+            state,
             clone
-                .twiddle_fwd
+                .base256
                 .as_ref()
-                .expect("a split-plan clone shares its forward table")
+                .expect("a split-plan clone shares its base state")
         ));
 
         let source = signal(n);
         let mut data = source.clone();
         plan.forward_complex_slice_inplace(&mut data);
         assert!(
-            plan.twiddle_inv.get().is_none(),
-            "forward execution must not initialize inverse twiddles"
+            !state.inverse_is_initialized(),
+            "forward execution must not initialize inverse state"
         );
         plan.inverse_complex_slice_inplace(&mut data);
-        let inverse = plan
-            .twiddle_inv
-            .get()
-            .expect("inverse execution initializes the complete inverse table");
-        assert_eq!(inverse.len(), n - 1);
-        let initialized_clone = plan.clone();
-        assert!(std::sync::Arc::ptr_eq(
-            inverse,
-            initialized_clone
-                .twiddle_inv
-                .get()
-                .expect("an initialized split-plan clone shares inverse twiddles")
-        ));
+        assert!(state.inverse_is_initialized() && state.inverse_sinks_initialized());
+        assert!(
+            plan.twiddle_inv.get().is_none(),
+            "the inverse split reads its sink tables, not the interleaved cache"
+        );
+        let error = worst(&data, &source);
+        let bound = 2.0 * tolerance(&source);
+        assert!(
+            error <= bound,
+            "N={n} split round trip differs by {error:.3e} > {bound:.3e}"
+        );
     }
 }
 
