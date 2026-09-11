@@ -237,3 +237,25 @@ fn recursive_workspace_preserves_incomplete_lane_groups() {
     check_matrix::<f32, 131_072, 3>(Storage::Dense, f64::from(f32::EPSILON) / 2.0);
     check_matrix::<f64, 131_072, 3>(Storage::Dense, f64::EPSILON / 2.0);
 }
+
+fn check_decisions<T: 'static>(cases: &[(usize, usize, bool)]) {
+    use moirai::ExecutionPolicy;
+
+    for &(elements, tasks, parallel) in cases {
+        assert_eq!(
+            super::LaneTasks::<T>::parallelize_chunks(elements, tasks),
+            parallel,
+            "{elements} elements in {tasks} tasks"
+        );
+    }
+}
+
+#[test]
+fn task_geometry_preserves_the_established_crossover() {
+    // Measured whole/half volumes: four tasks stay serial, five packed tasks
+    // gain parallelism, and existing element-threshold decisions stay intact.
+    check_decisions::<Complex<f64>>(&[(16_384, 4, false), (17_408, 5, true), (32_768, 8, true)]);
+    // Underfilled narrow tasks can reach five below the floor; that unmeasured
+    // opportunity deliberately retains the existing serial decision.
+    check_decisions::<Complex<f32>>(&[(25_000, 5, false), (32_768, 4, true)]);
+}
