@@ -203,3 +203,20 @@ measured first and gained nothing over the split at 256.
   1.34 (RustFFT itself had been misaligned before). Remaining levers in
   order: the 1024 gather (15 to 19% of the route), the column phase, and
   the row chain depth.
+- **2026-09-11, the blocks read the parent.** The kernel takes a source
+  and an output surface: the source is the block itself or block `OFFSET`
+  of a `BLOCKS`-way split read at stride out of a parent, and the sinks
+  index the surface holding no `&mut` of their own, so a combining block
+  reads the parent it then writes (the rows finish before the first
+  store). At four lanes the gather pass is gone — at 1024 subsequences 0
+  and 1 run into scratch as the pairs' peers, 2 runs over the parent into
+  the free scratch pair, 3 over the parent with the final sink — and `f64`
+  1024 reads 1.15 to 1.23 of RustFFT from 1.33 (1.34 to 1.41 ms from
+  1.53). At eight lanes the same loads cost two or four windows and up to
+  three shuffles a register, more than the gather (`f32` 512 and 1024 2 to
+  4% slower), so that width keeps the two- and four-block gather and the
+  even half in the output through an in-place final sink; the plan width
+  selects the form. The base-128 split, unreachable since the 256 base
+  exists on every host the 128 one does, is deleted with its eight-block
+  arm, its level pass, and the probe's incumbent comparison
+  (`output/apollo-base128/base256_2026-09-11.md`).
