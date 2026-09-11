@@ -114,6 +114,7 @@ jobs:
           --bench prime_compose
           --bench half_cyclic_rader
           --bench twiddless_comparison
+          --bench lane_threshold
       - name: Build NUFFT benchmark smoke
         run: >-
           cargo test --locked -p apollo-nufft --all-features --no-run
@@ -130,6 +131,7 @@ jobs:
           --bench prime_compose
           --bench half_cyclic_rader
           --bench twiddless_comparison
+          --bench lane_threshold
       - name: NUFFT benchmark smoke
         env:
           APOLLO_BENCH_MODE: smoke

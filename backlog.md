@@ -14,12 +14,11 @@
 - Integrator: Codex; branch: `perf/apollo-paired-parallel-bytes`; scope: lane scheduling and its crossover probe; no transform algorithm changes.
 - Acceptance: retain a production decision only with controlled real 3-D pair improvement and no complex-control regression; run native lane and real-half tests, format and clippy gates.
 - Reopened 2026-09-11: the byte rule below does not establish a geometry-aware crossover. The inverse-pass trial at 94–100% host load is inconclusive, not evidence for rejecting parallelism or fusion.
-- lease: Codex `crates/apollo-fft/src/application/execution/plan/fft/lanes.rs` `crates/apollo-fft/src/application/execution/plan/fft/dimension_3d/pass_attribution/threshold.rs` 2026-09-11T22:00:00Z
+- lease: Codex lane scheduling, `benches/lane_threshold.rs`, real-half tests, benchmark runner and smoke wiring; 2026-09-11T22:10:00Z
+- Probe correction: move the instrument out of the unit-test binary, whose per-task worker tracker takes a global mutex; preserve native CSV observations, bind the measurement processor and include both native precisions. The unpinned exploratory campaign is not acceptance evidence.
 
 - A paired pass now decides by the bytes both sides move (`PARALLEL_BYTES`, the same crossover in complex f64 bytes): an output element count undercounts a pass that also reads a wider input, which is why the 32³ real z pass ran serially while the complex volume of half its bytes ran parallel.
-- Crossover probe, two runs, complex arms flat as control: the real pair reads 94.2–97.6 to 68.1–69.8 µs at 32³, below the complex pair at 86.9–87.2, and 16³, 24³, 32×32×16 and 48³ are unchanged. The instrument is `pass_attribution::threshold::lane_threshold_crossover` (#438).
-- The constant itself stays at 32,768: halving it read the complex 32×32×16 pass 15% slower in two runs, and no swept size asked for a different value. The per-lane twiddle question it raised closed separately ([#apollo-real-split-twiddles](#apollo-real-split-twiddles)).
-- Also checked and dropped: forcing the inverse packed pass (`lanes::each`, retangle plus half-length inverse, 17,408 bins at 32³) parallel read the same 68.1 µs fastest sample as the shipped decision, so fusing it with the unpack pass — which would need a two-chunk-size mutable pair in moirai — buys nothing measurable and is not filed. Host ran 94–100% during that check; the equality of the best case is the evidence, not the medians.
+- Prior unit-test timings and the busy-host inverse-pass trial do not establish the production crossover. The replacement instrument is `benches/lane_threshold.rs`; `scripts/lane_threshold.py` runs two counterbalanced replications with processor, host-load and executable identities.
 
 <a id="apollo-native-real-3d"></a>
 
