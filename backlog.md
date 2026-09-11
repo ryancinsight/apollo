@@ -27,15 +27,9 @@
 
 <a id="apollo-rotated-move-geometry"></a>
 
-## APOLLO-ROTATED-MOVE-GEOMETRY-2026-09-10 — Attribute tall moves to task partition [patch] [perf] — review
-
-- Integrator: root; branch: `perf/apollo-rotated-move-geometry`; last-update: 2026-09-11.
-- Scope: 64³ move and lane attribution; change production only when controlled measurements support it. Basis: `aaa11ddc` with committed Git providers.
-- Acceptance: isolated wide/tall moves and full/rotated pairs identify the cost; native gates and retained benchmark observations support any production change.
-- Finding: the provider already compares destination width and source pitch. One-column transpose tasks cause the measured tall-move penalty; FFT64 uses no four-step companion.
-- Production: [Leto PR 192](https://github.com/ryancinsight/leto/pull/192) groups a cache-line width of columns; no tile-loop or FFT lane-schedule change.
-- Evidence: [four-run reports, intervals, commands and limits](docs/experiments/rotated-moves/README.md). Tall moves 41–45 → 30–32 µs; stable rotated-pair medians fall 7.6–14.4%. No universal performance claim.
-- Dependencies: provider landing and exact standalone consumer gates; the changed provider graph keeps all other revisions fixed.
+## APOLLO-ROTATED-MOVE-GEOMETRY-2026-09-10 — Attribute tall moves to task partition [patch] [perf] — done
+- Delivery: `8b709811`, integrated at `5c725de7`; [Leto PR 192](https://github.com/ryancinsight/leto/pull/192) changes transpose task width only. Destination-stride traversal and FFT lane scheduling remain unchanged.
+- Evidence: [reports, native gates and limits](docs/experiments/rotated-moves/README.md); 629 consumer tests pass, final 64³ probe passes in 26.254 s; stable rotated-pair medians fall 7.6–14.4% on this host.
 
 <a id="APOLLO-WASM-DEPENDENCY-2026-09-10"></a>
 ## APOLLO-WASM-DEPENDENCY-2026-09-10 — Keep the FFT dependency graph portable on WebAssembly [patch]

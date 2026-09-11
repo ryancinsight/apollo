@@ -81,7 +81,10 @@ cargo +1.97.0 nextest run --manifest-path D:\atlas\repos\apollo\Cargo.toml --loc
 ```
 
 Each `MOVE-GEOMETRY block` marker precedes a complete CSV report. Save those
-four reports as `block-0.csv` through `block-3.csv` without changing records.
+four reports with `python scripts/move_geometry.py <log> <destination>`.
+The extractor preserves records, rejects incomplete or mismatched blocks,
+and refuses to overwrite different evidence. Regenerating all four original
+report directories produces no Git diff.
 The local-provider experiment substitutes these two Cargo arguments for
 `--locked` (and restores the original standalone lock after measurement):
 
@@ -122,8 +125,9 @@ broad intervals; that run is retained as evidence of host noise and excluded
 from quantitative speedup claims.
 
 The counterbalanced comparator reports `52 cases across 4 reports; no
-supported regression`. This rejects a consistent slowdown in both observed
-orders; it does not turn the noisy baseline into a controlled speedup result.
+supported regression`. The comparator does not detect a supported slowdown
+in both observed orders; it does not turn the noisy baseline into a
+controlled speedup result.
 Run the existing `apollo-bench-compare` binary with:
 
 ```text
@@ -172,3 +176,12 @@ cases), `cargo clippy --locked -p apollo-fft --all-targets --all-features --
 under `bench-quick`, rather than being counted as covered by the ordinary
 suite. The Windows priority FFI is exercised by those runs; it is not
 Miri-covered. No production unsafe operation changes.
+
+Final integration at `5c725de7` includes current main (`5281d60b`) and the Git
+provider. Its separate `integrated/` reports confirm tall moves at
+30.0–31.5 µs, rotated pairs at 482.5–509.8 µs, and C-order pairs at
+554.6–570.2 µs. The optimized probe passes in 26.254 seconds; all 629 native
+tests pass again (43 skipped), and strict all-target/all-feature Clippy
+passes. These confirmation reports are not added to the original comparison
+family. Main's intervening row-order change affects the 256-point base,
+not this probe's length-32/64 lanes.
