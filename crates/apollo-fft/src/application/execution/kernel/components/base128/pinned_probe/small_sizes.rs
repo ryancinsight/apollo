@@ -273,9 +273,9 @@ fn small_sizes_against_the_references_by_core_type() {
                 })
                 .collect();
             let mut work = src.clone();
-            let base_plan = super::instance_major::Plan128::<f64>::new_if_supported::<false>()
+            let state = super::instance_major::State128::<f64>::new_if_supported(128)
                 .expect("the pinned host must provide the four-lane base capability");
-            let phases = phase_attribution(&src, &mut work, &base_plan);
+            let phases = phase_attribution(&src, &mut work, &state);
             println!(
                 "B128 phases: load_and_rows={} retired={} columns_and_sink={}",
                 phases[0], phases[1], phases[2]

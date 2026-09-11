@@ -16,7 +16,7 @@ use super::{instance_major, transform_via_base_256};
 fn phase_attribution(
     src: &[Complex64],
     work: &mut [Complex64],
-    plan: &super::instance_major::Plan128<f64>,
+    state: &super::instance_major::State128<f64>,
 ) -> [u64; 3] {
     use std::sync::atomic::Ordering;
 
@@ -29,7 +29,7 @@ fn phase_attribution(
         work.copy_from_slice(src);
         assert!(super::instance_major::transform_128::<f64, false, true>(
             std::hint::black_box(work),
-            plan,
+            state,
         ));
     }
     let calls = super::instance_major::phase_meter::CALLS

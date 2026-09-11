@@ -14,7 +14,7 @@ use eunomia::Complex;
 use super::strategy::generic_four_step_applies;
 use super::FftPlan1D;
 use crate::application::execution::kernel::components::base128::instance_major::{
-    table_lanes, transform_64, transform_block,
+    table_lanes, transform_128, transform_64, transform_block,
 };
 use crate::application::execution::kernel::components::base128::transform_via_base_256;
 
@@ -411,10 +411,7 @@ pub(super) fn exec_base128_forward<F: MixedRadixScalar<Complex = Complex<F>>>(
     slice: &mut [F::Complex],
 ) {
     assert!(
-        transform_block::<F, false, false, 8, 16, 256, { table_lanes(8, 16) }>(
-            slice,
-            plan.base128_forward_plan(),
-        ),
+        transform_128::<F, false, false>(slice, plan.base128_state()),
         "invariant: the selected base-128 capability remains available"
     );
 }
@@ -424,10 +421,7 @@ pub(super) fn exec_base128_inverse<F: MixedRadixScalar<Complex = Complex<F>>>(
     slice: &mut [F::Complex],
 ) {
     assert!(
-        transform_block::<F, true, false, 8, 16, 256, { table_lanes(8, 16) }>(
-            slice,
-            plan.base128_inverse_plan(),
-        ),
+        transform_128::<F, true, false>(slice, plan.base128_state()),
         "invariant: the selected base-128 capability remains available"
     );
     // The base-128 route serves n = 128, 256, and 512 (log2n 7, 8, 9 in
@@ -441,10 +435,7 @@ pub(super) fn exec_base128_inverse_unnorm<F: MixedRadixScalar<Complex = Complex<
     slice: &mut [F::Complex],
 ) {
     assert!(
-        transform_block::<F, true, false, 8, 16, 256, { table_lanes(8, 16) }>(
-            slice,
-            plan.base128_inverse_plan(),
-        ),
+        transform_128::<F, true, false>(slice, plan.base128_state()),
         "invariant: the selected base-128 capability remains available"
     );
 }

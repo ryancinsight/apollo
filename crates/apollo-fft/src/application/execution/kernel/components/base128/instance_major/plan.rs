@@ -39,6 +39,14 @@ const fn select_lane_width(
 #[repr(C, align(64))]
 pub(super) struct CacheLineAligned<A>(pub(super) A);
 
+/// The widest native layout the base kernel runs for `T` on this host, or
+/// none where neither width is native.
+pub(super) fn native_width<T: MixedRadixScalar>() -> Option<BaseLaneWidth> {
+    let eight_lanes_supported = size_of::<T>() == 4 && native_lanes_supported::<8, T>();
+    let four_lanes_supported = !eight_lanes_supported && native_lanes_supported::<4, T>();
+    select_lane_width(size_of::<T>(), eight_lanes_supported, four_lanes_supported)
+}
+
 pub(crate) struct BasePlan<T, const ROWS: usize, const ROW_LEN: usize, const TABLE_LANES: usize> {
     /// Dup-split twiddles. The fixed-size type is load-bearing, not
     /// decoration: the checked view's `offset + LANE_COUNT <= len` assert
@@ -64,11 +72,7 @@ impl<T: MixedRadixScalar, const ROWS: usize, const ROW_LEN: usize, const TABLE_L
     /// Builds the immutable plan for the widest native layout this kernel
     /// implements. Scalar fallback is not a base-kernel capability.
     pub(crate) fn new_if_supported<const INVERSE: bool>() -> Option<Self> {
-        let eight_lanes_supported = size_of::<T>() == 4 && native_lanes_supported::<8, T>();
-        let four_lanes_supported = !eight_lanes_supported && native_lanes_supported::<4, T>();
-        let lane_width =
-            select_lane_width(size_of::<T>(), eight_lanes_supported, four_lanes_supported)?;
-        Some(Self::new::<INVERSE>(lane_width))
+        Some(Self::new::<INVERSE>(native_width::<T>()?))
     }
 
     /// Whether this plan selected the eight-lane register layout, so

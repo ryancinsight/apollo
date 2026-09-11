@@ -35,7 +35,7 @@ mod plan;
 mod rows;
 mod store;
 
-use plan::{BaseLaneWidth, CacheLineAligned};
+use plan::{native_width, BaseLaneWidth, CacheLineAligned};
 pub(crate) use plan::{BasePlan, BasePlanState};
 pub(crate) use rows::{BlockSource, ParentSplit, SelfSplit};
 pub(crate) use store::{DirectSink, FinalRadix4Sink, SplitSinks, StoreSink};
@@ -381,38 +381,83 @@ where
 pub(crate) type Plan512<T> = BasePlan<T, 16, 32, { table_lanes(16, 32) }>;
 #[cfg(test)]
 pub(crate) type Plan256<T> = BasePlan<T, 8, 32, { table_lanes(8, 32) }>;
-pub(crate) type Plan128<T> = BasePlan<T, 8, 16, { table_lanes(8, 16) }>;
+#[cfg(test)]
+/// The 128-point base plan at four lanes, eight rows of sixteen: the
+/// width probe of the gather test.
+pub(crate) type Plan8x16<T> = BasePlan<T, 8, 16, { table_lanes(8, 16) }>;
 /// The 64-point base plan: four rows of sixteen.
 pub(crate) type Plan64<T> = BasePlan<T, 4, 16, { table_lanes(4, 16) }>;
 /// Directional state for the 512-point base.
 pub(crate) type State512<T> = BasePlanState<T, 16, 32, { table_lanes(16, 32) }>;
 /// Directional state for the 256-point base and the split routes over it.
 pub(crate) type State256<T> = BasePlanState<T, 8, 32, { table_lanes(8, 32) }>;
-pub(crate) type State128<T> = BasePlanState<T, 8, 16, { table_lanes(8, 16) }>;
+
+/// Directional state for the 128-point base, whose shape is the plan
+/// width's measured choice (ADR 0061): eight 16-sample rows at four
+/// lanes, four 32-sample rows at eight, where the shorter column pass
+/// (two levels, no multiply) outweighs the wider row layer.
+pub(crate) enum State128<T> {
+    /// Eight rows of sixteen, the four-lane form.
+    EightRows(BasePlanState<T, 8, 16, { table_lanes(8, 16) }>),
+    /// Four rows of thirty-two, the eight-lane form.
+    FourRows(BasePlanState<T, 4, 32, { table_lanes(4, 32) }>),
+}
+
+impl<T> State128<T>
+where
+    T: MixedRadixScalar<Complex = Complex<T>>,
+{
+    /// Builds the state for the shape this host's native width selects, or
+    /// none where neither width is native.
+    pub(crate) fn new_if_supported(n: usize) -> Option<Self> {
+        match native_width::<T>()? {
+            BaseLaneWidth::Eight => BasePlanState::new_if_supported(n).map(Self::FourRows),
+            BaseLaneWidth::Four => BasePlanState::new_if_supported(n).map(Self::EightRows),
+        }
+    }
+
+    #[cfg(test)]
+    pub(crate) fn inverse_is_initialized(&self) -> bool {
+        match self {
+            Self::EightRows(state) => state.inverse_is_initialized(),
+            Self::FourRows(state) => state.inverse_is_initialized(),
+        }
+    }
+}
 /// Directional state for the 64-point base.
 pub(crate) type State64<T> = BasePlanState<T, 4, 16, { table_lanes(4, 16) }>;
 
-#[cfg(test)]
-/// Runs the 128-point base butterfly when a supported native layout is
-/// available.
+/// Runs the 128-point base butterfly in the shape its state selected.
 ///
 /// # Panics
 ///
 /// If `data` is not exactly 128 samples.
 pub(crate) fn transform_128<T, const INVERSE: bool, const MEASURE: bool>(
     data: &mut [Complex<T>],
-    plan: &Plan128<T>,
+    state: &State128<T>,
 ) -> bool
 where
-    T: MixedRadixScalar,
+    T: MixedRadixScalar<Complex = Complex<T>>,
     Complex<T>: eunomia::layout::Pod,
 {
-    transform_base::<T, INVERSE, MEASURE, 8, 16, 256, { table_lanes(8, 16) }, _, _>(
-        data,
-        SelfSplit::<1, 0>,
-        plan,
-        DirectSink,
-    )
+    match state {
+        State128::EightRows(state) => {
+            let plan = if INVERSE {
+                state.inverse()
+            } else {
+                state.forward()
+            };
+            transform_block::<T, INVERSE, MEASURE, 8, 16, 256, { table_lanes(8, 16) }>(data, plan)
+        }
+        State128::FourRows(state) => {
+            let plan = if INVERSE {
+                state.inverse()
+            } else {
+                state.forward()
+            };
+            transform_block::<T, INVERSE, MEASURE, 4, 32, 256, { table_lanes(4, 32) }>(data, plan)
+        }
+    }
 }
 
 #[cfg(test)]

@@ -1,7 +1,7 @@
 //! Correctness for the 64- and 128-point base butterflies. The direct DFT is
 //! the analytical authority.
 
-use super::instance_major::{transform_128, Plan128};
+use super::instance_major::{transform_128, State128};
 use super::instance_major::{transform_256, Plan256};
 use super::instance_major::{transform_512, Plan512};
 use super::instance_major::{transform_64, Plan64};
@@ -333,7 +333,7 @@ fn dynamic_base64_plan_owns_only_the_selected_route() {
 fn forward_matches_the_direct_transform() {
     let src = signal(128);
     let mut data = src.clone();
-    let Some(plan) = Plan128::<f64>::new_if_supported::<false>() else {
+    let Some(plan) = State128::<f64>::new_if_supported(128) else {
         assert_eq!(data, src, "a width decline must not mutate the input");
         return;
     };
@@ -346,7 +346,7 @@ fn forward_matches_the_direct_transform() {
 fn inverse_matches_the_direct_transform() {
     let src = signal(128);
     let mut data = src.clone();
-    let Some(plan) = Plan128::<f64>::new_if_supported::<true>() else {
+    let Some(plan) = State128::<f64>::new_if_supported(128) else {
         assert_eq!(data, src, "a width decline must not mutate the input");
         return;
     };
@@ -359,15 +359,13 @@ fn inverse_matches_the_direct_transform() {
 fn forward_then_inverse_recovers_the_input() {
     let src = signal(128);
     let mut data = src.clone();
-    let Some(forward_plan) = Plan128::<f64>::new_if_supported::<false>() else {
+    let Some(state) = State128::<f64>::new_if_supported(128) else {
         assert_eq!(data, src, "a width decline must not mutate the input");
         return;
     };
-    let inverse_plan = Plan128::<f64>::new_if_supported::<true>()
-        .expect("the same exact-width capability serves both directions");
-    assert!(transform_128::<f64, false, false>(&mut data, &forward_plan));
+    assert!(transform_128::<f64, false, false>(&mut data, &state));
     assert!(
-        transform_128::<f64, true, false>(&mut data, &inverse_plan),
+        transform_128::<f64, true, false>(&mut data, &state),
         "one direction cannot decline after the same width ran forward"
     );
     let n = 128.0;
@@ -387,7 +385,7 @@ fn forward_then_inverse_recovers_the_input() {
 fn matches_the_static_incumbent_route_within_rounding() {
     let src = signal(128);
     let mut ours = src.clone();
-    let Some(plan) = Plan128::<f64>::new_if_supported::<false>() else {
+    let Some(plan) = State128::<f64>::new_if_supported(128) else {
         assert_eq!(ours, src, "a width decline must not mutate the input");
         return;
     };
@@ -410,7 +408,7 @@ fn reduced_precision_computes_or_declines_without_mutation() {
         })
         .collect();
     let mut data = src.clone();
-    let Some(plan) = Plan128::<f32>::new_if_supported::<false>() else {
+    let Some(plan) = State128::<f32>::new_if_supported(128) else {
         assert_eq!(data, src, "a width decline must not mutate the input");
         return;
     };
@@ -442,7 +440,7 @@ fn comparison_specialization_does_not_record_phases() {
 
     let source = signal(128);
     let mut data = source.clone();
-    let Some(plan) = Plan128::<f64>::new_if_supported::<false>() else {
+    let Some(plan) = State128::<f64>::new_if_supported(128) else {
         assert_eq!(data, source, "a width decline must not mutate the input");
         return;
     };
@@ -868,7 +866,7 @@ where
     assert_eq!(narrow, reference, "four-lane gather output mismatch");
     // The eight-lane request is handled exactly where the base plan selects
     // the eight-lane layout; there it must match the same reference.
-    let plan_is_wide = super::instance_major::Plan128::<T>::new_if_supported::<false>()
+    let plan_is_wide = super::instance_major::Plan8x16::<T>::new_if_supported::<false>()
         .is_some_and(|plan| plan.native_eight_lanes());
     if plan_is_wide {
         assert!(
