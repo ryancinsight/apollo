@@ -173,38 +173,21 @@ impl<F: MixedRadixScalar<Complex = Complex<F>>> FftPlan1D<F> {
         // four-step's six passes at a size where they dominate the transform.
         // 1024 joins them through the eight-block route, for both scalars.
         //
-        // It was `f64` only, because the eight-block construction measured
-        // slower for `f32` (1.24 ms against the four-step's 0.93). Two changes
-        // since remove that: eight blocks now take hermes'
-        // `deinterleave_pairs8` blend network rather than the strided scalar
-        // gather, and each half of the split runs the same sink-fused chain
-        // the four-block path uses rather than a detached `combine_final4`
-        // pass. Re-measured with both routes in one binary and the arms
-        // alternating, `f32` at n = 1024 is faster on the split in every run:
-        // -12.4, -13.7, -15.4 and -16.0%. An earlier pair of runs read -0.5 to
-        // -1.3% and is what the gate's removal was first justified on; those
-        // ran against concurrent peer builds and understated it. The gate's
-        // premise — a 33% regression — is gone either way. The 10 =>
-        // dispatch arm still falls back to the stock power-of-two route when
-        // the plan carries no base128 state.
         // From 256 to 1024 the eight-row form over 32-sample rows is the base
         // (ADR 0061): one kernel at 256, two and four blocks under one radix
-        // step above it; its plan is built first so that the 128 split state
-        // is not built beside it.
+        // step above it. The 128 base serves its own length only: the split
+        // over 128-blocks it once carried to 1024 is gone, since the 256 base
+        // exists on every host the 128 one does.
         let base256 = if (256..=1024).contains(&n) && n.is_power_of_two() {
             State256::new_if_supported().map(Arc::new)
         } else {
             None
         };
-        let base128 =
-            if crate::application::execution::kernel::components::base128::BASE_SPLIT_LENGTHS
-                .contains(&n)
-                && base256.is_none()
-            {
-                State128::new_if_supported().map(Arc::new)
-            } else {
-                None
-            };
+        let base128 = if n == 128 {
+            State128::new_if_supported().map(Arc::new)
+        } else {
+            None
+        };
         // The same construction at half the row length covers n = 64, which
         // otherwise runs six ping-pong Stockham passes over 1 KB.
         let base64 = if n == 64 {
@@ -220,9 +203,7 @@ impl<F: MixedRadixScalar<Complex = Complex<F>>> FftPlan1D<F> {
             let log2 = n.trailing_zeros();
             PlanStrategy::PowerOfTwo {
                 twiddle_fwd: ((base256.is_some() && n > 256)
-                    || (base256.is_none()
-                        && base64.is_none()
-                        && (base128.is_none() || n > 128)))
+                    || (base256.is_none() && base64.is_none() && base128.is_none()))
                     .then(|| F::cached_twiddle_fwd(n)),
                 log2,
                 pot: PhantomData,
@@ -487,10 +468,6 @@ impl<F: MixedRadixScalar<Complex = Complex<F>>> FftPlan1D<F> {
                             forward_impl = exec_base256_forward::<F>;
                             inverse_impl = exec_base256_inverse::<F>;
                             inverse_unnorm_impl = exec_base256_inverse_unnorm::<F>;
-                        } else if base128.is_some() {
-                            forward_impl = exec_base128_forward::<F>;
-                            inverse_impl = exec_base128_inverse::<F>;
-                            inverse_unnorm_impl = exec_base128_inverse_unnorm::<F>;
                         } else {
                             forward_impl = exec_pot_forward_sized::<F, 8>;
                             inverse_impl = exec_pot_inverse_sized::<F, 8>;
@@ -502,10 +479,6 @@ impl<F: MixedRadixScalar<Complex = Complex<F>>> FftPlan1D<F> {
                             forward_impl = exec_base256_forward::<F>;
                             inverse_impl = exec_base256_inverse::<F>;
                             inverse_unnorm_impl = exec_base256_inverse_unnorm::<F>;
-                        } else if base128.is_some() {
-                            forward_impl = exec_base128_forward::<F>;
-                            inverse_impl = exec_base128_inverse::<F>;
-                            inverse_unnorm_impl = exec_base128_inverse_unnorm::<F>;
                         } else {
                             forward_impl = exec_pot_forward_512::<F>;
                             inverse_impl = exec_pot_inverse_512::<F>;
@@ -517,10 +490,6 @@ impl<F: MixedRadixScalar<Complex = Complex<F>>> FftPlan1D<F> {
                             forward_impl = exec_base256_forward::<F>;
                             inverse_impl = exec_base256_inverse::<F>;
                             inverse_unnorm_impl = exec_base256_inverse_unnorm::<F>;
-                        } else if base128.is_some() {
-                            forward_impl = exec_base128_forward::<F>;
-                            inverse_impl = exec_base128_inverse::<F>;
-                            inverse_unnorm_impl = exec_base128_inverse_unnorm::<F>;
                         } else {
                             forward_impl = exec_pot_forward_sized::<F, 10>;
                             inverse_impl = exec_pot_inverse_sized::<F, 10>;

@@ -33,17 +33,6 @@ mod tests;
 #[cfg(all(test, windows, target_arch = "x86_64"))]
 mod pinned_probe;
 
-/// Powers of two that decompose down to the 128-point base: 128 itself, and
-/// 256, 512 and 1024 by repeated radix-2 decimation.
-///
-/// 2048 is not among them. Sixteen blocks are four sink-fused chains and two
-/// in-place levels — the same construction, generalised — and measured 3.3 and
-/// 3.5% *slower* than the flat Stockham route it would replace, with both
-/// routes in one binary and the arms alternating. The construction has a
-/// range and 2048 is past it
-/// (`backlog.md#atlas-apollo-sixteen-block-split`).
-pub(crate) const BASE_SPLIT_LENGTHS: [usize; 4] = [128, 256, 512, 1024];
-
 /// Length of the base transform every split bottoms out in.
 /// The lanes of one base block of `LANES / 2` samples.
 fn base_lanes<T, const LANES: usize>(data: &[eunomia::Complex<T>]) -> &[T; LANES]
@@ -64,24 +53,6 @@ where
     eunomia::layout::cast_slice_mut(data)
         .try_into()
         .expect("invariant: one base block is exactly LANES scalar lanes")
-}
-
-/// The split route over the 128-point base: [`transform_via_base`] at
-/// sixteen-sample rows.
-pub(crate) fn transform_via_base_128<F, const INVERSE: bool, const MEASURE: bool>(
-    data: &mut [F::Complex],
-    plan: &instance_major::Plan128<F>,
-    twiddles: &[F::Complex],
-) -> bool
-where
-    F: crate::application::execution::kernel::mixed_radix::MixedRadixScalar<
-        Complex = eunomia::Complex<F>,
-    >,
-    eunomia::Complex<F>: eunomia::layout::Pod,
-{
-    transform_via_base::<F, INVERSE, MEASURE, 16, 128, 256, { instance_major::table_lanes(8, 16) }>(
-        data, plan, twiddles,
-    )
 }
 
 /// The split route over the 256-point base (ADR 0061): [`transform_via_base`]
@@ -144,7 +115,7 @@ where
 {
     let n = data.len();
     debug_assert!(BASE == 8 * ROW_LEN && BLOCK_LANES == 2 * BASE);
-    debug_assert!(n % BASE == 0 && (n / BASE).is_power_of_two() && n / BASE <= 8);
+    debug_assert!(n % BASE == 0 && (n / BASE).is_power_of_two() && n / BASE <= 4);
     if n == BASE {
         return instance_major::transform_block::<
             F,
@@ -217,29 +188,7 @@ where
                             dst,
                         })
                     }
-                    (8, false) => {
-                        hermes_simd::vectorize_lanes::<4, F, _>(split_boundary::GatherBlocks::<
-                            F,
-                            8,
-                            BLOCK_LANES,
-                        > {
-                            src,
-                            dst,
-                        })
-                    }
-                    (8, true) => {
-                        hermes_simd::vectorize_lanes::<8, F, _>(split_boundary::GatherBlocks::<
-                            F,
-                            8,
-                            BLOCK_LANES,
-                        > {
-                            src,
-                            dst,
-                        })
-                    }
-                    // Any wider split takes the strided scalar gather below,
-                    // which is generic in the block count. No length currently
-                    // reaches it: `BASE_SPLIT_LENGTHS` stops at 1024.
+                    // The assertion above bounds the split at four blocks.
                     _ => Some(false),
                 }
                 .unwrap_or(false)
@@ -264,8 +213,7 @@ where
             // odd block combines on the way out of its own column pass,
             // writing both halves of `data` directly — no separate combine
             // pass and no store-then-reload of the odd spectrum
-            // (gap_audit.md#combine-sink). A width that does not carry the
-            // sink falls back to the two-pass form.
+            // (gap_audit.md#combine-sink).
             if blocks == 2 {
                 let (even, odd) = scratch.split_at_mut(BASE);
                 if !instance_major::transform_block::<
@@ -309,86 +257,7 @@ where
                         return true;
                     }
                 }
-                if !instance_major::transform_block::<
-                    F,
-                    INVERSE,
-                    MEASURE,
-                    ROW_LEN,
-                    BLOCK_LANES,
-                    TABLE_LANES,
-                >(odd, plan)
-                {
-                    return false;
-                }
-                combine_final::<F>(data, scratch, twiddles, BASE);
-                return true;
-            }
-            // Eight blocks: two fused four-block chains and one in-place
-            // level.
-            //
-            // Walking the three levels separately loses for the reason the
-            // four-step route was rejected at the top of this file — passes.
-            // `combine_final4` fuses two levels, so each half reaches its
-            // 512-point spectrum in one pass; the last level then reads and
-            // writes the same array, since output `j` and `j + 512` depend
-            // only on inputs `j` and `j + 512`
-            // (`backlog.md#atlas-apollo-eight-block-split`).
-            // More than four blocks: each group of four reaches its
-            // 512-point spectrum through the same sink-fused chain the
-            // four-block path uses, then the remaining radix-2 levels run in
-            // place — output `j` and `j + len` depend only on inputs `j` and
-            // `j + len`, so no second buffer and no copy back.
-            //
-            // Eight blocks is two chains and one level; sixteen is four
-            // chains and two. The detached `combine_final4` pass this
-            // replaced left the eight-block split 14% behind the flat
-            // Stockham route; fusing took it past
-            // (`backlog.md#atlas-apollo-eight-block-split`).
-            if blocks > 4 {
-                let quarter = 4 * BASE;
-                let mut combined = true;
-                for (data_group, scratch_group) in data
-                    .chunks_exact_mut(quarter)
-                    .zip(scratch[..n].chunks_exact_mut(quarter))
-                {
-                    if !combine_four_blocks::<
-                        F,
-                        INVERSE,
-                        MEASURE,
-                        ROW_LEN,
-                        BASE,
-                        BLOCK_LANES,
-                        TABLE_LANES,
-                    >(data_group, scratch_group, plan, twiddles)
-                    {
-                        combined = false;
-                        break;
-                    }
-                }
-                if !combined {
-                    return false;
-                }
-                #[cfg(all(test, windows, target_arch = "x86_64"))]
-                let t2 = if MEASURE {
-                    let t = instance_major::phase_meter::stamp();
-                    instance_major::phase_meter::add_outer(1, t - t1);
-                    t
-                } else {
-                    0
-                };
-                let mut len = quarter;
-                while len < n {
-                    combine_level_in_place::<F>(data, twiddles, len);
-                    len *= 2;
-                }
-                #[cfg(all(test, windows, target_arch = "x86_64"))]
-                if MEASURE {
-                    let t = instance_major::phase_meter::stamp();
-                    instance_major::phase_meter::add_outer(2, t - t2);
-                    instance_major::phase_meter::OUTER_CALLS
-                        .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
-                }
-                return true;
+                return false;
             }
             // Four blocks keep only the even pair's two halves as an
             // intermediate; the shared column pass carries the sinks at
@@ -510,64 +379,4 @@ where
             high_high: base_lanes_mut::<F, BLOCK_LANES>(high_high),
         },
     )
-}
-
-/// One radix-2 combine level, in place, over every adjacent pair of
-/// `len`-blocks.
-///
-/// Output `j` and `j + len` depend only on inputs `j` and `j + len`, so the
-/// halves are read and written where they already sit — no second buffer, no
-/// copy back, one pass. The twiddle table is stage-major: the level whose
-/// half-length is `len` reads `len` entries starting at `len - 1`, the same
-/// slice `combine_final` takes for its own level.
-fn combine_level_in_place<F>(data: &mut [F::Complex], twiddles: &[F::Complex], len: usize)
-where
-    F: crate::application::execution::kernel::mixed_radix::MixedRadixScalar<
-        Complex = eunomia::Complex<F>,
-    >,
-    eunomia::Complex<F>: eunomia::layout::Pod,
-{
-    let combine = &twiddles[len - 1..2 * len - 1];
-    // The dispatched width first; the scalar loop is the reference form.
-    if hermes_simd::vectorize(split_boundary::CombineLevel::<F> {
-        data: eunomia::layout::cast_slice_mut(&mut *data),
-        twiddles: eunomia::layout::cast_slice(combine),
-        len,
-    }) {
-        return;
-    }
-    for pair in data.chunks_exact_mut(2 * len) {
-        let (low, high) = pair.split_at_mut(len);
-        for j in 0..len {
-            let rotated = high[j] * combine[j];
-            let even = low[j];
-            low[j] = even + rotated;
-            high[j] = even - rotated;
-        }
-    }
-}
-
-/// The last combining stage, reading `scratch` and writing `out`.
-///
-/// The combining loop stays scalar: a hand-vectorized sibling measured
-/// 728.9 ns against 725.2 at n = 256, so the compiler is already doing what it
-/// would have done.
-fn combine_final<F>(
-    out: &mut [F::Complex],
-    scratch: &[F::Complex],
-    twiddles: &[F::Complex],
-    len: usize,
-) where
-    F: crate::application::execution::kernel::mixed_radix::MixedRadixScalar<
-        Complex = eunomia::Complex<F>,
-    >,
-{
-    let combine = &twiddles[len - 1..2 * len - 1];
-    let (even, odd) = scratch.split_at(len);
-    let (low, high) = out.split_at_mut(len);
-    for j in 0..len {
-        let rotated = odd[j] * combine[j];
-        low[j] = even[j] + rotated;
-        high[j] = even[j] - rotated;
-    }
 }
