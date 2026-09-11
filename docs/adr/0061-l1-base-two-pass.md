@@ -489,5 +489,21 @@ base); the two-block form of the step is deleted, and the step serves
   `f64` 384 345 / 341 us against RustFFT's 345 / 346 (1.00 / 0.99, from
   1.26), the efficiency core 827 / 826 against 739 / 740 (1.12, from
   1.29); `f32` unchanged at 1.37, the eight-lane shape declining the
-  three-block source (a stride-three gather or a three-window source at
-  eight lanes is the next slice). Kept.
+  three-block source. Kept.
+- **2026-09-11, the three-block source at eight lanes (slice 2).** The
+  stride-three register at eight lanes from the four windows at
+  `12 c + OFFSET` and three, six, nine samples on — column 0 of their
+  transpose, the network the four-block source runs with its windows
+  four apart — the last chunk's windows stepping back three samples and
+  taking column 3, since the parent ends inside its window nine on.
+  Both shapes of the 128 state serve 384. Pinned probe, two runs
+  (`output/apollo-base128/small_sizes_384wide_run{1,2}_2026-09-11.txt`):
+  `f32` 384 222 / 223 us against RustFFT's 254 / 188 (0.87 / 1.19, from
+  1.37; 259 / 258 on the composite route), the efficiency core 501 / 500
+  against 393 / 396 (1.28 / 1.26, from 1.33); `f64` 343 / 343 against
+  465 / 346 (0.99 on its steadier run). Kept: below the composite route
+  at both scalars. The `f32` residue (1.19 on the performance core, 1.26
+  on the efficiency core) is the three-block route's own — four windows
+  and three shuffles a register against the gather's two — and the
+  four-block form's gather at eight lanes suggests the same trade here;
+  a stride-three gather is the reading left.
