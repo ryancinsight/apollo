@@ -657,3 +657,72 @@ base); the two-block form of the step is deleted, and the step serves
   form (RustFFT's: the radix-8 pass over the parent in place ahead of
   the blocks, the blocks out of place, one interleave pass) is filed as
   `APOLLO-2048-COLUMN-FIRST`.
+
+- **2026-09-11, column-first 2048 trial; not retained
+  (`APOLLO-2048-COLUMN-FIRST`).** Trial `9774f5df` (rebased without
+  production changes as `418aad40`, PR #441) applies a radix-8 pass
+  across eight contiguous 256-point blocks, multiplies chunk-major
+  twiddles, transforms each block into scratch, then pair-interleaves
+  the spectra. With `n = c + 256 r` and `k = q + 8 p`, the DFT phase
+  factors as `rq/8 + cq/2048 + cp/256`. This replaces the sink's
+  twenty-three simultaneous L1 streams with nine per pass. The stream
+  count is a layout argument, not proof of a latency improvement.
+
+  The retention oracle is the user's same-run, core-pinned improvement
+  over PR #439 with no regression in the existing controls. Separate-run
+  reference minima do not satisfy it. The paired executable contains the
+  historical sink from `6323114b` and the candidate at matching direct
+  component boundaries. Both use aligned reset buffers and identical
+  timed work. Untouched lengths repeat the current public plan as
+  identity controls; they are not historical comparisons. RustFFT is
+  a third reference arm. Two replications reverse the three-arm order,
+  cover all seventeen existing lengths at both scalar widths and core
+  classes, and report 100 samples per case. Planning is outside timing.
+
+  | Comparison | Candidate median ns | Sink median ns |
+  | --- | ---: | ---: |
+  | Performance f32 2048, replication 1, candidate first | 1307.877 | 1480.300 |
+  | Performance f32 2048, replication 1, reference first | 1271.561 | 1433.761 |
+  | Performance f32 2048, replication 2, candidate first | 1357.043 | 1464.526 |
+  | Performance f32 2048, replication 2, reference first | 1296.622 | 1482.203 |
+
+  Three target comparisons improve 11.31–12.52% with disjoint reported
+  median intervals. The fourth is unstable: candidate 1311.904–1730.357
+  ns and sink 1450.947–1891.578 ns. Efficiency-core f32 2048 changes
+  direction with arm order in replication 1 and has overlapping
+  intervals in replication 2. The efficiency-core f32 64 control is
+  1.18–1.43% slower in all four comparisons with disjoint intervals;
+  replication 2 reads 44.541 versus 43.928 ns and 44.535 versus 43.979 ns.
+  Identical-code performance-core f32 32768 controls also drift
+  (0.32–0.44% apparent slowdown in replication 1, overlap or reversal
+  in replication 2). The intervals have 96.48% per-case coverage,
+  not simultaneous coverage across the sweep. Host logs record concurrent
+  compilation: pinning cannot remove shared-resource and frequency
+  effects. These observations do not establish that the algorithm causes
+  the control differences, and unstable timings are not accepted as
+  performance evidence.
+
+  **Decision:** the required stable improvement with clean controls is
+  unestablished. Remove the trial production route in a forward change
+  and retain PR #439's sink. Keep the exact impulse/constant spectra,
+  independently summed normalized inverse, finite-output checks, and
+  FFT-only round-trip error bound. A new trial requires a bounded
+  measurement design that resolves the identity-control drift; the
+  present data do not justify a retained optimization.
+
+  Artifacts are under `D:/atlas/output/apollo-base128/`: `experiment.md`
+  records source and executable provenance, commands and machine class;
+  `experiment.patch` and `prepare-baseline.ps1` reproduce the temporary
+  instrument; `{eight_lane,four_lane}_{candidate_first,reference_first}`
+  raw `.txt` files and their `_replication2.txt` counterparts hold every
+  sample and interval; `host_state.txt` records load. Temporary duplicate
+  kernels and probe registrations are removed from the source tree.
+  The candidate's release correctness run passed 31 selected tests;
+  all eight paired tests completed under the committed nextest 30/60s
+  bounds with retries disabled. Final retained-tree native checks are
+  recorded in the delivery commit and PR #441: package fmt, all-target
+  all-feature clippy with warnings denied, nextest 644/644 (42 skipped,
+  run `e99739e5-6b44-4cef-a7fc-3868c03c4513`), one doctest and rustdoc
+  with warnings denied pass. Native tests complete in 9.728 seconds.
+  Cargo reports unused stack-overlay patches; these are not Rust source
+  diagnostics, and the generated overlay lock delta is excluded.

@@ -8,6 +8,8 @@ use super::instance_major::{transform_64, Plan64};
 use eunomia::{Complex, Complex32, Complex64};
 use std::f64::consts::TAU;
 
+mod split;
+
 fn dft(input: &[Complex64], inverse: bool) -> Vec<Complex64> {
     let n = input.len();
     let sign = if inverse { 1.0 } else { -1.0 };
@@ -45,6 +47,10 @@ fn tolerance(input: &[Complex64]) -> f64 {
 }
 
 fn worst(a: &[Complex64], b: &[Complex64]) -> f64 {
+    assert!(a
+        .iter()
+        .chain(b)
+        .all(|v| v.re.is_finite() && v.im.is_finite()));
     a.iter()
         .zip(b)
         .map(|(x, y)| (x.re - y.re).hypot(x.im - y.im))
@@ -634,6 +640,7 @@ fn eight_block_2048_plans_keep_their_twiddle_rows_in_the_256_state() {
     let mut actual = source.clone();
     plan.forward_complex_slice_inplace(&mut actual);
     let expected = dft_reduced(&source, false);
+    assert!(actual.iter().all(|v| v.re.is_finite() && v.im.is_finite()));
     let error = actual
         .iter()
         .zip(&expected)
@@ -651,7 +658,16 @@ fn eight_block_2048_plans_keep_their_twiddle_rows_in_the_256_state() {
         .zip(&source)
         .map(|(value, reference)| (value.re - reference.re).hypot(value.im - reference.im))
         .fold(0.0_f32, f32::max);
-    let bound = 2.0 * reduced_tolerance(&source);
+    // Each FFT has at most sixteen rounding contributions per radix-2
+    // stage (complex products, additions and rounded twiddles). Propagating
+    // gamma_d through a forward and normalized inverse gives
+    // (2 gamma_d + gamma_d^2) ||source||_1. No direct-DFT summation occurs
+    // in this round trip, so its O(N epsilon) allowance does not belong here.
+    let du = 16.0 * N.ilog2() as f32 * (f32::EPSILON / 2.0);
+    let gamma = du / (1.0 - du);
+    let norm: f32 = source.iter().map(|v| v.re.hypot(v.im)).sum();
+    let bound = (2.0 * gamma + gamma * gamma) * norm;
+    assert!(actual.iter().all(|v| v.re.is_finite() && v.im.is_finite()));
     assert!(
         error <= bound,
         "N=2048 eight-block round trip differs by {error:.3e} > {bound:.3e}"
