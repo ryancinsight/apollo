@@ -234,6 +234,30 @@ where
     [values[0] + sum, m0 + m1, m0 - m1]
 }
 
+/// Computes lane-wise DFT-6s across six registers, natural order, as a
+/// three-by-two Good-Thomas: DFT-3s over the even and the reordered odd
+/// arms, then DFT-2s across, no twiddle between.
+#[expect(
+    clippy::inline_always,
+    reason = "register kernels must retain their caller's target-feature scope"
+)]
+#[inline(always)]
+pub(super) fn radix6<T, A, const INVERSE: bool>(
+    values: [ComplexReg<T, A>; 6],
+    thirds: &Thirds<T, A>,
+) -> [ComplexReg<T, A>; 6]
+where
+    T: LaneScalar,
+    A: SimdArch + SimdKernel<T>,
+{
+    let even = radix3::<T, A, INVERSE>([values[0], values[2], values[4]], thirds);
+    let odd = radix3::<T, A, INVERSE>([values[3], values[5], values[1]], thirds);
+    let (out0, out1) = even[0].butterfly(odd[0]);
+    let (out2, out3) = even[1].butterfly(odd[1]);
+    let (out4, out5) = even[2].butterfly(odd[2]);
+    [out0, out3, out4, out1, out2, out5]
+}
+
 /// The fifth-turn constants a radix-5 applies: the cosines `c1 = cos(2π/5)`,
 /// `c2 = cos(4π/5)` broadcast, and the sines `s1 = sin(2π/5)`,
 /// `s2 = sin(4π/5)` carrying the direction and the `(-1, 1)` of a quarter

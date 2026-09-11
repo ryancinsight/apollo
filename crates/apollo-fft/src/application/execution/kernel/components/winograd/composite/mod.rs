@@ -15,7 +15,9 @@ pub(crate) use power::{dft128_impl, dft16_impl, dft32_impl, dft64_impl};
 #[cfg(target_arch = "x86_64")]
 pub(crate) use radix_four_eight::{dft16_framed, dft32_framed};
 pub(crate) use radix_four_eight::{try_dft32_hardware, try_dft32_rows_hardware};
-pub(crate) use radix_four_nine::{dft36_kernel, load, store, twiddled, TwiddleRow, Twiddles36};
+pub(crate) use radix_four_nine::{
+    complexes_per_register, dft36_kernel, load, store, twiddled, TwiddleRow, Twiddles36,
+};
 pub(crate) use small::{
     dft10_impl, dft12_impl, dft14_impl, dft18_impl, dft20_impl, dft21_impl, dft22_impl, dft24_impl,
     dft25_impl, dft26_impl, dft27_impl, dft28_impl, dft30_impl, dft33_impl, dft34_impl, dft35_impl,
