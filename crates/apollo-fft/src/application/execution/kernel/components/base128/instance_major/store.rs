@@ -74,6 +74,9 @@ where
 /// exactly what they did from the interleaved table.
 pub(crate) struct SplitSinks<T> {
     inner: AlignedLanes<T>,
+    /// `W_{3 BASE}^{2 j}` for `j < BASE`, dup-split: the radix-3 step's
+    /// second twiddle; empty elsewhere.
+    second: AlignedLanes<T>,
     outer: AlignedLanes<T>,
 }
 
@@ -127,7 +130,32 @@ impl<T: MixedRadixScalar<Complex = Complex<T>>> SplitSinks<T> {
         } else {
             AlignedLanes::empty(zero)
         };
-        Self { inner, outer }
+        Self {
+            inner,
+            second: AlignedLanes::empty(zero),
+            outer,
+        }
+    }
+
+    /// The tables for the radix-3 step over three `base`-blocks with
+    /// `samples` complex samples a register: `W_{3 base}^j` and
+    /// `W_{3 base}^{2 j}` for `j < base`, computed here since the
+    /// stage-major cache serves powers of two only.
+    pub(crate) fn build_radix3<const INVERSE: bool>(samples: usize, base: usize) -> Self {
+        let zero = T::from_precise(0.0);
+        let dir = if INVERSE { 1.0_f64 } else { -1.0_f64 };
+        let n = 3 * base;
+        let w = |j: usize| -> Complex<T> {
+            let (s, c) = (dir * core::f64::consts::TAU * j as f64 / n as f64).sin_cos();
+            Complex::new(T::from_precise(c), T::from_precise(s))
+        };
+        let first: Vec<Complex<T>> = (0..base).map(w).collect();
+        let second: Vec<Complex<T>> = (0..base).map(|j| w(2 * j)).collect();
+        Self {
+            inner: AlignedLanes::new(&dup_split(samples, &first), zero),
+            second: AlignedLanes::new(&dup_split(samples, &second), zero),
+            outer: AlignedLanes::empty(zero),
+        }
     }
 
     /// No tables: the route is one block.
@@ -135,8 +163,15 @@ impl<T: MixedRadixScalar<Complex = Complex<T>>> SplitSinks<T> {
         let zero = T::from_precise(0.0);
         Self {
             inner: AlignedLanes::empty(zero),
+            second: AlignedLanes::empty(zero),
             outer: AlignedLanes::empty(zero),
         }
+    }
+
+    /// `W_{3 BASE}^{2 j}`, `j < BASE`, dup-split; empty except under the
+    /// radix-3 step.
+    pub(crate) fn second(&self) -> &[T] {
+        self.second.as_slice()
     }
 
     /// `W_{2 BASE}^j`, `j < BASE`, dup-split.
@@ -226,6 +261,74 @@ impl<T: LaneScalar> StoreSink<T> for DirectSink {
         out: &mut [T],
     ) {
         put(simd, reg.into_interleaved(), out, chunk);
+    }
+}
+
+/// The last block of three: the radix-3 step over the three block spectra
+/// as its registers leave the kernel. `sub0` and `sub1` are the other two
+/// blocks' spectra; with `t1 = W_{3 BASE}^j sub1` and `t2 = W_{3 BASE}^{2 j}
+/// reg`, the outputs are `sub0 + t1 + t2`, `m0 + m1`, and `m0 - m1` for
+/// `m0 = sub0 - (t1 + t2) / 2` and `m1 = -+ i (sqrt(3) / 2) (t1 - t2)`, the
+/// upper sign forward — the three-point butterfly the composite radix-3
+/// pass runs, over three spectra of `BASE` at once.
+pub(crate) struct FinalRadix3Sink<
+    'a,
+    T,
+    const LANES: usize,
+    const TW_LANES: usize,
+    const INVERSE: bool,
+> {
+    pub(crate) sub0: &'a [T; LANES],
+    pub(crate) sub1: &'a [T; LANES],
+    /// `W_{3 BASE}^j` per chunk, dup-split ([`SplitSinks::inner`]).
+    pub(crate) first_tw: &'a [T; TW_LANES],
+    /// `W_{3 BASE}^{2 j}` per chunk, dup-split ([`SplitSinks::second`]).
+    pub(crate) second_tw: &'a [T; TW_LANES],
+    /// `-1 / 2`, the real part of the third root of unity.
+    pub(crate) half_negative: T,
+    /// `sqrt(3) / 2`, the sine of the third root of unity.
+    pub(crate) sine: T,
+}
+
+impl<T: LaneScalar, const LANES: usize, const TW_LANES: usize, const INVERSE: bool> StoreSink<T>
+    for FinalRadix3Sink<'_, T, LANES, TW_LANES, INVERSE>
+{
+    const OUT_BLOCKS: usize = 3;
+
+    #[expect(
+        clippy::inline_always,
+        reason = "the base kernel invokes this concrete sink once per SIMD chunk"
+    )]
+    #[inline(always)]
+    fn store<A: SimdArch + SimdKernel<T>>(
+        &mut self,
+        simd: &Simd<T, A>,
+        reg: ComplexReg<T, A>,
+        chunk: usize,
+        out: &mut [T],
+    ) {
+        let block = LANES / <A as SimdStorage<T>>::LANE_COUNT;
+        let sub0 = input(simd, self.sub0, chunk);
+        let t1 = twiddled(simd, self.first_tw, input(simd, self.sub1, chunk), chunk);
+        let t2 = twiddled(simd, self.second_tw, reg, chunk);
+        let (sum, diff) = t1.butterfly(t2);
+        let half_negative = simd.splat(self.half_negative);
+        let sine = simd.splat(self.sine);
+        let (out0, _) = sub0.butterfly(sum);
+        let m0 = ComplexReg::from_interleaved(
+            sum.into_interleaved()
+                .mul_add(half_negative, sub0.into_interleaved()),
+        );
+        let turned = if INVERSE {
+            diff.mul_i()
+        } else {
+            diff.mul_neg_i()
+        };
+        let m1 = ComplexReg::from_interleaved(turned.into_interleaved() * sine);
+        let (out1, out2) = m0.butterfly(m1);
+        put(simd, out0.into_interleaved(), out, chunk);
+        put(simd, out1.into_interleaved(), out, block + chunk);
+        put(simd, out2.into_interleaved(), out, 2 * block + chunk);
     }
 }
 

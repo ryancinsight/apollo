@@ -38,7 +38,7 @@ mod store;
 use plan::{native_width, BaseLaneWidth, CacheLineAligned};
 pub(crate) use plan::{BasePlan, BasePlanState};
 pub(crate) use rows::{BlockSource, ParentSplit, SelfSplit};
-pub(crate) use store::{DirectSink, FinalRadix4Sink, SplitSinks, StoreSink};
+pub(crate) use store::{DirectSink, FinalRadix3Sink, FinalRadix4Sink, SplitSinks, StoreSink};
 
 /// Per-phase TSC accumulators for the separately instantiated attribution
 /// instrument.
@@ -417,6 +417,13 @@ where
         }
     }
 
+    /// Whether this state serves 384 as three 128-blocks: the three-block
+    /// source reads the parent at four lanes only (`rows::strided`), the
+    /// eight-row shape's width.
+    pub(crate) const fn serves_three_blocks(&self) -> bool {
+        matches!(self, Self::EightRows(_))
+    }
+
     #[cfg(test)]
     pub(crate) fn inverse_is_initialized(&self) -> bool {
         match self {
@@ -428,6 +435,7 @@ where
 /// Directional state for the 64-point base.
 pub(crate) type State64<T> = BasePlanState<T, 4, 16, { table_lanes(4, 16) }>;
 
+#[cfg(test)]
 /// Runs the 128-point base butterfly in the shape its state selected.
 ///
 /// # Panics

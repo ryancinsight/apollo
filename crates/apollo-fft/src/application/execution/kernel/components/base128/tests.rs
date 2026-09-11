@@ -571,6 +571,50 @@ fn four_block_2048_plans_keep_their_sink_tables_in_the_512_state() {
 }
 
 #[test]
+fn three_block_384_plans_route_through_the_128_state_at_four_lanes() {
+    // 384 is three 128-blocks under the radix-3 sink where the 128 state
+    // reads the parent at four lanes; the eight-lane shape declines and
+    // the composite route serves it. Either way the plan matches the DFT.
+    let plan = crate::FftPlan1D::<f64>::new(
+        crate::Shape1D::new(384).expect("invariant: shape lengths are non-zero"),
+    );
+    let source = signal(384);
+    let mut data = source.clone();
+    plan.forward_complex_slice_inplace(&mut data);
+    let expected = dft(&source, false);
+    let error = worst(&data, &expected);
+    let bound = tolerance(&source);
+    assert!(
+        error <= bound,
+        "N=384 forward differs by {error:.3e} > {bound:.3e}"
+    );
+    plan.inverse_complex_slice_inplace(&mut data);
+    let error = worst(&data, &source);
+    let bound = 2.0 * tolerance(&source);
+    assert!(
+        error <= bound,
+        "N=384 round trip differs by {error:.3e} > {bound:.3e}"
+    );
+    let Some(state) = plan.base128.as_ref() else {
+        return;
+    };
+    assert!(
+        state.serves_three_blocks(),
+        "the eight-lane shape never takes 384"
+    );
+    let (inner, second, outer) = match state.as_ref() {
+        super::instance_major::State128::EightRows(state) => (
+            state.sinks().inner().len(),
+            state.sinks().second().len(),
+            state.sinks().outer().len(),
+        ),
+        super::instance_major::State128::FourRows(_) => unreachable!("asserted above"),
+    };
+    assert_eq!((inner, second, outer), (4 * 128, 4 * 128, 0));
+    assert!(state.inverse_is_initialized());
+}
+
+#[test]
 fn dynamic_split_plans_keep_their_sink_tables_in_the_base_state() {
     // The 256 base splits 1024; 256 itself is one block and keeps no split
     // table. The sink twiddles live in the base state, dup-split at the

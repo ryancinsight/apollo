@@ -199,11 +199,7 @@ where
     /// flipped.
     pub(crate) fn new_if_supported(n: usize) -> Option<Self> {
         let forward = BasePlan::new_if_supported::<false>()?;
-        let sinks = if n > ROWS * ROW_LEN {
-            Self::sinks_for(&forward, n, &T::cached_twiddle_fwd(n))
-        } else {
-            SplitSinks::empty()
-        };
+        let sinks = Self::sinks_for::<false>(&forward, n);
         Some(Self {
             n,
             forward,
@@ -213,19 +209,32 @@ where
         })
     }
 
-    /// The sink tables for `n` at the plan's register width; empty when the
-    /// route is one block. The stage-major table is only consulted above
-    /// one block, so a single-block plan never touches the twiddle cache.
-    fn sinks_for(
+    /// The sink tables for `n` at the plan's register width: empty when
+    /// the route is one block, computed for the radix-3 step over three
+    /// blocks, and relaid from the stage-major table for the radix-4 step
+    /// — so a single-block plan never touches the twiddle cache, and a
+    /// three-block one never asks it for a length it does not serve.
+    fn sinks_for<const INVERSE: bool>(
         plan: &BasePlan<T, ROWS, ROW_LEN, TABLE_LANES>,
         n: usize,
-        twiddles: &std::sync::Arc<[eunomia::Complex<T>]>,
     ) -> SplitSinks<T> {
+        let base = ROWS * ROW_LEN;
         let samples = match plan.lane_width {
             BaseLaneWidth::Four => 2,
             BaseLaneWidth::Eight => 4,
         };
-        SplitSinks::build(samples, twiddles, ROWS * ROW_LEN, n)
+        if n == 3 * base {
+            SplitSinks::build_radix3::<INVERSE>(samples, base)
+        } else if n > base {
+            let twiddles = if INVERSE {
+                T::cached_twiddle_inv(n)
+            } else {
+                T::cached_twiddle_fwd(n)
+            };
+            SplitSinks::build(samples, &twiddles, base, n)
+        } else {
+            SplitSinks::empty()
+        }
     }
 
     /// Borrows the immutable forward plan.
@@ -246,13 +255,8 @@ where
 
     /// The inverse route's sink tables, initialized once across clones.
     pub(crate) fn inverse_sinks(&self) -> &SplitSinks<T> {
-        self.inverse_sinks.get_or_init(|| {
-            if self.n > ROWS * ROW_LEN {
-                Self::sinks_for(&self.forward, self.n, &T::cached_twiddle_inv(self.n))
-            } else {
-                SplitSinks::empty()
-            }
-        })
+        self.inverse_sinks
+            .get_or_init(|| Self::sinks_for::<true>(&self.forward, self.n))
     }
 
     #[cfg(test)]

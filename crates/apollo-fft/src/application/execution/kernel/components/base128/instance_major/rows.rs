@@ -167,8 +167,24 @@ where
     A: SimdArch + SimdKernel<T>,
 {
     debug_assert!(OFFSET < BLOCKS && S * 2 == <A as SimdStorage<T>>::LANE_COUNT);
+    debug_assert!(
+        BLOCKS != 3 || S == 2,
+        "invariant: three blocks read the parent at four lanes only"
+    );
     if BLOCKS == 1 {
         window(simd, parent, S * c)
+    } else if BLOCKS == 3 && S == 2 {
+        // Two samples three apart from `6 c + OFFSET`: the low sample of
+        // the window there and the high sample of the window two samples
+        // on (a window at `+ 3` would read one sample past the parent on
+        // the last chunk), the latter swapped to its low half so one
+        // interleave pairs them.
+        let base = 6 * c + OFFSET;
+        let low = window(simd, parent, base);
+        let high = ComplexReg::from_interleaved(window(simd, parent, base + 2))
+            .swap_samples()
+            .into_interleaved();
+        low.interleave_halves(high).0
     } else if S == 2 {
         // The two samples sit `BLOCKS` apart from `2 BLOCKS c + OFFSET`;
         // the even-aligned windows holding them share the sample's parity.
