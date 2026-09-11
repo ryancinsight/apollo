@@ -264,9 +264,9 @@ where
                 &tab_view,
                 b16_1 + layer_chunks(ROW_LEN) - 1,
             );
-            // The row's second stage is over `b0`, `ROW_LEN / 4` values per
-            // `m`; `zbuf` holds `z[b0][m]` at chunk `per_m * m + b0`.
-            let per_m = ROW_LEN / 4;
+            // The row's second stage is radix-4 over `b0` for each of the
+            // `ROW_LEN / 4` values of `m`; `zbuf` holds `z[b0][m]` at chunk
+            // `4 m + b0`.
 
             // The two radix-4 stages run as separate passes over a
             // 512-byte spill plane. Holding all sixteen twiddled values in
@@ -287,107 +287,106 @@ where
                         ))
                     };
                     if ROW_LEN == 32 {
-                        // 32 = 4 x 8 with `b = 8 b1 + b0`: radix-4 over `b1`
-                        // within each stride-8 group, the `W_32^{b0 m}` layer,
-                        // then radix-8 over `b0`. The layer's general
-                        // multiplies are the six broadcasts of the table; the
-                        // others are those under `W_32^8` (a rotation) or
-                        // `W_32^16` (a sign), and the eighths are the
-                        // `sqrt(2)/2` scalings.
+                        // 32 = 8 x 4 with `b = 4 b1 + b0`: radix-8 over `b1`
+                        // within each stride-4 group, the `W_32^{b0 m}` layer,
+                        // then radix-4 over `b0` below, so no stage holds more
+                        // than eight columns and their twiddles (the 4 x 8
+                        // order spilled forty registers a row pair). The
+                        // layer's general multiplies are the six broadcasts of
+                        // the table; the others are those under `W_32^8` (a
+                        // rotation) or `W_32^16` (a sign), and the eighths
+                        // are the `sqrt(2)/2` scalings.
                         let rot = rot90::<T, A, INVERSE>;
                         let neg = |v: ComplexReg<T, A>| {
                             ComplexReg::from_interleaved(-v.into_interleaved())
                         };
-                        for b0 in 0..8usize {
-                            let y = radix4::<T, A, INVERSE>([
-                                load_r(b0),
-                                load_r(b0 + 8),
-                                load_r(b0 + 16),
-                                load_r(b0 + 24),
-                            ]);
-                            let (w1, w3, w5, w7, v1, v3) = (
-                                b16_1,
-                                b16_1 + 2,
-                                b16_1 + 4,
-                                b16_1 + 6,
-                                b16_1 + 8,
-                                b16_1 + 10,
+                        let (w1, w3, w5, w7, v1, v3) = (
+                            b16_1,
+                            b16_1 + 2,
+                            b16_1 + 4,
+                            b16_1 + 6,
+                            b16_1 + 8,
+                            b16_1 + 10,
+                        );
+                        for b0 in 0..4usize {
+                            let y = radix8::<T, A, INVERSE>(
+                                core::array::from_fn(|b1| load_r(b0 + 4 * b1)),
+                                half_root2,
                             );
                             let z = match b0 {
                                 0 => y,
-                                1 => [y[0], cmul(y[1], w1), cmul(y[2], v1), cmul(y[3], w3)],
+                                1 => [
+                                    y[0],
+                                    cmul(y[1], w1),
+                                    cmul(y[2], v1),
+                                    cmul(y[3], w3),
+                                    root2_twiddle::<T, A, INVERSE, false>(y[4], half_root2),
+                                    cmul(y[5], w5),
+                                    cmul(y[6], v3),
+                                    cmul(y[7], w7),
+                                ],
                                 2 => [
                                     y[0],
                                     cmul(y[1], v1),
                                     root2_twiddle::<T, A, INVERSE, false>(y[2], half_root2),
                                     cmul(y[3], v3),
-                                ],
-                                3 => [y[0], cmul(y[1], w3), cmul(y[2], v3), rot(cmul(y[3], w1))],
-                                4 => [
-                                    y[0],
-                                    root2_twiddle::<T, A, INVERSE, false>(y[1], half_root2),
-                                    rot(y[2]),
-                                    root2_twiddle::<T, A, INVERSE, true>(y[3], half_root2),
-                                ],
-                                5 => [
-                                    y[0],
-                                    cmul(y[1], w5),
-                                    rot(cmul(y[2], v1)),
-                                    rot(cmul(y[3], w7)),
-                                ],
-                                6 => [
-                                    y[0],
-                                    cmul(y[1], v3),
-                                    root2_twiddle::<T, A, INVERSE, true>(y[2], half_root2),
-                                    neg(cmul(y[3], v1)),
+                                    rot(y[4]),
+                                    rot(cmul(y[5], v1)),
+                                    root2_twiddle::<T, A, INVERSE, true>(y[6], half_root2),
+                                    rot(cmul(y[7], v3)),
                                 ],
                                 _ => [
                                     y[0],
-                                    cmul(y[1], w7),
-                                    rot(cmul(y[2], v3)),
-                                    neg(cmul(y[3], w5)),
+                                    cmul(y[1], w3),
+                                    cmul(y[2], v3),
+                                    rot(cmul(y[3], w1)),
+                                    root2_twiddle::<T, A, INVERSE, true>(y[4], half_root2),
+                                    rot(cmul(y[5], w7)),
+                                    neg(cmul(y[6], v1)),
+                                    neg(cmul(y[7], w5)),
                                 ],
                             };
                             for (m, reg) in z.into_iter().enumerate() {
                                 reg.into_interleaved()
-                                    .store_to_view_chunk(&mut zv, per_m * m + b0);
+                                    .store_to_view_chunk(&mut zv, 4 * m + b0);
                             }
                         }
-                    }
-                    for b0 in 0..(if ROW_LEN == 32 { 0 } else { 4usize }) {
-                        let y = radix4::<T, A, INVERSE>([
-                            load_r(b0),
-                            load_r(b0 + 4),
-                            load_r(b0 + 8),
-                            load_r(b0 + 12),
-                        ]);
-                        // The `W_16^{b0*m}` layer: one general multiply only
-                        // where the twiddle is neither unity, a rotation, nor
-                        // a `sqrt(2)/2` scaling.
-                        let z = match b0 {
-                            0 => y,
-                            1 => [
-                                y[0],
-                                cmul(y[1], b16_1),
-                                root2_twiddle::<T, A, INVERSE, false>(y[2], half_root2),
-                                cmul(y[3], b16_1 + 2),
-                            ],
-                            2 => [
-                                y[0],
-                                root2_twiddle::<T, A, INVERSE, false>(y[1], half_root2),
-                                rot90::<T, A, INVERSE>(y[2]),
-                                root2_twiddle::<T, A, INVERSE, true>(y[3], half_root2),
-                            ],
-                            _ => [
-                                y[0],
-                                cmul(y[1], b16_1 + 2),
-                                root2_twiddle::<T, A, INVERSE, true>(y[2], half_root2),
-                                cmul(y[3], b16_1 + 4),
-                            ],
-                        };
-                        for (m, reg) in z.into_iter().enumerate() {
-                            reg.into_interleaved()
-                                .store_to_view_chunk(&mut zv, per_m * m + b0);
+                    } else {
+                        for b0 in 0..4usize {
+                            let y = radix4::<T, A, INVERSE>([
+                                load_r(b0),
+                                load_r(b0 + 4),
+                                load_r(b0 + 8),
+                                load_r(b0 + 12),
+                            ]);
+                            // The `W_16^{b0*m}` layer: one general multiply only
+                            // where the twiddle is neither unity, a rotation, nor
+                            // a `sqrt(2)/2` scaling.
+                            let z = match b0 {
+                                0 => y,
+                                1 => [
+                                    y[0],
+                                    cmul(y[1], b16_1),
+                                    root2_twiddle::<T, A, INVERSE, false>(y[2], half_root2),
+                                    cmul(y[3], b16_1 + 2),
+                                ],
+                                2 => [
+                                    y[0],
+                                    root2_twiddle::<T, A, INVERSE, false>(y[1], half_root2),
+                                    rot90::<T, A, INVERSE>(y[2]),
+                                    root2_twiddle::<T, A, INVERSE, true>(y[3], half_root2),
+                                ],
+                                _ => [
+                                    y[0],
+                                    cmul(y[1], b16_1 + 2),
+                                    root2_twiddle::<T, A, INVERSE, true>(y[2], half_root2),
+                                    cmul(y[3], b16_1 + 4),
+                                ],
+                            };
+                            for (m, reg) in z.into_iter().enumerate() {
+                                reg.into_interleaved()
+                                    .store_to_view_chunk(&mut zv, 4 * m + b0);
+                            }
                         }
                     }
                 }
@@ -398,40 +397,28 @@ where
                 let load_z = |m: usize, b0: usize| {
                     ComplexReg::<T, A>::from_interleaved(hermes_simd::Vector::from_view_chunk(
                         &zv,
-                        per_m * m + b0,
+                        4 * m + b0,
                     ))
                 };
-                for mh in 0..2usize {
+                // Output `(ROW_LEN / 4) q + m`; the two `m` of a pair land as
+                // consecutive samples of chunk `(ROW_LEN / 8) q + mh`.
+                let pairs = ROW_LEN / 8;
+                for mh in 0..pairs {
                     let m0 = 2 * mh;
-                    // Output `4 q + m` for `q` below `ROW_LEN / 4`; the two
-                    // `m` of a pair land as consecutive samples of a chunk.
-                    let mut o0 = [ComplexReg::from_interleaved(simd.zero()); 8];
-                    let mut o1 = [ComplexReg::from_interleaved(simd.zero()); 8];
-                    if ROW_LEN == 32 {
-                        o0 = radix8::<T, A, INVERSE>(
-                            core::array::from_fn(|b0| load_z(m0, b0)),
-                            half_root2,
-                        );
-                        o1 = radix8::<T, A, INVERSE>(
-                            core::array::from_fn(|b0| load_z(m0 + 1, b0)),
-                            half_root2,
-                        );
-                    } else {
-                        o0[..4].copy_from_slice(&radix4::<T, A, INVERSE>([
-                            load_z(m0, 0),
-                            load_z(m0, 1),
-                            load_z(m0, 2),
-                            load_z(m0, 3),
-                        ]));
-                        o1[..4].copy_from_slice(&radix4::<T, A, INVERSE>([
-                            load_z(m0 + 1, 0),
-                            load_z(m0 + 1, 1),
-                            load_z(m0 + 1, 2),
-                            load_z(m0 + 1, 3),
-                        ]));
-                    }
-                    for q in 0..per_m {
-                        let g = 2 * q + mh;
+                    let o0 = radix4::<T, A, INVERSE>([
+                        load_z(m0, 0),
+                        load_z(m0, 1),
+                        load_z(m0, 2),
+                        load_z(m0, 3),
+                    ]);
+                    let o1 = radix4::<T, A, INVERSE>([
+                        load_z(m0 + 1, 0),
+                        load_z(m0 + 1, 1),
+                        load_z(m0 + 1, 2),
+                        load_z(m0 + 1, 3),
+                    ]);
+                    for q in 0..4usize {
+                        let g = pairs * q + mh;
                         let a = o0[q].into_interleaved();
                         let b = o1[q].into_interleaved();
                         hi_mask
