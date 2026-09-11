@@ -564,3 +564,33 @@ base); the two-block form of the step is deleted, and the step serves
   RustFFT's two (sign mask, swap) and a twiddle multiply as six against
   four (a sign flip and blend where RustFFT's `fmaddsub` folds the
   signs) — filed as `APOLLO-F32-16-32-KERNEL-GAP`.
+
+- **2026-09-11, the rotation and the twiddle rows
+  (`APOLLO-F32-16-32-KERNEL-GAP`, slice 1).** Two forms, one upstream
+  and one here. hermes' `ComplexReg::mul_i` / `mul_neg_i` spent the
+  quarter turn as an alternating fused multiply-add against zero, which
+  LLVM expands to an add and a subtract against zero and a blend (it
+  cannot fold `0 - c` to `-c` under signed zeros): four instructions per
+  rotation in every radix-4 stage of every register kernel; now the swap
+  and one xor against a sign-mask pair (hermes PR #172). And this
+  crate's DFT-16 and DFT-32 twiddle rows were compile-time constants,
+  whose negated half LLVM folded into the complex multiply's second
+  constant and so broke the `fmaddsub` pattern into a sign flip, a blend
+  and a plain `fmadd`; the rows are promoted constants loaded through
+  `black_box`, one load a row, and the fused form returns. Census: the
+  `f32` 16 body 68 vector instructions on a 33-cycle estimated chain
+  (from 51), the 32 body 163 on 55 (from 66), against RustFFT's 48 / 34
+  and 115 / 56. Pinned probe, two runs
+  (`output/apollo-base128/small_sizes_kernelgap_run{1,2}_2026-09-11.txt`),
+  apollo / RustFFT: `f32` 16 on the efficiency core 1.04 / 1.04 (from
+  1.27), `f32` 32 on the performance core 1.01 / 1.11 (from 1.15 to
+  1.23) — and the rotation form reaches every register kernel, so the
+  base routes moved with it: 64 through 512 at both scalars and both
+  cores 8 to 13% under their frame-run readings, `f64` 512 0.81 / 0.85
+  on the performance core and 0.88 on the efficiency core, `f32` 256
+  0.88 / 0.90, `f64` 128 0.89 / 0.92 (RustFFT's readings unchanged
+  between the run pairs). The residue at 16 and 32 is the row loads'
+  alignment checks (`cast_slice` on an opaque pointer, three at 16 and
+  six at 32, each a compare, a branch and a trap) and the swap of each
+  row for the multiply's second operand, where RustFFT holds both rows;
+  slice 2.
