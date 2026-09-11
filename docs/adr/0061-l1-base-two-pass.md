@@ -594,3 +594,24 @@ base); the two-block form of the step is deleted, and the step serves
   six at 32, each a compare, a branch and a trap) and the swap of each
   row for the multiply's second operand, where RustFFT holds both rows;
   slice 2.
+
+- **2026-09-11, the twiddle rows as direct and swapped lanes
+  (`APOLLO-F32-16-32-KERNEL-GAP`, slice 2; closed).** Each DFT-16 and
+  DFT-32 row is a promoted constant of eight interleaved lanes in its
+  direct form and with every sample's real and imaginary lanes
+  exchanged, loaded opaque and multiplied through hermes'
+  `ComplexReg::mul_with_swapped` (hermes PR #173): one load a row where
+  the multiply had swapped the twiddle per use, and no slice cast, whose
+  alignment check on an opaque pointer had cost a compare, a branch and
+  a trap per row. Census: the `f32` 16 body 57 vector instructions
+  (from 68; RustFFT 48), the 32 body 133 (from 163; RustFFT 115), no
+  checks left. Pinned probe, two runs
+  (`output/apollo-base128/small_sizes_kernelgap2_run{1,2}_2026-09-11.txt`),
+  apollo / RustFFT: `f32` 16 on the efficiency core 0.97 / 0.96 (1.27
+  before the item), `f32` 32 on the performance core 0.95 / 0.96 (1.15
+  to 1.23 before), `f32` 32 on the efficiency core 0.77, `f32` 16 on
+  the performance core 1.01 / 0.99; 64 through 512 hold their slice-1
+  readings. Kept, and the item closed on its acceptance. What remains
+  above RustFFT among the small lengths is `f64` 8 on the performance
+  core (1.11 to 1.22, the scalar codelet against `Butterfly8Avx64`) and
+  `f64` 32 on the efficiency core (1.04 to 1.07).
