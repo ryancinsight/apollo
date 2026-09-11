@@ -18,6 +18,7 @@ use crate::application::execution::kernel::components::base128::instance_major::
 use crate::application::execution::kernel::components::base128::{
     transform_via_base_128, transform_via_base_256, transform_via_base_512,
 };
+use crate::application::execution::kernel::components::column_route::transform_180;
 
 // ── Static dispatch (used by StaticFftPlan1D) ────────────────────────────────
 
@@ -726,6 +727,46 @@ pub(super) fn exec_good_thomas_inverse_unnorm<F: MixedRadixScalar<Complex = Comp
 }
 
 // 6. Composite
+/// The 180 column route's executors carry the vector frame: the plan builds
+/// the route state only where the frame is present and assigns these only
+/// then, so the pointer's `unsafe fn` contract is the selection.
+///
+/// # Safety
+///
+/// `slice.len()` is 180 and the host executes AVX2 and FMA.
+#[cfg_attr(target_arch = "x86_64", target_feature(enable = "avx2,fma"))]
+pub(super) unsafe fn exec_column180_forward<F: MixedRadixScalar<Complex = Complex<F>>>(
+    plan: &FftPlan1D<F>,
+    slice: &mut [F::Complex],
+) {
+    // SAFETY: both halves of the contract pass through from the caller.
+    unsafe { transform_180::<F, false, false>(slice, plan.column180_state()) }
+}
+
+/// # Safety
+///
+/// As for the forward executor.
+#[cfg_attr(target_arch = "x86_64", target_feature(enable = "avx2,fma"))]
+pub(super) unsafe fn exec_column180_inverse<F: MixedRadixScalar<Complex = Complex<F>>>(
+    plan: &FftPlan1D<F>,
+    slice: &mut [F::Complex],
+) {
+    // SAFETY: both halves of the contract pass through from the caller.
+    unsafe { transform_180::<F, true, true>(slice, plan.column180_state()) }
+}
+
+/// # Safety
+///
+/// As for the forward executor.
+#[cfg_attr(target_arch = "x86_64", target_feature(enable = "avx2,fma"))]
+pub(super) unsafe fn exec_column180_inverse_unnorm<F: MixedRadixScalar<Complex = Complex<F>>>(
+    plan: &FftPlan1D<F>,
+    slice: &mut [F::Complex],
+) {
+    // SAFETY: both halves of the contract pass through from the caller.
+    unsafe { transform_180::<F, true, false>(slice, plan.column180_state()) }
+}
+
 pub(super) fn exec_composite_forward<F: MixedRadixScalar<Complex = Complex<F>>>(
     plan: &FftPlan1D<F>,
     slice: &mut [F::Complex],
