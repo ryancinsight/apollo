@@ -68,12 +68,17 @@ where
     unsafe { v.store_unaligned(data.as_mut_ptr().add(c * <A as SimdStorage<T>>::LANE_COUNT)) }
 }
 
-/// Gathers the split's four stride-4 subsequences into contiguous blocks.
+/// Gathers the split's `BLOCKS` stride-`BLOCKS` subsequences into
+/// contiguous blocks.
 ///
-/// One fused four-way pair deinterleave per quad of consecutive parent
-/// chunks yields one chunk of each subsequence at any width, and the
-/// network lands the four subsequences in exactly the bit-reversed block
-/// order the radix-4 sink expects.
+/// Four: one fused four-way pair deinterleave per quad of consecutive
+/// parent chunks yields one chunk of each subsequence at any width, and
+/// the network lands the four subsequences in exactly the bit-reversed
+/// block order the radix-4 sink expects. Eight: the four-way deinterleave
+/// of each half of eight consecutive chunks yields that half's stride-4
+/// subsequences, and one pair deinterleave across the halves splits each
+/// into its two stride-8 ones, landing in the natural order the radix-8
+/// sink expects.
 pub(crate) struct GatherBlocks<'a, T, const BLOCKS: usize, const BLOCK_LANES: usize> {
     pub(crate) src: &'a [T],
     pub(crate) dst: &'a mut [T],
@@ -99,14 +104,41 @@ impl<T: LaneScalar + MixedRadixScalar, const BLOCKS: usize, const BLOCK_LANES: u
         }
         // One bound for the whole pass, so the per-chunk compares vanish.
         assert!(
-            BLOCKS == 4
+            (BLOCKS == 4 || BLOCKS == 8)
                 && self.src.len() == BLOCKS * BLOCK_LANES
                 && self.dst.len() == self.src.len(),
-            "invariant: four blocks of one base length"
+            "invariant: four or eight blocks of one base length"
         );
-        // Chunks per block at the dispatched width; the outputs store in
-        // the bit-reversed block order [0, 2, 1, 3].
+        // Chunks per block at the dispatched width.
         let cpb = BLOCK_LANES / lanes;
+        if BLOCKS == 8 {
+            for k in 0..cpb {
+                let (s0, s1, s2, s3) = chunk::<T, A>(self.src, 8 * k).deinterleave_pairs4(
+                    chunk(self.src, 8 * k + 1),
+                    chunk(self.src, 8 * k + 2),
+                    chunk(self.src, 8 * k + 3),
+                );
+                let (t0, t1, t2, t3) = chunk::<T, A>(self.src, 8 * k + 4).deinterleave_pairs4(
+                    chunk(self.src, 8 * k + 5),
+                    chunk(self.src, 8 * k + 6),
+                    chunk(self.src, 8 * k + 7),
+                );
+                let (b0, b4) = s0.deinterleave_pairs(t0);
+                let (b1, b5) = s1.deinterleave_pairs(t1);
+                let (b2, b6) = s2.deinterleave_pairs(t2);
+                let (b3, b7) = s3.deinterleave_pairs(t3);
+                put_chunk(b0, self.dst, k);
+                put_chunk(b1, self.dst, cpb + k);
+                put_chunk(b2, self.dst, 2 * cpb + k);
+                put_chunk(b3, self.dst, 3 * cpb + k);
+                put_chunk(b4, self.dst, 4 * cpb + k);
+                put_chunk(b5, self.dst, 5 * cpb + k);
+                put_chunk(b6, self.dst, 6 * cpb + k);
+                put_chunk(b7, self.dst, 7 * cpb + k);
+            }
+            return true;
+        }
+        // Four blocks store in the bit-reversed block order [0, 2, 1, 3].
         for k in 0..cpb {
             let (b0, b1, b2, b3) = chunk::<T, A>(self.src, 4 * k).deinterleave_pairs4(
                 chunk(self.src, 4 * k + 1),

@@ -66,8 +66,9 @@ where
     eunomia::layout::cast_slice(data)
 }
 
-/// The 256 base and one radix-4 step over it for 256 and 1024 samples,
-/// from the plan state that owns its tables.
+/// The 256 base and one radix step over it for 256, 1024 (four blocks,
+/// radix 4) and 2048 samples (eight blocks, radix 8), from the plan state
+/// that owns its tables.
 pub(crate) fn transform_via_base_256<F, const INVERSE: bool, const MEASURE: bool>(
     data: &mut [F::Complex],
     state: &instance_major::State256<F>,
@@ -180,12 +181,14 @@ where
 }
 
 /// The base and one radix step over it: `n = BASE` runs the kernel in
-/// place, `4 BASE` runs the radix-4 step over its four subsequences'
-/// spectra, the combining butterflies riding the last block's column pass
-/// ([`instance_major::FinalRadix4Sink`]); the twiddle table is
-/// stage-major, the level of half-length `len` reading `len` entries from
-/// `len - 1`. (`2 BASE` was a pair of blocks under a combining sink until
-/// the sixteen-row base took 512 at both widths, ADR 0061.)
+/// place, `3 BASE`, `4 BASE` and `8 BASE` run the radix-3, radix-4 and
+/// radix-8 steps over their subsequences' spectra, the combining
+/// butterflies riding the last block's column pass
+/// ([`instance_major::FinalRadix4Sink`], [`instance_major::FinalRadix8Sink`]);
+/// the twiddle table is stage-major, the level of half-length `len`
+/// reading `len` entries from `len - 1`. (`2 BASE` was a pair of blocks
+/// under a combining sink until the sixteen-row base took 512 at both
+/// widths, ADR 0061.)
 ///
 /// Where a block reads its samples is the plan width's measured choice
 /// (ADR 0061). At four lanes every block loads its stride-`blocks`
@@ -198,7 +201,10 @@ where
 /// width gathers the subsequences into scratch first
 /// ([`split_boundary::GatherBlocks`]) and every block reads contiguously.
 /// Both forms run the first three blocks into scratch and the last
-/// through the radix-4 sink, so no intermediate pair is written.
+/// through the radix-4 sink, so no intermediate pair is written. Eight
+/// blocks take the same two forms — the parent read at stride eight at
+/// four lanes, gathered at eight — under the radix-8 sink, the first
+/// seven into scratch.
 ///
 /// Reports whether the dispatched width ran it.
 fn transform_via_base<
@@ -226,7 +232,7 @@ where
     debug_assert!(
         BASE == ROWS * ROW_LEN && BLOCK_LANES == 2 * BASE && SINK_LANES == 2 * BLOCK_LANES
     );
-    debug_assert!(n == BASE || n == 3 * BASE || n == 4 * BASE);
+    debug_assert!(n == BASE || n == 3 * BASE || n == 4 * BASE || n == 8 * BASE);
     if n == BASE {
         return instance_major::transform_block::<
             F,
@@ -244,18 +250,32 @@ where
     } else {
         0
     };
-    debug_assert_eq!(sinks.inner().len(), SINK_LANES);
     let blocks = n / BASE;
+    debug_assert!(if blocks == 8 {
+        sinks.rows().len() == 7 * BLOCK_LANES
+    } else {
+        sinks.inner().len() == SINK_LANES
+    });
     // Three blocks read the parent directly at either width (a stride-three
-    // register from three-sample-apart windows); four gather at eight.
-    let gathered_width = blocks == 4 && plan.native_eight_lanes();
+    // register from three-sample-apart windows); four and eight gather at
+    // eight.
+    let gathered_width = (blocks == 4 || blocks == 8) && plan.native_eight_lanes();
     let scratch_len = n;
     <F as crate::application::execution::kernel::mixed_radix::MixedRadixScalar>::with_scratch(
         scratch_len,
         |scratch| {
             let scratch = &mut scratch[..scratch_len];
             if gathered_width {
-                let gathered =
+                let gathered = if blocks == 8 {
+                    hermes_simd::vectorize_lanes::<8, F, _>(split_boundary::GatherBlocks::<
+                        F,
+                        8,
+                        BLOCK_LANES,
+                    > {
+                        src: lanes::<F>(data),
+                        dst: eunomia::layout::cast_slice_mut(&mut scratch[..n]),
+                    })
+                } else {
                     hermes_simd::vectorize_lanes::<8, F, _>(split_boundary::GatherBlocks::<
                         F,
                         4,
@@ -264,7 +284,8 @@ where
                         src: lanes::<F>(data),
                         dst: eunomia::layout::cast_slice_mut(&mut scratch[..n]),
                     })
-                    .unwrap_or(false);
+                }
+                .unwrap_or(false);
                 if !gathered {
                     return false;
                 }
@@ -277,7 +298,29 @@ where
             } else {
                 0
             };
-            let ran = if blocks == 3 {
+            let ran = if blocks == 8 && gathered_width {
+                eight_blocks_gathered::<
+                    F,
+                    INVERSE,
+                    MEASURE,
+                    ROWS,
+                    ROW_LEN,
+                    BASE,
+                    BLOCK_LANES,
+                    TABLE_LANES,
+                >(data, scratch, plan, sinks)
+            } else if blocks == 8 {
+                eight_blocks_direct::<
+                    F,
+                    INVERSE,
+                    MEASURE,
+                    ROWS,
+                    ROW_LEN,
+                    BASE,
+                    BLOCK_LANES,
+                    TABLE_LANES,
+                >(data, scratch, plan, sinks)
+            } else if blocks == 3 {
                 three_blocks_direct::<
                     F,
                     INVERSE,
@@ -362,6 +405,158 @@ where
         Src,
         S,
     >(out, source, plan, sink)
+}
+
+/// Eight blocks, each reading the parent: subsequences 0 to 6 into
+/// scratch, subsequence 7 over the parent with the radix-8 sink.
+fn eight_blocks_direct<
+    F,
+    const INVERSE: bool,
+    const MEASURE: bool,
+    const ROWS: usize,
+    const ROW_LEN: usize,
+    const BASE: usize,
+    const BLOCK_LANES: usize,
+    const TABLE_LANES: usize,
+>(
+    data: &mut [F::Complex],
+    scratch: &mut [F::Complex],
+    plan: &instance_major::BasePlan<F, ROWS, ROW_LEN, TABLE_LANES>,
+    sinks: &instance_major::SplitSinks<F>,
+) -> bool
+where
+    F: crate::application::execution::kernel::mixed_radix::MixedRadixScalar<
+        Complex = eunomia::Complex<F>,
+    >,
+    eunomia::Complex<F>: eunomia::layout::Pod,
+{
+    let (s0, rest) = scratch.split_at_mut(BASE);
+    let (s1, rest) = rest.split_at_mut(BASE);
+    let (s2, rest) = rest.split_at_mut(BASE);
+    let (s3, rest) = rest.split_at_mut(BASE);
+    let (s4, rest) = rest.split_at_mut(BASE);
+    let (s5, rest) = rest.split_at_mut(BASE);
+    let s6 = &mut rest[..BASE];
+    let parent = lanes::<F>(data);
+    let transformed =
+        block::<F, INVERSE, MEASURE, ROWS, ROW_LEN, BLOCK_LANES, TABLE_LANES, _, _>(
+            s0,
+            instance_major::ParentSplit::<F, 8, 0>(parent),
+            plan,
+            instance_major::DirectSink,
+        ) && block::<F, INVERSE, MEASURE, ROWS, ROW_LEN, BLOCK_LANES, TABLE_LANES, _, _>(
+            s1,
+            instance_major::ParentSplit::<F, 8, 1>(parent),
+            plan,
+            instance_major::DirectSink,
+        ) && block::<F, INVERSE, MEASURE, ROWS, ROW_LEN, BLOCK_LANES, TABLE_LANES, _, _>(
+            s2,
+            instance_major::ParentSplit::<F, 8, 2>(parent),
+            plan,
+            instance_major::DirectSink,
+        ) && block::<F, INVERSE, MEASURE, ROWS, ROW_LEN, BLOCK_LANES, TABLE_LANES, _, _>(
+            s3,
+            instance_major::ParentSplit::<F, 8, 3>(parent),
+            plan,
+            instance_major::DirectSink,
+        ) && block::<F, INVERSE, MEASURE, ROWS, ROW_LEN, BLOCK_LANES, TABLE_LANES, _, _>(
+            s4,
+            instance_major::ParentSplit::<F, 8, 4>(parent),
+            plan,
+            instance_major::DirectSink,
+        ) && block::<F, INVERSE, MEASURE, ROWS, ROW_LEN, BLOCK_LANES, TABLE_LANES, _, _>(
+            s5,
+            instance_major::ParentSplit::<F, 8, 5>(parent),
+            plan,
+            instance_major::DirectSink,
+        ) && block::<F, INVERSE, MEASURE, ROWS, ROW_LEN, BLOCK_LANES, TABLE_LANES, _, _>(
+            s6,
+            instance_major::ParentSplit::<F, 8, 6>(parent),
+            plan,
+            instance_major::DirectSink,
+        );
+    transformed
+        && block::<F, INVERSE, MEASURE, ROWS, ROW_LEN, BLOCK_LANES, TABLE_LANES, _, _>(
+            data,
+            instance_major::SelfSplit::<8, 7>,
+            plan,
+            radix8_sink::<F, INVERSE, BLOCK_LANES>([s0, s1, s2, s3, s4, s5, s6], sinks),
+        )
+}
+
+/// Eight gathered blocks in scratch, in natural order: the first seven in
+/// place, subsequence 7 over the output with the radix-8 sink.
+fn eight_blocks_gathered<
+    F,
+    const INVERSE: bool,
+    const MEASURE: bool,
+    const ROWS: usize,
+    const ROW_LEN: usize,
+    const BASE: usize,
+    const BLOCK_LANES: usize,
+    const TABLE_LANES: usize,
+>(
+    data: &mut [F::Complex],
+    scratch: &mut [F::Complex],
+    plan: &instance_major::BasePlan<F, ROWS, ROW_LEN, TABLE_LANES>,
+    sinks: &instance_major::SplitSinks<F>,
+) -> bool
+where
+    F: crate::application::execution::kernel::mixed_radix::MixedRadixScalar<
+        Complex = eunomia::Complex<F>,
+    >,
+    eunomia::Complex<F>: eunomia::layout::Pod,
+{
+    let (seven, s7) = scratch.split_at_mut(7 * BASE);
+    let s7 = &s7[..BASE];
+    let transformed = seven.chunks_exact_mut(BASE).all(|sub| {
+        block::<F, INVERSE, MEASURE, ROWS, ROW_LEN, BLOCK_LANES, TABLE_LANES, _, _>(
+            sub,
+            instance_major::SelfSplit::<1, 0>,
+            plan,
+            instance_major::DirectSink,
+        )
+    });
+    let (s0, rest) = seven.split_at(BASE);
+    let (s1, rest) = rest.split_at(BASE);
+    let (s2, rest) = rest.split_at(BASE);
+    let (s3, rest) = rest.split_at(BASE);
+    let (s4, rest) = rest.split_at(BASE);
+    let (s5, s6) = rest.split_at(BASE);
+    transformed
+        && block::<F, INVERSE, MEASURE, ROWS, ROW_LEN, BLOCK_LANES, TABLE_LANES, _, _>(
+            data,
+            instance_major::ParentSplit::<F, 1, 0>(lanes::<F>(s7)),
+            plan,
+            radix8_sink::<F, INVERSE, BLOCK_LANES>([s0, s1, s2, s3, s4, s5, s6], sinks),
+        )
+}
+
+/// The radix-8 sink over seven transformed blocks and the split's rows.
+fn radix8_sink<'a, F, const INVERSE: bool, const BLOCK_LANES: usize>(
+    subs: [&'a [F::Complex]; 7],
+    sinks: &'a instance_major::SplitSinks<F>,
+) -> instance_major::FinalRadix8Sink<'a, F, BLOCK_LANES, INVERSE>
+where
+    F: crate::application::execution::kernel::mixed_radix::MixedRadixScalar<
+        Complex = eunomia::Complex<F>,
+    >,
+    eunomia::Complex<F>: eunomia::layout::Pod,
+{
+    let dir = if INVERSE { 1.0_f64 } else { -1.0_f64 };
+    let eighth = |j: f64| -> [F; 2] {
+        let (s, c) = (dir * core::f64::consts::TAU * j / 8.0).sin_cos();
+        [F::from_precise(c), F::from_precise(s)]
+    };
+    let rows = sinks.rows();
+    let row =
+        |j: usize| lane_array::<F, BLOCK_LANES>(&rows[j * BLOCK_LANES..(j + 1) * BLOCK_LANES]);
+    instance_major::FinalRadix8Sink {
+        subs: subs.map(|sub| base_lanes::<F, BLOCK_LANES>(sub)),
+        rows: [row(0), row(1), row(2), row(3), row(4), row(5), row(6)],
+        eighth_one: eighth(1.0),
+        eighth_three: eighth(3.0),
+    }
 }
 
 /// Three blocks, each reading the parent: subsequences 0 and 1 into

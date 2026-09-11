@@ -535,12 +535,20 @@ fn single_block_512_plans_keep_no_split_table() {
 
 #[test]
 fn four_block_2048_plans_keep_their_sink_tables_in_the_512_state() {
-    // 2048 is four sixteen-row blocks under the radix-4 sink: the 512
-    // state carries the inner and outer sink tables, dup-split and
-    // interleaved at the plan's width, and no 256 base is built beside it.
+    // 2048 at four lanes is four sixteen-row blocks under the radix-4
+    // sink: the 512 state carries the inner and outer sink tables,
+    // dup-split and interleaved at the plan's width, and no 256 base is
+    // built beside it. (At eight lanes 2048 is eight 256-blocks, below.)
     let plan = crate::FftPlan1D::<f64>::new(
         crate::Shape1D::new(2048).expect("invariant: shape lengths are non-zero"),
     );
+    if super::instance_major::native_eight_lanes::<f64>() {
+        assert!(
+            plan.base512.is_none(),
+            "2048 at eight lanes takes the 256 base"
+        );
+        return;
+    }
     let Some(state) = plan.base512.as_ref() else {
         assert_incumbent_route_round_trips(&plan, 2048);
         return;
@@ -567,6 +575,86 @@ fn four_block_2048_plans_keep_their_sink_tables_in_the_512_state() {
     assert!(
         error <= bound,
         "N=2048 four-block round trip differs by {error:.3e} > {bound:.3e}"
+    );
+}
+
+#[test]
+fn eight_block_2048_plans_keep_their_twiddle_rows_in_the_256_state() {
+    // 2048 at eight lanes is eight eight-row blocks under the radix-8 sink:
+    // the 256 state carries the seven interleaved twiddle rows and no
+    // radix-4 tables, and no 512 base is built beside it.
+    const N: usize = 2048;
+    let plan = crate::FftPlan1D::<f32>::new(
+        crate::Shape1D::new(N).expect("invariant: shape lengths are non-zero"),
+    );
+    if !super::instance_major::native_eight_lanes::<f32>() {
+        assert!(
+            plan.base256.is_none(),
+            "2048 at four lanes takes the 512 base"
+        );
+        return;
+    }
+    let state = plan
+        .base256
+        .as_deref()
+        .expect("invariant: the eight-lane host builds the 256 base at 2048");
+    assert!(plan.base512.is_none(), "2048 routes through the 256 base");
+    assert!(plan.twiddle_fwd.is_none() && plan.twiddle_inv.get().is_none());
+    assert_eq!(state.sinks().rows().len(), 7 * 2 * 256);
+    assert_eq!(state.sinks().inner().len(), 0);
+    assert_eq!(state.sinks().outer().len(), 0);
+    assert!(!state.inverse_is_initialized() && !state.inverse_sinks_initialized());
+    // Row `j - 1` at `k` is `W_2048^{j k}`, the cache's value for `j k`
+    // reduced modulo 2048 and negated past the half circle.
+    let rows = state.sinks().rows();
+    let cache = <f32 as crate::application::execution::kernel::mixed_radix::MixedRadixScalar>::cached_twiddle_fwd(N);
+    for j in 1..8 {
+        for k in 0..256 {
+            let m = (j * k) % N;
+            let expected = if m < N / 2 {
+                cache[N / 2 - 1 + m]
+            } else {
+                let w = cache[m - 1];
+                Complex32::new(-w.re, -w.im)
+            };
+            let lane = ((j - 1) * 256 + k) * 2;
+            assert_eq!(
+                (rows[lane], rows[lane + 1]),
+                (expected.re, expected.im),
+                "row {j} at {k}"
+            );
+        }
+    }
+    let source: Vec<Complex32> = (0..N)
+        .map(|index| {
+            let x = index as f32;
+            Complex32::new((0.043 * x).sin(), 0.25 * (0.029 * x).cos())
+        })
+        .collect();
+    let mut actual = source.clone();
+    plan.forward_complex_slice_inplace(&mut actual);
+    let expected = dft_reduced(&source, false);
+    let error = actual
+        .iter()
+        .zip(&expected)
+        .map(|(value, reference)| (value.re - reference.re).hypot(value.im - reference.im))
+        .fold(0.0_f32, f32::max);
+    let bound = reduced_tolerance(&source);
+    assert!(
+        error <= bound,
+        "N=2048 eight-block forward differs by {error:.3e} > {bound:.3e}"
+    );
+    plan.inverse_complex_slice_inplace(&mut actual);
+    assert!(state.inverse_is_initialized() && state.inverse_sinks_initialized());
+    let error = actual
+        .iter()
+        .zip(&source)
+        .map(|(value, reference)| (value.re - reference.re).hypot(value.im - reference.im))
+        .fold(0.0_f32, f32::max);
+    let bound = 2.0 * reduced_tolerance(&source);
+    assert!(
+        error <= bound,
+        "N=2048 eight-block round trip differs by {error:.3e} > {bound:.3e}"
     );
 }
 
@@ -715,7 +803,8 @@ fn dynamic_split_plans_normalize_by_full_length() {
         let mut actual = source.clone();
         let selected = match n {
             128 => plan.base128.is_some(),
-            512 | 2048 => plan.base512.is_some(),
+            512 => plan.base512.is_some(),
+            2048 => plan.base512.is_some() || plan.base256.is_some(),
             _ => plan.base256.is_some(),
         };
         if !selected {
@@ -938,19 +1027,24 @@ fn f32_dynamic_plan_clones_execute_inverse_concurrently() {
 /// right answer: a wrong-width dispatch falls back and still passes value
 /// checks, so this asserts the dispatched width handled the pass and that
 /// its output matches the scalar strided reference.
-fn assert_gather_matches_reference<T>()
+fn assert_gather_matches_reference<T, const BLOCKS: usize>()
 where
     T: crate::application::execution::kernel::mixed_radix::MixedRadixScalar
         + hermes_simd::LaneScalar,
 {
-    const BLOCKS: usize = 4;
     let n = BLOCKS * 128;
     let lanes: Vec<T> = (0..2 * n)
         .map(|i| T::from_precise(((i * 37) % 97) as f64 * 0.125 - 4.0))
         .collect();
     let mut reference = vec![T::from_precise(0.0); 2 * n];
     for b in 0..BLOCKS {
-        let row = b.reverse_bits() >> (usize::BITS - 2);
+        // Four blocks land bit-reversed for the radix-4 sink, eight in
+        // natural order for the radix-8 one.
+        let row = if BLOCKS == 4 {
+            b.reverse_bits() >> (usize::BITS - 2)
+        } else {
+            b
+        };
         for j in 0..128 {
             reference[(row * 128 + j) * 2] = lanes[(j * BLOCKS + b) * 2];
             reference[(row * 128 + j) * 2 + 1] = lanes[(j * BLOCKS + b) * 2 + 1];
@@ -998,6 +1092,8 @@ where
 
 #[test]
 fn gather_matches_the_strided_reference_at_both_widths() {
-    assert_gather_matches_reference::<f64>();
-    assert_gather_matches_reference::<f32>();
+    assert_gather_matches_reference::<f64, 4>();
+    assert_gather_matches_reference::<f32, 4>();
+    assert_gather_matches_reference::<f64, 8>();
+    assert_gather_matches_reference::<f32, 8>();
 }

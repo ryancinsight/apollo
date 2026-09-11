@@ -1,3 +1,4 @@
+use crate::application::execution::kernel::components::base128::instance_major;
 use crate::application::execution::kernel::components::base128::instance_major::{
     Plan64, State128, State256, State512, State64,
 };
@@ -51,11 +52,13 @@ pub struct FftPlan1D<F: MixedRadixScalar> {
     pub(crate) twiddle_inv: std::sync::OnceLock<Arc<[F::Complex]>>,
     pub(crate) base128: Option<Arc<State128<F>>>,
     /// The 256-point two-pass base (ADR 0061), built at n = 256 in place of
-    /// the split state where its width runs.
+    /// the split state where its width runs, as four blocks under the
+    /// radix-4 sink at n = 1024, and as eight blocks under the radix-8 sink
+    /// at n = 2048 where the width is eight lanes.
     pub(crate) base256: Option<Arc<State256<F>>>,
     /// The 512-point single-pass base (sixteen rows of thirty-two), built
-    /// at n = 512 and, as four blocks under the radix-4 sink, at n = 2048,
-    /// at either native width (ADR 0061).
+    /// at n = 512 at either native width and, as four blocks under the
+    /// radix-4 sink, at n = 2048 at four lanes (ADR 0061).
     pub(crate) base512: Option<Arc<State512<F>>>,
     pub(crate) base64: Option<Arc<State64<F>>>,
     /// The 180 column route (ADR 0062): five register-resident 36-point
@@ -179,14 +182,20 @@ impl<F: MixedRadixScalar<Complex = Complex<F>>> FftPlan1D<F> {
         // over 128-blocks it once carried to 1024 is gone, since the 256 base
         // exists on every host the 128 one does.
         // 512 is one sixteen-row block at either width, measured against
-        // two 256-blocks under a combining sink at both, and 2048 four
-        // such blocks under the radix-4 sink (ADR 0061).
-        let base512 = if n == 512 || n == 2048 {
+        // two 256-blocks under a combining sink at both. 2048 is the
+        // width's measured form (ADR 0061): eight 256-blocks under the
+        // radix-8 sink at eight lanes — RustFFT's shape, one column pass
+        // over its 256-point butterfly — and four 512-blocks under the
+        // radix-4 sink at four.
+        let eight_blocks_at_2048 = n == 2048 && instance_major::native_eight_lanes::<F>();
+        let base512 = if n == 512 || (n == 2048 && !eight_blocks_at_2048) {
             State512::new_if_supported(n).map(Arc::new)
         } else {
             None
         };
-        let base256 = if (256..=1024).contains(&n) && n.is_power_of_two() && base512.is_none() {
+        let base256 = if ((256..=1024).contains(&n) && n.is_power_of_two() && base512.is_none())
+            || eight_blocks_at_2048
+        {
             State256::new_if_supported(n).map(Arc::new)
         } else {
             None
@@ -213,12 +222,12 @@ impl<F: MixedRadixScalar<Complex = Complex<F>>> FftPlan1D<F> {
         } else {
             None
         };
-        // The four-step route starts above the sized plans; the 512 base
-        // reaches 2048 as four blocks under the radix-4 sink and takes that
-        // length where it built (ADR 0061).
+        // The four-step route starts above the sized plans; the base
+        // routes reach 2048 as blocks under a radix step and take that
+        // length where they built (ADR 0061).
         let strategy: PlanStrategy<F> = if n <= 1 {
             PlanStrategy::Identity
-        } else if base512.is_none() && generic_four_step_applies(n) {
+        } else if base512.is_none() && base256.is_none() && generic_four_step_applies(n) {
             PlanStrategy::FourStep
         } else if n.is_power_of_two() {
             let log2 = n.trailing_zeros();
@@ -515,6 +524,11 @@ impl<F: MixedRadixScalar<Complex = Complex<F>>> FftPlan1D<F> {
                             inverse_impl = exec_pot_inverse_sized::<F, 10>;
                             inverse_unnorm_impl = exec_pot_inverse_unnorm_sized::<F, 10>;
                         }
+                    }
+                    11 if base256.is_some() => {
+                        forward_impl = exec_base256_forward::<F>;
+                        inverse_impl = exec_base256_inverse::<F>;
+                        inverse_unnorm_impl = exec_base256_inverse_unnorm::<F>;
                     }
                     11 if base512.is_some() => {
                         forward_impl = exec_base512_forward::<F>;
