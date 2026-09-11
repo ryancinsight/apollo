@@ -109,3 +109,14 @@ measured first and gained nothing over the split at 256.
   is saved before 1024. The slice is reverted; the recommendation moves to
   option B, whose column pass keeps eight rows and whose extra work is in
   the row phases, where the kernel already stages through registers.
+- **2026-09-11, option B measured.** The eight-row form over 32-sample
+  rows (`ROW_LEN = 32`: radix-4 over `b1` within each stride-8 group, the
+  `W_32^{b0 m}` layer from six broadcasts under rotations and signs,
+  radix-8 over `b0` through the pair staging, the eight-point column pass
+  unchanged) runs n = 256 oracle-correct in both directions and reads
+  1.08 of RustFFT's 256 butterfly in two quiet pinned runs
+  (`output/apollo-base128/small_sizes_rows32_2026-09-11.txt`, `_run2_`),
+  against the split's 1.20 and option A's 1.22; the route at 256 gains
+  10%. The base is the two-pass kernel the decision needs; the route above
+  it (512 and 1024 as two and four 256-blocks under one radix step) is
+  the next slice, and the acceptance stands on it.
