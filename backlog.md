@@ -9,31 +9,11 @@
 
 <a id="apollo-lane-parallel-threshold"></a>
 
-## APOLLO-LANE-PARALLEL-THRESHOLD-2026-09-11 — Lane passes under 32,768 elements run on one thread whether or not that is faster [patch] [perf] — in-progress
+## APOLLO-LANE-PARALLEL-THRESHOLD-2026-09-11 — Lane passes under 32,768 elements run on one thread whether or not that is faster [patch] [perf] — done 2026-09-11
 
-- **Integrator:** claude-opus-5; **branch:** `perf/apollo-lane-parallel-threshold`, stacked on #436. **Last-update:** 2026-09-11.
-- **Sweep, 2026-09-11** (`pass_attribution::threshold::lane_threshold_crossover`, d868ccb3; fastest sample
-  per transform). At 4–9% host load the 32³ real pair reads 99.5 µs at 32,768 and 67.0 µs at 16,384 —
-  consistent over four runs — while the complex 32×32×16 pair reads 45.2 µs serial and 52.1 µs once its
-  16,384-element passes go parallel (46.4 against 54.5 in a loaded run). One element count cannot serve both,
-  so the constant stays at 32,768. **Next:** a decision keyed to each pass's lane length and task count, read
-  by the same probe.
-- Checked against per-lane twiddle work ([#apollo-real-split-twiddles](#apollo-real-split-twiddles)): the table cut the real pair
-  13–17% at 16³ and 24³ but left serial 32³ within noise, so the 32³ gap is this threshold.
-- **Finding.** `lanes::PARALLEL_THRESHOLD = 32_768` total complex elements decides
-  serial against moirai-parallel for every lane pass, and no measurement is recorded
-  for it (it arrived as the "existing multidimensional crossover", 9db2f6ea). The real
-  half-spectrum pair at 32³ runs its passes on the 32·32·17 = 17,408-element half
-  volume, so they run serially: fastest sample 103 and 122 µs per transform in two
-  probe rounds, against 88 and 98 µs for the complex pair, which sits exactly at the
-  threshold. With the constant at 16,384 the same probe read 66 µs, at 82% host load.
-- **Acceptance.** A quiet or pinned sweep of the threshold over 4,096, 8,192, 16,384
-  and 32,768 against the complex and real pairs at 16³, 24³, 32×32×16, 32³ and 48³
-  sets the constant, its derivation recorded beside it; the real pair at 32³ then reads
-  below the complex pair, and no swept complex size regresses.
-- **Risk / change class:** [patch] [perf]; regions
-  `crates/apollo-fft/src/application/execution/plan/fft/lanes.rs` and the 3-D probe;
-  **dependencies:** [#apollo-native-real-3d](#apollo-native-real-3d).
+- A paired pass now decides by the bytes both sides move (`PARALLEL_BYTES`, the same crossover in complex f64 bytes): an output element count undercounts a pass that also reads a wider input, which is why the 32³ real z pass ran serially while the complex volume of half its bytes ran parallel.
+- Crossover probe, two runs, complex arms flat as control: the real pair reads 94.2–97.6 to 68.1–69.8 µs at 32³, below the complex pair at 86.9–87.2, and 16³, 24³, 32×32×16 and 48³ are unchanged. The instrument is `pass_attribution::threshold::lane_threshold_crossover` (#438).
+- The constant itself stays at 32,768: halving it read the complex 32×32×16 pass 15% slower in two runs, and no swept size asked for a different value. The per-lane twiddle question it raised closed separately ([#apollo-real-split-twiddles](#apollo-real-split-twiddles)).
 
 <a id="apollo-native-real-3d"></a>
 
