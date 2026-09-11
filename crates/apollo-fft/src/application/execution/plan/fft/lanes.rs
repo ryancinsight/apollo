@@ -9,6 +9,11 @@ use eunomia::Complex;
 /// Existing multidimensional crossover, measured in total complex elements.
 const PARALLEL_THRESHOLD: usize = 32_768;
 
+/// The same crossover in bytes of complex f64 lane data, for a pass whose two
+/// sides differ in element type and length: a real field beside its half
+/// spectrum moves more than its output's element count says.
+const PARALLEL_BYTES: usize = PARALLEL_THRESHOLD * core::mem::size_of::<[f64; 2]>();
+
 /// Bytes of lane data one scheduled task carries when lanes need no workspace.
 ///
 /// One lane per task — the previous shape — made a 64³ pass 3.3x *slower*
@@ -167,11 +172,7 @@ pub(super) fn paired<A, B, S>(
     let pair_bytes =
         output_lane * core::mem::size_of::<A>() + input_lane * core::mem::size_of::<B>();
     let lanes_per_task = (TASK_BYTES / pair_bytes.max(1)).max(1);
-    moirai::for_each_chunk_mut_enumerated_with::<
-        moirai::AdaptiveWithThreshold<PARALLEL_THRESHOLD>,
-        _,
-        _,
-    >(output, output_lane * lanes_per_task, |task, outputs| {
+    let run_task = |task: usize, outputs: &mut [A]| {
         #[cfg(all(test, not(miri)))]
         crate::application::execution::kernel::worker_quiescence::record_worker();
         let mut state = init();
@@ -179,7 +180,22 @@ pub(super) fn paired<A, B, S>(
         for (target, source) in outputs.chunks_exact_mut(output_lane).zip(inputs) {
             lane(&mut state, target, source);
         }
-    });
+    };
+    // Both sides count: the output's element count alone undercounts a pass
+    // that also reads a wider input.
+    if lanes * pair_bytes >= PARALLEL_BYTES {
+        moirai::for_each_chunk_mut_enumerated_with::<moirai::Parallel, _, _>(
+            output,
+            output_lane * lanes_per_task,
+            run_task,
+        );
+    } else {
+        moirai::for_each_chunk_mut_enumerated_with::<moirai::Sequential, _, _>(
+            output,
+            output_lane * lanes_per_task,
+            run_task,
+        );
+    }
 }
 
 fn transform<F, const FORWARD: bool>(lane: &mut [F::Complex], scratch: &mut [F::Complex])
