@@ -217,7 +217,11 @@ where
     } else {
         // Four samples four apart from `16 c + OFFSET`: sample `OFFSET` of
         // each of the four windows from `16 c`, one column of their
-        // transpose.
+        // transpose. Eight blocks gather at this width (ADR 0061).
+        debug_assert!(
+            BLOCKS == 4,
+            "the eight-lane parent read is the four-block one"
+        );
         let base = 16 * c;
         let (x0, x1) = window(simd, parent, base).interleave_halves(window(simd, parent, base + 4));
         let (y0, y1) =
