@@ -9,7 +9,12 @@
 
 <a id="apollo-lane-parallel-threshold"></a>
 
-## APOLLO-LANE-PARALLEL-THRESHOLD-2026-09-11 — Lane passes under 32,768 elements run on one thread whether or not that is faster [patch] [perf] — done 2026-09-11
+## APOLLO-LANE-PARALLEL-THRESHOLD-2026-09-11 — Derive lane parallelism from task geometry [patch] [perf] — in-progress
+
+- Integrator: Codex; branch: `perf/apollo-paired-parallel-bytes`; scope: lane scheduling and its crossover probe; no transform algorithm changes.
+- Acceptance: retain a production decision only with controlled real 3-D pair improvement and no complex-control regression; run native lane and real-half tests, format and clippy gates.
+- Reopened 2026-09-11: the byte rule below does not establish a geometry-aware crossover. The inverse-pass trial at 94–100% host load is inconclusive, not evidence for rejecting parallelism or fusion.
+- lease: Codex `crates/apollo-fft/src/application/execution/plan/fft/lanes.rs` `crates/apollo-fft/src/application/execution/plan/fft/dimension_3d/pass_attribution/threshold.rs` 2026-09-11T22:00:00Z
 
 - A paired pass now decides by the bytes both sides move (`PARALLEL_BYTES`, the same crossover in complex f64 bytes): an output element count undercounts a pass that also reads a wider input, which is why the 32³ real z pass ran serially while the complex volume of half its bytes ran parallel.
 - Crossover probe, two runs, complex arms flat as control: the real pair reads 94.2–97.6 to 68.1–69.8 µs at 32³, below the complex pair at 86.9–87.2, and 16³, 24³, 32×32×16 and 48³ are unchanged. The instrument is `pass_attribution::threshold::lane_threshold_crossover` (#438).
