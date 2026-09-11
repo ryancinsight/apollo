@@ -88,8 +88,11 @@ where
         assert_spectrum::<F, N>(&static_output, direction, unit_roundoff);
     }
 
-    if N == 1024 {
+    // 2048 is four sixteen-row blocks under the 512 base where that base
+    // builds (ADR 0061); the four-step route starts past it there.
+    if N == 1024 || (N == 2048 && dynamic.base512.is_some()) {
         assert!(matches!(dynamic.strategy, PlanStrategy::PowerOfTwo { .. }));
+        assert_eq!(dynamic.twiddle_fwd.as_deref().map_or(0, <[_]>::len), 0);
     } else {
         assert!(matches!(dynamic.strategy, PlanStrategy::FourStep));
         // Execution must not acquire a plan-owned stage table, including on

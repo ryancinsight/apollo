@@ -1,5 +1,5 @@
 use crate::application::execution::kernel::components::base128::instance_major::{
-    Plan512, Plan64, State128, State256, State512, State64,
+    Plan64, State128, State256, State512, State64,
 };
 use crate::application::execution::kernel::mixed_radix::MixedRadixScalar;
 use crate::domain::metadata::shape::Shape1D;
@@ -55,7 +55,8 @@ pub struct FftPlan1D<F: MixedRadixScalar> {
     /// the split state where its width runs.
     pub(crate) base256: Option<Arc<State256<F>>>,
     /// The 512-point single-pass base (sixteen rows of thirty-two), built
-    /// at n = 512 at either native width (ADR 0061).
+    /// at n = 512 and, as four blocks under the radix-4 sink, at n = 2048,
+    /// at either native width (ADR 0061).
     pub(crate) base512: Option<Arc<State512<F>>>,
     pub(crate) base64: Option<Arc<State64<F>>>,
 
@@ -132,20 +133,13 @@ impl<F: MixedRadixScalar<Complex = Complex<F>>> FftPlan1D<F> {
             .expect("invariant: the base-256 executor requires its plan state")
     }
 
+    /// The base-512 route's plan state: both directions' plans and sink
+    /// tables.
     #[inline]
-    pub(super) fn base512_forward_plan(&self) -> &Plan512<F> {
+    pub(super) fn base512_state(&self) -> &State512<F> {
         self.base512
             .as_deref()
             .expect("invariant: the base-512 executor requires its plan state")
-            .forward()
-    }
-
-    #[inline]
-    pub(super) fn base512_inverse_plan(&self) -> &Plan512<F> {
-        self.base512
-            .as_deref()
-            .expect("invariant: the base-512 executor requires its plan state")
-            .inverse()
     }
 
     /// The base-128 route's state: both directions' plans in the shape
@@ -172,8 +166,9 @@ impl<F: MixedRadixScalar<Complex = Complex<F>>> FftPlan1D<F> {
         // over 128-blocks it once carried to 1024 is gone, since the 256 base
         // exists on every host the 128 one does.
         // 512 is one sixteen-row block at either width, measured against
-        // two 256-blocks under a combining sink at both (ADR 0061).
-        let base512 = if n == 512 {
+        // two 256-blocks under a combining sink at both, and 2048 four
+        // such blocks under the radix-4 sink (ADR 0061).
+        let base512 = if n == 512 || n == 2048 {
             State512::new_if_supported(n).map(Arc::new)
         } else {
             None
@@ -195,9 +190,12 @@ impl<F: MixedRadixScalar<Complex = Complex<F>>> FftPlan1D<F> {
         } else {
             None
         };
+        // The four-step route starts above the sized plans; the 512 base
+        // reaches 2048 as four blocks under the radix-4 sink and takes that
+        // length where it built (ADR 0061).
         let strategy: PlanStrategy<F> = if n <= 1 {
             PlanStrategy::Identity
-        } else if generic_four_step_applies(n) {
+        } else if base512.is_none() && generic_four_step_applies(n) {
             PlanStrategy::FourStep
         } else if n.is_power_of_two() {
             let log2 = n.trailing_zeros();
@@ -501,6 +499,11 @@ impl<F: MixedRadixScalar<Complex = Complex<F>>> FftPlan1D<F> {
                             inverse_impl = exec_pot_inverse_sized::<F, 10>;
                             inverse_unnorm_impl = exec_pot_inverse_unnorm_sized::<F, 10>;
                         }
+                    }
+                    11 if base512.is_some() => {
+                        forward_impl = exec_base512_forward::<F>;
+                        inverse_impl = exec_base512_inverse::<F>;
+                        inverse_unnorm_impl = exec_base512_inverse_unnorm::<F>;
                     }
                     _ => {
                         forward_impl = exec_pot_forward_generic::<F>;

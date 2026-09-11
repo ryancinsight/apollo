@@ -11,7 +11,7 @@ use eunomia::Complex64;
 use crate::application::execution::kernel::mixed_radix::MixedRadixScalar;
 // Re-imported here so each probe module reaches them as `super::…` rather
 // than climbing two levels; they are the parent module's own items.
-use super::{instance_major, transform_via_base_256};
+use super::{instance_major, transform_via_base_256, transform_via_base_512};
 
 fn phase_attribution(
     src: &[Complex64],

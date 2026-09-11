@@ -377,6 +377,7 @@ where
     )
 }
 
+#[cfg(test)]
 /// The 512-point base plan: sixteen rows of thirty-two.
 pub(crate) type Plan512<T> = BasePlan<T, 16, 32, { table_lanes(16, 32) }>;
 #[cfg(test)]

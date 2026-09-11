@@ -14,9 +14,11 @@ use eunomia::Complex;
 use super::strategy::generic_four_step_applies;
 use super::FftPlan1D;
 use crate::application::execution::kernel::components::base128::instance_major::{
-    table_lanes, transform_128, transform_64, transform_block,
+    transform_128, transform_64,
 };
-use crate::application::execution::kernel::components::base128::transform_via_base_256;
+use crate::application::execution::kernel::components::base128::{
+    transform_via_base_256, transform_via_base_512,
+};
 
 // ── Static dispatch (used by StaticFftPlan1D) ────────────────────────────────
 
@@ -371,10 +373,7 @@ pub(super) fn exec_base512_forward<F: MixedRadixScalar<Complex = Complex<F>>>(
     slice: &mut [F::Complex],
 ) {
     assert!(
-        transform_block::<F, false, false, 16, 32, 1024, { table_lanes(16, 32) }>(
-            slice,
-            plan.base512_forward_plan(),
-        ),
+        transform_via_base_512::<F, false, false>(slice, plan.base512_state()),
         "invariant: the selected base-512 capability remains available"
     );
 }
@@ -384,10 +383,7 @@ pub(super) fn exec_base512_inverse<F: MixedRadixScalar<Complex = Complex<F>>>(
     slice: &mut [F::Complex],
 ) {
     assert!(
-        transform_block::<F, true, false, 16, 32, 1024, { table_lanes(16, 32) }>(
-            slice,
-            plan.base512_inverse_plan(),
-        ),
+        transform_via_base_512::<F, true, false>(slice, plan.base512_state()),
         "invariant: the selected base-512 capability remains available"
     );
     F::normalize(slice, plan.len());
@@ -398,10 +394,7 @@ pub(super) fn exec_base512_inverse_unnorm<F: MixedRadixScalar<Complex = Complex<
     slice: &mut [F::Complex],
 ) {
     assert!(
-        transform_block::<F, true, false, 16, 32, 1024, { table_lanes(16, 32) }>(
-            slice,
-            plan.base512_inverse_plan(),
-        ),
+        transform_via_base_512::<F, true, false>(slice, plan.base512_state()),
         "invariant: the selected base-512 capability remains available"
     );
 }
