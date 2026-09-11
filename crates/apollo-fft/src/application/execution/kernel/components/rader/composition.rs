@@ -315,6 +315,63 @@ fn half_cyclic_composition_attribution_by_core_type() {
             },
         );
 
+        // The two 50-point convolutions on their own, so the composition
+        // splits into its passes and its sub-transforms.
+        let conv = composition_input(TARGET);
+        let half = phase_input(TARGET);
+        suite.run_batched(
+            BenchmarkCase::new(label, "phase/convolve-cyclic", TARGET),
+            || half.first.clone(),
+            |work| {
+                let padded = std::hint::black_box(work.as_mut_slice());
+                let spectrum = std::hint::black_box(conv.cyclic_spectrum.as_ref());
+                super::convolution::rader_convolve_inplace::<f32>(padded, spectrum);
+                std::hint::black_box(work.as_slice());
+            },
+        );
+        suite.run_batched(
+            BenchmarkCase::new(label, "phase/convolve-negacyclic", TARGET),
+            || half.second.clone(),
+            |work| {
+                let padded = std::hint::black_box(work.as_mut_slice());
+                let spectrum = std::hint::black_box(conv.negacyclic_spectrum.as_ref());
+                super::convolution::rader_convolve_inplace::<f32>(padded, spectrum);
+                std::hint::black_box(work.as_slice());
+            },
+        );
+
+        // The composite transforms the convolutions call, alone: the
+        // 50-point [2, 5, 5] forward and inverse against the planned
+        // 100-point [4, 5, 5] forward the probe reads at 91 us a batch.
+        let full = signal(2 * ((TARGET - 1) / 2));
+        suite.run_batched(
+            BenchmarkCase::new(label, "phase/composite-forward-50", TARGET),
+            || half.first.clone(),
+            |work| {
+                let data = std::hint::black_box(work.as_mut_slice());
+                <f32 as MixedRadixScalar>::composite_forward(data, &[2, 5, 5]);
+                std::hint::black_box(work.as_slice());
+            },
+        );
+        suite.run_batched(
+            BenchmarkCase::new(label, "phase/composite-inverse-50", TARGET),
+            || half.first.clone(),
+            |work| {
+                let data = std::hint::black_box(work.as_mut_slice());
+                <f32 as MixedRadixScalar>::composite_inverse(data, &[2, 5, 5]);
+                std::hint::black_box(work.as_slice());
+            },
+        );
+        suite.run_batched(
+            BenchmarkCase::new(label, "phase/composite-forward-100", TARGET),
+            || full.clone(),
+            |work| {
+                let data = std::hint::black_box(work.as_mut_slice());
+                <f32 as MixedRadixScalar>::composite_forward(data, &[4, 5, 5]);
+                std::hint::black_box(work.as_slice());
+            },
+        );
+
         println!("RADER COMPOSITION cpu={landed} ({label})");
         print!("{}", suite.report());
     }
