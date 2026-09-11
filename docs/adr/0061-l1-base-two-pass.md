@@ -120,3 +120,23 @@ measured first and gained nothing over the split at 256.
   10%. The base is the two-pass kernel the decision needs; the route above
   it (512 and 1024 as two and four 256-blocks under one radix step) is
   the next slice, and the acceptance stands on it.
+- **2026-09-11, the route over the 256 base measured.** The split route
+  generalized over its base (one `transform_via_base` over the row
+  length, the base length and the block's lane count; the sinks and the
+  gather over the block's lane count) runs 512 as two and 1024 as four
+  256-blocks under one radix step. The phase meter at 1024, `f64`
+  (`output/apollo-base128/small_sizes_route256_run{2,3}_2026-09-11.txt`):
+  gather 1234 to 1312, four blocks of (rows 554, columns with the final
+  sink 717 to 767), no level, 6783 to 6890 in all, against the 128 route's
+  7324 to 8636 in the same runs (a 7 to 20% shorter construction); a
+  256-block costs 8% more than two 128-blocks (1271 against 1180 cycles),
+  its 4 x 8 rows 554 against 480. On wall clock the route reads 1.15 to
+  1.26 at 512 and 1.25 to 1.33 at 1024 across three runs, where the 128
+  route read 1.20 to 1.26 and 1.17 to 1.35; the gain is inside the run
+  drift. The route lands on its meter and its consolidation (one generic
+  split over the base, the 128 form its `f32` eight-lane instantiation).
+  Parity at 512 and 1024 is not reached: what remains is the base
+  kernel's per-sample cost (1.08 to 1.21 of RustFFT's 256 butterfly)
+  and the gather and sinks around it, not the pass count. Status stays
+  Proposed; the next slice attributes the 256 base against RustFFT's
+  `Butterfly256Avx64` at the instruction level.
