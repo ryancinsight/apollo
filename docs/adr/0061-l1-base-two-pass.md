@@ -507,3 +507,25 @@ base); the two-block form of the step is deleted, and the step serves
   and three shuffles a register against the gather's two — and the
   four-block form's gather at eight lanes suggests the same trade here;
   a stride-three gather is the reading left.
+
+- **2026-09-11, 4096 as eight sixteen-row blocks (rejected;
+  `APOLLO-4096-AS-EIGHT-512-BLOCKS`).** The radix step at eight blocks:
+  an eight-way gather at eight lanes, the parent read at stride eight at
+  four, and a radix-8 sink over seven spectra deriving `W_4096^{j k}` for
+  `j = 2..7` from the table's `W_4096^k` by multiplication, the register
+  radix-8 across the blocks
+  (`output/apollo-base128/eight_blocks_4096_route_2026-09-11.patch`).
+  Pinned probe, two runs
+  (`output/apollo-base128/small_sizes_4096_run{1,2}_2026-09-11.txt`):
+  `f64` 4096 7239 / 7522 us against the four-step route's 7850 / 8029
+  on the performance core (5 to 9% under it; RustFFT 8433 / 6453,
+  PhastFT 7078 / 6429), 13958 / 14004 against 12587 / 12721 on the
+  efficiency core (10% over); `f32` 4099 / 4183 against 3916 / 3949 (4
+  to 7% over) and 7635 / 7732 against 7171 / 7173 (7% over). The working
+  set is the reading: the parent and seven scratch blocks put 60 KB at
+  `f32` and 120 KB at `f64` in flight, past L1 at both scalars where
+  the 512 and 2048 forms stayed inside it, and the sink's six derived
+  powers a chunk sit on the critical path. The four-step route stays for
+  4096; a base route there needs an L2-aware shape (a 1024-point base
+  under a radix-4 step, or blocks that finish inside L1 before the step),
+  filed as the reading left.
