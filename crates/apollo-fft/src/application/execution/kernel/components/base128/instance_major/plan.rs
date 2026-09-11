@@ -1,5 +1,6 @@
 //! Immutable table construction and directional state for the base kernel.
 
+use super::store::SplitSinks;
 use super::table_lanes;
 use crate::application::execution::kernel::components::lane_capability::native_lanes_supported;
 use crate::application::execution::kernel::mixed_radix::MixedRadixScalar;
@@ -129,21 +130,29 @@ impl<T: MixedRadixScalar, const ROWS: usize, const ROW_LEN: usize, const TABLE_L
     }
 }
 
-/// Plan-owned directional state for a selected base route.
+/// Plan-owned directional state for a selected base route of `n` samples:
+/// the forward plan and, initialized on first use, the inverse; and the
+/// split's sink twiddles ([`SplitSinks`]) for `n`, likewise per direction.
 pub(crate) struct BasePlanState<
     T,
     const ROWS: usize,
     const ROW_LEN: usize,
     const TABLE_LANES: usize,
 > {
+    n: usize,
     forward: BasePlan<T, ROWS, ROW_LEN, TABLE_LANES>,
     inverse: OnceLock<BasePlan<T, ROWS, ROW_LEN, TABLE_LANES>>,
+    sinks: SplitSinks<T>,
+    inverse_sinks: OnceLock<SplitSinks<T>>,
 }
 
-impl<T: MixedRadixScalar, const ROWS: usize, const ROW_LEN: usize, const TABLE_LANES: usize>
+impl<T, const ROWS: usize, const ROW_LEN: usize, const TABLE_LANES: usize>
     BasePlanState<T, ROWS, ROW_LEN, TABLE_LANES>
+where
+    T: MixedRadixScalar<Complex = eunomia::Complex<T>>,
 {
-    /// Builds the forward plan when the exact-width route is available.
+    /// Builds the forward plan and sink tables for a route of `n` samples
+    /// when the exact-width route is available.
     ///
     /// Both row counts serve every scalar. The four-row route briefly carried
     /// a per-scalar switch, because on 2026-08-29 a four-byte scalar measured
@@ -153,11 +162,35 @@ impl<T: MixedRadixScalar, const ROWS: usize, const ROW_LEN: usize, const TABLE_L
     /// (`HS-SCALAR-FALLBACK-FRAME`). Re-measured against both, the route is
     /// 76 ns against 126 ns — the reverse — so the switch is gone rather than
     /// flipped.
-    pub(crate) fn new_if_supported() -> Option<Self> {
-        BasePlan::new_if_supported::<false>().map(|forward| Self {
+    pub(crate) fn new_if_supported(n: usize) -> Option<Self> {
+        let forward = BasePlan::new_if_supported::<false>()?;
+        let sinks = if n > ROWS * ROW_LEN {
+            Self::sinks_for(&forward, n, &T::cached_twiddle_fwd(n))
+        } else {
+            SplitSinks::empty()
+        };
+        Some(Self {
+            n,
             forward,
             inverse: OnceLock::new(),
+            sinks,
+            inverse_sinks: OnceLock::new(),
         })
+    }
+
+    /// The sink tables for `n` at the plan's register width; empty when the
+    /// route is one block. The stage-major table is only consulted above
+    /// one block, so a single-block plan never touches the twiddle cache.
+    fn sinks_for(
+        plan: &BasePlan<T, ROWS, ROW_LEN, TABLE_LANES>,
+        n: usize,
+        twiddles: &std::sync::Arc<[eunomia::Complex<T>]>,
+    ) -> SplitSinks<T> {
+        let samples = match plan.lane_width {
+            BaseLaneWidth::Four => 2,
+            BaseLaneWidth::Eight => 4,
+        };
+        SplitSinks::build(samples, twiddles, ROWS * ROW_LEN, n)
     }
 
     /// Borrows the immutable forward plan.
@@ -171,9 +204,30 @@ impl<T: MixedRadixScalar, const ROWS: usize, const ROW_LEN: usize, const TABLE_L
             .get_or_init(|| BasePlan::new::<true>(self.forward.lane_width))
     }
 
+    /// The forward route's sink tables.
+    pub(crate) fn sinks(&self) -> &SplitSinks<T> {
+        &self.sinks
+    }
+
+    /// The inverse route's sink tables, initialized once across clones.
+    pub(crate) fn inverse_sinks(&self) -> &SplitSinks<T> {
+        self.inverse_sinks.get_or_init(|| {
+            if self.n > ROWS * ROW_LEN {
+                Self::sinks_for(&self.forward, self.n, &T::cached_twiddle_inv(self.n))
+            } else {
+                SplitSinks::empty()
+            }
+        })
+    }
+
     #[cfg(test)]
     pub(crate) fn inverse_is_initialized(&self) -> bool {
         self.inverse.get().is_some()
+    }
+
+    #[cfg(test)]
+    pub(crate) fn inverse_sinks_initialized(&self) -> bool {
+        self.inverse_sinks.get().is_some()
     }
 }
 

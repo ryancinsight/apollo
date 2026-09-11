@@ -1,5 +1,5 @@
 use crate::application::execution::kernel::components::base128::instance_major::{
-    Plan128, Plan256, Plan64, State128, State256, State64,
+    Plan128, Plan64, State128, State256, State64,
 };
 use crate::application::execution::kernel::mixed_radix::MixedRadixScalar;
 use crate::domain::metadata::shape::Shape1D;
@@ -118,20 +118,13 @@ impl<F: MixedRadixScalar<Complex = Complex<F>>> FftPlan1D<F> {
             .inverse()
     }
 
+    /// The base-256 route's plan state: both directions' plans and sink
+    /// tables.
     #[inline]
-    pub(super) fn base256_forward_plan(&self) -> &Plan256<F> {
+    pub(super) fn base256_state(&self) -> &State256<F> {
         self.base256
             .as_deref()
             .expect("invariant: the base-256 executor requires its plan state")
-            .forward()
-    }
-
-    #[inline]
-    pub(super) fn base256_inverse_plan(&self) -> &Plan256<F> {
-        self.base256
-            .as_deref()
-            .expect("invariant: the base-256 executor requires its plan state")
-            .inverse()
     }
 
     pub(super) fn base128_forward_plan(&self) -> &Plan128<F> {
@@ -149,21 +142,6 @@ impl<F: MixedRadixScalar<Complex = Complex<F>>> FftPlan1D<F> {
             .inverse()
     }
 
-    #[inline]
-    /// The split route's combine twiddles over a base of `base` samples:
-    /// none at the base length itself, the complete table above it.
-    pub(super) fn split_twiddles<const INVERSE: bool>(&self, base: usize) -> &[F::Complex] {
-        if self.n <= base {
-            &[]
-        } else if INVERSE {
-            self.inverse_twiddles().as_ref()
-        } else {
-            self.twiddle_fwd
-                .as_deref()
-                .expect("invariant: split base route retains forward twiddles")
-        }
-    }
-
     /// Create a new 1D plan.
     #[must_use]
     pub fn new(shape: Shape1D) -> Self {
@@ -179,19 +157,19 @@ impl<F: MixedRadixScalar<Complex = Complex<F>>> FftPlan1D<F> {
         // over 128-blocks it once carried to 1024 is gone, since the 256 base
         // exists on every host the 128 one does.
         let base256 = if (256..=1024).contains(&n) && n.is_power_of_two() {
-            State256::new_if_supported().map(Arc::new)
+            State256::new_if_supported(n).map(Arc::new)
         } else {
             None
         };
         let base128 = if n == 128 {
-            State128::new_if_supported().map(Arc::new)
+            State128::new_if_supported(n).map(Arc::new)
         } else {
             None
         };
         // The same construction at half the row length covers n = 64, which
         // otherwise runs six ping-pong Stockham passes over 1 KB.
         let base64 = if n == 64 {
-            State64::new_if_supported().map(Arc::new)
+            State64::new_if_supported(n).map(Arc::new)
         } else {
             None
         };
@@ -202,8 +180,7 @@ impl<F: MixedRadixScalar<Complex = Complex<F>>> FftPlan1D<F> {
         } else if n.is_power_of_two() {
             let log2 = n.trailing_zeros();
             PlanStrategy::PowerOfTwo {
-                twiddle_fwd: ((base256.is_some() && n > 256)
-                    || (base256.is_none() && base64.is_none() && base128.is_none()))
+                twiddle_fwd: (base256.is_none() && base64.is_none() && base128.is_none())
                     .then(|| F::cached_twiddle_fwd(n)),
                 log2,
                 pot: PhantomData,

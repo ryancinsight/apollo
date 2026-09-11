@@ -47,6 +47,13 @@ where
         .expect("invariant: one base block is exactly LANES scalar lanes")
 }
 
+/// A sink table as the fixed-size array its sink indexes.
+fn lane_array<T, const N: usize>(lanes: &[T]) -> &[T; N] {
+    lanes
+        .try_into()
+        .expect("invariant: a sink table spans exactly its lane count")
+}
+
 /// The lanes of a whole split parent.
 fn lanes<T>(data: &[eunomia::Complex<T>]) -> &[T]
 where
@@ -56,13 +63,11 @@ where
     eunomia::layout::cast_slice(data)
 }
 
-/// The split route over the 256-point base (ADR 0061): [`transform_via_base`]
-/// at 32-sample rows, so 512 and 1024 are two and four blocks under one
-/// radix step.
+/// The 256 base and one radix step over it for 256, 512, and 1024
+/// samples, from the plan state that owns its tables.
 pub(crate) fn transform_via_base_256<F, const INVERSE: bool, const MEASURE: bool>(
     data: &mut [F::Complex],
-    plan: &instance_major::Plan256<F>,
-    twiddles: &[F::Complex],
+    state: &instance_major::State256<F>,
 ) -> bool
 where
     F: crate::application::execution::kernel::mixed_radix::MixedRadixScalar<
@@ -70,9 +75,21 @@ where
     >,
     eunomia::Complex<F>: eunomia::layout::Pod,
 {
-    transform_via_base::<F, INVERSE, MEASURE, 32, 256, 512, { instance_major::table_lanes(8, 32) }>(
-        data, plan, twiddles,
-    )
+    let (plan, sinks) = if INVERSE {
+        (state.inverse(), state.inverse_sinks())
+    } else {
+        (state.forward(), state.sinks())
+    };
+    transform_via_base::<
+        F,
+        INVERSE,
+        MEASURE,
+        32,
+        256,
+        512,
+        1024,
+        { instance_major::table_lanes(8, 32) },
+    >(data, plan, sinks)
 }
 
 /// The base and one radix step over it: `n = BASE` runs the kernel in
@@ -102,11 +119,12 @@ fn transform_via_base<
     const ROW_LEN: usize,
     const BASE: usize,
     const BLOCK_LANES: usize,
+    const SINK_LANES: usize,
     const TABLE_LANES: usize,
 >(
     data: &mut [F::Complex],
     plan: &instance_major::BasePlan<F, 8, ROW_LEN, TABLE_LANES>,
-    twiddles: &[F::Complex],
+    sinks: &instance_major::SplitSinks<F>,
 ) -> bool
 where
     F: crate::application::execution::kernel::mixed_radix::MixedRadixScalar<
@@ -115,7 +133,7 @@ where
     eunomia::Complex<F>: eunomia::layout::Pod,
 {
     let n = data.len();
-    debug_assert!(BASE == 8 * ROW_LEN && BLOCK_LANES == 2 * BASE);
+    debug_assert!(BASE == 8 * ROW_LEN && BLOCK_LANES == 2 * BASE && SINK_LANES == 2 * BLOCK_LANES);
     debug_assert!(n % BASE == 0 && (n / BASE).is_power_of_two() && n / BASE <= 4);
     if n == BASE {
         return instance_major::transform_block::<
@@ -133,7 +151,7 @@ where
     } else {
         0
     };
-    debug_assert_eq!(twiddles.len(), n - 1);
+    debug_assert_eq!(sinks.inner().len(), SINK_LANES);
     let blocks = n / BASE;
     let gathered_width = plan.native_eight_lanes();
     let scratch_len = n;
@@ -174,11 +192,16 @@ where
                 0
             };
             let ran = match (blocks, gathered_width) {
-                (2, false) => {
-                    two_blocks_direct::<F, INVERSE, MEASURE, ROW_LEN, BASE, BLOCK_LANES, TABLE_LANES>(
-                        data, scratch, plan, twiddles,
-                    )
-                }
+                (2, false) => two_blocks_direct::<
+                    F,
+                    INVERSE,
+                    MEASURE,
+                    ROW_LEN,
+                    BASE,
+                    BLOCK_LANES,
+                    SINK_LANES,
+                    TABLE_LANES,
+                >(data, scratch, plan, sinks),
                 (2, true) => two_blocks_gathered::<
                     F,
                     INVERSE,
@@ -186,13 +209,19 @@ where
                     ROW_LEN,
                     BASE,
                     BLOCK_LANES,
+                    SINK_LANES,
                     TABLE_LANES,
-                >(data, scratch, plan, twiddles),
-                (_, false) => {
-                    four_blocks_direct::<F, INVERSE, MEASURE, ROW_LEN, BASE, BLOCK_LANES, TABLE_LANES>(
-                        data, scratch, plan, twiddles,
-                    )
-                }
+                >(data, scratch, plan, sinks),
+                (_, false) => four_blocks_direct::<
+                    F,
+                    INVERSE,
+                    MEASURE,
+                    ROW_LEN,
+                    BASE,
+                    BLOCK_LANES,
+                    SINK_LANES,
+                    TABLE_LANES,
+                >(data, scratch, plan, sinks),
                 (_, true) => four_blocks_gathered::<
                     F,
                     INVERSE,
@@ -200,8 +229,9 @@ where
                     ROW_LEN,
                     BASE,
                     BLOCK_LANES,
+                    SINK_LANES,
                     TABLE_LANES,
-                >(data, scratch, plan, twiddles),
+                >(data, scratch, plan, sinks),
             };
             #[cfg(all(test, windows, target_arch = "x86_64"))]
             if MEASURE {
@@ -261,12 +291,13 @@ fn two_blocks_direct<
     const ROW_LEN: usize,
     const BASE: usize,
     const BLOCK_LANES: usize,
+    const SINK_LANES: usize,
     const TABLE_LANES: usize,
 >(
     data: &mut [F::Complex],
     scratch: &mut [F::Complex],
     plan: &instance_major::BasePlan<F, 8, ROW_LEN, TABLE_LANES>,
-    twiddles: &[F::Complex],
+    sinks: &instance_major::SplitSinks<F>,
 ) -> bool
 where
     F: crate::application::execution::kernel::mixed_radix::MixedRadixScalar<
@@ -274,7 +305,7 @@ where
     >,
     eunomia::Complex<F>: eunomia::layout::Pod,
 {
-    let inner = &twiddles[BASE - 1..2 * BASE - 1];
+    let inner = lane_array::<F, SINK_LANES>(sinks.inner());
     let even = &mut scratch[..BASE];
     block::<F, INVERSE, MEASURE, ROW_LEN, BLOCK_LANES, TABLE_LANES, _, _>(
         even,
@@ -287,7 +318,7 @@ where
         plan,
         instance_major::CombineSink {
             peer: base_lanes::<F, BLOCK_LANES>(even),
-            tw: base_lanes::<F, BLOCK_LANES>(inner),
+            tw: inner,
         },
     )
 }
@@ -301,12 +332,13 @@ fn two_blocks_gathered<
     const ROW_LEN: usize,
     const BASE: usize,
     const BLOCK_LANES: usize,
+    const SINK_LANES: usize,
     const TABLE_LANES: usize,
 >(
     data: &mut [F::Complex],
     scratch: &mut [F::Complex],
     plan: &instance_major::BasePlan<F, 8, ROW_LEN, TABLE_LANES>,
-    twiddles: &[F::Complex],
+    sinks: &instance_major::SplitSinks<F>,
 ) -> bool
 where
     F: crate::application::execution::kernel::mixed_radix::MixedRadixScalar<
@@ -314,7 +346,7 @@ where
     >,
     eunomia::Complex<F>: eunomia::layout::Pod,
 {
-    let inner = &twiddles[BASE - 1..2 * BASE - 1];
+    let inner = lane_array::<F, SINK_LANES>(sinks.inner());
     let (even, odd) = scratch.split_at_mut(BASE);
     block::<F, INVERSE, MEASURE, ROW_LEN, BLOCK_LANES, TABLE_LANES, _, _>(
         even,
@@ -327,7 +359,7 @@ where
         plan,
         instance_major::CombineSink {
             peer: base_lanes::<F, BLOCK_LANES>(even),
-            tw: base_lanes::<F, BLOCK_LANES>(inner),
+            tw: inner,
         },
     )
 }
@@ -343,12 +375,13 @@ fn four_blocks_direct<
     const ROW_LEN: usize,
     const BASE: usize,
     const BLOCK_LANES: usize,
+    const SINK_LANES: usize,
     const TABLE_LANES: usize,
 >(
     data: &mut [F::Complex],
     scratch: &mut [F::Complex],
     plan: &instance_major::BasePlan<F, 8, ROW_LEN, TABLE_LANES>,
-    twiddles: &[F::Complex],
+    sinks: &instance_major::SplitSinks<F>,
 ) -> bool
 where
     F: crate::application::execution::kernel::mixed_radix::MixedRadixScalar<
@@ -356,9 +389,10 @@ where
     >,
     eunomia::Complex<F>: eunomia::layout::Pod,
 {
-    let inner = &twiddles[BASE - 1..2 * BASE - 1];
-    let outer = &twiddles[2 * BASE - 1..4 * BASE - 1];
-    let (outer_low, outer_high) = outer.split_at(BASE);
+    let inner = lane_array::<F, SINK_LANES>(sinks.inner());
+    let (outer_low, outer_high) = sinks.outer().split_at(SINK_LANES);
+    let outer_low = lane_array::<F, SINK_LANES>(outer_low);
+    let outer_high = lane_array::<F, SINK_LANES>(outer_high);
     let (b0, rest) = scratch.split_at_mut(BASE);
     let (b1, even_pair) = rest.split_at_mut(BASE);
     let even_pair = &mut even_pair[..2 * BASE];
@@ -378,7 +412,7 @@ where
         plan,
         instance_major::CombineSink {
             peer: base_lanes::<F, BLOCK_LANES>(b0),
-            tw: base_lanes::<F, BLOCK_LANES>(inner),
+            tw: inner,
         },
     ) && {
         let (even_low, even_high) = even_pair.split_at(BASE);
@@ -388,11 +422,11 @@ where
             plan,
             instance_major::FinalCombineSink {
                 peer: base_lanes::<F, BLOCK_LANES>(b1),
-                inner_tw: base_lanes::<F, BLOCK_LANES>(inner),
+                inner_tw: inner,
                 even_low: base_lanes::<F, BLOCK_LANES>(even_low),
                 even_high: base_lanes::<F, BLOCK_LANES>(even_high),
-                outer_low_tw: base_lanes::<F, BLOCK_LANES>(outer_low),
-                outer_high_tw: base_lanes::<F, BLOCK_LANES>(outer_high),
+                outer_low_tw: outer_low,
+                outer_high_tw: outer_high,
             },
         )
     }
@@ -411,12 +445,13 @@ fn four_blocks_gathered<
     const ROW_LEN: usize,
     const BASE: usize,
     const BLOCK_LANES: usize,
+    const SINK_LANES: usize,
     const TABLE_LANES: usize,
 >(
     data: &mut [F::Complex],
     scratch: &mut [F::Complex],
     plan: &instance_major::BasePlan<F, 8, ROW_LEN, TABLE_LANES>,
-    twiddles: &[F::Complex],
+    sinks: &instance_major::SplitSinks<F>,
 ) -> bool
 where
     F: crate::application::execution::kernel::mixed_radix::MixedRadixScalar<
@@ -424,9 +459,10 @@ where
     >,
     eunomia::Complex<F>: eunomia::layout::Pod,
 {
-    let inner = &twiddles[BASE - 1..2 * BASE - 1];
-    let outer = &twiddles[2 * BASE - 1..4 * BASE - 1];
-    let (outer_low, outer_high) = outer.split_at(BASE);
+    let inner = lane_array::<F, SINK_LANES>(sinks.inner());
+    let (outer_low, outer_high) = sinks.outer().split_at(SINK_LANES);
+    let outer_low = lane_array::<F, SINK_LANES>(outer_low);
+    let outer_high = lane_array::<F, SINK_LANES>(outer_high);
     let (sub0, rest) = scratch.split_at_mut(BASE);
     let (sub2, rest) = rest.split_at_mut(BASE);
     let (sub1, sub3) = rest.split_at_mut(BASE);
@@ -447,7 +483,7 @@ where
         plan,
         instance_major::CombineSink {
             peer: base_lanes::<F, BLOCK_LANES>(sub0),
-            tw: base_lanes::<F, BLOCK_LANES>(inner),
+            tw: inner,
         },
     ) && block::<F, INVERSE, MEASURE, ROW_LEN, BLOCK_LANES, TABLE_LANES, _, _>(
         data,
@@ -455,9 +491,9 @@ where
         plan,
         instance_major::FinalCombineInPlaceSink {
             peer: base_lanes::<F, BLOCK_LANES>(sub1),
-            inner_tw: base_lanes::<F, BLOCK_LANES>(inner),
-            outer_low_tw: base_lanes::<F, BLOCK_LANES>(outer_low),
-            outer_high_tw: base_lanes::<F, BLOCK_LANES>(outer_high),
+            inner_tw: inner,
+            outer_low_tw: outer_low,
+            outer_high_tw: outer_high,
         },
     )
 }

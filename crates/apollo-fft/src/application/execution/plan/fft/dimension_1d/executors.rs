@@ -340,11 +340,7 @@ pub(super) fn exec_base256_forward<F: MixedRadixScalar<Complex = Complex<F>>>(
     slice: &mut [F::Complex],
 ) {
     assert!(
-        transform_via_base_256::<F, false, false>(
-            slice,
-            plan.base256_forward_plan(),
-            plan.split_twiddles::<false>(256),
-        ),
+        transform_via_base_256::<F, false, false>(slice, plan.base256_state()),
         "invariant: the selected base-256 capability remains available"
     );
 }
@@ -354,11 +350,7 @@ pub(super) fn exec_base256_inverse<F: MixedRadixScalar<Complex = Complex<F>>>(
     slice: &mut [F::Complex],
 ) {
     assert!(
-        transform_via_base_256::<F, true, false>(
-            slice,
-            plan.base256_inverse_plan(),
-            plan.split_twiddles::<true>(256),
-        ),
+        transform_via_base_256::<F, true, false>(slice, plan.base256_state()),
         "invariant: the selected base-256 capability remains available"
     );
     F::normalize(slice, plan.len());
@@ -369,11 +361,7 @@ pub(super) fn exec_base256_inverse_unnorm<F: MixedRadixScalar<Complex = Complex<
     slice: &mut [F::Complex],
 ) {
     assert!(
-        transform_via_base_256::<F, true, false>(
-            slice,
-            plan.base256_inverse_plan(),
-            plan.split_twiddles::<true>(256),
-        ),
+        transform_via_base_256::<F, true, false>(slice, plan.base256_state()),
         "invariant: the selected base-256 capability remains available"
     );
 }

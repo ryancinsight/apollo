@@ -39,7 +39,7 @@ use plan::BaseLaneWidth;
 pub(crate) use plan::{BasePlan, BasePlanState};
 pub(crate) use rows::{BlockSource, ParentSplit, SelfSplit};
 pub(crate) use store::{
-    CombineSink, DirectSink, FinalCombineInPlaceSink, FinalCombineSink, StoreSink,
+    CombineSink, DirectSink, FinalCombineInPlaceSink, FinalCombineSink, SplitSinks, StoreSink,
 };
 
 /// Per-phase TSC accumulators for the separately instantiated attribution
@@ -377,6 +377,7 @@ where
     )
 }
 
+#[cfg(test)]
 pub(crate) type Plan256<T> = BasePlan<T, 8, 32, { table_lanes(8, 32) }>;
 pub(crate) type Plan128<T> = BasePlan<T, 8, 16, { table_lanes(8, 16) }>;
 /// The 64-point base plan: four rows of sixteen.

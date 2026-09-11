@@ -229,12 +229,11 @@ fn small_sizes_against_the_references_by_core_type() {
                 })
                 .collect();
             let mut work = src.clone();
-            let twiddles = <f64 as MixedRadixScalar>::cached_twiddle_fwd(n);
-            let plan256 = super::instance_major::Plan256::<f64>::new_if_supported::<false>()
+            let state = super::instance_major::State256::<f64>::new_if_supported(n)
                 .expect("the pinned host must provide a native base capability");
             {
                 let split = split_attribution(&src, &mut work, |work| {
-                    super::transform_via_base_256::<f64, false, true>(work, &plan256, &twiddles)
+                    super::transform_via_base_256::<f64, false, true>(work, &state)
                 });
                 println!(
                     "B256 split n={n}: gather={} blocks={} levels={} total={} | per block ({}): load_and_rows={} columns_and_sink={}",
