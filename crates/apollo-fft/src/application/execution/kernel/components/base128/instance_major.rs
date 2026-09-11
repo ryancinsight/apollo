@@ -35,7 +35,8 @@ mod plan;
 mod rows;
 mod store;
 
-use plan::{native_width, BaseLaneWidth, CacheLineAligned};
+use crate::application::execution::kernel::components::aligned::CacheLineAligned;
+use plan::{native_width, BaseLaneWidth};
 pub(crate) use plan::{BasePlan, BasePlanState};
 pub(crate) use rows::{BlockSource, ParentSplit, SelfSplit};
 pub(crate) use store::{DirectSink, FinalRadix3Sink, FinalRadix4Sink, SplitSinks, StoreSink};
