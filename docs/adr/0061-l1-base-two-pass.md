@@ -711,3 +711,11 @@ base); the two-block form of the step is deleted, and the step serves
   ladder's next step, 8192 and above, is the four-step route (`f32`
   32768 1.06 to 1.10, `f64` 1.07 to 1.15 on the performance core), its
   own item.
+  Replication of the contributor's paired instrument for the 2048 form
+  (`output/apollo-base128/quiet-host/replication.md`): the
+  performance-core `f32` 2048 gain over the sink reads 10.4 to 14.6%
+  with disjoint intervals in six of eight comparisons across both
+  experiments; the efficiency-core target (0.8 to 2.2% slower) and every
+  control sit inside the band identical code shows on this host under
+  concurrent compilation (1 to 4.5% on the efficiency core, 40% under
+  one load spike).
