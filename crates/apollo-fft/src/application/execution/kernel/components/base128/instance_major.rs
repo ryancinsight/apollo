@@ -37,8 +37,10 @@ mod store;
 
 use plan::BaseLaneWidth;
 pub(crate) use plan::{BasePlan, BasePlanState};
-pub(crate) use store::{CombineSink, FinalCombineSink};
-use store::{DirectSink, StoreSink};
+pub(crate) use rows::{BlockSource, ParentSplit, SelfSplit};
+pub(crate) use store::{
+    CombineSink, DirectSink, FinalCombineInPlaceSink, FinalCombineSink, StoreSink,
+};
 
 /// Per-phase TSC accumulators for the separately instantiated attribution
 /// instrument.
@@ -133,9 +135,17 @@ pub(crate) const fn table_lanes(rows: usize, row_len: usize) -> usize {
 /// The base transform as a lane kernel over interleaved samples: `ROWS`
 /// stride-`ROWS` subsequences of `ROW_LEN`, so `ROWS = 8` over sixteen is
 /// the 128-point transform, `ROWS = 4` the 64-point one, and `ROWS = 8`
-/// over thirty-two the 256-point one (ADR 0061). The sixteen-sample row
-/// machinery is identical at both; the column pass is a lane-wise DIF of
-/// length `ROWS`.
+/// over thirty-two the 256-point one (ADR 0061). The row machinery is
+/// identical at every length; the column pass is a lane-wise DIF of length
+/// `ROWS`.
+///
+/// `out` is the surface the sink writes — the block itself, or the two or
+/// four blocks a combining sink fills — and `source` says where the block's
+/// samples are read from: `out` itself, contiguous or as one
+/// stride-`BLOCKS` subsequence of it, or a parent the kernel never writes.
+/// The rows read every sample before the columns store the first, so one
+/// `&mut` surface serves both roles in sequence, and a split's blocks load
+/// the parent directly instead of through a gather pass.
 pub(crate) struct BaseTransform<
     'a,
     T,
@@ -145,11 +155,13 @@ pub(crate) struct BaseTransform<
     const ROW_LEN: usize,
     const LANES: usize,
     const TABLE_LANES: usize,
+    Src,
     S,
 > {
-    /// Interleaved samples. Fixed-size for the reason [`BasePlan::table`]
-    /// documents: the phase-one loads index this from inside a loop.
-    pub(crate) data: &'a mut [T; LANES],
+    /// The output surface, `S::OUT_BLOCKS` blocks of `LANES` lanes.
+    pub(crate) out: &'a mut [T],
+    /// Where the block's samples come from.
+    pub(crate) source: Src,
     pub(crate) plan: &'a BasePlan<T, ROWS, ROW_LEN, TABLE_LANES>,
     /// Type-selected output strategy. Direct, pair, and four-block-final
     /// stores are separate monomorphizations, so no mode branch reaches the
@@ -165,11 +177,13 @@ impl<
         const ROW_LEN: usize,
         const LANES: usize,
         const TABLE_LANES: usize,
+        Src,
         S,
     > LaneKernel<T>
-    for BaseTransform<'_, T, INVERSE, MEASURE_PHASES, ROWS, ROW_LEN, LANES, TABLE_LANES, S>
+    for BaseTransform<'_, T, INVERSE, MEASURE_PHASES, ROWS, ROW_LEN, LANES, TABLE_LANES, Src, S>
 where
     T: LaneScalar + MixedRadixScalar,
+    Src: BlockSource<T>,
     S: StoreSink<T>,
 {
     /// Whether the dispatched width handled the transform.
@@ -191,18 +205,26 @@ where
             matches!(self.plan.lane_width, BaseLaneWidth::Eight),
             "the plan's table geometry is the dispatched width's"
         );
-        // The dispatch token proves support before this kernel begins, while
-        // views hoist bounds reasoning once per slice. Every offset below is
-        // a multiple of the four-lane width, so chunk indices are exact. The
-        // checked-slice load form spends a visible share of the transform in
-        // repeated probes, bounds checks, and Result branches.
+        let out = self.out;
+        // The two entry assertions are what the sinks' and sources' raw
+        // chunk accesses rest on.
+        assert_eq!(
+            out.len(),
+            S::OUT_BLOCKS * LANES,
+            "invariant: the output surface spans the sink's blocks"
+        );
+        assert_eq!(
+            self.source.parent_lanes(out),
+            Src::BLOCKS * LANES,
+            "invariant: the source parent spans its split"
+        );
         #[cfg(all(test, windows, target_arch = "x86_64"))]
         let t0 = if MEASURE_PHASES {
             phase_meter::stamp()
         } else {
             0
         };
-        // Phases 1 and 2, the row pairs (`rows`); the staging buffer is
+        // Phases 1 and 2, the row groups (`rows`); the staging buffer is
         // written in full by them before phase 3 reads a lane of it, so
         // zero-filling it first was pure waste — a 2 KB `memset` the
         // disassembly showed costing about 7% of the transform at every
@@ -210,16 +232,17 @@ where
         debug_assert!(LANES == 2 * ROW_LEN * ROWS && TABLE_LANES == table_lanes(ROWS, ROW_LEN));
         let mut staging_uninit = core::mem::MaybeUninit::<[T; LANES]>::uninit();
         // SAFETY: the reference is used only for writes until every lane is
-        // initialized. The row pass stores chunk `row * (ROW_LEN / 2) + g`
-        // for every row in `0..ROWS` and every `g in 0..ROW_LEN / 2` — all
-        // `ROWS * ROW_LEN / 2` four-lane chunks (`LANES` lanes) — before
-        // phase 3 performs the first read. Every `LaneScalar` implementor is
-        // an IEEE float with no validity niche. Coverage is enforced, not
-        // just argued: debug builds poison the buffer with NaN below, so a
-        // lane read before it is written poisons the output and fails every
-        // value-semantic oracle in the debug suite. Miri cannot reach this
-        // body (the dispatcher only selects it on AVX2 hardware); the NaN
-        // poison plus the analytical oracles are the substitute coverage.
+        // initialized. The row pass stores chunk `row * (ROW_LEN / S) + c`
+        // for every row in `0..ROWS` and every `c in 0..ROW_LEN / S` — all
+        // `ROWS * ROW_LEN / S` chunks of `2 S` lanes (`LANES` lanes) —
+        // before phase 3 performs the first read. Every `LaneScalar`
+        // implementor is an IEEE float with no validity niche. Coverage is
+        // enforced, not just argued: debug builds poison the buffer with
+        // NaN below, so a lane read before it is written poisons the output
+        // and fails every value-semantic oracle in the debug suite. Miri
+        // cannot reach this body (the dispatcher only selects it on AVX2
+        // hardware); the NaN poison plus the analytical oracles are the
+        // substitute coverage.
         let staging: &mut [T; LANES] = unsafe { &mut *staging_uninit.as_mut_ptr() };
         #[cfg(debug_assertions)]
         staging.fill(T::from_precise(f64::NAN));
@@ -231,9 +254,10 @@ where
                 layer: layer_ch(ROWS, ROW_LEN),
                 chunks: layer_chunks(ROW_LEN),
             };
-            rows::row_pass::<T, A, _, INVERSE, ROWS, ROW_LEN, 2>(
+            rows::row_pass::<T, A, Src, _, INVERSE, ROWS, ROW_LEN, 2>(
                 simd,
-                self.data.as_slice(),
+                &self.source,
+                out,
                 staging.as_mut_slice(),
                 &layer,
             );
@@ -246,16 +270,14 @@ where
                 layer_ch(ROWS, ROW_LEN) * 4,
                 layer_chunks(ROW_LEN) / 2,
             );
-            rows::row_pass::<T, A, _, INVERSE, ROWS, ROW_LEN, 4>(
+            rows::row_pass::<T, A, Src, _, INVERSE, ROWS, ROW_LEN, 4>(
                 simd,
-                self.data.as_slice(),
+                &self.source,
+                out,
                 staging.as_mut_slice(),
                 &layer,
             );
         }
-
-        // Counter 0 now carries the fused load-and-rows pass; counter 1 is
-        // retired with the separate redistribution it used to time.
         #[cfg(all(test, windows, target_arch = "x86_64"))]
         let t2m = if MEASURE_PHASES {
             let t = phase_meter::stamp();
@@ -264,14 +286,13 @@ where
         } else {
             0
         };
-        // Phase 3: the shared lane-wise `ROWS`-point DIF column pass, eight
-        // groups of two interleaved complex samples at this width.
+        // Phase 3: the shared lane-wise `ROWS`-point DIF column pass.
         column::column_pass::<T, A, S, INVERSE, ROWS, ROW_LEN>(
             simd,
             staging.as_slice(),
-            self.plan.table.as_slice(),
+            table,
             &self.plan.col,
-            self.data.as_mut_slice(),
+            out,
             self.sink,
         );
         #[cfg(all(test, windows, target_arch = "x86_64"))]
@@ -284,7 +305,14 @@ where
     }
 }
 
-fn transform_base<
+/// Runs the base kernel over `out` from `source` through `sink` at the
+/// plan's native width.
+///
+/// # Panics
+///
+/// If `out` does not span the sink's blocks or the source's parent its
+/// split.
+pub(crate) fn transform_base<
     T,
     const INVERSE: bool,
     const MEASURE_PHASES: bool,
@@ -292,89 +320,40 @@ fn transform_base<
     const ROW_LEN: usize,
     const LANES: usize,
     const TABLE_LANES: usize,
+    Src,
     S,
 >(
-    data: &mut [Complex<T>],
+    out: &mut [Complex<T>],
+    source: Src,
     plan: &BasePlan<T, ROWS, ROW_LEN, TABLE_LANES>,
     sink: S,
 ) -> bool
 where
     T: MixedRadixScalar,
     Complex<T>: eunomia::layout::Pod,
+    Src: BlockSource<T>,
     S: StoreSink<T>,
 {
-    assert_eq!(
-        2 * data.len(),
-        LANES,
-        "the base transform requires LANES / 2 samples"
-    );
-    let flat: &mut [T; LANES] = eunomia::layout::cast_slice_mut(data)
-        .try_into()
-        .expect("invariant: the assertion above fixes the lane count");
     // One kernel body at either width: the plan fixed the register layout
     // (and its table geometry) once, before execution.
-    let kernel = BaseTransform::<T, INVERSE, MEASURE_PHASES, ROWS, ROW_LEN, LANES, TABLE_LANES, S> {
-        data: flat,
-        plan,
-        sink,
-    };
+    let kernel =
+        BaseTransform::<T, INVERSE, MEASURE_PHASES, ROWS, ROW_LEN, LANES, TABLE_LANES, Src, S> {
+            out: eunomia::layout::cast_slice_mut(out),
+            source,
+            plan,
+            sink,
+        };
     match plan.lane_width {
         BaseLaneWidth::Four => hermes_simd::vectorize_lanes::<4, T, _>(kernel).unwrap_or(false),
         BaseLaneWidth::Eight => hermes_simd::vectorize_lanes::<8, T, _>(kernel).unwrap_or(false),
     }
 }
 
-/// Runs the 128-point base butterfly as the odd half of a split pair,
-/// combining with `sink.peer` on the way out (see [`CombineSink`]).
+/// Runs one eight-row base transform in place.
 ///
 /// # Panics
 ///
 /// If `data.len() * 2` is not the base lane count.
-pub(crate) fn transform_block_combining<
-    T,
-    const INVERSE: bool,
-    const MEASURE: bool,
-    const ROW_LEN: usize,
-    const LANES: usize,
-    const TABLE_LANES: usize,
->(
-    data: &mut [Complex<T>],
-    plan: &BasePlan<T, 8, ROW_LEN, TABLE_LANES>,
-    sink: CombineSink<'_, T, LANES>,
-) -> bool
-where
-    T: MixedRadixScalar,
-    Complex<T>: eunomia::layout::Pod,
-{
-    transform_base::<T, INVERSE, MEASURE, 8, ROW_LEN, LANES, TABLE_LANES, _>(data, plan, sink)
-}
-
-/// Runs block three of a four-block split and stores the final four quarters.
-///
-/// # Panics
-///
-/// If `data.len() * 2` is not the base lane count.
-pub(crate) fn transform_block_combining_final<
-    T,
-    const INVERSE: bool,
-    const MEASURE: bool,
-    const ROW_LEN: usize,
-    const LANES: usize,
-    const TABLE_LANES: usize,
->(
-    data: &mut [Complex<T>],
-    plan: &BasePlan<T, 8, ROW_LEN, TABLE_LANES>,
-    sink: FinalCombineSink<'_, T, LANES>,
-) -> bool
-where
-    T: MixedRadixScalar,
-    Complex<T>: eunomia::layout::Pod,
-{
-    transform_base::<T, INVERSE, MEASURE, 8, ROW_LEN, LANES, TABLE_LANES, _>(data, plan, sink)
-}
-
-/// Runs one eight-row base block of `ROW_LEN` samples per row in place:
-/// the 128-point form at sixteen, the 256-point form at thirty-two.
 pub(crate) fn transform_block<
     T,
     const INVERSE: bool,
@@ -390,10 +369,14 @@ where
     T: MixedRadixScalar,
     Complex<T>: eunomia::layout::Pod,
 {
-    transform_base::<T, INVERSE, MEASURE, 8, ROW_LEN, LANES, TABLE_LANES, _>(data, plan, DirectSink)
+    transform_base::<T, INVERSE, MEASURE, 8, ROW_LEN, LANES, TABLE_LANES, _, _>(
+        data,
+        SelfSplit::<1, 0>,
+        plan,
+        DirectSink,
+    )
 }
 
-/// The 128-point base plan: eight rows of sixteen.
 pub(crate) type Plan256<T> = BasePlan<T, 8, 32, { table_lanes(8, 32) }>;
 pub(crate) type Plan128<T> = BasePlan<T, 8, 16, { table_lanes(8, 16) }>;
 /// The 64-point base plan: four rows of sixteen.
@@ -419,8 +402,11 @@ where
     T: MixedRadixScalar,
     Complex<T>: eunomia::layout::Pod,
 {
-    transform_base::<T, INVERSE, MEASURE, 8, 16, 256, { table_lanes(8, 16) }, _>(
-        data, plan, DirectSink,
+    transform_base::<T, INVERSE, MEASURE, 8, 16, 256, { table_lanes(8, 16) }, _, _>(
+        data,
+        SelfSplit::<1, 0>,
+        plan,
+        DirectSink,
     )
 }
 
@@ -440,8 +426,11 @@ where
     T: MixedRadixScalar,
     Complex<T>: eunomia::layout::Pod,
 {
-    transform_base::<T, INVERSE, MEASURE, 8, 32, 512, { table_lanes(8, 32) }, _>(
-        data, plan, DirectSink,
+    transform_base::<T, INVERSE, MEASURE, 8, 32, 512, { table_lanes(8, 32) }, _, _>(
+        data,
+        SelfSplit::<1, 0>,
+        plan,
+        DirectSink,
     )
 }
 
@@ -459,7 +448,10 @@ where
     T: MixedRadixScalar,
     Complex<T>: eunomia::layout::Pod,
 {
-    transform_base::<T, INVERSE, false, 4, 16, 128, { table_lanes(4, 16) }, _>(
-        data, plan, DirectSink,
+    transform_base::<T, INVERSE, false, 4, 16, 128, { table_lanes(4, 16) }, _, _>(
+        data,
+        SelfSplit::<1, 0>,
+        plan,
+        DirectSink,
     )
 }

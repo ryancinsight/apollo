@@ -1,6 +1,6 @@
 //! The row phase of the instance-major base kernel: each row group runs
 //! from its loads to its staging stores in registers, at either native
-//! width.
+//! width, from a contiguous block or straight out of a split's parent.
 //!
 //! A register holds sample `b` of `S` rows — `[x[ROWS b + S g], ..,
 //! x[ROWS b + S g + S - 1]]`, one contiguous source load, `S = 2` at four
@@ -36,8 +36,178 @@ use super::super::cmul::cmul_chunk;
 use super::{radix4, radix8, root2_twiddle, rot90};
 use crate::application::execution::kernel::mixed_radix::MixedRadixScalar;
 use hermes_simd::{
-    Alignment, ComplexReg, ExecutionMode, LaneScalar, Simd, SimdArch, SimdKernel, SimdView, Vector,
+    Alignment, ComplexReg, ExecutionMode, LaneScalar, Simd, SimdArch, SimdKernel, SimdStorage,
+    SimdView, Vector,
 };
+
+/// Where a block's samples come from: chunk `c` holds block samples
+/// `S c .. S c + S`, which sit either contiguously in the block itself or
+/// `BLOCKS` apart in a split's parent from sample `OFFSET`.
+///
+/// Reading the parent directly is what deletes the split's gather pass:
+/// block `OFFSET` of a `BLOCKS`-way split is the stride-`BLOCKS`
+/// subsequence, and its rows load that subsequence as they go. The loads
+/// are `S`-sample windows aligned to `S` in the parent (never past its
+/// end), and the needed samples are picked out of them with the same
+/// pair-and-half shuffles the row transpose uses: at `S = 2` one
+/// `interleave_halves` of two windows; at `S = 4` one `deinterleave_pairs`
+/// of two windows for a two-way split, or the two-stage transpose of four
+/// for a four-way one. Two to four loads and one to three shuffles a
+/// register, against the gather's load, shuffle, and store per chunk plus
+/// the block's own load.
+pub(crate) trait BlockSource<T: LaneScalar> {
+    /// Blocks of the parent this source reads at stride: one for a
+    /// contiguous block.
+    const BLOCKS: usize;
+
+    /// Lanes the parent holds, for the kernel's entry assertion.
+    fn parent_lanes(&self, own: &[T]) -> usize;
+
+    /// Chunk `c` of the block, `S` samples a register.
+    fn chunk<A, const S: usize>(&self, simd: Simd<T, A>, own: &[T], c: usize) -> Vector<T, A>
+    where
+        A: SimdArch + SimdKernel<T>;
+}
+
+/// The kernel's own output surface is the parent: block `OFFSET` of its
+/// `BLOCKS`-way split, or the whole surface when `BLOCKS = 1`. The rows
+/// read it before the column pass writes it.
+pub(crate) struct SelfSplit<const BLOCKS: usize, const OFFSET: usize>;
+
+impl<T: LaneScalar, const BLOCKS: usize, const OFFSET: usize> BlockSource<T>
+    for SelfSplit<BLOCKS, OFFSET>
+{
+    const BLOCKS: usize = BLOCKS;
+
+    fn parent_lanes(&self, own: &[T]) -> usize {
+        own.len()
+    }
+
+    #[expect(
+        clippy::inline_always,
+        reason = "register kernels must retain their caller's target-feature scope"
+    )]
+    #[inline(always)]
+    fn chunk<A, const S: usize>(&self, simd: Simd<T, A>, own: &[T], c: usize) -> Vector<T, A>
+    where
+        A: SimdArch + SimdKernel<T>,
+    {
+        strided::<T, A, S, BLOCKS, OFFSET>(simd, own, c)
+    }
+}
+
+/// Block `OFFSET` of a `BLOCKS`-way split of a parent the kernel does not
+/// write: the direct blocks of the split, whose spectra land in scratch.
+pub(crate) struct ParentSplit<'a, T, const BLOCKS: usize, const OFFSET: usize>(pub(crate) &'a [T]);
+
+impl<T: LaneScalar, const BLOCKS: usize, const OFFSET: usize> BlockSource<T>
+    for ParentSplit<'_, T, BLOCKS, OFFSET>
+{
+    const BLOCKS: usize = BLOCKS;
+
+    fn parent_lanes(&self, _own: &[T]) -> usize {
+        self.0.len()
+    }
+
+    #[expect(
+        clippy::inline_always,
+        reason = "register kernels must retain their caller's target-feature scope"
+    )]
+    #[inline(always)]
+    fn chunk<A, const S: usize>(&self, simd: Simd<T, A>, _own: &[T], c: usize) -> Vector<T, A>
+    where
+        A: SimdArch + SimdKernel<T>,
+    {
+        strided::<T, A, S, BLOCKS, OFFSET>(simd, self.0, c)
+    }
+}
+
+/// One register of `S` parent samples from sample `sample` on.
+///
+/// The kernel asserts the parent's length at entry and every start below
+/// is an `S`-aligned window inside it, so the bound is a debug assertion.
+#[expect(
+    clippy::inline_always,
+    reason = "register kernels must retain their caller's target-feature scope"
+)]
+#[inline(always)]
+fn window<T, A>(simd: Simd<T, A>, parent: &[T], sample: usize) -> Vector<T, A>
+where
+    T: LaneScalar,
+    A: SimdArch + SimdKernel<T>,
+{
+    let lanes = <A as SimdStorage<T>>::LANE_COUNT;
+    debug_assert!(
+        2 * sample + lanes <= parent.len(),
+        "invariant: source window in bounds"
+    );
+    let _ = simd;
+    // SAFETY: `simd` proves the host supports `A`; the kernel's entry
+    // assertion on the parent's length and the aligned-window arithmetic
+    // of `strided` keep `2 * sample + LANE_COUNT <= parent.len()`, so the
+    // load reads a full vector in bounds.
+    unsafe { Vector::load_unaligned(parent.as_ptr().add(2 * sample)) }
+}
+
+/// Chunk `c` of block `OFFSET` of a `BLOCKS`-way split: parent samples
+/// `BLOCKS (S c + s) + OFFSET` for `s < S`, gathered from `S`-aligned
+/// windows. `BLOCKS = 1` is the contiguous block, one load.
+#[expect(
+    clippy::inline_always,
+    reason = "register kernels must retain their caller's target-feature scope"
+)]
+#[inline(always)]
+fn strided<T, A, const S: usize, const BLOCKS: usize, const OFFSET: usize>(
+    simd: Simd<T, A>,
+    parent: &[T],
+    c: usize,
+) -> Vector<T, A>
+where
+    T: LaneScalar,
+    A: SimdArch + SimdKernel<T>,
+{
+    debug_assert!(OFFSET < BLOCKS && S * 2 == <A as SimdStorage<T>>::LANE_COUNT);
+    if BLOCKS == 1 {
+        window(simd, parent, S * c)
+    } else if S == 2 {
+        // The two samples sit `BLOCKS` apart from `2 BLOCKS c + OFFSET`;
+        // the even-aligned windows holding them share the sample's parity.
+        let base = 2 * BLOCKS * c + 2 * (OFFSET / 2);
+        let (even, odd) =
+            window(simd, parent, base).interleave_halves(window(simd, parent, base + BLOCKS));
+        if OFFSET % 2 == 0 {
+            even
+        } else {
+            odd
+        }
+    } else if BLOCKS == 2 {
+        // Four samples two apart from `8 c + OFFSET`: the even or odd
+        // samples of the two four-sample windows from `8 c`.
+        let base = 8 * c;
+        let (even, odd) =
+            window(simd, parent, base).deinterleave_pairs(window(simd, parent, base + 4));
+        if OFFSET % 2 == 0 {
+            even
+        } else {
+            odd
+        }
+    } else {
+        // Four samples four apart from `16 c + OFFSET`: sample `OFFSET` of
+        // each of the four windows from `16 c`, one column of their
+        // transpose.
+        let base = 16 * c;
+        let (x0, x1) = window(simd, parent, base).interleave_halves(window(simd, parent, base + 4));
+        let (y0, y1) =
+            window(simd, parent, base + 8).interleave_halves(window(simd, parent, base + 12));
+        let (x, y) = if OFFSET / 2 == 0 { (x0, y0) } else { (x1, y1) };
+        let (even, odd) = x.deinterleave_pairs(y);
+        if OFFSET % 2 == 0 {
+            even
+        } else {
+            odd
+        }
+    }
+}
 
 /// The layer's broadcast twiddles: index `k` names the `k`th broadcast the
 /// plan pushes (`W_32^{1,3,5,7}`, `W_16^{1,3}` for 32-sample rows;
@@ -165,10 +335,11 @@ where
     }
 }
 
-/// Runs the row phase over `data` into `staging` with `S` samples a
-/// register: the `ROWS / S` row groups of `ROW_LEN` samples, each group's
-/// spectra landing in staging as chunk `row * (ROW_LEN / S) + c` holding
-/// samples `S c .. S c + S` of that row.
+/// Runs the row phase from `source` (over `own`, the kernel's output
+/// surface) into `staging` with `S` samples a register: the `ROWS / S` row
+/// groups of `ROW_LEN` samples, each group's spectra landing in staging as
+/// chunk `row * (ROW_LEN / S) + c` holding samples `S c .. S c + S` of that
+/// row.
 #[expect(
     clippy::inline_always,
     reason = "the pass must fold into the dispatcher's target-feature frame"
@@ -177,6 +348,7 @@ where
 pub(super) fn row_pass<
     T,
     A,
+    Src,
     W,
     const INVERSE: bool,
     const ROWS: usize,
@@ -184,15 +356,16 @@ pub(super) fn row_pass<
     const S: usize,
 >(
     simd: Simd<T, A>,
-    data: &[T],
+    source: &Src,
+    own: &[T],
     staging: &mut [T],
     layer: &W,
 ) where
     T: LaneScalar + MixedRadixScalar,
     A: SimdArch + SimdKernel<T>,
+    Src: BlockSource<T>,
     W: LayerTwiddles<T, A>,
 {
-    let data = simd.view(data);
     let mut stg = simd.view_mut(staging);
     // Blend mask selecting the high sample of each register half: the
     // pattern repeats per 128 bits, so one array serves both widths.
@@ -202,10 +375,10 @@ pub(super) fn row_pass<
     let hi_mask = Vector::<T, A>::from_view_chunk(&simd.view(&mask), 0);
     for g in 0..ROWS / S {
         let z = [
-            group::<T, A, W, INVERSE, ROWS, ROW_LEN, S, 0, _, _, _>(simd, &data, layer, g),
-            group::<T, A, W, INVERSE, ROWS, ROW_LEN, S, 1, _, _, _>(simd, &data, layer, g),
-            group::<T, A, W, INVERSE, ROWS, ROW_LEN, S, 2, _, _, _>(simd, &data, layer, g),
-            group::<T, A, W, INVERSE, ROWS, ROW_LEN, S, 3, _, _, _>(simd, &data, layer, g),
+            group::<T, A, Src, W, INVERSE, ROWS, ROW_LEN, S, 0>(simd, source, own, layer, g),
+            group::<T, A, Src, W, INVERSE, ROWS, ROW_LEN, S, 1>(simd, source, own, layer, g),
+            group::<T, A, Src, W, INVERSE, ROWS, ROW_LEN, S, 2>(simd, source, own, layer, g),
+            group::<T, A, Src, W, INVERSE, ROWS, ROW_LEN, S, 3>(simd, source, own, layer, g),
         ];
         if S == 2 {
             pair_tile::<T, A, INVERSE, ROW_LEN, 0, _, _>(&mut stg, g, hi_mask, &z);
@@ -224,28 +397,25 @@ pub(super) fn row_pass<
 }
 
 /// Sample `B0 + 4 b1` of row group `g`: the group's rows are adjacent in
-/// the source, `ROWS / S` chunks apart per sample.
+/// the block, `ROWS / S` chunks apart per sample.
 #[expect(
     clippy::inline_always,
     reason = "register kernels must retain their caller's target-feature scope"
 )]
 #[inline(always)]
-fn sample<T, A, const ROWS: usize, const S: usize, const B0: usize, Align, Mode, Ref>(
-    data: &SimdView<'_, T, A, Align, Mode, Ref>,
+fn sample<T, A, Src, const ROWS: usize, const S: usize, const B0: usize>(
+    simd: Simd<T, A>,
+    source: &Src,
+    own: &[T],
     g: usize,
     b1: usize,
 ) -> ComplexReg<T, A>
 where
     T: LaneScalar,
     A: SimdArch + SimdKernel<T>,
-    Align: Alignment,
-    Mode: ExecutionMode,
-    Ref: core::ops::Deref<Target = [T]>,
+    Src: BlockSource<T>,
 {
-    ComplexReg::from_interleaved(Vector::from_view_chunk(
-        data,
-        (ROWS / S) * (B0 + 4 * b1) + g,
-    ))
+    ComplexReg::from_interleaved(source.chunk::<A, S>(simd, own, (ROWS / S) * (B0 + 4 * b1) + g))
 }
 
 /// The register negated: the `W^{ROW_LEN / 2}` twiddle.
@@ -278,28 +448,25 @@ where
 fn group<
     T,
     A,
+    Src,
     W,
     const INVERSE: bool,
     const ROWS: usize,
     const ROW_LEN: usize,
     const S: usize,
     const B0: usize,
-    Align,
-    Mode,
-    Ref,
 >(
     simd: Simd<T, A>,
-    data: &SimdView<'_, T, A, Align, Mode, Ref>,
+    source: &Src,
+    own: &[T],
     layer: &W,
     g: usize,
 ) -> [ComplexReg<T, A>; 8]
 where
     T: LaneScalar,
     A: SimdArch + SimdKernel<T>,
+    Src: BlockSource<T>,
     W: LayerTwiddles<T, A>,
-    Align: Alignment,
-    Mode: ExecutionMode,
-    Ref: core::ops::Deref<Target = [T]>,
 {
     let rot = rot90::<T, A, INVERSE>;
     let eighth = root2_twiddle::<T, A, INVERSE, false>;
@@ -310,14 +477,14 @@ where
         let (w1, w3, w5, w7, v1, v3) = (0, 1, 2, 3, 4, 5);
         let y = radix8::<T, A, INVERSE>(
             [
-                sample::<T, A, ROWS, S, B0, _, _, _>(data, g, 0),
-                sample::<T, A, ROWS, S, B0, _, _, _>(data, g, 1),
-                sample::<T, A, ROWS, S, B0, _, _, _>(data, g, 2),
-                sample::<T, A, ROWS, S, B0, _, _, _>(data, g, 3),
-                sample::<T, A, ROWS, S, B0, _, _, _>(data, g, 4),
-                sample::<T, A, ROWS, S, B0, _, _, _>(data, g, 5),
-                sample::<T, A, ROWS, S, B0, _, _, _>(data, g, 6),
-                sample::<T, A, ROWS, S, B0, _, _, _>(data, g, 7),
+                sample::<T, A, Src, ROWS, S, B0>(simd, source, own, g, 0),
+                sample::<T, A, Src, ROWS, S, B0>(simd, source, own, g, 1),
+                sample::<T, A, Src, ROWS, S, B0>(simd, source, own, g, 2),
+                sample::<T, A, Src, ROWS, S, B0>(simd, source, own, g, 3),
+                sample::<T, A, Src, ROWS, S, B0>(simd, source, own, g, 4),
+                sample::<T, A, Src, ROWS, S, B0>(simd, source, own, g, 5),
+                sample::<T, A, Src, ROWS, S, B0>(simd, source, own, g, 6),
+                sample::<T, A, Src, ROWS, S, B0>(simd, source, own, g, 7),
             ],
             half_root2,
         );
@@ -358,10 +525,10 @@ where
         // Broadcasts `W_16^1`, `W_16^3`, `-W_16^1`.
         let (w1, w3, n1) = (0, 1, 2);
         let y = radix4::<T, A, INVERSE>([
-            sample::<T, A, ROWS, S, B0, _, _, _>(data, g, 0),
-            sample::<T, A, ROWS, S, B0, _, _, _>(data, g, 1),
-            sample::<T, A, ROWS, S, B0, _, _, _>(data, g, 2),
-            sample::<T, A, ROWS, S, B0, _, _, _>(data, g, 3),
+            sample::<T, A, Src, ROWS, S, B0>(simd, source, own, g, 0),
+            sample::<T, A, Src, ROWS, S, B0>(simd, source, own, g, 1),
+            sample::<T, A, Src, ROWS, S, B0>(simd, source, own, g, 2),
+            sample::<T, A, Src, ROWS, S, B0>(simd, source, own, g, 3),
         ]);
         let z = match B0 {
             0 => y,

@@ -16,9 +16,10 @@ use super::store::StoreSink;
 use super::{MIX_CH, REV2, REV3};
 use hermes_simd::{ComplexReg, LaneScalar, Simd, SimdArch, SimdKernel, SimdStorage};
 
-/// Runs the column pass over `staging`, storing into `data` (direct) or
-/// through `sink` (combining). `col` carries `W_8^1` and `W_8^3` for the
-/// eight-row form's distance-4 stage; the four-row form never reads them.
+/// Runs the column pass over `staging`, storing every register through
+/// `sink` into `out`, the kernel's output surface. `col` carries `W_8^1`
+/// and `W_8^3` for the eight-row form's distance-4 stage; the four-row
+/// form never reads them.
 ///
 /// Inlined into the dispatcher's target-feature frame; the caller's
 /// fixed-size arrays keep the view bounds foldable through that inlining.
@@ -32,7 +33,7 @@ pub(super) fn column_pass<T, A, S, const INVERSE: bool, const ROWS: usize, const
     staging: &[T],
     table: &[T],
     col: &[[T; 2]; 2],
-    data: &mut [T],
+    out: &mut [T],
     mut sink: S,
 ) where
     T: LaneScalar,
@@ -50,7 +51,6 @@ pub(super) fn column_pass<T, A, S, const INVERSE: bool, const ROWS: usize, const
     let w8_3 = complex_splat(col[1]);
     let zero_complex = ComplexReg::from_interleaved(simd.zero());
     let stg = simd.view(staging);
-    let mut out = simd.view_mut(data);
     for g in 0..groups {
         let mut c = [zero_complex; 8];
         for (a, reg) in c.iter_mut().enumerate().take(ROWS) {
@@ -105,12 +105,7 @@ pub(super) fn column_pass<T, A, S, const INVERSE: bool, const ROWS: usize, const
         }
         for (q, reg) in c.iter().enumerate().take(ROWS) {
             let row = if ROWS == 8 { REV3[q] } else { REV2[q] };
-            let j = row * groups + g;
-            if S::DIRECT {
-                reg.into_interleaved().store_to_view_chunk(&mut out, j);
-            } else {
-                sink.store(&simd, *reg, j);
-            }
+            sink.store(&simd, *reg, row * groups + g, out);
         }
     }
 }
