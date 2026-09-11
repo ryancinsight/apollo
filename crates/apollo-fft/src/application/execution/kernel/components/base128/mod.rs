@@ -93,12 +93,12 @@ where
 }
 
 /// The base and one radix step over it: `n = BASE` runs the kernel in
-/// place, `2 BASE` pairs the even and odd subsequences, `4 BASE` pairs
-/// subsequences 0 with 2 (the even 512-point half) and 1 with 3 (the odd)
-/// under the outer level. The combining butterflies ride the last blocks'
-/// column passes ([`instance_major::CombineSink`],
-/// [`instance_major::FinalCombineSink`]); the twiddle table is stage-major,
-/// the level of half-length `len` reading `len` entries from `len - 1`.
+/// place, `2 BASE` pairs the even and odd subsequences, `4 BASE` runs the
+/// radix-4 step over its four subsequences' spectra. The combining
+/// butterflies ride the last block's column pass
+/// ([`instance_major::CombineSink`], [`instance_major::FinalRadix4Sink`]);
+/// the twiddle table is stage-major, the level of half-length `len`
+/// reading `len` entries from `len - 1`.
 ///
 /// Where a block reads its samples is the plan width's measured choice
 /// (ADR 0061). At four lanes every block loads its stride-`blocks`
@@ -110,6 +110,8 @@ where
 /// gather they replace (`f32` 512 and 1024 measured 2 to 4% slower), so
 /// that width gathers the subsequences into scratch first
 /// ([`split_boundary::GatherBlocks`]) and every block reads contiguously.
+/// Both forms run the first three blocks of four into scratch and the
+/// last through the radix-4 sink, so no intermediate pair is written.
 ///
 /// Reports whether the dispatched width ran it.
 fn transform_via_base<
@@ -364,10 +366,8 @@ where
     )
 }
 
-/// Four blocks, each reading the parent: subsequences 0 and 1 into scratch
-/// as the pairs' peers, subsequence 2 over the parent into the free
-/// scratch pair with the combining sink (the even half's halves),
-/// subsequence 3 over the parent with the final sink.
+/// Four blocks, each reading the parent: subsequences 0, 1, and 2 into
+/// scratch, subsequence 3 over the parent with the radix-4 sink.
 fn four_blocks_direct<
     F,
     const INVERSE: bool,
@@ -389,55 +389,35 @@ where
     >,
     eunomia::Complex<F>: eunomia::layout::Pod,
 {
-    let inner = lane_array::<F, SINK_LANES>(sinks.inner());
-    let (outer_low, outer_high) = sinks.outer().split_at(BLOCK_LANES);
-    let outer_low = lane_array::<F, BLOCK_LANES>(outer_low);
-    let outer_high = lane_array::<F, BLOCK_LANES>(outer_high);
-    let (b0, rest) = scratch.split_at_mut(BASE);
-    let (b1, even_pair) = rest.split_at_mut(BASE);
-    let even_pair = &mut even_pair[..2 * BASE];
+    let (sub0, rest) = scratch.split_at_mut(BASE);
+    let (sub1, sub2) = rest.split_at_mut(BASE);
+    let sub2 = &mut sub2[..BASE];
     block::<F, INVERSE, MEASURE, ROW_LEN, BLOCK_LANES, TABLE_LANES, _, _>(
-        b0,
+        sub0,
         instance_major::ParentSplit::<F, 4, 0>(lanes::<F>(data)),
         plan,
         instance_major::DirectSink,
     ) && block::<F, INVERSE, MEASURE, ROW_LEN, BLOCK_LANES, TABLE_LANES, _, _>(
-        b1,
+        sub1,
         instance_major::ParentSplit::<F, 4, 1>(lanes::<F>(data)),
         plan,
         instance_major::DirectSink,
     ) && block::<F, INVERSE, MEASURE, ROW_LEN, BLOCK_LANES, TABLE_LANES, _, _>(
-        even_pair,
+        sub2,
         instance_major::ParentSplit::<F, 4, 2>(lanes::<F>(data)),
         plan,
-        instance_major::CombineSink {
-            peer: base_lanes::<F, BLOCK_LANES>(b0),
-            tw: inner,
-        },
-    ) && {
-        let (even_low, even_high) = even_pair.split_at(BASE);
-        block::<F, INVERSE, MEASURE, ROW_LEN, BLOCK_LANES, TABLE_LANES, _, _>(
-            data,
-            instance_major::SelfSplit::<4, 3>,
-            plan,
-            instance_major::FinalCombineSink {
-                peer: base_lanes::<F, BLOCK_LANES>(b1),
-                inner_tw: inner,
-                even_low: base_lanes::<F, BLOCK_LANES>(even_low),
-                even_high: base_lanes::<F, BLOCK_LANES>(even_high),
-                outer_low_tw: outer_low,
-                outer_high_tw: outer_high,
-            },
-        )
-    }
+        instance_major::DirectSink,
+    ) && block::<F, INVERSE, MEASURE, ROW_LEN, BLOCK_LANES, TABLE_LANES, _, _>(
+        data,
+        instance_major::SelfSplit::<4, 3>,
+        plan,
+        radix4_sink::<F, BASE, BLOCK_LANES, SINK_LANES>(sub0, sub1, sub2, sinks),
+    )
 }
 
 /// Four gathered blocks in scratch, in the gather's bit-reversed order
-/// (subsequences 0, 2, 1, 3): subsequences 0 and 1 in place as the pairs'
-/// peers, subsequence 2 into the output's first half with the combining
-/// sink (the even half's halves), subsequence 3 over the output with the
-/// in-place final sink, which reads those halves a chunk ahead of
-/// overwriting them.
+/// (subsequences 0, 2, 1, 3): the first three in place, subsequence 3 over
+/// the output with the radix-4 sink.
 fn four_blocks_gathered<
     F,
     const INVERSE: bool,
@@ -459,10 +439,6 @@ where
     >,
     eunomia::Complex<F>: eunomia::layout::Pod,
 {
-    let inner = lane_array::<F, SINK_LANES>(sinks.inner());
-    let (outer_low, outer_high) = sinks.outer().split_at(BLOCK_LANES);
-    let outer_low = lane_array::<F, BLOCK_LANES>(outer_low);
-    let outer_high = lane_array::<F, BLOCK_LANES>(outer_high);
     let (sub0, rest) = scratch.split_at_mut(BASE);
     let (sub2, rest) = rest.split_at_mut(BASE);
     let (sub1, sub3) = rest.split_at_mut(BASE);
@@ -478,22 +454,38 @@ where
         plan,
         instance_major::DirectSink,
     ) && block::<F, INVERSE, MEASURE, ROW_LEN, BLOCK_LANES, TABLE_LANES, _, _>(
-        &mut data[..2 * BASE],
-        instance_major::ParentSplit::<F, 1, 0>(lanes::<F>(sub2)),
+        sub2,
+        instance_major::SelfSplit::<1, 0>,
         plan,
-        instance_major::CombineSink {
-            peer: base_lanes::<F, BLOCK_LANES>(sub0),
-            tw: inner,
-        },
+        instance_major::DirectSink,
     ) && block::<F, INVERSE, MEASURE, ROW_LEN, BLOCK_LANES, TABLE_LANES, _, _>(
         data,
         instance_major::ParentSplit::<F, 1, 0>(lanes::<F>(sub3)),
         plan,
-        instance_major::FinalCombineInPlaceSink {
-            peer: base_lanes::<F, BLOCK_LANES>(sub1),
-            inner_tw: inner,
-            outer_low_tw: outer_low,
-            outer_high_tw: outer_high,
-        },
+        radix4_sink::<F, BASE, BLOCK_LANES, SINK_LANES>(sub0, sub1, sub2, sinks),
     )
+}
+
+/// The radix-4 sink over three transformed blocks and the split's tables.
+fn radix4_sink<'a, F, const BASE: usize, const BLOCK_LANES: usize, const SINK_LANES: usize>(
+    sub0: &'a [F::Complex],
+    sub1: &'a [F::Complex],
+    sub2: &'a [F::Complex],
+    sinks: &'a instance_major::SplitSinks<F>,
+) -> instance_major::FinalRadix4Sink<'a, F, BLOCK_LANES, SINK_LANES>
+where
+    F: crate::application::execution::kernel::mixed_radix::MixedRadixScalar<
+        Complex = eunomia::Complex<F>,
+    >,
+    eunomia::Complex<F>: eunomia::layout::Pod,
+{
+    let (outer_low, outer_high) = sinks.outer().split_at(BLOCK_LANES);
+    instance_major::FinalRadix4Sink {
+        sub0: base_lanes::<F, BLOCK_LANES>(sub0),
+        sub2: base_lanes::<F, BLOCK_LANES>(sub2),
+        sub1: base_lanes::<F, BLOCK_LANES>(sub1),
+        inner_tw: lane_array::<F, SINK_LANES>(sinks.inner()),
+        outer_low_tw: lane_array::<F, BLOCK_LANES>(outer_low),
+        outer_high_tw: lane_array::<F, BLOCK_LANES>(outer_high),
+    }
 }

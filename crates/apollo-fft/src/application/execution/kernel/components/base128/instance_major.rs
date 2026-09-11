@@ -38,9 +38,7 @@ mod store;
 use plan::BaseLaneWidth;
 pub(crate) use plan::{BasePlan, BasePlanState};
 pub(crate) use rows::{BlockSource, ParentSplit, SelfSplit};
-pub(crate) use store::{
-    CombineSink, DirectSink, FinalCombineInPlaceSink, FinalCombineSink, SplitSinks, StoreSink,
-};
+pub(crate) use store::{CombineSink, DirectSink, FinalRadix4Sink, SplitSinks, StoreSink};
 
 /// Per-phase TSC accumulators for the separately instantiated attribution
 /// instrument.
