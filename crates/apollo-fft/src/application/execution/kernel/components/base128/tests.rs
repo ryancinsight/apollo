@@ -174,7 +174,7 @@ where
     let Some(plan) = Plan512::<T>::new_if_supported::<INVERSE>() else {
         assert!(
             !must_run,
-            "an eight-lane host must provide the sixteen-row base"
+            "the pinned host must provide a native base capability"
         );
         return;
     };
@@ -182,7 +182,7 @@ where
     if !transform_512::<T, INVERSE, false>(&mut actual, &plan) {
         assert!(
             !must_run,
-            "the eight-lane width must run the sixteen-row form"
+            "either native width must run the sixteen-row form"
         );
         assert_eq!(
             actual, untouched,
@@ -206,17 +206,14 @@ where
 }
 
 #[test]
-fn base512_runs_at_eight_lanes_and_matches_the_direct_transform() {
+fn base512_matches_the_direct_transform_in_both_precisions_and_directions() {
     use crate::application::execution::kernel::components::lane_capability::native_lanes_supported;
     let eight_lanes = native_lanes_supported::<8, f32>();
+    let four_lanes = native_lanes_supported::<4, f64>();
     assert_base512_matches_direct::<f32, false>(f64::from(f32::EPSILON), eight_lanes);
     assert_base512_matches_direct::<f32, true>(f64::from(f32::EPSILON), eight_lanes);
-    // The eight-byte scalar is a four-lane plan: the sixteen-row form
-    // declines rather than running at that width.
-    assert!(
-        Plan512::<f64>::new_if_supported::<false>().is_none(),
-        "the sixteen-row base is an eight-lane form"
-    );
+    assert_base512_matches_direct::<f64, false>(f64::EPSILON, four_lanes);
+    assert_base512_matches_direct::<f64, true>(f64::EPSILON, four_lanes);
 }
 
 #[test]
