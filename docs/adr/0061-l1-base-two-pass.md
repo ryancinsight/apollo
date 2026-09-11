@@ -254,3 +254,17 @@ measured first and gained nothing over the split at 256.
   shuffles a row pair from 532 and 122; the 256 base 2.5% faster at both
   scalars on the pinned probe, the split lengths inside drift
   (`output/apollo-base128/small_sizes_prerot_run{1,2}_2026-09-11.txt`).
+- **2026-09-11, the four-block step as one radix-4 sink.** The
+  four-block split had combined in two levels, writing the even half to
+  a pair of blocks and reading it back for the outer level.
+  `FinalRadix4Sink` forms both halves from the three transformed spectra
+  and applies the outer level as the last block's registers leave the
+  kernel, so the first three blocks run into scratch through the direct
+  sink at either width and no intermediate pair exists. Pinned probe:
+  `f64` 1024 1.11 to 1.12 of RustFFT from 1.22 to 1.25 (1.28 ms from
+  1.38 to 1.43), `f32` 1024 1.04 to 1.07 from 1.08 to 1.09, 512 1.16 to
+  1.19 from 1.15 to 1.23
+  (`output/apollo-base128/small_sizes_radix4_run{1,2}_2026-09-11.txt`).
+  After slices 5 to 10 the `f64` route reads 512 at 1.12 and 1024 at 1.11
+  to 1.12 of RustFFT, from 1.17 to 1.19 and 1.26 to 1.27 when the item
+  opened; the row phase remains the lever.
