@@ -24,7 +24,7 @@
 //! its incumbent path.
 
 use crate::application::execution::kernel::components::register_butterfly::{
-    radix4, radix8, root2_twiddle, rot90,
+    radix4, radix8, rot90, DupSplitEighths, Eighths,
 };
 use crate::application::execution::kernel::mixed_radix::MixedRadixScalar;
 use eunomia::Complex;
@@ -111,15 +111,15 @@ const fn layer_ch(rows: usize, row_len: usize) -> usize {
 }
 
 /// Chunks of the row layer's broadcasts: sixteen-sample rows carry
-/// `W_16^1`, `W_16^3`, `-W_16^1` and the real `sqrt(2)/2`; 32-sample rows
-/// carry the twelve pre-rotated general twiddles of the `8 x 4` layer
-/// (`W_32^{1,3,5,7,9,15,21}`, `W_16^{1,3,5,7,9}`) and the real
-/// `sqrt(2)/2`.
+/// `W_16^1`, `W_16^3`, `-W_16^1`; 32-sample rows the twelve pre-rotated
+/// general twiddles of the `8 x 4` layer (`W_32^{1,3,5,7,9,15,21}`,
+/// `W_16^{1,3,5,7,9}`); both end with the eighths `W_8^1`, `W_8^3`, which
+/// the radix-8 and the layer apply as dup-split multiplies.
 const fn layer_chunks(row_len: usize) -> usize {
     if row_len == 32 {
-        25
+        28
     } else {
-        7
+        10
     }
 }
 
@@ -250,7 +250,7 @@ where
             let layer = rows::TableLayer {
                 table: &tab,
                 layer: layer_ch(ROWS, ROW_LEN),
-                chunks: layer_chunks(ROW_LEN),
+                eighth: layer_chunks(ROW_LEN) / 2 - 2,
             };
             rows::row_pass::<T, A, Src, _, INVERSE, ROWS, ROW_LEN, 2>(
                 simd,

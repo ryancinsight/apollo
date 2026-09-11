@@ -11,7 +11,9 @@
 //! before either kernel observes the mutable operand.
 
 use super::power::TWIDDLE32_FWD;
-use crate::application::execution::kernel::components::register_butterfly::{radix4, radix8};
+use crate::application::execution::kernel::components::register_butterfly::{
+    radix4, radix8, HalfRoot2,
+};
 use eunomia::{Complex, Complex32};
 use hermes_simd::{ComplexReg, LaneKernel, Simd, SimdArch, SimdKernel, Vector};
 
@@ -125,11 +127,11 @@ where
     second[3] = second[3] * twiddles::<A, INVERSE, 12, 15, 18, 21>(simd);
     ComplexReg::transpose_square(&mut first);
     ComplexReg::transpose_square(&mut second);
-    let output = radix8::<f32, A, INVERSE>(
+    let output = radix8::<f32, A, INVERSE, _>(
         [
             first[0], first[1], first[2], first[3], second[0], second[1], second[2], second[3],
         ],
-        simd.splat(core::f32::consts::FRAC_1_SQRT_2),
+        &HalfRoot2::<_, _, INVERSE>(simd.splat(core::f32::consts::FRAC_1_SQRT_2)),
     );
 
     store(output[0], &mut data[0..4]);

@@ -33,7 +33,7 @@
 //! reads per iteration.
 
 use super::super::cmul::cmul_chunk;
-use super::{radix4, radix8, root2_twiddle, rot90};
+use super::{radix4, radix8, rot90, DupSplitEighths, Eighths};
 use crate::application::execution::kernel::mixed_radix::MixedRadixScalar;
 use hermes_simd::{
     Alignment, ComplexReg, ExecutionMode, LaneScalar, Simd, SimdArch, SimdKernel, SimdStorage,
@@ -212,7 +212,7 @@ where
 /// The layer's broadcast twiddles: index `k` names the `k`th broadcast the
 /// plan pushes (`W_32^{1,3,5,7}`, `W_16^{1,3}`, `W_32^{9,15,21}`,
 /// `W_16^{5,7,9}` for 32-sample rows; `W_16^1`, `W_16^3`, `-W_16^1` for
-/// sixteen), and the real `sqrt(2)/2` broadcast follows them.
+/// sixteen), and the eighths `W_8^1`, `W_8^3` close both lists.
 pub(super) trait LayerTwiddles<T, A>
 where
     T: LaneScalar,
@@ -220,8 +220,8 @@ where
 {
     /// `v` times broadcast `k`.
     fn mul(&self, v: ComplexReg<T, A>, k: usize) -> ComplexReg<T, A>;
-    /// The real `sqrt(2)/2` in every lane.
-    fn half_root2(&self) -> Vector<T, A>;
+    /// The eighths `W_8^{1,3}` as dup-split register pairs.
+    fn eighths(&self) -> DupSplitEighths<T, A>;
 }
 
 /// The four-lane layer: the plan's dup-split broadcast chunks, read in
@@ -236,8 +236,8 @@ where
     pub(super) table: &'v SimdView<'v, T, A, Align, Mode, Ref>,
     /// Chunk of the first broadcast.
     pub(super) layer: usize,
-    /// Chunks the broadcasts span, the `sqrt(2)/2` chunk last.
-    pub(super) chunks: usize,
+    /// Index of the `W_8^1` broadcast; `W_8^3` follows it.
+    pub(super) eighth: usize,
 }
 
 impl<T, A, Align, Mode, Ref> LayerTwiddles<T, A> for TableLayer<'_, T, A, Align, Mode, Ref>
@@ -262,8 +262,17 @@ where
         reason = "register kernels must retain their caller's target-feature scope"
     )]
     #[inline(always)]
-    fn half_root2(&self) -> Vector<T, A> {
-        Vector::from_view_chunk(self.table, self.layer + self.chunks - 1)
+    fn eighths(&self) -> DupSplitEighths<T, A> {
+        let pair = |k: usize| {
+            (
+                Vector::from_view_chunk(self.table, self.layer + 2 * k),
+                Vector::from_view_chunk(self.table, self.layer + 2 * k + 1),
+            )
+        };
+        DupSplitEighths {
+            one: pair(self.eighth),
+            three: pair(self.eighth + 1),
+        }
     }
 }
 
@@ -277,9 +286,10 @@ where
     T: LaneScalar,
     A: SimdArch + SimdKernel<T>,
 {
-    re: [Vector<T, A>; 12],
-    im: [Vector<T, A>; 12],
-    half_root2: Vector<T, A>,
+    re: [Vector<T, A>; 14],
+    im: [Vector<T, A>; 14],
+    /// Index of the `W_8^1` broadcast; `W_8^3` follows it.
+    eighth: usize,
 }
 
 impl<T, A> SplatLayer<T, A>
@@ -287,8 +297,8 @@ where
     T: LaneScalar,
     A: SimdArch + SimdKernel<T>,
 {
-    /// Splats the `count` broadcasts and the `sqrt(2)/2` that the plan
-    /// pushed from lane `layer_lane` on: each broadcast is `[re; 4]` then
+    /// Splats the `count` broadcasts the plan pushed from lane
+    /// `layer_lane` on, the eighths last: each broadcast is `[re; 4]` then
     /// `[im; 4]`.
     #[expect(
         clippy::inline_always,
@@ -296,8 +306,8 @@ where
     )]
     #[inline(always)]
     pub(super) fn new(simd: Simd<T, A>, table: &[T], layer_lane: usize, count: usize) -> Self {
-        let mut re = [simd.zero(); 12];
-        let mut im = [simd.zero(); 12];
+        let mut re = [simd.zero(); 14];
+        let mut im = [simd.zero(); 14];
         for k in 0..count {
             re[k] = simd.splat(table[layer_lane + 8 * k]);
             im[k] = simd.splat(table[layer_lane + 8 * k + 4]);
@@ -305,7 +315,7 @@ where
         Self {
             re,
             im,
-            half_root2: simd.splat(table[layer_lane + 8 * count]),
+            eighth: count - 2,
         }
     }
 }
@@ -330,8 +340,11 @@ where
         reason = "register kernels must retain their caller's target-feature scope"
     )]
     #[inline(always)]
-    fn half_root2(&self) -> Vector<T, A> {
-        self.half_root2
+    fn eighths(&self) -> DupSplitEighths<T, A> {
+        DupSplitEighths {
+            one: (self.re[self.eighth], self.im[self.eighth]),
+            three: (self.re[self.eighth + 1], self.im[self.eighth + 1]),
+        }
     }
 }
 
@@ -424,8 +437,8 @@ where
 /// which the constant-indexed second stage never reads.
 ///
 /// The layer's general multiplies are the broadcasts, pre-rotated so no
-/// rotation or sign follows one; the remaining twiddles are the pure
-/// rotation `W^{ROW_LEN / 4}` and the eighths' `sqrt(2)/2` scaling.
+/// rotation or sign follows one; the eighths are dup-split multiplies too,
+/// and the pure rotation `W^{ROW_LEN / 4}` is the only other twiddle.
 #[expect(
     clippy::inline_always,
     reason = "register kernels must retain their caller's target-feature scope"
@@ -455,15 +468,13 @@ where
     W: LayerTwiddles<T, A>,
 {
     let rot = rot90::<T, A, INVERSE>;
-    let eighth = root2_twiddle::<T, A, INVERSE, false>;
-    let three_eighths = root2_twiddle::<T, A, INVERSE, true>;
-    let half_root2 = layer.half_root2();
+    let e = layer.eighths();
     if ROW_LEN == 32 {
         // Broadcasts `W_32^{1,3,5,7}`, `W_16^{1,3}`, then the pre-rotated
         // `W_32^{9,15,21}` and `W_16^{5,7,9}` the later groups reach.
         let (w1, w3, w5, w7, v1, v3) = (0, 1, 2, 3, 4, 5);
         let (w9, w15, w21, v5, v7, v9) = (6, 7, 8, 9, 10, 11);
-        let y = radix8::<T, A, INVERSE>(
+        let y = radix8::<T, A, INVERSE, _>(
             [
                 sample::<T, A, Src, ROWS, S, B0>(simd, source, own, g, 0),
                 sample::<T, A, Src, ROWS, S, B0>(simd, source, own, g, 1),
@@ -474,7 +485,7 @@ where
                 sample::<T, A, Src, ROWS, S, B0>(simd, source, own, g, 6),
                 sample::<T, A, Src, ROWS, S, B0>(simd, source, own, g, 7),
             ],
-            half_root2,
+            &e,
         );
         match B0 {
             0 => y,
@@ -483,7 +494,7 @@ where
                 layer.mul(y[1], w1),
                 layer.mul(y[2], v1),
                 layer.mul(y[3], w3),
-                eighth(y[4], half_root2),
+                e.one(y[4]),
                 layer.mul(y[5], w5),
                 layer.mul(y[6], v3),
                 layer.mul(y[7], w7),
@@ -491,11 +502,11 @@ where
             2 => [
                 y[0],
                 layer.mul(y[1], v1),
-                eighth(y[2], half_root2),
+                e.one(y[2]),
                 layer.mul(y[3], v3),
                 rot(y[4]),
                 layer.mul(y[5], v5),
-                three_eighths(y[6], half_root2),
+                e.three(y[6]),
                 layer.mul(y[7], v7),
             ],
             _ => [
@@ -503,7 +514,7 @@ where
                 layer.mul(y[1], w3),
                 layer.mul(y[2], v3),
                 layer.mul(y[3], w9),
-                three_eighths(y[4], half_root2),
+                e.three(y[4]),
                 layer.mul(y[5], w15),
                 layer.mul(y[6], v9),
                 layer.mul(y[7], w21),
@@ -520,22 +531,12 @@ where
         ]);
         let z = match B0 {
             0 => y,
-            1 => [
-                y[0],
-                layer.mul(y[1], w1),
-                eighth(y[2], half_root2),
-                layer.mul(y[3], w3),
-            ],
-            2 => [
-                y[0],
-                eighth(y[1], half_root2),
-                rot(y[2]),
-                three_eighths(y[3], half_root2),
-            ],
+            1 => [y[0], layer.mul(y[1], w1), e.one(y[2]), layer.mul(y[3], w3)],
+            2 => [y[0], e.one(y[1]), rot(y[2]), e.three(y[3])],
             _ => [
                 y[0],
                 layer.mul(y[1], w3),
-                three_eighths(y[2], half_root2),
+                e.three(y[2]),
                 layer.mul(y[3], n1),
             ],
         };
