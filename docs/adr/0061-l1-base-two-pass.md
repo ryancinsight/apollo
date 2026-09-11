@@ -529,3 +529,33 @@ base); the two-block form of the step is deleted, and the step serves
   4096; a base route there needs an L2-aware shape (a 1024-point base
   under a radix-4 step, or blocks that finish inside L1 before the step),
   filed as the reading left.
+
+- **2026-09-11, the per-call fixed cost of the lengths under 64
+  (`APOLLO-SMALL-LENGTH-FIXED-COST`).** Attribution by asm census of
+  the release test binary
+  (`output/apollo-base128/base256_2026-09-11.md`): the `f32` eight-point
+  call path was an executor of two instructions tail-jumping into the
+  trait hop, which probed the host per call and called the register arm
+  (63 instructions) — three frames for a 3 ns transform, against
+  RustFFT's virtual call into one frame (5 + 43); the `f32` 32 executor
+  carried two feature-detect calls and hermes' lane dispatch in front
+  of the codelet. Two slices. The reduced eight-point arm in 256-bit
+  registers (two registers, one fused multiply-add against `W_8`, the
+  pair layout running both four-point transforms at once): `f32` 8 on
+  the performance core 1.21 from 1.52, the efficiency core 1.15 to 1.21
+  from 1.11 — the cross-lane permutes cost there. Then the vector frame
+  entered once: the plan selects a framed executor set at construction
+  when the host has AVX2 and FMA (hermes' `Avx2` contract), each
+  executor carrying the frame so the sized entry and its register arm
+  inline into it, and the `f32` 16 and 32 executors holding the hermes
+  eight-lane codelets through the backend token. After: the `f32`
+  eight-point executor is one frame of 29 instructions with no calls,
+  the 16 and 32 executors 71 and 164 (RustFFT 96 + 5 and 191 + 5).
+  Pinned probe, three runs
+  (`output/apollo-base128/small_sizes_frame_run{1,2,3}_2026-09-11.txt`):
+  `f32` 8 1.07 / 1.07 / 1.07 on the performance core and 0.93 / 0.93 /
+  0.94 on the efficiency core; no length under 128 slower, `f64` 8
+  inside its eleven-run band. Kept. The remaining small-length gaps are
+  the kernels, not the chain — `f32` 16 on the efficiency core 1.27 and
+  `f32` 32 on the performance core 1.15 to 1.23 with the frame in
+  place — filed as `APOLLO-F32-16-32-KERNEL-GAP`.
