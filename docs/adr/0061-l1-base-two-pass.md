@@ -314,3 +314,13 @@ measured first and gained nothing over the split at 256.
   1024 from 8). The meter reads the 1024 column phase at 571 to 589
   cycles a block from 634 to 656; the wall clock inside drift
   (`output/apollo-base128/small_sizes_outerrot_run{1,2}_2026-09-11.txt`).
+- **2026-09-11, the two-block split strided at eight lanes (rejected
+  again).** Re-measured after the eighths and the rotated outer table:
+  the eight-lane two-block route reading the parent runs 612
+  instructions a row group against 543 gathered, and `f32` 512 reads
+  272 to 273 us against 271 to 278 — the gather pass and the in-register
+  extraction cost the same at this width, so the gathered form stays
+  (`output/apollo-base128/small_sizes_f32strided_run{1,2}_2026-09-11.txt`).
+  The route after slices 5 to 14: `f64` 128 1.02 to 1.07, 256 0.99 to
+  1.02, 512 0.98 to 1.08, 1024 1.00 to 1.07 of RustFFT; `f32` 128 1.03
+  to 1.10, 256 1.00 to 1.04, 512 1.06 to 1.14, 1024 0.96 to 1.05.
