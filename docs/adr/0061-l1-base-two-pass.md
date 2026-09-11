@@ -234,3 +234,13 @@ measured first and gained nothing over the split at 256.
   a block from 630) while the production wall clock improved: the doubled
   tables take the 1024 working set past the 48 KB L1D, the hypothesis the
   next slice tests (`output/apollo-base128/small_sizes_sinktables_run{1,2}_2026-09-11.txt`).
+- **2026-09-11, the outer sink table interleaved.** Tested and kept: the
+  outer level's table stays interleaved and the final sink duplicates
+  each twiddle in registers, the inner table dup-split. Meter at 1024
+  5227 to 5802 from 6011 to 6075 (columns 563 to 654 a block from 668 to
+  714), wall clock `f64` 1024 1.36 ms from 1.37 to 1.38, 512 and `f32`
+  unchanged (`output/apollo-base128/small_sizes_outerint_run{1,2}_2026-09-11.txt`).
+  After slices 5 to 8 the `f64` route reads 512 at 1.09 to 1.13 and 1024
+  at 1.14 to 1.21 of RustFFT, from 1.17 to 1.19 and 1.26 to 1.27 when
+  the item opened; the row phase, latency-bound on its butterfly chains,
+  is the lever left.
