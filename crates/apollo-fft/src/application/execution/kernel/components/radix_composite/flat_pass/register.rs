@@ -68,9 +68,10 @@ where
 
 /// The complexes an arm scatter of radix `R` writes past its `per` groups:
 /// the zero padding of its last transpose tile, `per - R % per` when `R`
-/// does not fill whole tiles, none for two arms (a pair interleave), two
-/// complexes per register (the half-register packing is exact) or a radix
-/// that is a multiple of the width.
+/// does not fill whole tiles, none for two or three arms (a pair
+/// interleave, a three-way pair interleave), two complexes per register
+/// (the half-register packing is exact) or a radix that is a multiple of
+/// the width.
 #[inline]
 pub(in super::super) fn scatter_spill<T, A, const R: usize>() -> usize
 where
@@ -78,7 +79,7 @@ where
     A: SimdArch + SimdKernel<T>,
 {
     let per = <A as SimdStorage<T>>::LANE_COUNT / 2;
-    if R == 2 || per <= 2 || R % per == 0 {
+    if R == 2 || R == 3 || per <= 2 || R % per == 0 {
         0
     } else {
         per - R % per
@@ -108,8 +109,10 @@ where
 /// consecutive groups, and each group's `R` arms are consecutive in `dst`,
 /// group `i` from complex offset `at + R * i`.
 ///
-/// Two arms are one pair interleave, and two complexes per register is the
-/// half-register packing of [`store_arm_halves`] (a register holds two
+/// Two arms are one pair interleave and three arms one three-way pair
+/// interleave (the flat sequence `b0 b1 b2` per group over three
+/// registers), both exact at every width; two complexes per register is
+/// the half-register packing of [`store_arm_halves`] (a register holds two
 /// groups' one-complex rows), exact for every radix. Otherwise the arms go
 /// through square complex transposes of `per` rows, `R.div_ceil(per)` tiles zero-padded
 /// past `R`, each the backend's pair decimation (a square read as one flat
@@ -150,6 +153,17 @@ pub(in super::super) unsafe fn store_arms<T, A, const R: usize>(
         unsafe {
             store(first, dst, at);
             store(second, dst, at + per);
+        }
+        return;
+    }
+    if R == 3 {
+        let (first, second, third) = b[0].interleave_pairs3(b[1], b[2]);
+        // SAFETY: the caller's contract; three registers cover `3 * per`
+        // complexes with no run-over.
+        unsafe {
+            store(first, dst, at);
+            store(second, dst, at + per);
+            store(third, dst, at + 2 * per);
         }
         return;
     }
