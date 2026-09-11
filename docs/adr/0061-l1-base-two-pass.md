@@ -726,3 +726,49 @@ base); the two-block form of the step is deleted, and the step serves
   with warnings denied pass. Native tests complete in 9.728 seconds.
   Cargo reports unused stack-overlay patches; these are not Rust source
   diagnostics, and the generated overlay lock delta is excluded.
+
+- **2026-09-11, bounded follow-up requested by the user.** Reopen
+  `APOLLO-2048-COLUMN-FIRST` at `6e7d0031`. The new hypothesis is that
+  buffer placement and the transpose's cross-half shuffle count can
+  preserve the performance-core gain without moving the controls. Write
+  the column pass directly into existing scratch, run the authoritative
+  in-place base kernel on each block, and transpose into the parent with
+  Hermes' existing four-way pair primitive. At eight lanes, two fused
+  four-way transposes replace eight pairwise interleaves: the locked
+  AVX2 implementation expresses sixteen rather than thirty-two shuffle
+  instructions before compiler optimization. This is a codegen hypothesis,
+  not a latency claim. No row/column butterfly arithmetic, f64 2048 route,
+  scratch capacity, or pass count changes relative to the rejected
+  column-first trial.
+
+  The measurement design must retire the earlier instrument's identity
+  bias: alternate paired samples rather than timing whole arms far apart,
+  retain same-address identity controls, record pinning and host load, and
+  repeat with reversed initial order. Acceptance remains stable same-run
+  target improvement without supported regression in the existing controls;
+  no tolerance or workload is weakened. Native analytical and bit-exact
+  permutation oracles precede measurement. An unsupported candidate is
+  removed in the same delivery and this record carries its result.
+
+  Pre-measurement refinement: compare both column placements with the same
+  fused transpose. The scratch-destination column phase touches about
+  46 KiB (parent, scratch and twiddles), versus 30 KiB in place; reduced
+  base specialization and scratch locality do not prove that this tradeoff
+  wins. One column body uses the existing `BlockSource` role; the alternative
+  schedule exists only in the experiment. All eight input registers load
+  before an in-place output store.
+
+  Predeclared instrument: seventeen same-plan identity pairs, seventeen
+  RustFFT contextual pairs and seven historical direct pairs per scalar
+  and core, plus two f32 2048 placement pairs. Two initial-order replications
+  give 336 paired intervals and 672 marginal intervals. Each case keeps
+  100 samples and the original source-reset/FFT/output-black-box timed
+  workload. Calibration uses one common iteration count from the slower
+  arm; AB/BA order and buffer slots balance over four samples. Identity
+  comparisons share the exact route and plan. Bonferroni-adjusted binomial
+  median intervals assume independent samples with a common median;
+  counterbalancing alone does not establish those assumptions. Zero-time
+  samples fail. Target performance-core gains must separate from zero in
+  both replications, historical controls must show no supported regression,
+  and identity intervals must contain zero. Host-load and dependence limits
+  remain part of the retention decision, not a reason to widen bounds.
