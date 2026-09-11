@@ -27,7 +27,11 @@
 
 <a id="apollo-rotated-move-geometry"></a>
 
-## APOLLO-ROTATED-MOVE-GEOMETRY-2026-09-10 — Two moves save a quarter of one move's time [patch] [perf] — todo
+## APOLLO-ROTATED-MOVE-GEOMETRY-2026-09-10 — Two moves save a quarter of one move's time [patch] [perf] — in-progress
+
+- Integrator: root; branch: `perf/apollo-rotated-move-geometry`; last-update: 2026-09-11.
+- Scope: 64³ move and lane attribution; change production only when controlled measurements support it. Basis: `aaa11ddc` with committed Git providers.
+- Acceptance: isolated wide/tall moves and full/rotated pairs identify the cost; native gates and retained benchmark observations support any production change.
 
 - **Question (spike).** The rotated pair
   ([`#apollo-rotated-order-handoff`](#apollo-rotated-order-handoff)) removes two
