@@ -40,27 +40,27 @@ base's store sink as the base-128 route already does. Keep the base-128
 kernel for 128 and 256 while the new base is measured; retire it where the
 new base wins.
 
-Recommended shape (option A below): sixteen 16-point columns as two
-radix-4 passes through the staging buffer (the base-128 kernel's phase 1
-and 2, widened from eight rows to sixteen), the transpose in registers on
-the way into staging, then sixteen 16-point rows as the column pass
-widened from eight to sixteen points. The row twiddles stay broadcast
-scalars; the internal twiddle table grows from 8 x 16 to 16 x 16.
+Recommended shape (option B below, after the revision of 2026-09-11):
+eight 32-point rows through the row phases widened from sixteen to
+thirty-two samples, then the eight-point column pass unchanged. Option A
+(sixteen 16-point rows, the column pass widened to sixteen) was built and
+measured first and gained nothing over the split at 256.
 
 ## Options
 
-- **A. A 256 base as 16 x 16 in the base-128 kernel's shape** (recommended).
-  Reuses the two-pass structure, the staging discipline, the sinks and the
-  plan tables; the register budget per pass is the base-128 kernel's
-  (about a dozen live values per stage). Risk: the column pass over
-  sixteen points needs a 16-point DIF in registers where the kernel has
-  an 8-point one; the sixteen-point step is the radix-4 pair the rows
-  already use.
-- **B. A 256 base as 8 x 32, RustFFT's shape.** Eight-point columns keep
-  the existing column pass; the rows become 32-point (`dft32` exists as
-  a scalar Winograd codelet, not as a register kernel). Risk: a 32-point
-  row kernel over registers is new work with no sibling to copy, and the
-  8 x 32 twiddle layer is wider than 16 x 16's.
+- **A. A 256 base as 16 x 16 in the base-128 kernel's shape** (built,
+  measured, rejected; see the revision). Reuses the two-pass structure,
+  the staging discipline, the sinks and the plan tables. The sixteen-row
+  column pass cannot hold sixteen columns in the AVX2 file, so its
+  distance-8 level ran as one more pass over the 4 KB staging buffer, and
+  that pass costs what the two eight-row column passes cost together.
+- **B. A 256 base as 8 x 32, RustFFT's shape** (recommended). Eight-point
+  columns keep the existing column pass and its register budget; the rows
+  become 32-point, the row phases widened from `4 x 4` to `4 x 8` through
+  the same pair staging (`dft32` exists as a scalar Winograd codelet, not
+  as a register kernel). Risk: a 32-point row kernel over registers is new
+  work with no sibling to copy, and the 8 x 32 twiddle layer is wider than
+  16 x 16's.
 - **C. Keep the base-128 route and take its two levers.** Bounded at 2 to
   5% each by the aliasing analysis; cannot reach parity (1.22 and 1.29).
 
@@ -90,4 +90,22 @@ scalars; the internal twiddle table grows from 8 x 16 to 16 x 16.
 
 ## Revision notes
 
-None; Proposed.
+- **2026-09-11, option A measured.** The sixteen-row form was built as
+  the base kernel's `ROWS = 16` instance (`transform_256`; the column pass
+  as one in-place distance-8 level over staging, four rows at a time, then
+  the eight-row DIF once per half with the halves interleaved in the
+  output) and wired at n = 256 in place of the two-block split
+  (`output/apollo-base128/base256_sixteen_row_form_2026-09-11.patch`, 623
+  tests green, the direct-transform oracle in both directions). On the
+  pinned performance core, quiet host
+  (`output/apollo-base128/small_sizes_base256_2026-09-11.txt`), `f64` 256
+  reads 1.22 of RustFFT's 256 butterfly where the two-block split read
+  1.20 the day before (`small_sizes_2026-09-10.txt`; the ratio is the
+  stable quantity across runs, absolute counts drift by about 8%), and
+  128 reads 1.02. The extra level pass over staging (sixteen loads,
+  sixteen stores, eight butterflies and eight multiplies per group) costs
+  about what both eight-row column passes cost, so the form is two passes
+  and most of a third; at 256 the split is four passes too, and no pass
+  is saved before 1024. The slice is reverted; the recommendation moves to
+  option B, whose column pass keeps eight rows and whose extra work is in
+  the row phases, where the kernel already stages through registers.
