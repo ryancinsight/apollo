@@ -455,14 +455,16 @@ MESSAGE
   exit 1
 fi
 
-# The workspace lint table denies what matters, so this gate runs clippy
-# without extra flags: adding `-D warnings` here would fail on the
-# pre-existing per-crate debt the ratchet exists to burn down, and a gate
-# that fails on debt you did not write is a gate that gets bypassed.
+# The same flags as the CI ratchet (`--all-features -- -D warnings`), so a
+# warning-level lint the workspace table does not deny (an unused import)
+# fails here and not on the runner: on 2026-09-11 one reached a push under
+# a bare `cargo clippy` and only the next local `-D warnings` run caught it.
+# The workspace is clean under these flags on main, so nothing pre-existing
+# fails a push that did not write it.
 gate_log="$(mktemp)"
 trap 'rm -f "$gate_log"; restore_gate_lock' EXIT INT TERM
 
-case "$(classify_gate_step "$gate_log" cargo clippy $gate_specs --all-targets)" in
+case "$(classify_gate_step "$gate_log" cargo clippy $gate_specs --all-targets --all-features -- -D warnings)" in
   ours)
     cat >&2 <<MESSAGE
 
@@ -470,7 +472,7 @@ pre-push: clippy fails for$gate_packages, so the CI ratchet would.
 
 Reproduce:
 
-    cargo clippy$gate_specs --all-targets
+    cargo clippy$gate_specs --all-targets --all-features -- -D warnings
 
 To push anyway: SKIP_LOCAL_GATE=1 git push
 MESSAGE
