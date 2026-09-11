@@ -27,21 +27,9 @@
 
 <a id="apollo-rotated-move-geometry"></a>
 
-## APOLLO-ROTATED-MOVE-GEOMETRY-2026-09-10 — Two moves save a quarter of one move's time [patch] [perf] — todo
-
-- **Question (spike).** The rotated pair
-  ([`#apollo-rotated-order-handoff`](#apollo-rotated-order-handoff)) removes two
-  of a round trip's six full-volume moves and buys 4–7%, where equal-cost moves
-  would buy about 18%. Either the two moves it keeps cost more than the chain's
-  three, or the lane passes around them lost something (cache state, the
-  four-step companion) that the chain's ordering preserved.
-- **Method.** Probe arms timing each move geometry alone at 64³: the chain's
-  `[nx, ny*nz]`, `[ny, nz*nx]`, `[nz, nx*ny]` against the rotated inverse's
-  `[nz*nx, ny]` and `[ny*nz, nx]`. If a tall geometry is the cost, the fix is
-  leto's tile rule reading the destination stride as well as the source pitch
-  ([`leto #leto-strided-pitch-aliasing`](../leto/backlog.md#leto-strided-pitch-aliasing));
-  if the lane passes are the cost, the fix is in the schedule.
-- **Risk / change class:** [patch] [perf]; **dependencies:** none.
+## APOLLO-ROTATED-MOVE-GEOMETRY-2026-09-10 — Attribute tall moves to task partition [patch] [perf] — done
+- Delivery: `8b709811`, integrated at `5c725de7`; [Leto PR 192](https://github.com/ryancinsight/leto/pull/192) changes transpose task width only. Destination-stride traversal and FFT lane scheduling remain unchanged.
+- Evidence: [reports, native gates and limits](docs/experiments/rotated-moves/README.md); 629 consumer tests pass, final 64³ probe passes in 26.254 s; stable rotated-pair medians fall 7.6–14.4% on this host.
 
 <a id="APOLLO-WASM-DEPENDENCY-2026-09-10"></a>
 ## APOLLO-WASM-DEPENDENCY-2026-09-10 — Keep the FFT dependency graph portable on WebAssembly [patch]
