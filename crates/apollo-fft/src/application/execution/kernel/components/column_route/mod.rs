@@ -6,7 +6,8 @@
 //! scratch, and writes natural order through an `r`-way pair interleave:
 //! RustFFT's mixed-radix shape at a composite length, the block-and-sink
 //! construction of ADR 0061 with the transposes in registers. The first
-//! instance is 180 = 5 × 36.
+//! instance is 180 = 5 × 36, at four complexes a register (`f32` on AVX2)
+//! and at two (`f64`).
 //!
 //! With `x` as five rows of thirty-six, `x[36 c + j]`, and `k = k2 + 5 k1`:
 //!
@@ -21,7 +22,7 @@ use crate::application::execution::kernel::components::register_butterfly::{
     radix5, Fifths, FIFTH_C1, FIFTH_C2, FIFTH_S1, FIFTH_S2,
 };
 use crate::application::execution::kernel::components::winograd::composite::{
-    dft36_kernel, load, store, twiddled, TwiddleRow, Twiddles36,
+    complexes_per_register, dft36_kernel, load, store, twiddled, TwiddleRow, Twiddles36,
 };
 use crate::application::execution::kernel::mixed_radix::scalar::simd::avx::vector_frame_available;
 use crate::application::execution::kernel::mixed_radix::MixedRadixScalar;
@@ -38,13 +39,14 @@ pub(crate) struct Tables180<F> {
     /// The radix-5 constants as lane rows: `c1` and `c2` broadcast, the
     /// direction-signed sines on alternate lanes.
     fifths: [[F; 8]; 4],
-    /// `W_180^{j k2}` for the column chunk `q` (`j = 4 q .. 4 q + 4`) and
-    /// `k2` in 1 to 4, at `4 q + k2 - 1`.
-    columns: [TwiddleRow<F>; 36],
+    /// `W_180^{j k2}` for the column chunk `q` (`j` the register's columns
+    /// from `q` complexes-per-register on) and `k2` in 1 to 4, at
+    /// `4 q + k2 - 1`.
+    columns: Box<[TwiddleRow<F>]>,
 }
 
 impl<F: MixedRadixScalar> Tables180<F> {
-    fn new(inverse: bool) -> Self {
+    fn new(inverse: bool, complexes: usize) -> Self {
         let (s1, s2) = if inverse {
             (FIFTH_S1, FIFTH_S2)
         } else {
@@ -59,17 +61,15 @@ impl<F: MixedRadixScalar> Tables180<F> {
             }
             row
         };
-        let mut columns = [TwiddleRow::of_roots(180, [0; 4], inverse); 36];
-        for (index, row) in columns.iter_mut().enumerate() {
-            let chunk = index / 4;
-            let k2 = index % 4 + 1;
-            let j = 4 * chunk;
-            *row = TwiddleRow::of_roots(
-                180,
-                [j * k2, (j + 1) * k2, (j + 2) * k2, (j + 3) * k2],
-                inverse,
-            );
-        }
+        let chunks = 36 / complexes;
+        let columns = (0..4 * chunks)
+            .map(|index| {
+                let j = complexes * (index / 4);
+                let k2 = index % 4 + 1;
+                let exponents: Vec<usize> = (0..complexes).map(|l| (j + l) * k2).collect();
+                TwiddleRow::of_roots(180, &exponents, inverse)
+            })
+            .collect();
         Self {
             thirty_six: Twiddles36::new(inverse),
             fifths: [broadcast(FIFTH_C1), broadcast(FIFTH_C2), turn(s1), turn(s2)],
@@ -87,11 +87,14 @@ pub(crate) struct State180<F> {
 
 impl<F: MixedRadixScalar + LaneScalar> State180<F> {
     /// Builds the state where the route runs: the vector frame present and
-    /// the scalar's frame register holding four complexes.
+    /// the scalar's frame register holding four or two complexes.
     pub(crate) fn new_if_supported() -> Option<Self> {
-        (F::FRAME_LANES == 8 && vector_frame_available()).then(|| Self {
-            forward: Box::new(CacheLineAligned(Tables180::new(false))),
-            inverse: Box::new(CacheLineAligned(Tables180::new(true))),
+        (matches!(F::FRAME_LANES, 4 | 8) && vector_frame_available()).then(|| {
+            let complexes = F::FRAME_LANES / 2;
+            Self {
+                forward: Box::new(CacheLineAligned(Tables180::new(false, complexes))),
+                inverse: Box::new(CacheLineAligned(Tables180::new(true, complexes))),
+            }
         })
     }
 }
@@ -145,11 +148,13 @@ where
     #[inline(always)]
     fn call<A: SimdArch + SimdKernel<F>>(self, simd: Simd<F, A>) {
         let Self { tables, data } = self;
+        let complexes = complexes_per_register::<F, A>();
         debug_assert_eq!(
             <A as SimdStorage<F>>::LANE_COUNT,
-            8,
-            "invariant: the state exists only at the eight-lane frame"
+            F::FRAME_LANES,
+            "invariant: the route runs on the frame backend its tables were built for"
         );
+        let chunks = 36 / complexes;
         let fifths = Fifths {
             c1: load_row(simd, &tables.fifths[0]),
             c2: load_row(simd, &tables.fifths[1]),
@@ -157,34 +162,34 @@ where
             s2_turn: load_row(simd, &tables.fifths[3]),
         };
 
-        // The column pass: a radix-5 across the five rows at four columns a
-        // register, the twiddled arms back in place.
-        for chunk in 0..9 {
-            let j = 4 * chunk;
+        // The column pass: a radix-5 across the five rows at one register of
+        // columns, the twiddled arms back in place.
+        for chunk in 0..chunks {
+            let j = complexes * chunk;
             let rows = [
-                load(simd, &data[j..j + 4]),
-                load(simd, &data[36 + j..40 + j]),
-                load(simd, &data[72 + j..76 + j]),
-                load(simd, &data[108 + j..112 + j]),
-                load(simd, &data[144 + j..148 + j]),
+                load(simd, &data[j..j + complexes]),
+                load(simd, &data[36 + j..36 + j + complexes]),
+                load(simd, &data[72 + j..72 + j + complexes]),
+                load(simd, &data[108 + j..108 + j + complexes]),
+                load(simd, &data[144 + j..144 + j + complexes]),
             ];
             let arms = radix5::<F, A>(rows, &fifths);
-            store(arms[0], &mut data[j..j + 4]);
+            store(arms[0], &mut data[j..j + complexes]);
             store(
                 twiddled(simd, arms[1], &tables.columns[4 * chunk]),
-                &mut data[36 + j..40 + j],
+                &mut data[36 + j..36 + j + complexes],
             );
             store(
                 twiddled(simd, arms[2], &tables.columns[4 * chunk + 1]),
-                &mut data[72 + j..76 + j],
+                &mut data[72 + j..72 + j + complexes],
             );
             store(
                 twiddled(simd, arms[3], &tables.columns[4 * chunk + 2]),
-                &mut data[108 + j..112 + j],
+                &mut data[108 + j..108 + j + complexes],
             );
             store(
                 twiddled(simd, arms[4], &tables.columns[4 * chunk + 3]),
-                &mut data[144 + j..148 + j],
+                &mut data[144 + j..144 + j + complexes],
             );
         }
 
@@ -200,42 +205,42 @@ where
                 .expect("invariant: a row is thirty-six samples");
             dft36_kernel::<F, A, INVERSE>(simd, &tables.thirty_six, input, output);
         }
-        // SAFETY: each of the five kernels wrote its thirty-six outputs as
-        // nine registers of four, so every element of the scratch is
+        // SAFETY: each of the five kernels wrote its thirty-six outputs one
+        // register at a time, so every element of the scratch is
         // initialized.
         let spectra: &[Complex<F>; 180] = unsafe { &*scratch.as_ptr().cast::<[Complex<F>; 180]>() };
 
-        // The five-way interleave: register `k1`-chunk `q` of row `k2` lands
-        // at `5 (4 q + l) + k2`, natural order.
+        // The five-way interleave: the register at columns `j ..` of row `k2`
+        // lands at `5 j + k2`, natural order.
         let scale = simd.splat(F::from_precise(1.0 / 180.0));
-        for chunk in 0..9 {
-            let j = 4 * chunk;
-            let packed = load(simd, &spectra[j..j + 4])
+        for chunk in 0..chunks {
+            let j = complexes * chunk;
+            let packed = load(simd, &spectra[j..j + complexes])
                 .into_interleaved()
                 .interleave_pairs5(
-                    load(simd, &spectra[36 + j..40 + j]).into_interleaved(),
-                    load(simd, &spectra[72 + j..76 + j]).into_interleaved(),
-                    load(simd, &spectra[108 + j..112 + j]).into_interleaved(),
-                    load(simd, &spectra[144 + j..148 + j]).into_interleaved(),
+                    load(simd, &spectra[36 + j..36 + j + complexes]).into_interleaved(),
+                    load(simd, &spectra[72 + j..72 + j + complexes]).into_interleaved(),
+                    load(simd, &spectra[108 + j..108 + j + complexes]).into_interleaved(),
+                    load(simd, &spectra[144 + j..144 + j + complexes]).into_interleaved(),
                 );
-            let base = 20 * chunk;
+            let base = 5 * j;
             for (index, register) in packed.into_iter().enumerate() {
                 let value = if INVERSE && NORMALIZE {
                     register * scale
                 } else {
                     register
                 };
-                let at = base + 4 * index;
+                let at = base + complexes * index;
                 store(
                     hermes_simd::ComplexReg::from_interleaved(value),
-                    &mut data[at..at + 4],
+                    &mut data[at..at + complexes],
                 );
             }
         }
     }
 }
 
-/// Loads eight lanes as one register.
+/// Loads a row's leading lanes as one register.
 #[expect(
     clippy::inline_always,
     reason = "the load must stay in the selected target-feature frame"
