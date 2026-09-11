@@ -366,12 +366,52 @@ pub(super) fn exec_base256_inverse_unnorm<F: MixedRadixScalar<Complex = Complex<
     );
 }
 
+pub(super) fn exec_base512_forward<F: MixedRadixScalar<Complex = Complex<F>>>(
+    plan: &FftPlan1D<F>,
+    slice: &mut [F::Complex],
+) {
+    assert!(
+        transform_block::<F, false, false, 16, 32, 1024, { table_lanes(16, 32) }>(
+            slice,
+            plan.base512_forward_plan(),
+        ),
+        "invariant: the selected base-512 capability remains available"
+    );
+}
+
+pub(super) fn exec_base512_inverse<F: MixedRadixScalar<Complex = Complex<F>>>(
+    plan: &FftPlan1D<F>,
+    slice: &mut [F::Complex],
+) {
+    assert!(
+        transform_block::<F, true, false, 16, 32, 1024, { table_lanes(16, 32) }>(
+            slice,
+            plan.base512_inverse_plan(),
+        ),
+        "invariant: the selected base-512 capability remains available"
+    );
+    F::normalize(slice, plan.len());
+}
+
+pub(super) fn exec_base512_inverse_unnorm<F: MixedRadixScalar<Complex = Complex<F>>>(
+    plan: &FftPlan1D<F>,
+    slice: &mut [F::Complex],
+) {
+    assert!(
+        transform_block::<F, true, false, 16, 32, 1024, { table_lanes(16, 32) }>(
+            slice,
+            plan.base512_inverse_plan(),
+        ),
+        "invariant: the selected base-512 capability remains available"
+    );
+}
+
 pub(super) fn exec_base128_forward<F: MixedRadixScalar<Complex = Complex<F>>>(
     plan: &FftPlan1D<F>,
     slice: &mut [F::Complex],
 ) {
     assert!(
-        transform_block::<F, false, false, 16, 256, { table_lanes(8, 16) }>(
+        transform_block::<F, false, false, 8, 16, 256, { table_lanes(8, 16) }>(
             slice,
             plan.base128_forward_plan(),
         ),
@@ -384,7 +424,7 @@ pub(super) fn exec_base128_inverse<F: MixedRadixScalar<Complex = Complex<F>>>(
     slice: &mut [F::Complex],
 ) {
     assert!(
-        transform_block::<F, true, false, 16, 256, { table_lanes(8, 16) }>(
+        transform_block::<F, true, false, 8, 16, 256, { table_lanes(8, 16) }>(
             slice,
             plan.base128_inverse_plan(),
         ),
@@ -401,7 +441,7 @@ pub(super) fn exec_base128_inverse_unnorm<F: MixedRadixScalar<Complex = Complex<
     slice: &mut [F::Complex],
 ) {
     assert!(
-        transform_block::<F, true, false, 16, 256, { table_lanes(8, 16) }>(
+        transform_block::<F, true, false, 8, 16, 256, { table_lanes(8, 16) }>(
             slice,
             plan.base128_inverse_plan(),
         ),

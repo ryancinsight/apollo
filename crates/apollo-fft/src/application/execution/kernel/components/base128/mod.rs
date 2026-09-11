@@ -6,7 +6,9 @@
 //! blocks' column passes. At four lanes every block loads its samples
 //! straight out of the parent, so the route is the blocks' own passes and
 //! nothing else; at eight lanes the blocks are gathered first, the
-//! measured better of the two (`transform_via_base`).
+//! measured better of the two (`transform_via_base`), and 512 is instead
+//! one sixteen-row block (`ROWS = 16` over 32-sample rows, the column
+//! pass a sixteen-point DIF), the gather and the combining sink gone.
 //!
 //! The register map selects a native width once: f64 retains the four-lane
 //! AVX2 layout, f32 uses the eight-lane AVX2 layout or the four-lane NEON
@@ -142,6 +144,7 @@ where
             F,
             INVERSE,
             MEASURE,
+            8,
             ROW_LEN,
             BLOCK_LANES,
             TABLE_LANES,

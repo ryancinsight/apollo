@@ -40,22 +40,29 @@ pub(crate) struct BasePlan<T, const ROWS: usize, const ROW_LEN: usize, const TAB
     pub(super) table: Box<[T; TABLE_LANES]>,
     /// Register layout used to build `table` and execute this plan.
     pub(super) lane_width: BaseLaneWidth,
-    /// `W_8^1` and `W_8^3` as complex values for the eight-row column pass's
-    /// splats; unread by the four-row pass, whose radix-4 column transform
+    /// The column network's twiddles as complex values for its splats:
+    /// `W_8^{1,3}` (the distance-4 stage) then `W_16^{1,3,5,7}` (the
+    /// sixteen-row form's distance-8 stage). The eight-row pass reads the
+    /// first two, the four-row pass none — its radix-4 column transform
     /// needs no multiply beyond its rotation.
-    pub(super) col: [[T; 2]; 2],
+    pub(super) col: [[T; 2]; 6],
 }
 
 impl<T: MixedRadixScalar, const ROWS: usize, const ROW_LEN: usize, const TABLE_LANES: usize>
     BasePlan<T, ROWS, ROW_LEN, TABLE_LANES>
 {
     /// Builds the immutable plan for the widest native layout this kernel
-    /// implements. Scalar fallback is not a base-kernel capability.
+    /// implements. Scalar fallback is not a base-kernel capability, and the
+    /// sixteen-row form is an eight-lane one: at four lanes its 512 samples
+    /// run as the two-block split over the 256 base (ADR 0061).
     pub(crate) fn new_if_supported<const INVERSE: bool>() -> Option<Self> {
         let eight_lanes_supported = size_of::<T>() == 4 && native_lanes_supported::<8, T>();
         let four_lanes_supported = !eight_lanes_supported && native_lanes_supported::<4, T>();
         let lane_width =
             select_lane_width(size_of::<T>(), eight_lanes_supported, four_lanes_supported)?;
+        if ROWS == 16 && lane_width != BaseLaneWidth::Eight {
+            return None;
+        }
         Some(Self::new::<INVERSE>(lane_width))
     }
 
@@ -136,7 +143,8 @@ impl<T: MixedRadixScalar, const ROWS: usize, const ROW_LEN: usize, const TABLE_L
             push_broadcast(w(3, 8));
         }
 
-        let col = [w(1, 8), w(3, 8)].map(|v| [T::from_precise(v[0]), T::from_precise(v[1])]);
+        let col = [w(1, 8), w(3, 8), w(1, 16), w(3, 16), w(5, 16), w(7, 16)]
+            .map(|v| [T::from_precise(v[0]), T::from_precise(v[1])]);
         let table: Box<[T; TABLE_LANES]> = table
             .into_boxed_slice()
             .try_into()

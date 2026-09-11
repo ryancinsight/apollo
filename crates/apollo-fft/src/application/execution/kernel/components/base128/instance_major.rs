@@ -132,8 +132,9 @@ pub(crate) const fn table_lanes(rows: usize, row_len: usize) -> usize {
 
 /// The base transform as a lane kernel over interleaved samples: `ROWS`
 /// stride-`ROWS` subsequences of `ROW_LEN`, so `ROWS = 8` over sixteen is
-/// the 128-point transform, `ROWS = 4` the 64-point one, and `ROWS = 8`
-/// over thirty-two the 256-point one (ADR 0061). The row machinery is
+/// the 128-point transform, `ROWS = 4` the 64-point one, `ROWS = 8` over
+/// thirty-two the 256-point one (ADR 0061), and `ROWS = 16` over
+/// thirty-two the 512-point one at eight lanes. The row machinery is
 /// identical at every length; the column pass is a lane-wise DIF of length
 /// `ROWS`.
 ///
@@ -347,7 +348,7 @@ where
     }
 }
 
-/// Runs one eight-row base transform in place.
+/// Runs one base transform of `ROWS x ROW_LEN` samples in place.
 ///
 /// # Panics
 ///
@@ -356,18 +357,19 @@ pub(crate) fn transform_block<
     T,
     const INVERSE: bool,
     const MEASURE: bool,
+    const ROWS: usize,
     const ROW_LEN: usize,
     const LANES: usize,
     const TABLE_LANES: usize,
 >(
     data: &mut [Complex<T>],
-    plan: &BasePlan<T, 8, ROW_LEN, TABLE_LANES>,
+    plan: &BasePlan<T, ROWS, ROW_LEN, TABLE_LANES>,
 ) -> bool
 where
     T: MixedRadixScalar,
     Complex<T>: eunomia::layout::Pod,
 {
-    transform_base::<T, INVERSE, MEASURE, 8, ROW_LEN, LANES, TABLE_LANES, _, _>(
+    transform_base::<T, INVERSE, MEASURE, ROWS, ROW_LEN, LANES, TABLE_LANES, _, _>(
         data,
         SelfSplit::<1, 0>,
         plan,
@@ -375,12 +377,16 @@ where
     )
 }
 
+/// The 512-point base plan: sixteen rows of thirty-two, eight lanes only.
+pub(crate) type Plan512<T> = BasePlan<T, 16, 32, { table_lanes(16, 32) }>;
 #[cfg(test)]
 pub(crate) type Plan256<T> = BasePlan<T, 8, 32, { table_lanes(8, 32) }>;
 pub(crate) type Plan128<T> = BasePlan<T, 8, 16, { table_lanes(8, 16) }>;
 /// The 64-point base plan: four rows of sixteen.
 pub(crate) type Plan64<T> = BasePlan<T, 4, 16, { table_lanes(4, 16) }>;
-/// Directional state for the 128-point base.
+/// Directional state for the 512-point base.
+pub(crate) type State512<T> = BasePlanState<T, 16, 32, { table_lanes(16, 32) }>;
+/// Directional state for the 256-point base and the split routes over it.
 pub(crate) type State256<T> = BasePlanState<T, 8, 32, { table_lanes(8, 32) }>;
 pub(crate) type State128<T> = BasePlanState<T, 8, 16, { table_lanes(8, 16) }>;
 /// Directional state for the 64-point base.
@@ -426,6 +432,30 @@ where
     Complex<T>: eunomia::layout::Pod,
 {
     transform_base::<T, INVERSE, MEASURE, 8, 32, 512, { table_lanes(8, 32) }, _, _>(
+        data,
+        SelfSplit::<1, 0>,
+        plan,
+        DirectSink,
+    )
+}
+
+#[cfg(test)]
+/// Runs the 512-point base butterfly: sixteen stride-16 subsequences of
+/// thirty-two, the row phases over `4 x 8` and the sixteen-point column
+/// pass, at eight lanes only.
+///
+/// # Panics
+///
+/// If `data` is not exactly 512 samples.
+pub(crate) fn transform_512<T, const INVERSE: bool, const MEASURE: bool>(
+    data: &mut [Complex<T>],
+    plan: &Plan512<T>,
+) -> bool
+where
+    T: MixedRadixScalar,
+    Complex<T>: eunomia::layout::Pod,
+{
+    transform_base::<T, INVERSE, MEASURE, 16, 32, 1024, { table_lanes(16, 32) }, _, _>(
         data,
         SelfSplit::<1, 0>,
         plan,

@@ -3,6 +3,7 @@
 
 use super::instance_major::{transform_128, Plan128};
 use super::instance_major::{transform_256, Plan256};
+use super::instance_major::{transform_512, Plan512};
 use super::instance_major::{transform_64, Plan64};
 use eunomia::{Complex, Complex32, Complex64};
 use std::f64::consts::TAU;
@@ -78,7 +79,11 @@ fn reduced_tolerance(input: &[Complex32]) -> f32 {
 /// the incumbent twiddle route; the fallback asserts that route's round-trip
 /// correctness instead of merely asserting twiddles exist.
 fn assert_incumbent_route_round_trips(plan: &crate::FftPlan1D<f64>, n: usize) {
-    if plan.base128.is_some() || plan.base256.is_some() || plan.base64.is_some() {
+    if plan.base128.is_some()
+        || plan.base256.is_some()
+        || plan.base512.is_some()
+        || plan.base64.is_some()
+    {
         return;
     }
     let source = signal(n);
@@ -151,6 +156,66 @@ where
     assert!(
         error <= bound,
         "base-256 transform differs by {error:.3e} > {bound:.3e}"
+    );
+}
+
+fn assert_base512_matches_direct<T, const INVERSE: bool>(unit_roundoff: f64, must_run: bool)
+where
+    T: crate::application::execution::kernel::mixed_radix::MixedRadixScalar
+        + eunomia::FloatElement
+        + Into<f64>,
+    Complex<T>: eunomia::layout::Pod,
+{
+    let source = signal(512);
+    let mut actual: Vec<Complex<T>> = source
+        .iter()
+        .map(|c| Complex::new(T::from_f64(c.re), T::from_f64(c.im)))
+        .collect();
+    let Some(plan) = Plan512::<T>::new_if_supported::<INVERSE>() else {
+        assert!(
+            !must_run,
+            "an eight-lane host must provide the sixteen-row base"
+        );
+        return;
+    };
+    let untouched = actual.clone();
+    if !transform_512::<T, INVERSE, false>(&mut actual, &plan) {
+        assert!(
+            !must_run,
+            "the eight-lane width must run the sixteen-row form"
+        );
+        assert_eq!(
+            actual, untouched,
+            "a width decline must not mutate the input"
+        );
+        return;
+    }
+    let expected = dft(&source, INVERSE);
+    let actual: Vec<Complex64> = actual
+        .iter()
+        .map(|c| Complex64::new(c.re.into(), c.im.into()))
+        .collect();
+    let error = worst(&actual, &expected);
+    // Nine levels of butterflies and two twiddle layers: eighteen roundings
+    // of the input scale, against the direct sum's own.
+    let bound = tolerance(&source) * (unit_roundoff / f64::EPSILON).max(1.0);
+    assert!(
+        error <= bound,
+        "base-512 transform differs by {error:.3e} > {bound:.3e}"
+    );
+}
+
+#[test]
+fn base512_runs_at_eight_lanes_and_matches_the_direct_transform() {
+    use crate::application::execution::kernel::components::lane_capability::native_lanes_supported;
+    let eight_lanes = native_lanes_supported::<8, f32>();
+    assert_base512_matches_direct::<f32, false>(f64::from(f32::EPSILON), eight_lanes);
+    assert_base512_matches_direct::<f32, true>(f64::from(f32::EPSILON), eight_lanes);
+    // The eight-byte scalar is a four-lane plan: the sixteen-row form
+    // declines rather than running at that width.
+    assert!(
+        Plan512::<f64>::new_if_supported::<false>().is_none(),
+        "the sixteen-row base is an eight-lane form"
     );
 }
 
@@ -570,10 +635,14 @@ fn reduced_dynamic_split_matches_the_direct_transform() {
         crate::Shape1D::new(N).expect("invariant: shape lengths are non-zero"),
     );
     let mut actual = source.clone();
-    let Some(_) = plan.base256.as_ref() else {
+    if plan.base512.is_none() && plan.base256.is_none() {
         assert_eq!(actual, source, "a width decline must not mutate the input");
         return;
-    };
+    }
+    assert!(
+        plan.base512.is_some() != plan.base256.is_some(),
+        "512 is one sixteen-row block or the two-block split, never both"
+    );
 
     plan.forward_complex_slice_inplace(&mut actual);
     let expected = dft_reduced(&source, false);
