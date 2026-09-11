@@ -106,16 +106,19 @@ const REV2: [usize; 4] = [0, 2, 1, 3];
 /// First chunk of the mixed-radix twiddles: the table opens with them.
 const MIX_CH: usize = 0;
 
-/// Chunk of the broadcast `W_16^1`; `W_16^3`, `-W_16^1`, and the real
-/// `sqrt(2)/2` broadcast follow at `+2`, `+4`, and `+6`.
-const fn b16_1_ch(rows: usize) -> usize {
-    (rows - 1) * 16
+/// Chunk of the row layer's first broadcast twiddle (`W_16^1` for
+/// sixteen-sample rows; `W_16^3`, `-W_16^1`, and the real `sqrt(2)/2`
+/// broadcast follow at `+2`, `+4`, and `+6`), after the `(rows - 1) *
+/// row_len` mixed-radix chunks.
+const fn layer_ch(rows: usize, row_len: usize) -> usize {
+    (rows - 1) * row_len
 }
 
-/// Lane count of the table for `rows` subsequences: `(rows - 1) * 8`
-/// mixed-radix dup-split pairs, three broadcast pairs, one real broadcast.
-pub(crate) const fn table_lanes(rows: usize) -> usize {
-    ((rows - 1) * 16 + 7) * 4
+/// Lane count of the table for `rows` subsequences of `row_len` samples:
+/// `(rows - 1) * row_len / 2` mixed-radix dup-split pairs, then the row
+/// layer's broadcasts (three pairs and one real for sixteen-sample rows).
+pub(crate) const fn table_lanes(rows: usize, row_len: usize) -> usize {
+    ((rows - 1) * row_len + 7) * 4
 }
 
 /// The base transform as a lane kernel over interleaved samples: `ROWS`
@@ -129,6 +132,7 @@ pub(crate) struct BaseTransform<
     const INVERSE: bool,
     const MEASURE_PHASES: bool,
     const ROWS: usize,
+    const ROW_LEN: usize,
     const LANES: usize,
     const TABLE_LANES: usize,
     S,
@@ -136,7 +140,7 @@ pub(crate) struct BaseTransform<
     /// Interleaved samples. Fixed-size for the reason [`BasePlan::table`]
     /// documents: the phase-one loads index this from inside a loop.
     pub(crate) data: &'a mut [T; LANES],
-    pub(crate) plan: &'a BasePlan<T, ROWS, TABLE_LANES>,
+    pub(crate) plan: &'a BasePlan<T, ROWS, ROW_LEN, TABLE_LANES>,
     /// Type-selected output strategy. Direct, pair, and four-block-final
     /// stores are separate monomorphizations, so no mode branch reaches the
     /// column loop.
@@ -148,10 +152,12 @@ impl<
         const INVERSE: bool,
         const MEASURE_PHASES: bool,
         const ROWS: usize,
+        const ROW_LEN: usize,
         const LANES: usize,
         const TABLE_LANES: usize,
         S,
-    > LaneKernel<T> for BaseTransform<'_, T, INVERSE, MEASURE_PHASES, ROWS, LANES, TABLE_LANES, S>
+    > LaneKernel<T>
+    for BaseTransform<'_, T, INVERSE, MEASURE_PHASES, ROWS, ROW_LEN, LANES, TABLE_LANES, S>
 where
     T: LaneScalar + MixedRadixScalar,
     S: StoreSink<T>,
@@ -217,8 +223,9 @@ where
         // 2 KB `memset` the disassembly showed costing about 7% of the
         // transform at every size this kernel serves
         // (gap_audit.md#base-kernel-memset).
-        debug_assert!(LANES == 32 * ROWS && TABLE_LANES == table_lanes(ROWS));
-        let b16_1 = b16_1_ch(ROWS);
+        debug_assert!(LANES == 2 * ROW_LEN * ROWS && TABLE_LANES == table_lanes(ROWS, ROW_LEN));
+        let b16_1 = layer_ch(ROWS, ROW_LEN);
+        let chunks_per_row = ROW_LEN / 2;
         let mut staging_uninit = core::mem::MaybeUninit::<[T; LANES]>::uninit();
         // SAFETY: the reference is used only for writes until every lane is
         // initialized. Phase 1 stores chunk `2p*8 + g` and `(2p+1)*8 + g`
@@ -325,10 +332,10 @@ where
                         let b = o1[q].into_interleaved();
                         hi_mask
                             .blend(b.swap_pairs(), a)
-                            .store_to_view_chunk(&mut stg, 2 * p * 8 + g);
+                            .store_to_view_chunk(&mut stg, 2 * p * chunks_per_row + g);
                         hi_mask
                             .blend(b, a.swap_pairs())
-                            .store_to_view_chunk(&mut stg, (2 * p + 1) * 8 + g);
+                            .store_to_view_chunk(&mut stg, (2 * p + 1) * chunks_per_row + g);
                     }
                 }
             }
@@ -346,7 +353,7 @@ where
         };
         // Phase 3: the shared lane-wise `ROWS`-point DIF column pass, eight
         // groups of two interleaved complex samples at this width.
-        column::column_pass::<T, A, S, INVERSE, ROWS, 8>(
+        column::column_pass::<T, A, S, INVERSE, ROWS, ROW_LEN>(
             simd,
             staging.as_slice(),
             self.plan.table.as_slice(),
@@ -369,12 +376,13 @@ fn transform_base<
     const INVERSE: bool,
     const MEASURE_PHASES: bool,
     const ROWS: usize,
+    const ROW_LEN: usize,
     const LANES: usize,
     const TABLE_LANES: usize,
     S,
 >(
     data: &mut [Complex<T>],
-    plan: &BasePlan<T, ROWS, TABLE_LANES>,
+    plan: &BasePlan<T, ROWS, ROW_LEN, TABLE_LANES>,
     sink: S,
 ) -> bool
 where
@@ -400,6 +408,7 @@ where
             INVERSE,
             MEASURE_PHASES,
             ROWS,
+            ROW_LEN,
             LANES,
             TABLE_LANES,
             S,
@@ -416,6 +425,7 @@ where
             INVERSE,
             MEASURE_PHASES,
             ROWS,
+            ROW_LEN,
             LANES,
             TABLE_LANES,
             S,
@@ -430,6 +440,7 @@ where
             INVERSE,
             MEASURE_PHASES,
             ROWS,
+            ROW_LEN,
             LANES,
             TABLE_LANES,
             S,
@@ -457,7 +468,7 @@ where
     T: MixedRadixScalar,
     Complex<T>: eunomia::layout::Pod,
 {
-    transform_base::<T, INVERSE, MEASURE, 8, 256, { table_lanes(8) }, _>(data, plan, sink)
+    transform_base::<T, INVERSE, MEASURE, 8, 16, 256, { table_lanes(8, 16) }, _>(data, plan, sink)
 }
 
 /// Runs block three of a four-block split and stores the final four quarters.
@@ -474,17 +485,17 @@ where
     T: MixedRadixScalar,
     Complex<T>: eunomia::layout::Pod,
 {
-    transform_base::<T, INVERSE, MEASURE, 8, 256, { table_lanes(8) }, _>(data, plan, sink)
+    transform_base::<T, INVERSE, MEASURE, 8, 16, 256, { table_lanes(8, 16) }, _>(data, plan, sink)
 }
 
 /// The 128-point base plan: eight rows of sixteen.
-pub(crate) type Plan128<T> = BasePlan<T, 8, { table_lanes(8) }>;
+pub(crate) type Plan128<T> = BasePlan<T, 8, 16, { table_lanes(8, 16) }>;
 /// The 64-point base plan: four rows of sixteen.
-pub(crate) type Plan64<T> = BasePlan<T, 4, { table_lanes(4) }>;
+pub(crate) type Plan64<T> = BasePlan<T, 4, 16, { table_lanes(4, 16) }>;
 /// Directional state for the 128-point base.
-pub(crate) type State128<T> = BasePlanState<T, 8, { table_lanes(8) }>;
+pub(crate) type State128<T> = BasePlanState<T, 8, 16, { table_lanes(8, 16) }>;
 /// Directional state for the 64-point base.
-pub(crate) type State64<T> = BasePlanState<T, 4, { table_lanes(4) }>;
+pub(crate) type State64<T> = BasePlanState<T, 4, 16, { table_lanes(4, 16) }>;
 
 /// Runs the 128-point base butterfly when a supported native layout is
 /// available.
@@ -500,7 +511,9 @@ where
     T: MixedRadixScalar,
     Complex<T>: eunomia::layout::Pod,
 {
-    transform_base::<T, INVERSE, MEASURE, 8, 256, { table_lanes(8) }, _>(data, plan, DirectSink)
+    transform_base::<T, INVERSE, MEASURE, 8, 16, 256, { table_lanes(8, 16) }, _>(
+        data, plan, DirectSink,
+    )
 }
 
 /// Runs the 64-point base butterfly: the same construction over four
@@ -517,5 +530,7 @@ where
     T: MixedRadixScalar,
     Complex<T>: eunomia::layout::Pod,
 {
-    transform_base::<T, INVERSE, false, 4, 128, { table_lanes(4) }, _>(data, plan, DirectSink)
+    transform_base::<T, INVERSE, false, 4, 16, 128, { table_lanes(4, 16) }, _>(
+        data, plan, DirectSink,
+    )
 }
