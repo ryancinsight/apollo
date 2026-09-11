@@ -2,6 +2,7 @@
 
 use super::store::SplitSinks;
 use super::table_lanes;
+use crate::application::execution::kernel::components::aligned::CacheLineAligned;
 use crate::application::execution::kernel::components::lane_capability::native_lanes_supported;
 use crate::application::execution::kernel::mixed_radix::MixedRadixScalar;
 use core::mem::size_of;
@@ -29,15 +30,6 @@ const fn select_lane_width(
         None
     }
 }
-
-/// `A` placed on a 64-byte boundary. The allocator places a `Box` at 16
-/// bytes and the compiler a stack array at its scalar's alignment, so
-/// whether a 32-byte vector load from a table or the staging buffer
-/// splits a cache line is the heap's or the frame's luck: the pinned probe
-/// read the same kernel 8 to 30% apart through two allocations of one
-/// table. The wrapper makes the boundary a type fact.
-#[repr(C, align(64))]
-pub(super) struct CacheLineAligned<A>(pub(super) A);
 
 /// The widest native layout the base kernel runs for `T` on this host, or
 /// none where neither width is native.

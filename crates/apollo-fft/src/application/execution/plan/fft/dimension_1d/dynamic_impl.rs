@@ -15,7 +15,8 @@ use super::executors::{
     exec_base256_inverse, exec_base256_inverse_unnorm, exec_base512_forward, exec_base512_inverse,
     exec_base512_inverse_unnorm, exec_base64_forward, exec_base64_inverse,
     exec_base64_inverse_unnorm, exec_bluestein_forward, exec_bluestein_inverse,
-    exec_bluestein_inverse_unnorm, exec_composite_forward, exec_composite_inverse,
+    exec_bluestein_inverse_unnorm, exec_column180_forward, exec_column180_inverse,
+    exec_column180_inverse_unnorm, exec_composite_forward, exec_composite_inverse,
     exec_composite_inverse_unnorm, exec_four_step, exec_good_thomas_forward,
     exec_good_thomas_inverse, exec_good_thomas_inverse_unnorm, exec_identity, exec_pot_forward_2,
     exec_pot_forward_4, exec_pot_forward_512, exec_pot_forward_generic, exec_pot_forward_sized,
@@ -27,6 +28,7 @@ use super::executors::{
     pot_executors_64, pot_executors_8, runtime_tiny_direct_dispatch,
 };
 use super::strategy::{arc_to_cow, generic_four_step_applies, PlanStrategy};
+use crate::application::execution::kernel::components::column_route::State180;
 use crate::application::execution::kernel::mixed_radix::scalar::plan_scratch::PlanScratch;
 use crate::application::execution::plan::fft::layout::with_c_order_view;
 
@@ -56,6 +58,10 @@ pub struct FftPlan1D<F: MixedRadixScalar> {
     /// at either native width (ADR 0061).
     pub(crate) base512: Option<Arc<State512<F>>>,
     pub(crate) base64: Option<Arc<State64<F>>>,
+    /// The 180 column route (ADR 0062): five register-resident 36-point
+    /// transforms under a radix-5 column pass, built where the vector frame
+    /// holds four complexes a register.
+    pub(crate) column180: Option<Arc<State180<F>>>,
 
     // Function pointers for execution routing, selected at construction for
     // this length on this host. The framed small power-of-two executors carry
@@ -81,6 +87,7 @@ impl<F: MixedRadixScalar> Clone for FftPlan1D<F> {
             base256: self.base256.clone(),
             base512: self.base512.clone(),
             base64: self.base64.clone(),
+            column180: self.column180.clone(),
             // `OnceLock: Clone` clones the initialized state, so a clone of a
             // plan that has run an inverse keeps the table handle.
             forward_impl: self.forward_impl,
@@ -151,6 +158,12 @@ impl<F: MixedRadixScalar<Complex = Complex<F>>> FftPlan1D<F> {
             .expect("invariant: base-128 executor requires its plan state")
     }
 
+    pub(super) fn column180_state(&self) -> &State180<F> {
+        self.column180
+            .as_deref()
+            .expect("invariant: the 180 executor requires its plan state")
+    }
+
     /// Create a new 1D plan.
     #[must_use]
     pub fn new(shape: Shape1D) -> Self {
@@ -189,6 +202,14 @@ impl<F: MixedRadixScalar<Complex = Complex<F>>> FftPlan1D<F> {
         // otherwise runs six ping-pong Stockham passes over 1 KB.
         let base64 = if n == 64 {
             State64::new_if_supported(n).map(Arc::new)
+        } else {
+            None
+        };
+        // 180 is five 36-point transforms held in registers under a radix-5
+        // column pass where the frame holds four complexes a register (ADR
+        // 0062); the composite route stays the fallback.
+        let column180 = if n == 180 {
+            State180::new_if_supported().map(Arc::new)
         } else {
             None
         };
@@ -519,7 +540,11 @@ impl<F: MixedRadixScalar<Complex = Complex<F>>> FftPlan1D<F> {
             }
             PlanStrategy::Composite { radices } => {
                 radices_field = Some(Cow::clone(radices));
-                if base128.is_some() {
+                if column180.is_some() {
+                    forward_impl = exec_column180_forward::<F>;
+                    inverse_impl = exec_column180_inverse::<F>;
+                    inverse_unnorm_impl = exec_column180_inverse_unnorm::<F>;
+                } else if base128.is_some() {
                     forward_impl = exec_base128_forward::<F>;
                     inverse_impl = exec_base128_inverse::<F>;
                     inverse_unnorm_impl = exec_base128_inverse_unnorm::<F>;
@@ -554,6 +579,7 @@ impl<F: MixedRadixScalar<Complex = Complex<F>>> FftPlan1D<F> {
             base256,
             base512,
             base64,
+            column180,
             forward_impl,
             inverse_impl,
             inverse_unnorm_impl,
