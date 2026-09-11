@@ -52,17 +52,12 @@ impl<T: MixedRadixScalar, const ROWS: usize, const ROW_LEN: usize, const TABLE_L
     BasePlan<T, ROWS, ROW_LEN, TABLE_LANES>
 {
     /// Builds the immutable plan for the widest native layout this kernel
-    /// implements. Scalar fallback is not a base-kernel capability, and the
-    /// sixteen-row form is an eight-lane one: at four lanes its 512 samples
-    /// run as the two-block split over the 256 base (ADR 0061).
+    /// implements. Scalar fallback is not a base-kernel capability.
     pub(crate) fn new_if_supported<const INVERSE: bool>() -> Option<Self> {
         let eight_lanes_supported = size_of::<T>() == 4 && native_lanes_supported::<8, T>();
         let four_lanes_supported = !eight_lanes_supported && native_lanes_supported::<4, T>();
         let lane_width =
             select_lane_width(size_of::<T>(), eight_lanes_supported, four_lanes_supported)?;
-        if ROWS == 16 && lane_width != BaseLaneWidth::Eight {
-            return None;
-        }
         Some(Self::new::<INVERSE>(lane_width))
     }
 
