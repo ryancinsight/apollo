@@ -1025,3 +1025,41 @@ base); the two-block form of the step is deleted, and the step serves
   count is not what that core charges the passes for; the next spike is
   an instruction census of the pass loop under the two cores' port models
   (`APOLLO-CHAIN-PASS-E-CORE-CENSUS`).
+
+- **2026-09-15, what the efficiency core charges the column pass for
+  (`APOLLO-CHAIN-PASS-E-CORE-CENSUS`, spike).** The census
+  (`scripts/codegen_attribution.py loops`, the AVX2 frames of the release
+  build; the eight-lane `f32` loop from the test harness assembly, the
+  four-lane `f64` loop from the library's): the `f32` radix-8 pass runs
+  143 instructions a chunk of eight registers, 114 of
+  them vector — 24 add/sub, 18 multiply
+  and FMA, 33 shuffles, 27 loads and 9
+  stores of which 11 are spill traffic — with a critical path
+  of 37 cycles against an issue bound of 29 to
+  38 (four- and three-wide): issue-bound, not latency-bound.
+  Skymont's execution units are 128 bits wide and "256-bit instructions
+  execute as two micro-ops" (Chips and Cheese, "Skymont: Intel's E-Cores
+  reach for the Sky", section Floating Point and Vector Execution; the
+  same section: "scheduling capacity for 256-bit operations remains
+  mediocre"), so an issue-bound loop of 256-bit instructions pays about
+  twice its performance-core issue time there, and with the clock ratio
+  (about 1.24) that is the measured 2.0 to 2.2x — at every level and
+  stride, since the bound is the instruction count rather than the memory
+  pattern; the dup-split trial moved the innermost pass by the share of
+  instructions it removed. The four-step's batched planar kernel is FMA-
+  and load-heavy with few shuffles and scales at 1.19x, the clock ratio:
+  latency-bound on its strided loads, which is also why it loses 17% to
+  the chain on the performance core. The removable share of the pass is
+  its spill traffic (11 of 36 memory
+  operations a chunk at eight lanes, 11 of
+  36 at four: eight inputs, seven twiddles and
+  four eighth registers against sixteen — `APOLLO-CHAIN-PASS-SPILLS`).
+  The census also found the four-lane eight-block interleave calling
+  hermes' `interleave_pairs` out of line 4 times a chunk
+  (86 instructions, 40 spill moves, no shuffle in
+  the frame): the AVX2 and AVX-512 impls lacked the target-feature gate
+  and the inline hint their siblings carry, fixed upstream in hermes #175
+  (`APOLLO-HERMES-INTERLEAVE-IN-FRAME` advances the lock and re-reads the
+  `f64` chain, whose interleaves the meter charged 273k cycles at 131072
+  against the `f32` form's 64k). The eight-lane interleave runs in its
+  frame (35 instructions, 0 calls).
