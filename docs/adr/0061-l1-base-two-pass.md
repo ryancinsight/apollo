@@ -977,3 +977,29 @@ base); the two-block form of the step is deleted, and the step serves
   (`large-chain-2026-09-15/`): f64 262144 takes the chain at four lanes (2% under the four-step on both cores, the pattern of 131072) and f32 262144 keeps the four-step (the chain reads 16% over on the efficiency core there); 524288 keeps the four-step on both widths (the chain of four passes reads within 4% of it either way, 4% over on the efficiency core at f64). A first 524288 measurement read the chain at 0.08 of RustFFT: the plan selected the base state without an executor arm for 2^19 and the generic route ran with no twiddle table, so every chain length now carries its oracles through 524288 and that campaign is not read. Standing after
   (`large-chain2-2026-09-15 (524288: large-standing-2026-09-15)`, apollo / RustFFT, performance / efficiency core):
   `f64` 65536 0.95 / 0.96; `f32` 65536 0.97 / 0.91; `f64` 131072 1.00 / 1.03; `f32` 131072 1.23 / 0.85; `f64` 262144 1.00 / 0.99; `f32` 262144 0.89 / 0.87; `f64` 524288 1.08 / 1.10; `f32` 524288 1.03 / 1.01.
+
+- **2026-09-15, why the four-step keeps `f32` 131072 at eight lanes
+  (`APOLLO-FOUR-STEP-E-CORE-F32-131072`, spike).** The chain's per-level
+  phases on both cores (`output/apollo-base128/chain_phases_2026-09-15.txt`,
+  the `MEASURE` variant of `column_first::chain`, TSC cycles a step, 64
+  transforms): at `f32` 131072 the column passes cost
+  2.03x / 2.19x / 2.08x their
+  performance-core cycles on the efficiency core at levels 0, 1 and 2
+  (block strides 128 KB, 16 KB and 2 KB), the base blocks
+  1.67x and the interleaves 1.24x /
+  1.13x / 1.79x, against a clock ratio of
+  about 1.24. The aliasing hypothesis is falsified: the 2 KB-stride level
+  maps its eight streams to different L1 sets and costs the same 2x as the
+  4 KB-aliased levels. The passes are throughput-bound in the mix the
+  efficiency core runs at half rate (the 256-bit shuffles of the
+  interleaved-twiddle complex multiply and of the eighths, beside the
+  FMAs), so the chain's transform runs 1.69x slower there than on the
+  performance core while the four-step's radix-2 split over two planar
+  batched 65536 transforms runs 1.19x slower — the four-step is bound by
+  something core-insensitive (its strided transposes), which is also why
+  it loses to the chain by 17% on the performance core. `f64` shows the
+  same shape with the outermost pass memory-bound at 2 MB (1.0x). The
+  follow-up is a chain whose passes carry fewer shuffles
+  (`APOLLO-CHAIN-DUP-SPLIT-ROWS`): the sinks already store their twiddles
+  dup-split so the complex multiply needs no swap, the chain rows are
+  interleaved.
