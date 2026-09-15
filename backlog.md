@@ -32,14 +32,6 @@
 - **Evidence budget:** two sessions. **Decision deliverable:** an ADR selecting one estimator (or none) with the measured error table; the accepted one becomes a DoR item.
 - **Risk/class:** [patch] spike. **Dependencies:** access to the 2020 reference. **Verification:** oracle errors reported with derived uncertainty per numerical discipline.
 
-<a id="apollo-semver-locked-inputs"></a>
-## APOLLO-SEMVER-LOCKED-INPUTS — Compare APIs without provider re-resolution [patch] — todo
-- **Scope:** consume an Atlas-owned exact-lock API generation path; no duplicate member SemVer implementation.
-- **Failure:** [run 34078401287](https://github.com/ryancinsight/apollo/actions/runs/34078401287) fails resolving `moirai-runtime = ^0.5.0` before comparison; the checker discards generated locks.
-- **Acceptance:** both API artifacts identify their source revision, committed lock and toolchain; compilation failure remains distinct from a detected API break.
-- **Verification:** exact-lock artifact generation and comparator tests in the shared owner, then the Apollo caller. Local FFT JSON comparison already passes 223 checks; it does not cover every published workspace package.
-- **Dependencies:** Atlas shared workflow capability and caller pin update; root publication remains subject to the previously recorded shared-tree branch approval.
-
 <a id="apollo-workspace-instrumented-verification"></a>
 ## APOLLO-WORKSPACE-INSTRUMENTED-VERIFICATION — Close instrumented workspace coverage [patch] — blocked
 - **Scope:** borrowed FourStep workspace boundaries and existing SIMD kernels; [ADR 0048](docs/adr/0048-worker-scratch-lifetime.md).
@@ -141,6 +133,27 @@
 - Acceptance: clean metadata and package archives resolve Mnemosyne and Moirai through their published package identities without changing Rust imports; the workspace gate remains green and reusable crates publish in dependency order through the OIDC release workflow.
 - Status: the exact external graph resolves the current Mnemosyne, Moirai, Hermes, Leto, and Hephaestus sources; format, locked `apollo-fft` check, and 400/400 focused Nextest cases pass. The first archive dry run exposed sibling-source includes in `apollo-fft`; the primitive table now crosses the package boundary through `apollo-fft-macros` 0.2.0 code generation and runtime-only integer math is package-owned. Exact package verification, hosted verification, and merge remain.
 - **State (2026-09-01, Claude `/root`, claim four weeks stale).** The workspace half is done: `mnemosyne = { package = "mnemosyne-memory" }` and `moirai = { package = "moirai-runtime" }` bind the published identities at the root (`0917a6a6`) without changing imports, and the gate is green. The remaining half — publishing through the OIDC release workflow — is the release state, which needs explicit authority; re-open trigger: a release authorization naming the crates.
+
+<a id="apollo-real-2d-half-api"></a>
+## APOLLO-REAL-2D-HALF-API — Give the 2-D real transforms a half-spectrum API [minor] — todo
+- **Finding:** `fft_1d_slice_half_into`/`ifft_1d_slice_half_into` and `fft_3d_array_half_into`/`ifft_3d_array_half_into` exist; the 2-D real entry points (`fft_2d_array`, `ifft_2d_array` and their `_into` forms) still widen to complex and transform every column at full length, the 2x arithmetic the split removes elsewhere (residual of `#atlas-apollo-real-split-coverage`).
+- **Outcome:** `fft_2d_array_half_into` / `ifft_2d_array_half_into` over `[nx, ny/2 + 1]`, the last axis split as the 3-D forms split `z`, and the full-spectrum 2-D real entries routed through them where the split admits `ny`.
+- **Acceptance:** sample-for-sample agreement with the 3-D forms on a `[nx, ny, 1]` field and with the full-spectrum route; the `_into` forms allocate nothing once warm; the census extended with the 2-D real rows shows the 1-D gain.
+- **Risk / change class:** [minor]; additive public contract, the 3-D half API as its template.
+
+<a id="apollo-real-static-split-bound"></a>
+## APOLLO-REAL-STATIC-SPLIT-BOUND — Let the static-length real transforms take the split [major] — todo
+- **Finding:** `fft_1d_array_static_into` and `ifft_1d_array_static_into` bound `T: RealFftData` only, so they have no plan provider for the half-length plan and keep the widening path at every length (recorded under `#atlas-apollo-real-split-coverage`).
+- **Outcome:** the static forms take the split where it admits `N`, through a `StaticFftPlan1D<_, N / 2>` or a `PlanCacheProvider` bound — the bound change is the decision.
+- **Acceptance:** agreement with the dynamic split forms at every admitted `N`; `cargo-semver-checks` names the bound change as the one [major] surface; migration guide for the two entry points.
+- **Risk / change class:** [major]; ADR for the bound choice.
+
+<a id="apollo-stockham-module-allows"></a>
+## APOLLO-STOCKHAM-MODULE-ALLOWS — Retire the module-scoped lint allows in the Stockham kernels [patch] — todo
+- **Finding:** `stockham/mod.rs` and `stockham/stage.rs` open with `#![allow(clippy::many_single_char_names)]`, and `lib.rs` carries the crate-level twin; `#atlas-apollo-butterfly-blanket-allows` closed the butterfly files but these two modules kept the blanket form.
+- **Outcome:** per-site `#[expect(clippy::many_single_char_names, reason = "...")]` on the kernels whose signal-flow names are the domain form, the module-scoped allows deleted, and the crate-level entry reviewed against the workspace lint table.
+- **Acceptance:** no `#![allow(clippy::many_single_char_names)]` in the crate; clippy warning-clean; the conformance scan's `#[allow]` count falls by the sites removed.
+- **Risk / change class:** [patch]; lint hygiene only.
 
 # Done
 
@@ -416,3 +429,4 @@ One line an item: the anchor, the identity, the outcome with its commit or PR; t
 <a id="atlas-apollo-real-split-coverage"></a>- **ATLAS-APOLLO-REAL-SPLIT-COVERAGE-2026-08-25** — Extend the split past the 1-D forward slice [patch]. [#469](https://github.com/ryancinsight/apollo/pull/469): the full-spectrum 1-D inverses (`ifft_1d_slice`, `_array`, `_array_into`, `_array_into_spectrum_scratch`, `_leto`) read only the lower half where the split admits the length, bit-identical to the half inverse for f64/f32/F16, caller-owned forms allocation-free; census against the widened route 1.07x at 1024, 1.27x at 4096, 1.35x at 16384, 3.7x at 65536, 1.9x at 262144. The forward paths took the split earlier and the 3-D real paths have their half APIs. Residual, filed separately when picked up: the static-length variants need a plan provider bound ([major]), and a 2-D real half API does not exist yet ([minor]).
 <a id="atlas-apollo-caches-misc-junk-drawer"></a>- **ATLAS-APOLLO-CACHES-MISC-JUNK-DRAWER** — Split `mixed_radix/caches/misc.rs` by concern [patch]. [#470](https://github.com/ryancinsight/apollo/pull/470): `caches/misc.rs` (449 lines) splits into `radices.rs`, `factors.rs`, `pfa.rs` and `rader.rs`, bodies unchanged, the manifest re-exporting the same eight names so no caller moves; no `helpers`, `utils`, `misc` or `common` module remains in apollo-fft.
 <a id="atlas-apollo-safety-comment-ratchet"></a>- **ATLAS-APOLLO-SAFETY-COMMENT-RATCHET** — Ratchet SAFETY-comment coverage over unsafe sites [patch]. Reached zero in [#472](https://github.com/ryancinsight/apollo/pull/472) after the Cook-Toom slice (#466): `scripts/safety_ratchet.py check` counts 0 uncommented `unsafe` blocks across the workspace crates against a baseline of 0, from 406 in 35 files when the instrument landed (2026-09-01). Three release-mode soundness holes surfaced on the way and are fixed in the same PR — the Stockham entries, the two-by-prime entries and the Bluestein fold checked their lengths only in debug before slicing unchecked. The check stays wired in the `ci` workflow as the guard against regrowth.
+<a id="apollo-semver-locked-inputs"></a>- **APOLLO-SEMVER-LOCKED-INPUTS** — Compare APIs without provider re-resolution [patch]. Closed 2026-09-15 on the shared gate: `ci.yml` consumes atlas `semver-gate.yml@806949a`, which runs `cargo-semver-checks-action` against the pull request's base revision with both checkouts' committed locks (`fetch-depth: 0`), so no provider is re-resolved; the `^0.5.0` failure belonged to the stripped-lock era the lockfile guard closed. The action reports the two revisions and the toolchain and distinguishes a build failure from a detected break; the informational job ran green on #459 through #472 and the release gate runs only under the release workflow.
