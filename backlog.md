@@ -379,10 +379,14 @@
 - [#452](https://github.com/ryancinsight/apollo/pull/452): falsified and not retained — the doubled twiddle stream costs the outer levels 21 to 79% a pass on both cores while the L1-resident innermost level gains 7 to 15%; `f32` 131072 -11% on the performance core, +1% on the efficiency core (`../../output/apollo-base128/chain_phases_dup_split_2026-09-15.txt`); the innermost pass keeps its 2x efficiency-core ratio with a third fewer shuffles, so the follow-up is [the pass census](#apollo-chain-pass-e-core-census); ADR 0061 note.
 
 <a id="apollo-chain-pass-e-core-census"></a>
-## APOLLO-CHAIN-PASS-E-CORE-CENSUS — What the efficiency core charges the column pass for [spike] — todo
-- **Question:** the column pass runs 2.0 to 2.2x its performance-core cycles on the efficiency core at every level and stride (clock ratio 1.24, base blocks 1.67x), and cutting its shuffles by a third ([dup-split rows](#apollo-chain-dup-split-rows)) left the innermost level's ratio at 1.9x — which instruction class of the pass loop does that core run at half rate?
-- **Method:** the asm census of the radix-8 column-pass loop at eight lanes (`loops.py` / `chain.py` class counts: loads, stores, shuffles by kind, FMAs, adds) read against the two cores' port models (the performance core three 256-bit FP ports, the efficiency core's shuffle and FMA ports), and the same census of the four-step's planar row kernel that scales at 1.19x; evidence budget one census session.
-- **Deliverable:** the class on ADR 0061 and, where the census names a kernel form, the item that changes it (the eighths, the register radix-8's rotations, or the pass's load pattern).
+## APOLLO-CHAIN-PASS-E-CORE-CENSUS — What the efficiency core charges the column pass for [spike] — done
+- [#453](https://github.com/ryancinsight/apollo/pull/453): the radix-8 pass loop is issue-bound (114 vector instructions a chunk at eight lanes, critical path 37 against an issue bound of 29 to 38) and Skymont executes each 256-bit instruction as two micro-ops, so the pass pays twice its issue time there at every stride (2.0 to 2.2x with the clock ratio); the four-step's batched kernel is FMA- and load-heavy and latency-bound (1.19x); the census (now `scripts/codegen_attribution.py loops`, unit-tested) also found the four-lane interleave calling hermes' `interleave_pairs` out of line (4 calls, 40 spill moves a chunk) — fixed upstream in hermes #175, [the lock advance](#apollo-hermes-interleave-in-frame); the pass's removable share is its spill traffic — [the spills item](#apollo-chain-pass-spills); ADR 0061 note.
+
+<a id="apollo-chain-pass-spills"></a>
+## APOLLO-CHAIN-PASS-SPILLS — Cut the radix-8 column pass's spill traffic [patch] [perf] — todo
+- **Evidence:** the eight-lane radix-8 column-pass loop carries 11 spill moves among its 36 memory operations a chunk (eight inputs, seven twiddle registers and four dup-split eighth registers against sixteen vector registers), 114 vector instructions in all; the four-lane loop 11 of 36. On the efficiency core the loop is issue-bound at two micro-ops per 256-bit instruction ([the census](#apollo-chain-pass-e-core-census)), so every instruction removed is paid back twice there and once on the performance core.
+- **Scope:** the pass's register budget — the twiddle registers taken from memory as FMA operands at their use rather than held, or the eighths reduced to the two-register form — measured by `chain_phases_by_core_type` (pass cycles on both cores), `scripts/codegen_attribution.py loops` (spill traffic to zero), the small-sizes probe at 2048 to 32768 and the large-sizes campaign at 131072. Non-goals: the interleave, the base blocks.
+- **Acceptance:** spill traffic gone from the loop, the pass cycles down on both cores at `f32` 131072 (two pinned sessions), no length slower on either core; `f32` 131072 re-selected per the readings.
 - **Dependencies:** none; parent [beat the references](#atlas-apollo-beat-the-references).
 
 <a id="apollo-probe-4mb-variance"></a>
@@ -392,6 +396,14 @@
 <a id="apollo-generic-pot-executor-silent-skip"></a>
 ## APOLLO-GENERIC-POT-EXECUTOR-SILENT-SKIP — The generic power-of-two executor returns without transforming when the plan has no twiddle table [patch] [fix] — done
 - [#451](https://github.com/ryancinsight/apollo/pull/451): the sized and generic forward executors take the table through `FftPlan1D::forward_twiddles`, an `expect` on the invariant that a power-of-two plan without a base route owns it; `every_power_of_two_transforms_an_impulse_into_a_flat_spectrum` (both scalars, 2^0 to 2^20) and the normalized-inverse rung test extended to 2^20; on the reproduced defect tree (the 256 base at 2^19 without its arm) both tests fail — the impulse test at the executor invariant (`invariant: a power-of-two plan without a base route owns its forward table`) and the rung round trip likewise.
+
+<a id="apollo-hermes-interleave-in-frame"></a>
+## APOLLO-HERMES-INTERLEAVE-IN-FRAME — Advance hermes past the in-frame `interleave_pairs` and re-read the four-lane chain [patch] [perf] — in-progress
+- **Integrator:** claude/fable; **last-update:** 2026-09-15; lane `D:/atlas/worktrees/apollo-route` (branch `build/apollo-hermes-interleave-in-frame`); regions `Cargo.lock`, `docs/adr/0061-l1-base-two-pass.md`.
+- **Evidence:** the column-pass census ([the spike](#apollo-chain-pass-e-core-census)) found the four-lane eight-block interleave calling hermes' `interleave_pairs` out of line four times a chunk with 40 spill moves (86 instructions a chunk, no shuffle in the frame), and the phase meter charges the `f64` chain interleaves 273k cycles at 131072 against the `f32` form's 64k for twice the data; hermes gates and inlines the operation on every x86 backend in [PR #175](https://github.com/ryancinsight/hermes/pull/175) (`../hermes/backlog.md#hermes-interleave-pairs-in-frame`).
+- **Scope:** `cargo update -p hermes-simd-intrinsics` (the lock only), the frame census after it (calls inside every dispatched `InterleaveBlocks` and `GatherBlocks` frame: zero), then the `f64` readings: `chain_phases_by_core_type` at 32768 to 262144, the small-sizes probe (two quiet runs) and the replicated large-sizes campaign, with the selection past 32768 re-read at four lanes (65536 and 524288 on the chain again if the interleave was what lost them). Non-goals: kernels.
+- **Acceptance:** no call inside the interleave frames; `f64` 2048 to 262144 not slower on either core; any length whose reading now favours the chain re-selected with its reading recorded.
+- **Dependencies:** hermes #175 (landed). Parent [beat the references](#atlas-apollo-beat-the-references).
 
 <a id="apollo-board-compaction"></a>
 ## APOLLO-BOARD-COMPACTION — Compact the board to its line budget [patch] — todo
