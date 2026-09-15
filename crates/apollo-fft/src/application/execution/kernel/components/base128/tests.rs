@@ -26,6 +26,19 @@ fn dft(input: &[Complex64], inverse: bool) -> Vec<Complex64> {
         .collect()
 }
 
+/// One bin of the direct sum, `O(n)`, for the lengths whose full sum
+/// would not fit the test budget.
+fn dft_bin(input: &[Complex64], k: usize) -> Complex64 {
+    let n = input.len();
+    let (mut re, mut im) = (0.0, 0.0);
+    for (t, v) in input.iter().enumerate() {
+        let (s, c) = (-TAU * ((k * t) % n) as f64 / n as f64).sin_cos();
+        re += v.re * c - v.im * s;
+        im += v.re * s + v.im * c;
+    }
+    Complex64::new(re, im)
+}
+
 fn signal(n: usize) -> Vec<Complex64> {
     (0..n)
         .map(|i| {
@@ -575,6 +588,72 @@ fn eight_block_2048_plans_route_through_the_256_state_at_four_lanes() {
         error <= bound,
         "N=2048 eight-block round trip at four lanes differs by {error:.3e} > {bound:.3e}"
     );
+}
+
+#[test]
+fn radix_chain_plans_carry_both_levels_of_rows_and_match_the_direct_sum() {
+    // 8192 and 16384 chain over the 256 base (a radix-4 and a radix-8 pass
+    // over eight-block slices), 32768 over the 512 base; each state carries
+    // the inner rows (seven registers a chunk over one base block) and the
+    // outer rows over one eight-block slice, and no sink tables.
+    for (n, base, outer) in [
+        (8192usize, 256usize, 4usize),
+        (16_384, 256, 8),
+        (32_768, 512, 8),
+    ] {
+        let plan = crate::FftPlan1D::<f64>::new(
+            crate::Shape1D::new(n).expect("invariant: shape lengths are non-zero"),
+        );
+        let (rows, outer_rows, inner) = match base {
+            256 => {
+                let Some(state) = plan.base256.as_ref() else {
+                    assert_incumbent_route_round_trips(&plan, n);
+                    continue;
+                };
+                assert!(plan.base512.is_none(), "{n} routes through the 256 base");
+                (
+                    state.sinks().rows().len(),
+                    state.sinks().outer_rows().len(),
+                    state.sinks().inner().len(),
+                )
+            }
+            _ => {
+                let Some(state) = plan.base512.as_ref() else {
+                    assert_incumbent_route_round_trips(&plan, n);
+                    continue;
+                };
+                assert!(plan.base256.is_none(), "{n} routes through the 512 base");
+                (
+                    state.sinks().rows().len(),
+                    state.sinks().outer_rows().len(),
+                    state.sinks().inner().len(),
+                )
+            }
+        };
+        assert_eq!(rows, 7 * 2 * base, "inner rows at {n}");
+        assert_eq!(outer_rows, (outer - 1) * 2 * 8 * base, "outer rows at {n}");
+        assert_eq!(inner, 0, "no sink tables at {n}");
+        assert!(plan.twiddle_fwd.is_none() && plan.twiddle_inv.get().is_none());
+        let source = signal(n);
+        let mut data = source.clone();
+        plan.forward_complex_slice_inplace(&mut data);
+        let bound = tolerance(&source);
+        for k in [0, 1, n / 8 - 1, n / 8, n / 4 + 3, n / 2, n - 1] {
+            let expected = dft_bin(&source, k);
+            let error = (data[k].re - expected.re).hypot(data[k].im - expected.im);
+            assert!(
+                error <= bound,
+                "N={n} bin {k} differs by {error:.3e} > {bound:.3e}"
+            );
+        }
+        plan.inverse_complex_slice_inplace(&mut data);
+        let error = worst(&data, &source);
+        let bound = 2.0 * tolerance(&source);
+        assert!(
+            error <= bound,
+            "N={n} round trip differs by {error:.3e} > {bound:.3e}"
+        );
+    }
 }
 
 #[test]
