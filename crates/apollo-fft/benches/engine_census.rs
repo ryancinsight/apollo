@@ -784,6 +784,77 @@ fn main() -> Result<(), apollo_bench::BenchmarkError> {
             black_box(apollo_fft::fft_1d_slice::<f64>(black_box(&real_src)));
         });
 
+        // The inverse rows mirror the forward ones: the half-spectrum inverse
+        // into caller-owned storage against RealFFT's c2r, then the
+        // full-spectrum inverse, which reads only the lower half where the
+        // split admits the length, beside the widening route it replaced so
+        // the gain is read in one run.
+        const REAL_HALF_INVERSE: &str = "real_half_inverse_f64";
+        const REAL_FULL_INVERSE: &str = "real_full_inverse_f64";
+        let half_spectrum = apollo_fft::fft_1d_slice_half::<f64>(&real_src);
+        let full_spectrum = apollo_fft::fft_1d_slice::<f64>(&real_src);
+        let mut half_work = half_spectrum.clone();
+        let mut real_out = vec![0.0_f64; n];
+        flush_cache(&mut flush);
+        suite.run_with_config(
+            config,
+            BenchmarkCase::new(REAL_HALF_INVERSE, "apollo", n),
+            || {
+                half_work.copy_from_slice(&half_spectrum);
+                apollo_fft::ifft_1d_slice_half_into::<f64>(
+                    black_box(&mut half_work),
+                    black_box(&mut real_out),
+                );
+                black_box(&real_out);
+            },
+        );
+
+        // RealFFT refuses a non-zero imaginary part on the zero and Nyquist
+        // bins, which a real signal's spectrum carries only as rounding.
+        let c2r = real_planner.plan_fft_inverse(n);
+        let rf_half: Vec<RustComplex<f64>> = half_spectrum
+            .iter()
+            .enumerate()
+            .map(|(k, v)| {
+                let im = if k == 0 || k == n / 2 { 0.0 } else { v.im };
+                RustComplex::new(v.re, im)
+            })
+            .collect();
+        let mut rf_spec = c2r.make_input_vec();
+        let mut rf_real = c2r.make_output_vec();
+        flush_cache(&mut flush);
+        suite.run_with_config(
+            config,
+            BenchmarkCase::new(REAL_HALF_INVERSE, "realfft", n),
+            || {
+                rf_spec.copy_from_slice(&rf_half);
+                c2r.process(black_box(&mut rf_spec), black_box(&mut rf_real))
+                    .expect("realfft length agrees with the plan");
+                black_box(&rf_real);
+            },
+        );
+
+        flush_cache(&mut flush);
+        suite.run_with_config(
+            config,
+            BenchmarkCase::new(REAL_FULL_INVERSE, "apollo", n),
+            || {
+                black_box(apollo_fft::ifft_1d_slice::<f64>(black_box(&full_spectrum)));
+            },
+        );
+
+        flush_cache(&mut flush);
+        suite.run_with_config(
+            config,
+            BenchmarkCase::new(REAL_FULL_INVERSE, "apollo (widened)", n),
+            || {
+                black_box(<f64 as apollo_fft::RealFftData>::inverse_1d_slice_owned(
+                    &apollo,
+                    black_box(&full_spectrum),
+                ));
+            },
+        );
+
         // Allocation is a property of the call, not of the machine, so it is
         // reported once per size rather than timed.
         let (complex_allocs, complex_bytes) = count_allocations(|| {
@@ -804,9 +875,12 @@ fn main() -> Result<(), apollo_bench::BenchmarkError> {
         let (half_allocs, half_bytes) = count_allocations(|| {
             apollo_fft::fft_1d_slice_half_into::<f64>(&real_src, &mut half_out);
         });
+        let (inverse_allocs, inverse_bytes) =
+            count_allocations(|| drop(apollo_fft::ifft_1d_slice::<f64>(&full_spectrum)));
         eprintln!(
             "engine_census: N={n:<8} apollo allocations/call — complex {complex_allocs} \
-             ({complex_bytes} B), real-full {real_allocs} ({real_bytes} B), real-half {half_allocs} ({half_bytes} B)"
+             ({complex_bytes} B), real-full {real_allocs} ({real_bytes} B), real-half {half_allocs} ({half_bytes} B), \
+             real-full-inverse {inverse_allocs} ({inverse_bytes} B)"
         );
     }
 
