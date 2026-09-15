@@ -63,6 +63,22 @@ pub(crate) mod phase_meter {
     pub(crate) static OUTER: [AtomicU64; 3] =
         [AtomicU64::new(0), AtomicU64::new(0), AtomicU64::new(0)];
     pub(crate) static OUTER_CALLS: AtomicU64 = AtomicU64::new(0);
+    /// The column-first chain's phases per level, outermost first: the
+    /// column pass, the slice transforms below it, the interleave.
+    pub(crate) const CHAIN_LEVELS: usize = 4;
+    pub(crate) static CHAIN: [[AtomicU64; 3]; CHAIN_LEVELS] = [
+        [AtomicU64::new(0), AtomicU64::new(0), AtomicU64::new(0)],
+        [AtomicU64::new(0), AtomicU64::new(0), AtomicU64::new(0)],
+        [AtomicU64::new(0), AtomicU64::new(0), AtomicU64::new(0)],
+        [AtomicU64::new(0), AtomicU64::new(0), AtomicU64::new(0)],
+    ];
+    /// Steps entered per level (one at the top, `R_0` at the next, ...).
+    pub(crate) static CHAIN_CALLS: [AtomicU64; CHAIN_LEVELS] = [
+        AtomicU64::new(0),
+        AtomicU64::new(0),
+        AtomicU64::new(0),
+        AtomicU64::new(0),
+    ];
     #[expect(
         clippy::inline_always,
         reason = "a timing stamp outlined from the measured region distorts it"
@@ -92,6 +108,14 @@ pub(crate) mod phase_meter {
     #[inline(always)]
     pub(crate) fn add_outer(phase: usize, dt: u64) {
         OUTER[phase].fetch_add(dt, Ordering::Relaxed);
+    }
+    #[expect(
+        clippy::inline_always,
+        reason = "a timing accumulator outlined from the measured region distorts it"
+    )]
+    #[inline(always)]
+    pub(crate) fn add_chain(level: usize, phase: usize, dt: u64) {
+        CHAIN[level][phase].fetch_add(dt, Ordering::Relaxed);
     }
 }
 
