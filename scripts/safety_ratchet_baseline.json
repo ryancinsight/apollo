@@ -15,10 +15,8 @@
   "crates/apollo-fft/src/application/execution/kernel/components/stockham/precision/traits.rs": 1,
   "crates/apollo-fft/src/application/execution/kernel/components/stockham/tests.rs": 8,
   "crates/apollo-fft/src/application/execution/kernel/components/winograd/composite/power.rs": 2,
-  "crates/apollo-fft/src/application/execution/kernel/mixed_radix/scalar/impls.rs": 12,
   "crates/apollo-fft/src/application/execution/kernel/mixed_radix/traits.rs": 1,
   "crates/apollo-fft/src/application/execution/kernel/twiddle_table.rs": 1,
-  "crates/apollo-fft/src/application/execution/plan/fft/dimension_1d/executors.rs": 11,
   "crates/apollo-fft/src/application/utilities/shift.rs": 1,
   "crates/apollo-fwht/src/application/execution/kernel/direct.rs": 2,
   "crates/apollo-nufft/src/infrastructure/transport/gpu/verification/mod.rs": 2

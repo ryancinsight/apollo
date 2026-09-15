@@ -253,21 +253,33 @@ impl MixedRadixScalar for f32 {
         // for 128+ (md-worst PoT) use stockham sized path so const LOG2 flows end-to-end to
         // kernel forward_with_scratch_sized -> transform_sized / with_strategy / len* bodies.
         match LOG2 {
+            // SAFETY: `data.len() == 1 << LOG2` by the length match in `dispatch.rs` that
+            // selected this arm, and `N` is that length.
             1 => unsafe {
                 Self::small_pot_inplace_sized::<2, INVERSE, NORMALIZE>(data);
             },
+            // SAFETY: `data.len() == 1 << LOG2` by the length match in `dispatch.rs` that
+            // selected this arm, and `N` is that length.
             2 => unsafe {
                 Self::small_pot_inplace_sized::<4, INVERSE, NORMALIZE>(data);
             },
+            // SAFETY: `data.len() == 1 << LOG2` by the length match in `dispatch.rs` that
+            // selected this arm, and `N` is that length.
             3 => unsafe {
                 Self::small_pot_inplace_sized::<8, INVERSE, NORMALIZE>(data);
             },
+            // SAFETY: `data.len() == 1 << LOG2` by the length match in `dispatch.rs` that
+            // selected this arm, and `N` is that length.
             4 => unsafe {
                 Self::small_pot_inplace_sized::<16, INVERSE, NORMALIZE>(data);
             },
+            // SAFETY: `data.len() == 1 << LOG2` by the length match in `dispatch.rs` that
+            // selected this arm, and `N` is that length.
             5 => unsafe {
                 Self::small_pot_inplace_sized::<32, INVERSE, NORMALIZE>(data);
             },
+            // SAFETY: `data.len() == 1 << LOG2` by the length match in `dispatch.rs` that
+            // selected this arm, and `N` is that length.
             6 => unsafe {
                 Self::small_pot_inplace_sized::<64, INVERSE, NORMALIZE>(data);
             },
@@ -562,21 +574,33 @@ impl MixedRadixScalar for f64 {
         // kernel forward_with_scratch_sized -> transform_sized / with_strategy / len* bodies.
         // twiddles passed directly as &[Complex] (zero-copy reference from plan).
         match LOG2 {
+            // SAFETY: `data.len() == 1 << LOG2` by the length match in `dispatch.rs` that
+            // selected this arm, and `N` is that length.
             1 => unsafe {
                 Self::small_pot_inplace_sized::<2, INVERSE, NORMALIZE>(data);
             },
+            // SAFETY: `data.len() == 1 << LOG2` by the length match in `dispatch.rs` that
+            // selected this arm, and `N` is that length.
             2 => unsafe {
                 Self::small_pot_inplace_sized::<4, INVERSE, NORMALIZE>(data);
             },
+            // SAFETY: `data.len() == 1 << LOG2` by the length match in `dispatch.rs` that
+            // selected this arm, and `N` is that length.
             3 => unsafe {
                 Self::small_pot_inplace_sized::<8, INVERSE, NORMALIZE>(data);
             },
+            // SAFETY: `data.len() == 1 << LOG2` by the length match in `dispatch.rs` that
+            // selected this arm, and `N` is that length.
             4 => unsafe {
                 Self::small_pot_inplace_sized::<16, INVERSE, NORMALIZE>(data);
             },
+            // SAFETY: `data.len() == 1 << LOG2` by the length match in `dispatch.rs` that
+            // selected this arm, and `N` is that length.
             5 => unsafe {
                 Self::small_pot_inplace_sized::<32, INVERSE, NORMALIZE>(data);
             },
+            // SAFETY: `data.len() == 1 << LOG2` by the length match in `dispatch.rs` that
+            // selected this arm, and `N` is that length.
             6 => unsafe {
                 Self::small_pot_inplace_sized::<64, INVERSE, NORMALIZE>(data);
             },
