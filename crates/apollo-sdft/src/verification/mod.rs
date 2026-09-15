@@ -141,4 +141,65 @@ mod tests {
             }
         }
     }
+
+    /// A deterministic stream in `[-1, 1)`: Knuth MMIX linear congruential
+    /// constants, read from the top 53 bits.
+    struct Stream(u64);
+
+    impl Stream {
+        fn next(&mut self) -> f64 {
+            self.0 = self
+                .0
+                .wrapping_mul(6_364_136_223_846_793_005)
+                .wrapping_add(1_442_695_040_888_963_407);
+            (self.0 >> 11) as f64 / (1u64 << 53) as f64 * 2.0 - 1.0
+        }
+    }
+
+    /// The worst tracked-bin error against the direct DFT of the current window.
+    fn worst_bin_error(plan: &SdftPlan, state: &crate::SdftState) -> f64 {
+        let direct = plan.direct_bins(&state.window()).expect("direct");
+        state
+            .bins()
+            .iter()
+            .zip(direct.iter())
+            .map(|(tracked, direct)| (*tracked - *direct).norm())
+            .fold(0.0, f64::max)
+    }
+
+    /// A million updates through a 48-sample window stay inside the drift
+    /// bound the plan derives, checked against the direct DFT every hundred
+    /// thousand updates. The window length is not a power of two so the
+    /// modulation phase wraps at every residue, and the bin count is below
+    /// the window length so the round-robin refresh cycles through fewer bins
+    /// than samples.
+    #[test]
+    fn a_million_updates_stay_inside_the_derived_drift_bound() {
+        const WINDOW: usize = 48;
+        const BINS: usize = 6;
+        const UPDATES: usize = 1_000_000;
+        const CHECKPOINT: usize = 100_000;
+        let plan = SdftPlan::new(WINDOW, BINS).expect("plan");
+        let mut stream = Stream(0x9E37_79B9_7F4A_7C15);
+        let initial: Vec<f64> = (0..WINDOW).map(|_| stream.next()).collect();
+        let mut state = plan.state_from_window(&initial).expect("state");
+        // The oracle is `direct_bins`, an N-term sum of products with trig
+        // within an ulp of the circle: its own error is `u (N^2 + 2N)` at unit
+        // amplitude, added to the bound the tracked bins promise.
+        let oracle = f64::EPSILON / 2.0 * ((WINDOW * WINDOW + 2 * WINDOW) as f64);
+        let bound = plan.drift_bound(1.0) + oracle;
+        assert!(worst_bin_error(&plan, &state) <= bound);
+
+        for update in 1..=UPDATES {
+            state.update(stream.next());
+            if update % CHECKPOINT == 0 {
+                let error = worst_bin_error(&plan, &state);
+                assert!(
+                    error <= bound,
+                    "after {update} updates the worst bin error {error:e} exceeds the derived bound {bound:e}"
+                );
+            }
+        }
+        assert_eq!(state.updates(), UPDATES);
+    }
 }

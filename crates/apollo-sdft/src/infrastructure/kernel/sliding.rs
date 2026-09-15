@@ -1,9 +1,35 @@
 //! Sliding DFT kernel primitives.
 //!
-//! For window length N, the tracked bin is
-//! `X_k[n] = sum_{m=0}^{N-1} x[n-N+1+m] exp(-2pi i k m/N)`.
-//! When x_old leaves and x_new enters at the end, the recurrence is
-//! X_k <- (X_k + x_new - x_old) exp(2pi i k/N).
+//! For window length `N` and bin `k`, the tracked bin is
+//! `X_k[n] = sum_{m=0}^{N-1} x[n-N+1+m] exp(-2πi k m/N)`: the DFT of the
+//! window that ends at the newest sample `x[n]`.
+//!
+//! ## The modulated form
+//!
+//! The textbook recurrence `X_k <- (X_k + x_new - x_old) exp(2πi k/N)` has its
+//! pole on the unit circle. The computed twiddle is not of unit modulus, so
+//! the error already in `X_k` is scaled at every step while fresh rounding
+//! joins it, and nothing ever removes what has accumulated (Jacobsen and
+//! Lyons, "The sliding DFT", IEEE Signal Processing Magazine 20(2), 2003,
+//! the section on stability). Measured here before this form landed, a
+//! 48-sample window tracked over a million `f64` updates wandered two to
+//! five times past the bound stated on `SdftPlan::drift_bound`.
+//!
+//! This kernel keeps the modulated form instead (Duda, "Accurate, guaranteed
+//! stable, sliding discrete Fourier transform", IEEE Signal Processing
+//! Magazine 27(6), 2010). Each bin accumulates
+//! `S_k = sum_j x[j] · E[(k·j) mod N]` over the window, with `j` the absolute
+//! sample index and `E[q] = exp(-2πi q/N)` read from one `N`-entry table. The
+//! sample leaving and the sample entering have indices `N` apart, so they
+//! take the same table entry and one advance is
+//! `S_k += (x_new - x_old) · E[(k·n) mod N]`; the bin itself is
+//! `X_k = S_k · conj(E[(k·(n+1)) mod N])`. No multiplication touches the
+//! accumulated value, so its error is a sum of per-step roundings rather than
+//! a product of them, and the refresh bounds that sum outright: on a fixed
+//! cadence a bin is re-summed from the window through the same table
+//! (`refresh_bin` below), which resets its error to that of one direct sum. The
+//! resulting bound, independent of the update count, is derived on
+//! `SdftPlan::drift_bound`.
 use crate::domain::contracts::error::{SdftError, SdftResult};
 use eunomia::Complex64;
 use mnemosyne::scratch::ScratchPool;
@@ -22,12 +48,16 @@ thread_local! {
     static DIRECT_BIN_WEIGHT_SCRATCH: ScratchPool<f64> = const { ScratchPool::new() };
 }
 
-/// Build update twiddle factors for SDFT bins.
+/// The modulation table `E[q] = exp(-2πi q/N)` for `q` in `0..N`.
+///
+/// Every twiddle a bin ever needs is one of these `N` entries, indexed by
+/// `(k·j) mod N`, so a sample and the sample that replaces it `N` updates
+/// later are weighted by the same value.
 #[must_use]
-pub fn update_twiddles(window_len: usize, bin_count: usize) -> Vec<Complex64> {
-    (0..bin_count)
-        .map(|bin| {
-            let angle = std::f64::consts::TAU * bin as f64 / window_len as f64;
+pub fn modulation_table(window_len: usize) -> Vec<Complex64> {
+    (0..window_len)
+        .map(|index| {
+            let angle = -std::f64::consts::TAU * index as f64 / window_len as f64;
             Complex64::new(angle.cos(), angle.sin())
         })
         .collect()
@@ -45,6 +75,10 @@ pub fn direct_bins(window: &[f64], bin_count: usize) -> SdftResult<Vec<Complex64
 }
 
 /// Compute direct DFT bins for a real-valued window into caller-owned storage.
+///
+/// # Errors
+/// Returns [`SdftError::EmptyWindow`] if `window` is empty.
+/// Returns [`SdftError::BinCountExceedsWindow`] if `bins.len() > window.len()`.
 pub fn direct_bins_into(window: &[f64], bins: &mut [Complex64]) -> SdftResult<()> {
     let n = window.len();
     if n == 0 {
@@ -120,38 +154,173 @@ fn fill_direct_bin_weights(
     }
 }
 
-/// Apply one O(bin_count) sliding DFT update.
+/// One tracked bin of the modulated sliding DFT.
 ///
-/// ## Invariant
-///
-/// After each call, `bins[k]` equals the DFT of the current sliding window:
-/// `bins[k] = sum_{j=0}^{N-1} window[(head+j) % N] * exp(-2pi i k j / N)`
-///
-/// ## Recurrence derivation
-/// When the window advances by one sample (removing x_old, inserting x_new):
-/// `DFT_new[k] = DFT_old[k] - x_old + x_new`
-/// followed by multiplication by `twiddle[k] = exp(2pi i k / N)` (phase advance).
-/// Proof: shifting the window by one sample in time multiplies each DFT bin
-/// by exp(2pi i k / N), as a one-sample time-delay corresponds to multiplication
-/// by exp(-2pi i k / N) in frequency, and the recurrence advances the phase forward.
-pub fn update_bins(bins: &mut [Complex64], twiddles: &[Complex64], outgoing: f64, incoming: f64) {
-    let delta = Complex64::new(incoming - outgoing, 0.0);
-    if bins.len() >= UPDATE_PAR_BIN_THRESHOLD && twiddles.len() >= bins.len() {
-        bins.par_mut().enumerate(|index, bin| {
-            *bin = update_bin(*bin, twiddles[index], delta);
-        });
+/// `sum` is `sum_j x[j] · E[(k·j) mod N]` over the current window and
+/// `phase` is `(k·n) mod N` for the newest sample `x[n]`; the bin index `k`
+/// and the window length `N` are the slot the value sits in and the table it
+/// reads, passed at every operation rather than stored.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct ModulatedBin {
+    sum: Complex64,
+    phase: usize,
+}
+
+/// `value mod window_len` for a `value` below `2 · window_len`.
+#[inline]
+const fn wrap(value: usize, window_len: usize) -> usize {
+    if value >= window_len {
+        value - window_len
     } else {
-        bins.iter_mut()
-            .zip(twiddles.iter())
-            .for_each(|(bin, twiddle)| {
-                *bin = update_bin(*bin, *twiddle, delta);
-            });
+        value
     }
 }
 
-#[inline]
-fn update_bin(bin: Complex64, twiddle: Complex64, delta: Complex64) -> Complex64 {
-    (bin + delta) * twiddle
+impl ModulatedBin {
+    /// An empty bin `bin` whose newest sample is the last of the first window,
+    /// absolute index `window_len - 1`.
+    #[must_use]
+    pub const fn new(bin: usize, window_len: usize) -> Self {
+        Self {
+            sum: Complex64::new(0.0, 0.0),
+            phase: (bin * (window_len - 1)) % window_len,
+        }
+    }
+
+    /// The table index of the next sample, `(k·(n+1)) mod N`, which is also
+    /// the index of the oldest sample in the window (`n-N+1 ≡ n+1`).
+    #[inline]
+    const fn next_phase(&self, bin: usize, window_len: usize) -> usize {
+        wrap(self.phase + bin, window_len)
+    }
+
+    /// Advance by one sample: `sum += delta · E[(k·(n+1)) mod N]`.
+    #[inline]
+    fn advance(&mut self, bin: usize, table: &[Complex64], delta: f64) {
+        let phase = self.next_phase(bin, table.len());
+        self.sum += table[phase].scale(delta);
+        self.phase = phase;
+    }
+
+    /// The tracked DFT bin, `sum · conj(E[(k·(n+1)) mod N])`.
+    #[inline]
+    fn value(&self, bin: usize, table: &[Complex64]) -> Complex64 {
+        self.sum * table[self.next_phase(bin, table.len())].conj()
+    }
+
+    /// Re-sum from the window, oldest sample first: the oldest sample sits
+    /// at the next phase and each later sample `k` entries on.
+    fn refresh(&mut self, bin: usize, table: &[Complex64], window: (&[f64], &[f64])) {
+        let window_len = table.len();
+        let mut phase = self.next_phase(bin, window_len);
+        let mut sum = Complex64::new(0.0, 0.0);
+        for &sample in window.0.iter().chain(window.1) {
+            sum += table[phase].scale(sample);
+            phase = wrap(phase + bin, window_len);
+        }
+        self.sum = sum;
+    }
+}
+
+/// Initialize every tracked bin from a full window, oldest sample first, and
+/// write the bins; `tracked[k]` and `bins[k]` are bin `k`.
+///
+/// # Errors
+/// Returns [`SdftError::EmptyWindow`] if `window` is empty,
+/// [`SdftError::InitialWindowLengthMismatch`] if `table` is not
+/// [`modulation_table`] of the window length, and
+/// [`SdftError::BinCountExceedsWindow`] if more bins are tracked than the
+/// window holds samples.
+///
+/// # Panics
+/// Panics if `tracked` and `bins` differ in length.
+pub fn initialize_bins(
+    window: &[f64],
+    table: &[Complex64],
+    tracked: &mut [ModulatedBin],
+    bins: &mut [Complex64],
+) -> SdftResult<()> {
+    let window_len = window.len();
+    if window_len == 0 {
+        return Err(SdftError::EmptyWindow);
+    }
+    if table.len() != window_len {
+        return Err(SdftError::InitialWindowLengthMismatch);
+    }
+    if tracked.len() > window_len {
+        return Err(SdftError::BinCountExceedsWindow);
+    }
+    assert_eq!(
+        tracked.len(),
+        bins.len(),
+        "tracked bins and bin storage must hold the same bin count"
+    );
+    for (bin, (state, value)) in tracked.iter_mut().zip(bins.iter_mut()).enumerate() {
+        *state = ModulatedBin::new(bin, window_len);
+        state.refresh(bin, table, (window, &[]));
+        *value = state.value(bin, table);
+    }
+    Ok(())
+}
+
+/// Advance every tracked bin by one sample and write the bins.
+///
+/// ## Invariant
+///
+/// After each call, `bins[k]` equals the DFT of the current sliding window
+/// within the bound derived on `SdftPlan::drift_bound`:
+/// `bins[k] = sum_{j=0}^{N-1} window[(head+j) % N] · exp(-2πi k j / N)`.
+///
+/// # Panics
+/// Panics if `tracked` and `bins` differ in length.
+pub fn update_bins(
+    tracked: &mut [ModulatedBin],
+    bins: &mut [Complex64],
+    table: &[Complex64],
+    outgoing: f64,
+    incoming: f64,
+) {
+    assert_eq!(
+        tracked.len(),
+        bins.len(),
+        "tracked bins and bin storage must hold the same bin count"
+    );
+    let delta = incoming - outgoing;
+    if tracked.len() >= UPDATE_PAR_BIN_THRESHOLD {
+        tracked.par_mut().enumerate(|bin, state| {
+            state.advance(bin, table, delta);
+        });
+        let tracked: &[ModulatedBin] = tracked;
+        bins.par_mut().enumerate(|bin, value| {
+            *value = tracked[bin].value(bin, table);
+        });
+    } else {
+        for (bin, (state, value)) in tracked.iter_mut().zip(bins.iter_mut()).enumerate() {
+            state.advance(bin, table, delta);
+            *value = state.value(bin, table);
+        }
+    }
+}
+
+/// Re-sum tracked bin `bin` from the current window, oldest sample first,
+/// through the same table its advances read, and rewrite its bin.
+///
+/// The window arrives as the two slices of a ring buffer
+/// (`VecDeque::as_slices`); the second may be empty.
+pub fn refresh_bin(
+    bin: usize,
+    state: &mut ModulatedBin,
+    value: &mut Complex64,
+    table: &[Complex64],
+    window: (&[f64], &[f64]),
+) {
+    debug_assert_eq!(
+        window.0.len() + window.1.len(),
+        table.len(),
+        "invariant: the window holds one sample per table entry"
+    );
+    state.refresh(bin, table, window);
+    *value = state.value(bin, table);
 }
 
 #[cfg(test)]
@@ -159,13 +328,17 @@ mod tests {
     use super::*;
     use eunomia::assert_abs_diff_eq;
 
+    fn sample_window(window_len: usize) -> Vec<f64> {
+        (0..window_len)
+            .map(|index| (index as f64 * 0.125).sin() - (index as f64 * 0.03125).cos())
+            .collect()
+    }
+
     #[test]
     fn moirai_parallel_direct_bins_match_serial_formula_at_threshold() {
         let window_len = 128;
         let bin_count = DIRECT_PAR_OP_THRESHOLD / window_len;
-        let window = (0..window_len)
-            .map(|index| (index as f64 * 0.125).sin() - (index as f64 * 0.03125).cos())
-            .collect::<Vec<_>>();
+        let window = sample_window(window_len);
         let mut actual = vec![Complex64::new(0.0, 0.0); bin_count];
 
         direct_bins_into(&window, &mut actual).expect("parallel direct bins");
@@ -180,9 +353,7 @@ mod tests {
     #[test]
     fn hermes_direct_bin_matches_scalar_formula_at_threshold() {
         let window_len = HERMES_DIRECT_BIN_LEN_THRESHOLD;
-        let window = (0..window_len)
-            .map(|index| (index as f64 * 0.125).sin() - (index as f64 * 0.03125).cos())
-            .collect::<Vec<_>>();
+        let window = sample_window(window_len);
 
         for bin in [0usize, 1, 17, 64, 127] {
             let actual = direct_bin_hermes(&window, window_len, bin);
@@ -207,18 +378,109 @@ mod tests {
     }
 
     #[test]
-    fn moirai_parallel_update_bins_match_recurrence_formula_at_threshold() {
-        let mut bins = (0..UPDATE_PAR_BIN_THRESHOLD)
-            .map(|index| Complex64::new(index as f64 * 0.25, -(index as f64) * 0.125))
-            .collect::<Vec<_>>();
-        let before = bins.clone();
-        let twiddles = update_twiddles(UPDATE_PAR_BIN_THRESHOLD, UPDATE_PAR_BIN_THRESHOLD);
-        let delta = Complex64::new(1.25 - -0.5, 0.0);
+    fn initialized_bins_match_the_direct_formula_at_a_non_power_of_two_length() {
+        let window_len = 48;
+        let window = sample_window(window_len);
+        let table = modulation_table(window_len);
+        let mut tracked = vec![ModulatedBin::new(0, window_len); window_len];
+        let mut bins = vec![Complex64::new(0.0, 0.0); window_len];
 
-        update_bins(&mut bins, &twiddles, -0.5, 1.25);
+        initialize_bins(&window, &table, &mut tracked, &mut bins).expect("initialize");
 
-        for (index, actual) in bins.iter().enumerate() {
-            let expected = update_bin(before[index], twiddles[index], delta);
+        for (bin, actual) in bins.iter().enumerate() {
+            let expected = direct_bin_scalar(&window, window_len, bin);
+            assert_abs_diff_eq!(actual.re, expected.re, epsilon = 1.0e-12);
+            assert_abs_diff_eq!(actual.im, expected.im, epsilon = 1.0e-12);
+        }
+    }
+
+    #[test]
+    fn initialize_rejects_a_table_of_another_length() {
+        let window = sample_window(8);
+        let table = modulation_table(6);
+        let mut tracked = vec![ModulatedBin::new(0, 8); 3];
+        let mut bins = vec![Complex64::new(0.0, 0.0); 3];
+
+        assert_eq!(
+            initialize_bins(&window, &table, &mut tracked, &mut bins).unwrap_err(),
+            SdftError::InitialWindowLengthMismatch
+        );
+    }
+
+    /// Advancing through a whole window returns every phase to where it
+    /// started, so the leaving and entering samples of every later update
+    /// read one table entry.
+    #[test]
+    fn a_full_turn_of_advances_returns_every_phase_exactly() {
+        let window_len = 48;
+        let table = modulation_table(window_len);
+        let mut tracked: Vec<_> = (0..window_len)
+            .map(|bin| ModulatedBin::new(bin, window_len))
+            .collect();
+        let start: Vec<usize> = tracked.iter().map(|state| state.phase).collect();
+
+        for (bin, state) in tracked.iter_mut().enumerate() {
+            for _ in 0..window_len {
+                state.advance(bin, &table, 0.5);
+            }
+        }
+
+        let end: Vec<usize> = tracked.iter().map(|state| state.phase).collect();
+        assert_eq!(start, end);
+    }
+
+    /// A refreshed bin matches the bin advanced sample by sample, to rounding.
+    #[test]
+    fn refresh_agrees_with_the_advanced_sum() {
+        let window_len = 48;
+        let bin_count = 7;
+        let table = modulation_table(window_len);
+        let stream: Vec<f64> = sample_window(3 * window_len);
+        let mut tracked: Vec<_> = (0..bin_count)
+            .map(|bin| ModulatedBin::new(bin, window_len))
+            .collect();
+        let mut bins = vec![Complex64::new(0.0, 0.0); bin_count];
+        initialize_bins(&stream[..window_len], &table, &mut tracked, &mut bins)
+            .expect("initialize");
+
+        for (outgoing, incoming) in stream.iter().zip(&stream[window_len..]) {
+            update_bins(&mut tracked, &mut bins, &table, *outgoing, *incoming);
+        }
+        let window = &stream[2 * window_len..];
+        let (head, tail) = window.split_at(11);
+
+        for bin in 0..bin_count {
+            let advanced = bins[bin];
+            let mut state = tracked[bin];
+            let mut refreshed = Complex64::new(0.0, 0.0);
+            refresh_bin(bin, &mut state, &mut refreshed, &table, (head, tail));
+            assert_abs_diff_eq!(advanced.re, refreshed.re, epsilon = 1.0e-12);
+            assert_abs_diff_eq!(advanced.im, refreshed.im, epsilon = 1.0e-12);
+            let direct = direct_bin_scalar(window, window_len, bin);
+            assert_abs_diff_eq!(refreshed.re, direct.re, epsilon = 1.0e-12);
+            assert_abs_diff_eq!(refreshed.im, direct.im, epsilon = 1.0e-12);
+        }
+    }
+
+    #[test]
+    fn moirai_parallel_update_bins_match_the_serial_advance_at_threshold() {
+        let window_len = UPDATE_PAR_BIN_THRESHOLD;
+        let table = modulation_table(window_len);
+        let mut tracked: Vec<_> = (0..window_len)
+            .map(|bin| ModulatedBin::new(bin, window_len))
+            .collect();
+        for (bin, state) in tracked.iter_mut().enumerate() {
+            state.sum = Complex64::new(bin as f64 * 0.25, -(bin as f64) * 0.125);
+        }
+        let mut expected_tracked = tracked.clone();
+        let mut bins = vec![Complex64::new(0.0, 0.0); window_len];
+
+        update_bins(&mut tracked, &mut bins, &table, -0.5, 1.25);
+
+        for (bin, (state, actual)) in expected_tracked.iter_mut().zip(&bins).enumerate() {
+            state.advance(bin, &table, 1.25 - -0.5);
+            assert_eq!(state.phase, tracked[bin].phase, "bin={bin}");
+            let expected = state.value(bin, &table);
             assert_abs_diff_eq!(actual.re, expected.re, epsilon = 1.0e-12);
             assert_abs_diff_eq!(actual.im, expected.im, epsilon = 1.0e-12);
         }

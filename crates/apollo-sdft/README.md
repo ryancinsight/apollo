@@ -8,8 +8,8 @@
 src/
   domain/          window-length and bin-count contracts
   application/     reusable plan and streaming state
-  infrastructure/  direct initialization and recurrence kernels
-  verification/    direct-vs-recurrence and contract tests
+  infrastructure/  direct initialization, the modulated recurrence and its refresh
+  verification/    direct-vs-recurrence, drift-bound and contract tests
 ```
 
 `SdftPlan` owns validated window metadata and twiddle factors. `SdftState` owns
@@ -52,9 +52,15 @@ Hephaestus device abstraction only.
 ## Mathematical Contract
 
 For a window of length `N`, each update removes `x_old`, appends `x_new`, and
-updates tracked bins by the sliding recurrence derived from the DFT definition.
-The state is equivalent to recomputing direct DFT bins over the current window
-after every update.
+advances every tracked bin in the modulated form: bin `k` accumulates
+`sum_j x[j] · exp(-2πi (k·j mod N)/N)` over the window through one `N`-entry
+table, so the leaving and entering samples take the same entry and no
+multiplication ever touches the accumulated value. On a fixed cadence one bin
+is re-summed from the window through the same table, so the rounding a bin
+carries is bounded at every update count; `SdftPlan::drift_bound` derives the
+bound from the window length, bin count and sample amplitude. The state is
+equivalent to recomputing direct DFT bins over the current window after every
+update, within that bound.
 
 ### Complete-bin inversion theorem
 
@@ -78,8 +84,9 @@ forward SDFT analysis but is a projection, not an invertible spectrum.
 ## Verification
 
 Tests cover initial direct-bin equivalence, update recurrence equivalence,
-zero-state behavior, update counting, invalid contracts, and direct DFT parity
-after a full window of pushes. Typed tests cover `f64`, `f32`, mixed `f16`,
+zero-state behavior, update counting, invalid contracts, direct DFT parity
+after a full window of pushes, and a million updates through a 48-sample
+window held inside the derived drift bound at every checkpoint. Typed tests cover `f64`, `f32`, mixed `f16`,
 represented-input direct-bin parity, repeated workspace reuse, caller-owned
 output reuse, output length rejection, and precision/profile mismatch
 rejection. GPU tests cover real-device CPU differential forward values,

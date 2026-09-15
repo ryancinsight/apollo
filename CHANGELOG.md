@@ -10,6 +10,14 @@ Change-class tags: [patch] backward-compatible fix, [minor] additive non-breakin
 
 ### Breaking
 
+- [major] `apollo-sdft` tracks bins in the modulated sliding-DFT form with a
+  round-robin refresh from the window, so a tracked bin stays within
+  `SdftPlan::drift_bound` of the direct DFT at every update count instead of
+  drifting without bound on the unit-circle recurrence. The kernel surface
+  `infrastructure::kernel::sliding::{update_twiddles, update_bins}` becomes
+  `modulation_table`, `ModulatedBin`, `initialize_bins`, `update_bins` and
+  `refresh_bin`; `SdftPlan` and `SdftState` keep their public methods and
+  gain `SdftPlan::drift_bound`.
 - [major] `apollo-fft-macros` replaces the duplicated split codelet family
   with a compile-time schedule parameter. `generate_winograd_composites!`
   gains an optional `scheduled_pairs` input, accepted only for Good-Thomas
