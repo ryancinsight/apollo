@@ -566,7 +566,7 @@ fn eight_block_2048_plans_route_through_the_256_state_at_four_lanes() {
     };
     assert!(plan.base512.is_none(), "2048 routes through the 256 base");
     assert!(plan.twiddle_fwd.is_none() && plan.twiddle_inv.get().is_none());
-    assert_eq!(state.sinks().rows().len(), 7 * 2 * 256);
+    assert_eq!(state.sinks().chain()[0].rows().len(), 7 * 2 * 256);
     assert_eq!(state.sinks().inner().len(), 0);
     assert_eq!(state.sinks().outer().len(), 0);
     assert!(!state.inverse_is_initialized() && !state.inverse_sinks_initialized());
@@ -591,29 +591,36 @@ fn eight_block_2048_plans_route_through_the_256_state_at_four_lanes() {
 }
 
 #[test]
-fn radix_chain_plans_carry_both_levels_of_rows_and_match_the_direct_sum() {
-    // 8192 and 16384 chain over the 256 base (a radix-4 and a radix-8 pass
-    // over eight-block slices), 32768 over the 512 base; each state carries
-    // the inner rows (seven registers a chunk over one base block) and the
-    // outer rows over one eight-block slice, and no sink tables.
-    for (n, base, outer) in [
-        (8192usize, 256usize, 4usize),
-        (16_384, 256, 8),
-        (32_768, 512, 8),
+fn radix_chain_plans_carry_a_row_table_per_level_and_match_the_direct_sum() {
+    // Eights over the base with the closing four outside them (RustFFT's
+    // chain): the 256 base at 8192, 16384, 65536 and 131072, the 512 base
+    // at 32768 and 262144. Each state carries one chunk-major row table per
+    // level (`radix - 1` registers a chunk over the level's block) and no
+    // sink tables.
+    for (n, base, radices) in [
+        (8192usize, 256usize, &[4usize, 8][..]),
+        (16_384, 256, &[8, 8]),
+        (32_768, 512, &[8, 8]),
+        (65_536, 256, &[4, 8, 8]),
+        (131_072, 256, &[8, 8, 8]),
+        (262_144, 512, &[8, 8, 8]),
     ] {
         let plan = crate::FftPlan1D::<f64>::new(
             crate::Shape1D::new(n).expect("invariant: shape lengths are non-zero"),
         );
-        let (rows, outer_rows, inner) = match base {
+        let (levels, inner): (Vec<(usize, usize)>, usize) = match base {
             256 => {
                 let Some(state) = plan.base256.as_ref() else {
                     assert_incumbent_route_round_trips(&plan, n);
                     continue;
                 };
                 assert!(plan.base512.is_none(), "{n} routes through the 256 base");
+                let levels = state.sinks().chain();
                 (
-                    state.sinks().rows().len(),
-                    state.sinks().outer_rows().len(),
+                    levels
+                        .iter()
+                        .map(|level| (level.radix(), level.rows().len()))
+                        .collect(),
                     state.sinks().inner().len(),
                 )
             }
@@ -623,15 +630,25 @@ fn radix_chain_plans_carry_both_levels_of_rows_and_match_the_direct_sum() {
                     continue;
                 };
                 assert!(plan.base256.is_none(), "{n} routes through the 512 base");
+                let levels = state.sinks().chain();
                 (
-                    state.sinks().rows().len(),
-                    state.sinks().outer_rows().len(),
+                    levels
+                        .iter()
+                        .map(|level| (level.radix(), level.rows().len()))
+                        .collect(),
                     state.sinks().inner().len(),
                 )
             }
         };
-        assert_eq!(rows, 7 * 2 * base, "inner rows at {n}");
-        assert_eq!(outer_rows, (outer - 1) * 2 * 8 * base, "outer rows at {n}");
+        let mut block = n;
+        let expected: Vec<(usize, usize)> = radices
+            .iter()
+            .map(|&radix| {
+                block /= radix;
+                (radix, (radix - 1) * 2 * block)
+            })
+            .collect();
+        assert_eq!(levels, expected, "chain levels at {n}");
         assert_eq!(inner, 0, "no sink tables at {n}");
         assert!(plan.twiddle_fwd.is_none() && plan.twiddle_inv.get().is_none());
         let source = signal(n);
@@ -677,13 +694,13 @@ fn eight_block_2048_plans_keep_their_twiddle_rows_in_the_256_state() {
         return;
     }
     assert!(plan.twiddle_fwd.is_none() && plan.twiddle_inv.get().is_none());
-    assert_eq!(state.sinks().rows().len(), 7 * 2 * 256);
+    assert_eq!(state.sinks().chain()[0].rows().len(), 7 * 2 * 256);
     assert_eq!(state.sinks().inner().len(), 0);
     assert_eq!(state.sinks().outer().len(), 0);
     assert!(!state.inverse_is_initialized() && !state.inverse_sinks_initialized());
     // Chunk-major entry `j - 1` at sample `k` is `W_2048^{j k}`, the cache value for `j k`
     // reduced modulo 2048 and negated past the half circle.
-    let rows = state.sinks().rows();
+    let rows = state.sinks().chain()[0].rows();
     let cache = <f32 as crate::application::execution::kernel::mixed_radix::MixedRadixScalar>::cached_twiddle_fwd(N);
     for j in 1..8 {
         for k in 0..256 {

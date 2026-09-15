@@ -88,11 +88,12 @@ where
         assert_spectrum::<F, N>(&static_output, direction, unit_roundoff);
     }
 
-    // 2048 to 32768 are column-first steps over the width's base where it
-    // builds (ADR 0061); the four-step route starts past 32768 there.
+    // 2048 to 262144 are column-first chains over the width's base where it
+    // builds (ADR 0061); the four-step route starts past 262144 there.
     if N == 1024
-        || ((N == 2048 || N == 8192 || N == 16384) && dynamic.base256.is_some())
-        || ((N == 4096 || N == 32_768) && dynamic.base512.is_some())
+        || ((N == 2048 || N == 8192 || N == 16384 || N == 65_536 || N == 131_072)
+            && dynamic.base256.is_some())
+        || ((N == 4096 || N == 32_768 || N == 262_144) && dynamic.base512.is_some())
     {
         assert!(matches!(dynamic.strategy, PlanStrategy::PowerOfTwo { .. }));
         assert_eq!(dynamic.twiddle_fwd.as_deref().map_or(0, <[_]>::len), 0);

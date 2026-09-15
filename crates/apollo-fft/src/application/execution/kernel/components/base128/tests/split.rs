@@ -1,11 +1,12 @@
 //! Independent ordering and normalization oracles for the column-first
-//! routes: 2048 and its chains 8192, 16384 and 32768.
+//! routes: 2048 and 4096, and the chains from 8192 to 262144.
 
 use eunomia::{Complex32, Complex64};
 
 const LENGTH: usize = 2048;
 /// Every length the column-first steps serve above the base.
-const COLUMN_FIRST_LENGTHS: [usize; 5] = [2048, 4096, 8192, 16_384, 32_768];
+const COLUMN_FIRST_LENGTHS: [usize; 8] =
+    [2048, 4096, 8192, 16_384, 32_768, 65_536, 131_072, 262_144];
 
 #[test]
 fn impulse_and_constant_have_exact_spectra() {
@@ -150,20 +151,20 @@ where
         hermes_simd::vectorize_lanes::<4, T, _>(super::super::split_boundary::InterleaveBlocks::<
             T,
             BLOCKS,
-            512,
         > {
             src: &lanes,
             dst: &mut narrow,
+            block_lanes: 512,
         })
         .unwrap_or(false);
     let wide_handled =
         hermes_simd::vectorize_lanes::<8, T, _>(super::super::split_boundary::InterleaveBlocks::<
             T,
             BLOCKS,
-            512,
         > {
             src: &lanes,
             dst: &mut wide,
+            block_lanes: 512,
         })
         .unwrap_or(false);
     assert!(narrow_handled, "four-lane interleave must be handled");
