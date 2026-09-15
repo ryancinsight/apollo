@@ -88,7 +88,13 @@ fn two_by_prime_ordered_rader<
     generator_inverse: usize,
 ) {
     let n = prime * 2;
-    debug_assert!(data.len() >= n);
+    // The load and combine passes below index `data` unchecked; its length is
+    // held here, once per transform, in every build.
+    assert!(
+        data.len() >= n,
+        "two-by-prime: {} samples for a transform of n = {n}",
+        data.len()
+    );
 
     let twiddles = F::cached_four_step_twiddles::<INVERSE>(n, prime, 2);
     let input_order =
@@ -128,7 +134,13 @@ fn two_by_prime_natural_prime<
     prime: usize,
 ) {
     let n = prime * 2;
-    debug_assert!(data.len() >= n);
+    // The load and combine passes below index `data` unchecked; its length is
+    // held here, once per transform, in every build.
+    assert!(
+        data.len() >= n,
+        "two-by-prime: {} samples for a transform of n = {n}",
+        data.len()
+    );
 
     if fuse_two_prime_natural::<F, INVERSE>(data, prime) {
         return;
@@ -164,6 +176,8 @@ fn load_even_odd_ordered<F: MixedRadixScalar<Complex = eunomia::Complex<F>>>(
     debug_assert!(even.len() >= prime);
     debug_assert!(odd.len() >= prime);
 
+    // SAFETY: the entry assert holds `src.len() >= 2 * prime` with `prime >= 2`, so
+    // indices 0 and 1 exist, and `even` and `odd` are the `prime`-long halves the caller split.
     unsafe {
         *even.get_unchecked_mut(0) = *src.get_unchecked(0);
         *odd.get_unchecked_mut(0) = *src.get_unchecked(1);
@@ -173,6 +187,9 @@ fn load_even_odd_ordered<F: MixedRadixScalar<Complex = eunomia::Complex<F>>>(
         debug_assert!(src_base + 1 < src.len());
         debug_assert!(1 + q < even.len());
         debug_assert!(1 + q < odd.len());
+        // SAFETY: `j` runs over the generator order, a permutation of `1..prime`, so
+        // `2 j + 1 < 2 prime <= src.len()`; `q < prime - 1`, so `1 + q < prime`, the
+        // length of `even` and `odd`.
         unsafe {
             *even.get_unchecked_mut(1 + q) = *src.get_unchecked(src_base);
             *odd.get_unchecked_mut(1 + q) = *src.get_unchecked(src_base + 1);
@@ -188,6 +205,8 @@ fn load_even_compact_odd_natural<C: Copy>(data: &mut [C], even: &mut [C], prime:
         let src_base = j * 2;
         debug_assert!(src_base + 1 < data.len());
         debug_assert!(j < even.len());
+        // SAFETY: `j < prime`, so `2 j + 1 < 2 prime <= data.len()` (the entry assert) and
+        // `j < prime == even.len()`.
         unsafe {
             *even.get_unchecked_mut(j) = *data.get_unchecked(src_base);
             let val = *data.get_unchecked(src_base + 1);
@@ -226,8 +245,12 @@ fn combine_two_prime_ordered<F: MixedRadixScalar<Complex = eunomia::Complex<F>>>
     debug_assert!(even.len() >= prime);
     debug_assert!(odd.len() >= prime);
 
+    // SAFETY: `odd` is the `prime >= 2`-long half the caller split, so index 0 exists.
     let b0 = unsafe { *odd.get_unchecked(0) };
+    // SAFETY: `even` is the `prime >= 2`-long half the caller split, so index 0 exists.
     let e0 = unsafe { *even.get_unchecked(0) };
+    // SAFETY: `dst` is the entry `data`, at least `2 * prime` long, so indices 0 and
+    // `prime` exist.
     unsafe {
         *dst.get_unchecked_mut(0) = e0 + b0;
         *dst.get_unchecked_mut(prime) = e0 - b0;
@@ -243,6 +266,8 @@ fn combine_two_prime_ordered<F: MixedRadixScalar<Complex = eunomia::Complex<F>>>
         debug_assert!(1 + q < odd.len());
         debug_assert!(1 + q < even.len());
         debug_assert!(k + prime < dst.len());
+        // SAFETY: `k` is a generator power below `prime == twiddles.len()`; `q < prime - 1`,
+        // so `1 + q < prime == even.len() == odd.len()`; and `k + prime < 2 prime <= dst.len()`.
         unsafe {
             let wb = *twiddles.get_unchecked(k) * *odd.get_unchecked(1 + q);
             let a = *even.get_unchecked(1 + q);
@@ -264,6 +289,8 @@ fn combine_two_prime_natural_compacted<F: MixedRadixScalar<Complex = eunomia::Co
     debug_assert!(even.len() >= prime);
 
     for k in 0..prime {
+        // SAFETY: `k < prime == twiddles.len() == even.len()`, and `k + prime < 2 prime <=
+        // dst.len()`, the entry assert.
         unsafe {
             let wb = *twiddles.get_unchecked(k) * *dst.get_unchecked(k);
             let a = *even.get_unchecked(k);
