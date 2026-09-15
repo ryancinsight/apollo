@@ -613,9 +613,11 @@ pub(super) fn exec_pot_forward_sized<F: MixedRadixScalar<Complex = Complex<F>>, 
     slice: &mut [F::Complex],
 ) {
     with_pot_zst!(LOG2, _s, {
-        if let Some(tw) = &plan.twiddle_fwd {
-            F::pot_inplace_sized::<false, false, StockhamAutosort, LOG2>(slice, tw, _s);
-        }
+        F::pot_inplace_sized::<false, false, StockhamAutosort, LOG2>(
+            slice,
+            plan.forward_twiddles(),
+            _s,
+        );
     });
 }
 
@@ -680,9 +682,7 @@ pub(super) fn exec_pot_forward_generic<F: MixedRadixScalar<Complex = Complex<F>>
     plan: &FftPlan1D<F>,
     slice: &mut [F::Complex],
 ) {
-    if let Some(tw) = &plan.twiddle_fwd {
-        F::pot_inplace::<false, false>(slice, tw);
-    }
+    F::pot_inplace::<false, false>(slice, plan.forward_twiddles());
 }
 pub(super) fn exec_pot_inverse_generic<F: MixedRadixScalar<Complex = Complex<F>>>(
     plan: &FftPlan1D<F>,

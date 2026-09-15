@@ -118,6 +118,18 @@ impl<F: MixedRadixScalar<Complex = Complex<F>>> FftPlan1D<F> {
     /// `Arc` clone thereafter); every later call reads the initialized
     /// `OnceLock` with no synchronization beyond its acquire load.
     #[inline]
+    /// The forward stage-major table of the power-of-two routes that run
+    /// on one: built exactly when no base route is selected, so a plan
+    /// dispatched to those executors without it is a routing defect, never
+    /// a transform to skip (the 2^19 case of 2026-09-15 ran the generic
+    /// executor with a base state and read as a transform 14x faster than
+    /// RustFFT).
+    pub(super) fn forward_twiddles(&self) -> &[F::Complex] {
+        self.twiddle_fwd
+            .as_deref()
+            .expect("invariant: a power-of-two plan without a base route owns its forward table")
+    }
+
     pub(crate) fn inverse_twiddles(&self) -> &Arc<[F::Complex]> {
         self.twiddle_inv
             .get_or_init(|| F::cached_twiddle_inv(self.n))
