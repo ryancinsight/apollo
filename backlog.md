@@ -31,7 +31,8 @@
 - **Dependencies:** none. **Verification:** generic instantiation over `f32`/`f64`, property tests over random supports, benchmark with committed budget.
 
 <a id="apollo-sdft-recurrence-stability"></a>
-## APOLLO-SDFT-RECURRENCE-STABILITY — Bound sliding-DFT rounding drift [patch] — todo
+## APOLLO-SDFT-RECURRENCE-STABILITY — Bound sliding-DFT rounding drift [patch] — in-progress
+- **Integrator:** claude-fable-5.1 (session 5bed7001); **branch:** `fix/apollo-sdft-recurrence-stability` (lane apollo-route, stacked on #459); **lease:** `crates/apollo-sdft/**`, `CHANGELOG.md`, this entry; **last-update:** 2026-09-15.
 - **Outcome:** the streaming update carries a stated, tested bound on accumulated rounding error over unbounded update counts.
 - **Evidence:** `crates/apollo-sdft/src/infrastructure/kernel/sliding.rs:4-6` applies `X_k <- (X_k + x_new - x_old) · exp(2πi k/N)` with no damping, reset or modulated form; the recurrence's pole sits on the unit circle, so rounding error accumulates without bound (Jacobsen and Lyons, "The sliding DFT", IEEE SP Mag 20(2), 2003, section on stability; Duda, "Accurate, guaranteed stable, sliding DFT", IEEE SP Mag 27(6), 2010). No stability test or recorded limitation exists in the crate.
 - **Scope:** a drift test driving at least `10^6` updates in `f32` against a direct-DFT oracle at the final window, then the stabilization the measurement justifies (modulated SDFT or damping with a derived bound), one implementation, documented. Non-goals: API change beyond a typed configuration where the bound requires it.
