@@ -135,10 +135,10 @@ pub(crate) fn good_thomas_function(
             // Transform rows using zero-cost pointer cast
             for i1 in 0..#n1 {
                 let row_start = i1 * #n2;
+                // SAFETY: `row_start + N2 = (i1 + 1) * N2 <= N1 * N2`, the scratch length, and the
+                // gather initialized every slot; the cast views that contiguous run as the row array.
                 let row = unsafe { &mut *(scratch_ptr.add(row_start) as *mut [eunomia::Complex<F>; #n2]) };
-                unsafe {
-                    <F as crate::application::execution::kernel::mixed_radix::traits::ShortDft<#n2>>::dft::<INVERSE>(row);
-                }
+                <F as crate::application::execution::kernel::mixed_radix::traits::ShortDft<#n2>>::dft::<INVERSE>(row);
             }
         }
     };
@@ -151,13 +151,15 @@ pub(crate) fn good_thomas_function(
             let [destination0, destination1, destination2] = destinations;
             quote! {
                 let mut col = [
+                    // SAFETY: the three column slots `i1 * N2 + i2` for `i1 = 0, 1, 2` lie below
+                    // `N1 * N2`, the scratch length, and the gather initialized them.
                     unsafe { scratch_ptr.add(#scratch0).read() },
+                    // SAFETY: as above, the slot for `i1 = 1`.
                     unsafe { scratch_ptr.add(#scratch1).read() },
+                    // SAFETY: as above, the slot for `i1 = 2`.
                     unsafe { scratch_ptr.add(#scratch2).read() },
                 ];
-                unsafe {
-                    <F as crate::application::execution::kernel::mixed_radix::traits::ShortDft<#n1>>::dft::<INVERSE>(&mut col);
-                }
+                <F as crate::application::execution::kernel::mixed_radix::traits::ShortDft<#n1>>::dft::<INVERSE>(&mut col);
                 data[#destination0] = col[0];
                 data[#destination1] = col[1];
                 data[#destination2] = col[2];
@@ -177,12 +179,13 @@ pub(crate) fn good_thomas_function(
                 let mut col = std::mem::MaybeUninit::<[eunomia::Complex<F>; #n1]>::uninit();
                 let col_ptr = col.as_mut_ptr() as *mut eunomia::Complex<F>;
                 for i1 in 0..#n1 {
+                    // SAFETY: `i1 < N1`, so the write lies inside the `N1` slots of `col` and the
+                    // read `i1 * N2 + i2 < N1 * N2` inside the initialized scratch.
                     unsafe { col_ptr.add(i1).write(scratch_ptr.add(i1 * #n2 + i2).read()); }
                 }
+                // SAFETY: the loop above wrote all `N1` slots.
                 let col = unsafe { col.assume_init_mut() };
-                unsafe {
-                    <F as crate::application::execution::kernel::mixed_radix::traits::ShortDft<#n1>>::dft::<INVERSE>(col);
-                }
+                <F as crate::application::execution::kernel::mixed_radix::traits::ShortDft<#n1>>::dft::<INVERSE>(col);
 
                 let base = (i2 * #n1 * inv_n1_n2) % #n;
                 let mut dest_idx = base;
@@ -273,7 +276,7 @@ pub fn generate_good_thomas_dispatch(input: CompilerTokenStream) -> CompilerToke
         quote! {
             (#n1, #n2) => {
                 let arr: &mut [F::Complex; #n] = data.try_into().unwrap();
-                unsafe { #fn_name::<F, INVERSE>(arr); }
+                #fn_name::<F, INVERSE>(arr);
             }
         }
     });
