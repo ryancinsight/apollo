@@ -340,6 +340,39 @@ pub fn ifft_2d_array_into<T>(
     );
 }
 
+/// Inverse 2D FFT of an `(nx, ny/2 + 1)` half spectrum into caller-owned real
+/// storage, consuming the spectrum as scratch.
+///
+/// Inverts [`fft_2d_array_half_into`](crate::fft_2d_array_half_into) with the
+/// `1 / (nx * ny)` normalization of the full inverse: the result is the real
+/// part of the full inverse of the half spectrum's Hermitian completion, so
+/// imaginary parts a real field's spectrum cannot carry are ignored. The x
+/// pass runs on the half plane and each row through the half-length inverse
+/// where the split admits `ny`; allocates nothing on a warm plan.
+///
+/// # Panics
+///
+/// Panics on a zero dimension, or if `field_hat` is not a C-contiguous
+/// `(nx, ny/2 + 1)` array for `out`'s shape.
+pub fn ifft_2d_array_half_into<T>(
+    field_hat: &mut Array2<Complex<T::PlanScalar>>,
+    out: &mut Array2<T>,
+) where
+    T: RealFftData + PlanCacheProvider,
+    Complex<T::PlanScalar>: PlanScratch,
+    <T as RealFftData>::PlanScalar: PlanCacheProvider,
+{
+    let [nx, ny] = out.shape();
+    T::inverse_2d_half_into(
+        T::get_2d_plan(
+            Shape2D::new(nx, ny).expect("ifft_2d_array_half_into requires non-zero dimensions"),
+        )
+        .as_ref(),
+        field_hat,
+        out,
+    );
+}
+
 /// Inverse 2D FFT into caller-owned typed real storage and typed scratch
 /// spectrum for a compile-time-known shape.
 pub fn ifft_2d_array_static_into<T, const NX: usize, const NY: usize>(

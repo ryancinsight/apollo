@@ -21,19 +21,24 @@ let volume: Array3<Complex64> = fft_3d_array(&real_field);
 ## Half Spectrum
 
 A real input's spectrum repeats itself as conjugates: `X[N-k] = conj(X[k])` in
-one dimension, and in three every bin with `k > nz/2` is the conjugate of one
-with `k < nz/2`. The half forms keep only the bins that are not repeated, and
-compute only those: consecutive pairs of reals are packed as one complex
-sample and transformed at half the length, and in three dimensions the x and y
-passes then run on the half volume.
+one dimension, and in two or three every bin past the half of the last axis
+is the conjugate of one below it. The half forms keep only the bins that are
+not repeated, and compute only those: consecutive pairs of reals are packed as
+one complex sample and transformed at half the length, and in two and three
+dimensions the remaining passes then run on the half plane or volume.
 
 ```rust,ignore
 use apollo_fft::{fft_1d_slice_half_into, ifft_1d_slice_half_into};
+use apollo_fft::{fft_2d_array_half_into, ifft_2d_array_half_into};
 use apollo_fft::{fft_3d_array_half_into, ifft_3d_array_half_into};
 
 // [N] -> [N/2 + 1]; the inverse consumes the spectrum as scratch.
 fft_1d_slice_half_into(&signal, &mut half);
 ifft_1d_slice_half_into(&mut half, &mut signal_back);
+
+// [nx, ny] -> [nx, ny/2 + 1], and back.
+fft_2d_array_half_into(&plane, &mut half_plane);
+ifft_2d_array_half_into(&mut half_plane, &mut plane_back);
 
 // [nx, ny, nz] -> [nx, ny, nz/2 + 1], and back.
 fft_3d_array_half_into(&field, &mut half_volume);
@@ -41,11 +46,11 @@ ifft_3d_array_half_into(&mut half_volume, &mut field_back);
 ```
 
 The packing needs a length that is a positive multiple of four; other lengths
-are served through the full transform. The 3-D inverse returns the real part of
-the full inverse of the half spectrum's Hermitian completion, so imaginary
-parts a real field's spectrum cannot have are ignored. `RealFftData` carries the
-same pair for callers that hold a plan (`forward_3d_half_into`,
-`inverse_3d_half_into`).
+are served through the full transform. The 2-D and 3-D inverses return the
+real part of the full inverse of the half spectrum's Hermitian completion, so
+imaginary parts a real field's spectrum cannot have are ignored. `RealFftData`
+carries the same pairs for callers that hold a plan (`forward_2d_half_into`,
+`inverse_2d_half_into`, `forward_3d_half_into`, `inverse_3d_half_into`).
 
 ## Complex FFT (cfft)
 

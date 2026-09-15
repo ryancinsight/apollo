@@ -3,7 +3,8 @@ use super::super::twiddles::cached_power_of_two_twiddle;
 use crate::application::execution::kernel::mixed_radix::scalar::plan_scratch::{
     with_2d_scratch, PlanScratch,
 };
-use crate::application::execution::kernel::mixed_radix::{dispatch_inplace, MixedRadixScalar};
+use crate::application::execution::kernel::mixed_radix::MixedRadixScalar;
+use crate::application::execution::kernel::real_fft::split_twiddle_table;
 use crate::application::execution::plan::fft::layout::{transpose_matrices, with_c_order_view};
 use crate::domain::metadata::shape::Shape2D;
 use eunomia::Complex;
@@ -14,10 +15,18 @@ use std::sync::Arc;
 pub struct FftPlan2D<F: MixedRadixScalar> {
     nx: usize,
     ny: usize,
+    ny_c: usize,
     twiddle_row_fwd: Option<Arc<[F::Complex]>>,
     twiddle_row_inv: Option<Arc<[F::Complex]>>,
     twiddle_col_fwd: Option<Arc<[F::Complex]>>,
     twiddle_col_inv: Option<Arc<[F::Complex]>>,
+    /// Tables for the packed rows of the real split: a real row of `ny`
+    /// samples is `ny/2` complex ones.
+    twiddle_half_row_fwd: Option<Arc<[F::Complex]>>,
+    twiddle_half_row_inv: Option<Arc<[F::Complex]>>,
+    /// The real split's `W_ny^k`, evaluated once for every row of the
+    /// half-spectrum pair rather than once per row.
+    split_twiddles: Box<[F::Complex]>,
 }
 
 impl<F: MixedRadixScalar> std::fmt::Debug for FftPlan2D<F> {
@@ -25,6 +34,7 @@ impl<F: MixedRadixScalar> std::fmt::Debug for FftPlan2D<F> {
         f.debug_struct("FftPlan2D")
             .field("nx", &self.nx)
             .field("ny", &self.ny)
+            .field("ny_c", &self.ny_c)
             .finish()
     }
 }
@@ -39,14 +49,31 @@ where
     pub fn new(shape: Shape2D) -> Self {
         crate::application::execution::kernel::scratch_hook::ensure_registered();
         let (nx, ny) = (shape.nx(), shape.ny());
+        let m = ny / 2;
         Self {
             nx,
             ny,
+            ny_c: m + 1,
             twiddle_row_fwd: cached_power_of_two_twiddle::<F, true>(ny),
             twiddle_row_inv: cached_power_of_two_twiddle::<F, false>(ny),
             twiddle_col_fwd: cached_power_of_two_twiddle::<F, true>(nx),
             twiddle_col_inv: cached_power_of_two_twiddle::<F, false>(nx),
+            twiddle_half_row_fwd: cached_power_of_two_twiddle::<F, true>(m),
+            twiddle_half_row_inv: cached_power_of_two_twiddle::<F, false>(m),
+            split_twiddles: split_twiddle_table::<F>(ny),
         }
+    }
+
+    /// Return the half-spectrum bookkeeping value `ny / 2 + 1`.
+    #[must_use]
+    pub fn ny_c(&self) -> usize {
+        self.ny_c
+    }
+
+    /// Return the full real-domain shape owned by this plan.
+    #[must_use]
+    pub fn dimensions(&self) -> (usize, usize) {
+        (self.nx, self.ny)
     }
 
     /// Return the validated shape owned by this plan.
@@ -110,74 +137,79 @@ where
         });
     }
 
+    /// One direction's transform of a packed row: the `ny/2` complex samples
+    /// that carry a real row's `ny` values in the real split.
+    pub(crate) fn half_y_lane<const FORWARD: bool>(
+        &self,
+    ) -> impl Fn(&mut [F::Complex]) + Send + Sync + '_ {
+        let twiddles = if FORWARD {
+            &self.twiddle_half_row_fwd
+        } else {
+            &self.twiddle_half_row_inv
+        };
+        lanes::lane_over::<F, FORWARD>(twiddles.as_deref())
+    }
+
+    /// The real split's twiddles for the rows, `W_ny^k` for `k = 1..⌈ny/4⌉`.
+    pub(crate) fn split_twiddles(&self) -> &[F::Complex] {
+        &self.split_twiddles
+    }
+
+    /// One direction's transform of a full row, for real rows the split does
+    /// not admit.
+    pub(crate) fn y_lane<const FORWARD: bool>(
+        &self,
+    ) -> impl Fn(&mut [F::Complex]) + Send + Sync + '_ {
+        self.lane::<FORWARD>(1)
+    }
+
+    /// Transforms axis 0 of a C-order `[nx, row_len]` plane in place.
+    ///
+    /// The half-spectrum pair runs x on the `(nx, ny/2 + 1)` plane its rows
+    /// leave, so `row_len` is the plane's, not the plan's. The columns are
+    /// transposed into the plan's full-plane scratch, transformed there as
+    /// contiguous lanes, and transposed back.
+    pub(crate) fn x_axis_inplace<const FORWARD: bool>(
+        &self,
+        data: &mut [F::Complex],
+        row_len: usize,
+    ) {
+        with_2d_scratch::<F::Complex, _>(self.nx * row_len, |scratch| {
+            transpose_matrices(data, scratch, 1, self.nx, row_len);
+            lanes::execute::<F, FORWARD>(scratch, data, self.nx, self.lane::<FORWARD>(0));
+            transpose_matrices(scratch, data, 1, row_len, self.nx);
+        });
+    }
+
     fn axis_pass_complex<const FORWARD: bool>(
         &self,
-        data: ArrayViewMut2<'_, F::Complex>,
+        mut data: ArrayViewMut2<'_, F::Complex>,
         axis: usize,
     ) {
-        if axis == 1 {
-            self.axis1_pass_complex::<FORWARD>(data);
-            return;
-        }
-        if axis == 0 {
-            self.axis0_pass_complex::<FORWARD>(data);
-            return;
-        }
-
-        unreachable!("2D FFT axis index must be 0 or 1");
-    }
-
-    fn axis1_pass_complex<const FORWARD: bool>(&self, mut data: ArrayViewMut2<'_, F::Complex>) {
         let data_slice = data
             .as_mut_slice()
             .expect("invariant: 2D axis execution receives C-order data");
-        let lane_fn =
-            |lane: &mut [F::Complex]| match (FORWARD, &self.twiddle_row_fwd, &self.twiddle_row_inv)
-            {
-                (true, Some(tw), _) => dispatch_inplace::<F, false, false>(lane, Some(tw.as_ref())),
-                (false, _, Some(tw)) => dispatch_inplace::<F, true, true>(lane, Some(tw.as_ref())),
-                _ => {
-                    if FORWARD {
-                        crate::application::execution::kernel::mixed_radix::forward_inplace::<F>(
-                            lane,
-                        )
-                    } else {
-                        crate::application::execution::kernel::mixed_radix::inverse_inplace::<F>(
-                            lane,
-                        )
-                    }
-                }
-            };
-        lanes::contiguous::<F, FORWARD, 2>(data_slice, self.ny, lane_fn);
+        match axis {
+            0 => self.x_axis_inplace::<FORWARD>(data_slice, self.ny),
+            1 => lanes::contiguous::<F, FORWARD, 2>(data_slice, self.ny, self.lane::<FORWARD>(1)),
+            _ => unreachable!("invariant: the entry points validate the axis"),
+        }
     }
 
-    fn axis0_pass_complex<const FORWARD: bool>(&self, mut data: ArrayViewMut2<'_, F::Complex>) {
-        let data_slice = data
-            .as_mut_slice()
-            .expect("invariant: 2D axis execution receives C-order data");
-        with_2d_scratch::<F::Complex, _>(self.nx * self.ny, |scratch| {
-            transpose_matrices(data_slice, scratch, 1, self.nx, self.ny);
-            let lane_fn = |lane: &mut [F::Complex]| match (
-                FORWARD,
-                &self.twiddle_col_fwd,
-                &self.twiddle_col_inv,
-            ) {
-                (true, Some(tw), _) => dispatch_inplace::<F, false, false>(lane, Some(tw.as_ref())),
-                (false, _, Some(tw)) => dispatch_inplace::<F, true, true>(lane, Some(tw.as_ref())),
-                _ => {
-                    if FORWARD {
-                        crate::application::execution::kernel::mixed_radix::forward_inplace::<F>(
-                            lane,
-                        )
-                    } else {
-                        crate::application::execution::kernel::mixed_radix::inverse_inplace::<F>(
-                            lane,
-                        )
-                    }
-                }
-            };
-            lanes::execute::<F, FORWARD>(scratch, data_slice, self.nx, lane_fn);
-            transpose_matrices(scratch, data_slice, 1, self.ny, self.nx);
-        });
+    /// One direction's lane transform along `axis`: the cached power-of-two
+    /// twiddles where the length has them, the generic mixed radix otherwise.
+    fn lane<const FORWARD: bool>(
+        &self,
+        axis: usize,
+    ) -> impl Fn(&mut [F::Complex]) + Send + Sync + '_ {
+        let twiddles = match (axis, FORWARD) {
+            (0, true) => &self.twiddle_col_fwd,
+            (0, false) => &self.twiddle_col_inv,
+            (1, true) => &self.twiddle_row_fwd,
+            (1, false) => &self.twiddle_row_inv,
+            _ => unreachable!("invariant: the entry points validate the axis"),
+        }
+        .as_deref();
+        lanes::lane_over::<F, FORWARD>(twiddles)
     }
 }

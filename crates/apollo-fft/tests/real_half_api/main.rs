@@ -1,20 +1,23 @@
-//! The half-spectrum API, in one dimension and in three.
+//! The half-spectrum API, in one dimension, in two and in three.
 //!
 //! A real signal's spectrum satisfies `X[n-k] = conj(X[k])`, so its upper half
-//! carries no information, and a real field's 3-D spectrum repeats every bin
-//! with `k > nz/2` the same way. The half forms skip that half — its storage
-//! and, in three dimensions, the passes over it. These tests pin that skipping
+//! carries no information, and a real field's 2-D or 3-D spectrum repeats every
+//! bin past the half of its last axis the same way. The half forms skip that
+//! half — its storage and, in two and three dimensions, the passes over it.
+//! These tests pin that skipping
 //! it changes nothing about the bins a caller receives or the signal an
 //! inverse returns.
 //!
 //! ## Oracles, in order of authority
 //!
 //! 1. **Agreement with the full transforms.** The 1-D half forward shares the
-//!    full one's code path, so their shared bins must be *identical*; the 3-D
-//!    pair runs different passes, so its bins agree within the derived bound.
+//!    full one's code path, so their shared bins must be *identical*; the 2-D
+//!    and 3-D pairs run different passes, so their bins agree within the
+//!    derived bound, and the 2-D pair agrees with the 3-D one on a plane
+//!    stored as a unit-depth volume.
 //! 2. **Conjugate symmetry**, a property of the input rather than of any
-//!    implementation: the discarded half must be recoverable, and the 3-D
-//!    inverse must be the real part of the full inverse of the Hermitian
+//!    implementation: the discarded half must be recoverable, and the 2-D and 3-D
+//!    inverses must be the real part of the full inverse of the Hermitian
 //!    completion for any half spectrum.
 //! 3. **Differential against RealFFT**, an independently authored real-FFT
 //!    implementation whose public contract is this same `n/2 + 1` shape.
@@ -24,6 +27,7 @@
 
 mod forward;
 mod inverse;
+mod plane;
 mod volume;
 
 use apollo_fft::{PlanCacheProvider, RealFftData, F16};

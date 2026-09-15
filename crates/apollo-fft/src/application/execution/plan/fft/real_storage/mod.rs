@@ -20,6 +20,7 @@ use leto::{Array1, Array2, Array3};
 
 mod compact;
 pub(super) mod fill;
+mod half_plane;
 mod half_volume;
 mod precise;
 mod reduced;
@@ -313,6 +314,50 @@ where
     {
         plan.inverse_complex_inplace(spectrum);
         fill_real(spectrum, output);
+    }
+    /// Forward 2D transform of a real field into its `(nx, ny/2 + 1)` half
+    /// spectrum, the bins the full transform does not repeat.
+    ///
+    /// The rows go through the real split straight into `output`, and x then
+    /// runs on the half plane. An `ny` the split does not admit
+    /// ([`RealFftData::real_split_applies`]) widens each row to complex
+    /// instead, borrowing one row of thread-local scratch per scheduled task
+    /// (the same rank-disjoint role a non-contiguous input view would stage
+    /// through) rather than allocating it — a warm plan costs nothing beyond
+    /// that borrow. A strided `input` is copied once.
+    ///
+    /// # Panics
+    ///
+    /// Panics if `input` is not the plan's shape, or `output` is not a
+    /// C-contiguous `(nx, ny/2 + 1)` array.
+    fn forward_2d_half_into(
+        plan: &FftPlan2D<Self::PlanScalar>,
+        input: &Array2<Self>,
+        output: &mut Array2<Complex<Self::PlanScalar>>,
+    ) where
+        Complex<Self::PlanScalar>: PlanScratch,
+    {
+        half_plane::forward(plan, input, output);
+    }
+    /// Inverse of [`RealFftData::forward_2d_half_into`], consuming `spectrum`
+    /// as scratch and normalized like [`RealFftData::inverse_2d_into`].
+    ///
+    /// The result is the real part of the full inverse of the spectrum's
+    /// Hermitian completion, so the imaginary parts a real field's spectrum
+    /// cannot carry are ignored rather than rejected.
+    ///
+    /// # Panics
+    ///
+    /// Panics if `spectrum` is not a C-contiguous `(nx, ny/2 + 1)` array or
+    /// `output` is not a C-contiguous array of the plan's shape.
+    fn inverse_2d_half_into(
+        plan: &FftPlan2D<Self::PlanScalar>,
+        spectrum: &mut Array2<Complex<Self::PlanScalar>>,
+        output: &mut Array2<Self>,
+    ) where
+        Complex<Self::PlanScalar>: PlanScratch,
+    {
+        half_plane::inverse(plan, spectrum, output);
     }
     /// Forward 2D transform into caller-owned spectrum storage using a
     /// compile-time-known shape and zero-sized static plan.

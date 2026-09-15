@@ -3,7 +3,9 @@
 use super::dimension_1d::strategy::generic_four_step_applies;
 use crate::application::execution::kernel::components::four_step;
 use crate::application::execution::kernel::mixed_radix::scalar::plan_scratch::PlanScratch;
-use crate::application::execution::kernel::mixed_radix::MixedRadixScalar;
+use crate::application::execution::kernel::mixed_radix::{
+    dispatch_inplace, forward_inplace, inverse_inplace, MixedRadixScalar,
+};
 use eunomia::Complex;
 
 /// Existing multidimensional crossover, measured in total complex elements.
@@ -201,6 +203,24 @@ where
         four_step::four_step_fft::<F, false, false>(lane, scratch);
     } else {
         four_step::four_step_fft::<F, true, true>(lane, scratch);
+    }
+}
+
+/// One direction's transform of a lane of the table's length: the cached
+/// power-of-two twiddles where the length has them, the generic mixed radix
+/// otherwise.
+pub(super) fn lane_over<F, const FORWARD: bool>(
+    twiddles: Option<&[F::Complex]>,
+) -> impl Fn(&mut [F::Complex]) + Send + Sync + '_
+where
+    F: MixedRadixScalar<Complex = Complex<F>>,
+    F::Complex: PlanScratch,
+{
+    move |lane: &mut [F::Complex]| match (FORWARD, twiddles) {
+        (true, Some(twiddles)) => dispatch_inplace::<F, false, false>(lane, Some(twiddles)),
+        (false, Some(twiddles)) => dispatch_inplace::<F, true, true>(lane, Some(twiddles)),
+        (true, None) => forward_inplace::<F>(lane),
+        (false, None) => inverse_inplace::<F>(lane),
     }
 }
 

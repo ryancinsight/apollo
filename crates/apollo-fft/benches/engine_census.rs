@@ -34,7 +34,9 @@
 //! produce `n/2 + 1` bins into caller-owned storage. `real_full_forward_f64`
 //! keeps Apollo's full-spectrum form beside it, unpaired: the distance between
 //! the two Apollo rows *is* the cost of materializing the redundant half, which
-//! is worth seeing rather than hiding.
+//! is worth seeing rather than hiding. The 2-D real rows
+//! (`real_half_forward_2d_f64` and the inverse) have no RealFFT pairing and
+//! stand beside the full-spectrum 2-D forms the same way.
 //!
 //! ## Interpreting the allocation column
 //!
@@ -947,6 +949,66 @@ fn main() -> Result<(), apollo_bench::BenchmarkError> {
             },
         );
 
+        // The real rows: the half-spectrum pair into caller-owned storage
+        // beside the full-spectrum forms, unpaired, so the distance between
+        // the two Apollo rows is the cost of the widened columns and the
+        // redundant half.
+        const TWO_D_REAL_HALF: &str = "real_half_forward_2d_f64";
+        const TWO_D_REAL_FULL: &str = "real_full_forward_2d_f64";
+        const TWO_D_REAL_HALF_INVERSE: &str = "real_half_inverse_2d_f64";
+        const TWO_D_REAL_FULL_INVERSE: &str = "real_full_inverse_2d_f64";
+        let real_plane = Array2::from_shape_vec((nx, ny), src.iter().map(|v| v.re).collect())
+            .expect("shape matches the data");
+        let mut half_plane = Array2::from_elem([nx, ny / 2 + 1], Complex64::default());
+        flush_cache(&mut flush);
+        suite.run_with_config(
+            config,
+            BenchmarkCase::new(TWO_D_REAL_HALF, "apollo", shape.clone()),
+            || {
+                apollo_fft::fft_2d_array_half_into::<f64>(
+                    black_box(&real_plane),
+                    black_box(&mut half_plane),
+                );
+                black_box(&half_plane);
+            },
+        );
+        flush_cache(&mut flush);
+        suite.run_with_config(
+            config,
+            BenchmarkCase::new(TWO_D_REAL_FULL, "apollo", shape.clone()),
+            || {
+                black_box(apollo_fft::fft_2d_array::<f64>(black_box(&real_plane)));
+            },
+        );
+        let full_plane = apollo_fft::fft_2d_array::<f64>(&real_plane);
+        let mut half_work = half_plane.clone();
+        let mut real_out = Array2::from_elem([nx, ny], 0.0_f64);
+        flush_cache(&mut flush);
+        suite.run_with_config(
+            config,
+            BenchmarkCase::new(TWO_D_REAL_HALF_INVERSE, "apollo", shape.clone()),
+            || {
+                half_work.assign(&half_plane.view());
+                apollo_fft::ifft_2d_array_half_into::<f64>(
+                    black_box(&mut half_work),
+                    black_box(&mut real_out),
+                );
+                black_box(&real_out);
+            },
+        );
+        flush_cache(&mut flush);
+        suite.run_with_config(
+            config,
+            BenchmarkCase::new(TWO_D_REAL_FULL_INVERSE, "apollo", shape.clone()),
+            || {
+                black_box(apollo_fft::ifft_2d_array::<f64>(black_box(&full_plane)));
+            },
+        );
+        let (half_allocs, half_bytes) = count_allocations(|| {
+            apollo_fft::fft_2d_array_half_into::<f64>(&real_plane, &mut half_plane);
+            apollo_fft::ifft_2d_array_half_into::<f64>(&mut half_work, &mut real_out);
+        });
+
         let (allocs, bytes) = count_allocations(|| {
             plane
                 .as_slice_mut()
@@ -954,7 +1016,10 @@ fn main() -> Result<(), apollo_bench::BenchmarkError> {
                 .copy_from_slice(&src);
             apollo.forward_complex_inplace(&mut plane);
         });
-        eprintln!("engine_census: 2-D {shape:<10} apollo allocations/call — {allocs} ({bytes} B)");
+        eprintln!(
+            "engine_census: 2-D {shape:<10} apollo allocations/call — complex {allocs} ({bytes} B), \
+             real-half pair {half_allocs} ({half_bytes} B)"
+        );
     }
 
     let [nx, ny, nz] = THREE_D_SHAPE;

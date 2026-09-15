@@ -227,6 +227,35 @@ where
     );
 }
 
+/// Forward 2D FFT of a real array into its `(nx, ny/2 + 1)` half spectrum.
+///
+/// The bins with a row index past `ny/2` repeat the others as conjugates, so
+/// this writes only the rest: each row goes through the real split and the x
+/// pass runs on the half plane, half the data the full transform moves. Rows
+/// the split does not admit ([`RealFftData::real_split_applies`]) are widened
+/// to complex instead. Allocates nothing on a warm plan.
+///
+/// # Panics
+///
+/// Panics on a zero dimension, or if `out` is not a C-contiguous
+/// `(nx, ny/2 + 1)` array.
+pub fn fft_2d_array_half_into<T>(field: &Array2<T>, out: &mut Array2<Complex<T::PlanScalar>>)
+where
+    T: RealFftData + PlanCacheProvider,
+    Complex<T::PlanScalar>: PlanScratch,
+    <T as RealFftData>::PlanScalar: PlanCacheProvider,
+{
+    let [nx, ny] = field.shape();
+    T::forward_2d_half_into(
+        T::get_2d_plan(
+            Shape2D::new(nx, ny).expect("fft_2d_array_half_into requires non-zero dimensions"),
+        )
+        .as_ref(),
+        field,
+        out,
+    );
+}
+
 /// Forward 2D FFT of a real array into caller-owned typed spectrum storage for
 /// a compile-time-known shape.
 pub fn fft_2d_array_static_into<T, const NX: usize, const NY: usize>(
