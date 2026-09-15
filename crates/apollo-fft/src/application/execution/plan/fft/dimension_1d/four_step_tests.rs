@@ -88,10 +88,10 @@ where
         assert_spectrum::<F, N>(&static_output, direction, unit_roundoff);
     }
 
-    // 2048 is blocks under a radix step over the width's base where that
-    // base builds (ADR 0061); the four-step route starts past it there.
+    // 2048 is eight 256-blocks under a radix-8 pass where the 256 base
+    // builds (ADR 0061); the four-step route starts past 4096 there.
     if N == 1024
-        || (N == 2048 && (dynamic.base512.is_some() || dynamic.base256.is_some()))
+        || (N == 2048 && dynamic.base256.is_some())
         || (N == 4096 && dynamic.base512.is_some())
     {
         assert!(matches!(dynamic.strategy, PlanStrategy::PowerOfTwo { .. }));

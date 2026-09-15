@@ -540,29 +540,22 @@ fn single_block_512_plans_keep_no_split_table() {
 }
 
 #[test]
-fn four_block_2048_plans_keep_their_sink_tables_in_the_512_state() {
-    // 2048 at four lanes is four sixteen-row blocks under the radix-4
-    // sink: the 512 state carries the inner and outer sink tables,
-    // dup-split and interleaved at the plan's width, and no 256 base is
-    // built beside it. (At eight lanes 2048 is eight 256-blocks, below.)
+fn eight_block_2048_plans_route_through_the_256_state_at_four_lanes() {
+    // 2048 is eight eight-row blocks under the radix-8 pass at either
+    // width: at four lanes the 256 state carries the chunk-major table of
+    // two complexes a register and no 512 base is built beside it.
     let plan = crate::FftPlan1D::<f64>::new(
         crate::Shape1D::new(2048).expect("invariant: shape lengths are non-zero"),
     );
-    if super::instance_major::native_eight_lanes::<f64>() {
-        assert!(
-            plan.base512.is_none(),
-            "2048 at eight lanes takes the 256 base"
-        );
-        return;
-    }
-    let Some(state) = plan.base512.as_ref() else {
+    let Some(state) = plan.base256.as_ref() else {
         assert_incumbent_route_round_trips(&plan, 2048);
         return;
     };
-    assert!(plan.base256.is_none(), "2048 routes through the 512 base");
+    assert!(plan.base512.is_none(), "2048 routes through the 256 base");
     assert!(plan.twiddle_fwd.is_none() && plan.twiddle_inv.get().is_none());
-    assert_eq!(state.sinks().inner().len(), 4 * 512);
-    assert_eq!(state.sinks().outer().len(), 2 * 512);
+    assert_eq!(state.sinks().rows().len(), 7 * 2 * 256);
+    assert_eq!(state.sinks().inner().len(), 0);
+    assert_eq!(state.sinks().outer().len(), 0);
     assert!(!state.inverse_is_initialized() && !state.inverse_sinks_initialized());
     let source = signal(2048);
     let mut data = source.clone();
@@ -572,7 +565,7 @@ fn four_block_2048_plans_keep_their_sink_tables_in_the_512_state() {
     let bound = tolerance(&source);
     assert!(
         error <= bound,
-        "N=2048 four-block forward differs by {error:.3e} > {bound:.3e}"
+        "N=2048 eight-block forward at four lanes differs by {error:.3e} > {bound:.3e}"
     );
     plan.inverse_complex_slice_inplace(&mut data);
     assert!(state.inverse_is_initialized() && state.inverse_sinks_initialized());
@@ -580,7 +573,7 @@ fn four_block_2048_plans_keep_their_sink_tables_in_the_512_state() {
     let bound = 2.0 * tolerance(&source);
     assert!(
         error <= bound,
-        "N=2048 four-block round trip differs by {error:.3e} > {bound:.3e}"
+        "N=2048 eight-block round trip at four lanes differs by {error:.3e} > {bound:.3e}"
     );
 }
 
@@ -593,18 +586,17 @@ fn eight_block_2048_plans_keep_their_twiddle_rows_in_the_256_state() {
     let plan = crate::FftPlan1D::<f32>::new(
         crate::Shape1D::new(N).expect("invariant: shape lengths are non-zero"),
     );
-    if !super::instance_major::native_eight_lanes::<f32>() {
-        assert!(
-            plan.base256.is_none(),
-            "2048 at four lanes takes the 512 base"
-        );
+    let Some(state) = plan.base256.as_deref() else {
+        return;
+    };
+    assert!(plan.base512.is_none(), "2048 routes through the 256 base");
+    let plan_is_wide = super::instance_major::Plan8x16::<f32>::new_if_supported::<false>()
+        .is_some_and(|plan| plan.native_eight_lanes());
+    if !plan_is_wide {
+        // The chunk-major layout below is the eight-lane one; four lanes
+        // are covered by `eight_block_2048_matches_the_direct_transform_at_four_lanes`.
         return;
     }
-    let state = plan
-        .base256
-        .as_deref()
-        .expect("invariant: the eight-lane host builds the 256 base at 2048");
-    assert!(plan.base512.is_none(), "2048 routes through the 256 base");
     assert!(plan.twiddle_fwd.is_none() && plan.twiddle_inv.get().is_none());
     assert_eq!(state.sinks().rows().len(), 7 * 2 * 256);
     assert_eq!(state.sinks().inner().len(), 0);
@@ -820,7 +812,6 @@ fn dynamic_split_plans_normalize_by_full_length() {
         let selected = match n {
             128 => plan.base128.is_some(),
             512 => plan.base512.is_some(),
-            2048 => plan.base512.is_some() || plan.base256.is_some(),
             _ => plan.base256.is_some(),
         };
         if !selected {
