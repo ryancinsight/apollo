@@ -15,7 +15,8 @@
 - Blocker: separate unpublished provider migration; re-open when its corrected Git revision is available. Basis: `src/sync/scoped/partition/executor.rs:149–215` in Melinoe `af052fc`.
 
 <a id="apollo-ntt-circle-group-lengths"></a>
-## APOLLO-NTT-CIRCLE-GROUP-LENGTHS — Admit `n | p + 1` transform lengths [minor] — todo
+## APOLLO-NTT-CIRCLE-GROUP-LENGTHS — Admit `n | p + 1` transform lengths [minor] — in-progress
+- **Integrator:** claude-fable-5.1 (session 5bed7001); **branch:** `feat/apollo-ntt-circle-group` (lane apollo-route, from main — the crate is off the apollo-fft series); **lease:** `crates/apollo-ntt/`, `docs/adr/0065-*.md`, `docs/adr/README.md`, this entry; **last-update:** 2026-09-15. Construction from Haböck, Levit, Papini (ePrint 2024/278, Sections 3.1, 3.2, 4.1, 4.2): twin-coset domain, FFT basis, the y-split then x-splits under the squaring map; the ADR states the basis and the product modulo the vanishing polynomial.
 - **Outcome:** `apollo-ntt` supports power-of-two lengths over primes whose `p + 1` is smooth, such as Mersenne `2^31 − 1`, through the order-`(p + 1)` cyclic subgroup of `PGL₂(p)` (norm-one elements of `F_{p²}`).
 - **Evidence:** `crates/apollo-ntt/src/application/execution/plan/ntt/dimension_1d.rs:47-57` requires `n | modulus − 1` with a primitive root; `2^31 − 1` therefore admits only `n = 2`. Li and Xing, "Fast Fourier transform via automorphism groups of rational function fields", arXiv:2310.14462 (2023), Theorem 1.1 and section 4, give an `O(n log n)` evaluation map for `n | q + 1`; Haböck, Levit and Papini, "Circle STARKs", IACR ePrint 2024/278, give the practical circle-group FFT for the same case.
 - **Scope:** one plan kind over the circle group with its non-monomial basis stated in the contract (the transform is a multipoint evaluation, not the cyclic DFT), forward and inverse, convolution via pointwise product verified. Non-goals: GPU path, arbitrary `B`-smooth `n`.
