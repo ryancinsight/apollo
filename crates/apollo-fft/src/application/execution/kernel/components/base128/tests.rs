@@ -586,8 +586,8 @@ fn four_block_2048_plans_keep_their_sink_tables_in_the_512_state() {
 
 #[test]
 fn eight_block_2048_plans_keep_their_twiddle_rows_in_the_256_state() {
-    // 2048 at eight lanes is eight eight-row blocks under the radix-8 sink:
-    // the 256 state carries the seven interleaved twiddle rows and no
+    // 2048 at eight lanes is eight eight-row blocks after the radix-8 column pass:
+    // the 256 state carries seven chunk-major twiddle registers and no
     // radix-4 tables, and no 512 base is built beside it.
     const N: usize = 2048;
     let plan = crate::FftPlan1D::<f32>::new(
@@ -610,7 +610,7 @@ fn eight_block_2048_plans_keep_their_twiddle_rows_in_the_256_state() {
     assert_eq!(state.sinks().inner().len(), 0);
     assert_eq!(state.sinks().outer().len(), 0);
     assert!(!state.inverse_is_initialized() && !state.inverse_sinks_initialized());
-    // Row `j - 1` at `k` is `W_2048^{j k}`, the cache's value for `j k`
+    // Chunk-major entry `j - 1` at sample `k` is `W_2048^{j k}`, the cache value for `j k`
     // reduced modulo 2048 and negated past the half circle.
     let rows = state.sinks().rows();
     let cache = <f32 as crate::application::execution::kernel::mixed_radix::MixedRadixScalar>::cached_twiddle_fwd(N);
@@ -623,7 +623,7 @@ fn eight_block_2048_plans_keep_their_twiddle_rows_in_the_256_state() {
                 let w = cache[m - 1];
                 Complex32::new(-w.re, -w.im)
             };
-            let lane = ((j - 1) * 256 + k) * 2;
+            let lane = (k / 4 * 7 + j - 1) * 8 + k % 4 * 2;
             assert_eq!(
                 (rows[lane], rows[lane + 1]),
                 (expected.re, expected.im),
@@ -1043,24 +1043,19 @@ fn f32_dynamic_plan_clones_execute_inverse_concurrently() {
 /// right answer: a wrong-width dispatch falls back and still passes value
 /// checks, so this asserts the dispatched width handled the pass and that
 /// its output matches the scalar strided reference.
-fn assert_gather_matches_reference<T, const BLOCKS: usize>()
+fn assert_gather_matches_reference<T>()
 where
     T: crate::application::execution::kernel::mixed_radix::MixedRadixScalar
         + hermes_simd::LaneScalar,
 {
+    const BLOCKS: usize = 4;
     let n = BLOCKS * 128;
     let lanes: Vec<T> = (0..2 * n)
         .map(|i| T::from_precise(((i * 37) % 97) as f64 * 0.125 - 4.0))
         .collect();
     let mut reference = vec![T::from_precise(0.0); 2 * n];
     for b in 0..BLOCKS {
-        // Four blocks land bit-reversed for the radix-4 sink, eight in
-        // natural order for the radix-8 one.
-        let row = if BLOCKS == 4 {
-            b.reverse_bits() >> (usize::BITS - 2)
-        } else {
-            b
-        };
+        let row = b.reverse_bits() >> (usize::BITS - 2);
         for j in 0..128 {
             reference[(row * 128 + j) * 2] = lanes[(j * BLOCKS + b) * 2];
             reference[(row * 128 + j) * 2 + 1] = lanes[(j * BLOCKS + b) * 2 + 1];
@@ -1108,8 +1103,6 @@ where
 
 #[test]
 fn gather_matches_the_strided_reference_at_both_widths() {
-    assert_gather_matches_reference::<f64, 4>();
-    assert_gather_matches_reference::<f32, 4>();
-    assert_gather_matches_reference::<f64, 8>();
-    assert_gather_matches_reference::<f32, 8>();
+    assert_gather_matches_reference::<f64>();
+    assert_gather_matches_reference::<f32>();
 }
