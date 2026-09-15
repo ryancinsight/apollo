@@ -59,6 +59,7 @@ use crate::application::execution::kernel::components::winograd::{
     dft16_impl, dft32_impl, dft64_impl, dft8_array_impl,
 };
 use crate::application::execution::kernel::measurement_cores;
+use crate::application::execution::kernel::mixed_radix::scalar::simd::avx::vector_frame_available;
 use crate::application::execution::kernel::mixed_radix::scalar::{
     n16_framed_lane_pass, n16_fused_round_trip, n16_vector_arm_unchecked, n32_framed_lane_pass,
     n8_framed_lane_pass, n8_fused_round_trip, n8_vector_arm_unchecked,
@@ -150,8 +151,13 @@ fn scalar_round_trip<const N: usize>(work: &mut [Complex64]) {
 /// the loop rather than per call. It isolates the `OnceLock` probe, not the
 /// `#[target_feature]` call boundary, which both arms still pay.
 fn direct_round_trip<const N: usize>(work: &mut [Complex64]) {
-    // SAFETY: the caller establishes AVX and FMA once before the loop, and
-    // sizes the buffer to `N`.
+    debug_assert!(
+        vector_frame_available(),
+        "invariant: the callers skip this arm off the frame"
+    );
+    // SAFETY: `vector_frame_available()` reported the AVX2 and FMA frame for
+    // this process before `assert_arms_agree` or `arms_for_size` ran this
+    // arm — both skip it otherwise — and the buffer is sized to `N`.
     unsafe {
         match N {
             8 => {
@@ -176,8 +182,13 @@ fn direct_round_trip<const N: usize>(work: &mut [Complex64]) {
 /// a caller without the feature. The gap is an upper bound on what hoisting
 /// the frame would buy; the entries it calls carry the reason.
 fn fused_round_trip<const N: usize>(work: &mut [Complex64]) {
-    // SAFETY: the caller establishes AVX and FMA once before the loop, and
-    // sizes the buffer to `N`.
+    debug_assert!(
+        vector_frame_available(),
+        "invariant: the callers skip this arm off the frame"
+    );
+    // SAFETY: `vector_frame_available()` reported the AVX2 and FMA frame for
+    // this process before `assert_arms_agree` or `arms_for_size` ran this
+    // arm — both skip it otherwise — and the buffer is sized to `N`.
     unsafe {
         match N {
             8 => n8_fused_round_trip(work),
@@ -234,8 +245,14 @@ const fn has_framed_arm<const N: usize>() -> bool {
 /// held in registers across transforms: the only thing this removes is one
 /// crossing per lane, which is the quantity a hoisted axis pass would recover.
 fn framed_lane_pass<const N: usize>(work: &mut [Complex64]) {
-    // SAFETY: the caller establishes AVX and FMA once before the loop, and
-    // sizes the buffer to a multiple of `N`.
+    debug_assert!(
+        vector_frame_available(),
+        "invariant: the callers skip this arm off the frame"
+    );
+    // SAFETY: `vector_frame_available()` reported the AVX2 and FMA frame for
+    // this process before `assert_arms_agree` or `arms_for_size` ran this
+    // arm — both skip it otherwise — and the buffer is sized to a multiple
+    // of `N`.
     unsafe {
         match N {
             8 => {
@@ -292,8 +309,8 @@ fn assert_arms_agree<const N: usize>() {
     // checked: an untouched buffer would pass this vacuously.
     let mut arms = vec![("dispatched", dispatched), ("scalar", scalar)];
     // N = 32's arm has no unchecked entry, so it is measured only through
-    // the dispatch.
-    if N == 8 || N == 16 {
+    // the dispatch; off the vector frame no unchecked arm runs at all.
+    if (N == 8 || N == 16) && vector_frame_available() {
         let mut direct = input.clone();
         direct_round_trip::<N>(&mut direct);
         arms.push(("direct", direct));
@@ -310,7 +327,7 @@ fn assert_arms_agree<const N: usize>() {
             ("lanes-per-call", per_lane_pass::<N> as fn(&mut [Complex64])),
             ("lanes-scalar", scalar_lane_pass::<N>),
         ];
-        if has_framed_arm::<N>() {
+        if has_framed_arm::<N>() && vector_frame_available() {
             passes.push(("lanes-framed", framed_lane_pass::<N>));
         }
         for (label, pass) in passes {
@@ -355,7 +372,7 @@ fn arms_for_size<const N: usize>(suite: &mut BenchmarkSuite, core: &str) {
     suite.run(BenchmarkCase::new(core, "scalar-winograd", N), || {
         scalar_round_trip::<N>(std::hint::black_box(&mut work));
     });
-    if N == 8 || N == 16 {
+    if (N == 8 || N == 16) && vector_frame_available() {
         let mut work = input.clone();
         suite.run(BenchmarkCase::new(core, "vector-direct", N), || {
             direct_round_trip::<N>(std::hint::black_box(&mut work));
@@ -379,7 +396,7 @@ fn arms_for_size<const N: usize>(suite: &mut BenchmarkSuite, core: &str) {
     suite.run(BenchmarkCase::new(core, "lanes-scalar", N), || {
         scalar_lane_pass::<N>(std::hint::black_box(&mut work));
     });
-    if has_framed_arm::<N>() {
+    if has_framed_arm::<N>() && vector_frame_available() {
         let mut work = lanes.clone();
         suite.run(BenchmarkCase::new(core, "lanes-framed", N), || {
             framed_lane_pass::<N>(std::hint::black_box(&mut work));
@@ -398,6 +415,11 @@ fn small_pot_arms_by_core_type() {
              --cargo-profile bench-quick. No timings reported."
         );
         return;
+    }
+    if !vector_frame_available() {
+        eprintln!(
+            "small_pot_arms: this host offers no AVX2 and FMA frame; the vector-direct,              vector-fused and lanes-framed arms are skipped."
+        );
     }
     assert_arms_agree::<8>();
     assert_arms_agree::<16>();
