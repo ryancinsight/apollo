@@ -359,12 +359,15 @@
 ## APOLLO-F32-16-32-KERNEL-GAP — Close the `f32` 16 and 32 kernel gap now the call chain is gone [patch] [perf] — done
 - [#433](https://github.com/ryancinsight/apollo/pull/433), [#434](https://github.com/ryancinsight/apollo/pull/434) with hermes [#172](https://github.com/ryancinsight/hermes/pull/172) and [#173](https://github.com/ryancinsight/hermes/pull/173): the rotation as a sign flip (every register kernel: 64 through 512 8 to 13% under their frame-run readings at both scalars and cores), the twiddle rows as direct and swapped lanes loaded opaque through `mul_with_swapped`. `f32` 16 on the efficiency core 0.97 / 0.96 from 1.27, `f32` 32 on the performance core 0.95 / 0.96 from 1.15 to 1.23 (`../../output/apollo-base128/small_sizes_kernelgap*_2026-09-11.txt`); ADR 0061 revised. Residue: `f64` 8 on the performance core 1.11 to 1.22 (the scalar codelet), `f64` 32 on the efficiency core 1.04 to 1.07.
 <a id="apollo-2048-f64-column-first"></a>
-## APOLLO-2048-F64-COLUMN-FIRST — 2048 at four lanes on the eight-block column-first form [patch] [perf] — in-progress
-- **Integrator:** claude/fable; **last-update:** 2026-09-14; lane `D:/atlas/worktrees/apollo-route` (branch `perf/apollo-2048-f64-column-first`); regions `plan/fft/dimension_1d/dynamic_impl.rs`, `base128/tests.rs`.
-- **Evidence:** `f64` 2048 on the four 512-blocks under the radix-4 sink reads 0.99 / 1.04 of RustFFT on the performance core and 1.07 / 1.09 on the efficiency core (`../../output/apollo-base128/small_sizes_column384_run*_2026-09-14.txt`), the last power of two under 32768 over RustFFT there; the eight-block column-first form that took `f32` 2048 under RustFFT on both cores ([above](#apollo-2048-column-first)) runs at four lanes already (`eight_block_2048_matches_the_direct_transform_at_four_lanes`) and the plan only selects it at eight.
-- **Scope:** the plan selects the eight 256-blocks under the radix-8 pass at 2048 at either width; measured at 2048 on both cores, two pinned runs, against the four-block form. Non-goals: kernels, 4096 (already eight blocks at both widths).
-- **Acceptance:** `f64` 2048 at or below the four-block form on both cores on two pinned runs, no other length slower; otherwise the four-lane selection restored and the reading recorded.
-- **Dependencies:** none; parent [beat the references](#atlas-apollo-beat-the-references). **Verification:** the 2048 oracles in `base128/tests.rs`, `four_step_tests` at 2048, `small_sizes_against_the_references_by_core_type`.
+## APOLLO-2048-F64-COLUMN-FIRST — 2048 at four lanes on the eight-block column-first form [patch] [perf] — done
+- [#446](https://github.com/ryancinsight/apollo/pull/446): the plan selects the eight 256-blocks under the radix-8 pass at 2048 at either width (kernels unchanged; the 512 base builds at 512 and 4096 only); `f64` 2048 0.95 / 0.92 of RustFFT on the performance core from 1.04 / 1.00 and 0.98 / 0.97 on the efficiency core from 1.07 / 1.09 (9% and 9% under the four 512-block sink form), no other length slower (`../../output/apollo-base128/small_sizes_eight2048f64_run*_2026-09-14.txt`); ADR 0061 note.
+
+<a id="apollo-board-compaction"></a>
+## APOLLO-BOARD-COMPACTION — Compact the board to its line budget [patch] — todo
+- **Evidence:** `backlog.md` runs 6935 lines against the committed 1000-line budget (context_and_memory: artifact compaction); done items carry their delivery narrative in place of the three-line record.
+- **Scope:** every done item collapsed to at most three lines (status, PR link, one-line outcome) with its evidence left in the linked commits, PR bodies, ADR notes, and `../../output/apollo-base128/`; open items trimmed to their DoR fields; anchors and inbound links preserved (`git grep -n <ID>` across atlas and apollo before and after). Non-goals: reordering items, closing or reopening any.
+- **Acceptance:** the board under 1000 lines, every anchor that had an inbound link still present, the board lint green.
+- **Dependencies:** none. **Verification:** the link check over PM artifacts, `git grep` of every removed anchor returning no hits.
 
 <a id="apollo-small-pot-arms-probe-guard"></a>
 ## APOLLO-SMALL-POT-ARMS-PROBE-GUARD — Guard the `small_pot_arms` direct arms with the frame probe [patch] — todo

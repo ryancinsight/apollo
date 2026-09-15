@@ -891,3 +891,22 @@ base); the two-block form of the step is deleted, and the step serves
   128 reads 0.92 to 0.95 standalone) plus the two passes; RustFFT's 3xn
   column loop runs 34 instructions per three registers, the sink form's
   last-block column group ran 106.
+
+- **2026-09-14, 2048 at four lanes on the eight-block column-first form
+  (`APOLLO-2048-F64-COLUMN-FIRST`).** The eight 256-blocks under the
+  radix-8 pass ahead of them, selected for `f32` 2048 at eight lanes
+  above, run at four lanes unchanged (the column pass, the blocks and the
+  interleave are generic over the width; the interleave pairs even and
+  odd blocks with `interleave_pairs` there), so the plan now selects the
+  form at either width and the 512 base builds at 512 and 4096 only.
+  Pinned probe, two runs on a quiet host
+  (`output/apollo-base128/small_sizes_eight2048f64_run{1,2}_2026-09-14.txt`),
+  apollo / RustFFT: `f64` 2048 on the performance core 0.95 / 0.92 from the
+  four 512-block sink form's 1.04 / 1.00 (2736.6, 2700.3 ns
+  against 2886.2, 2923.6; the sink form
+  3048.3, 2894.9), the efficiency core 0.98 / 0.97 from
+  1.07 / 1.09 (5413.0, 5374.1 against
+  5497.9, 5521.8; the sink form
+  5925.4, 5988.0): 9% and 9% under the
+  sink form. No other length moved (`f32` 2048 0.98 / 0.93, `f64` 1024 0.92 / 0.93, `f64` 4096 0.95 / 0.86, `f64` 512 0.82 / 0.83 on the performance core).
+  Kept.
