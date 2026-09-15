@@ -930,3 +930,30 @@ base); the two-block form of the step is deleted, and the step serves
   performance core). Efficiency-core changes at or under zero (`f64` 8192 -0%, `f64` 16384 -4%, `f32` 16384 -2%, `f64` 32768 -1%, `f32` 32768 -4%) sit
   inside the identical-code control band of that core (1 to 4.5%) and are
   not attributable to the route. Kept at every length.
+
+- **2026-09-15, the column-first chain at any depth and its selection past
+  32768 (`APOLLO-POT-CHAIN-DEPTH`).** The two-level chain generalizes: the
+  column pass and the interleave take the block length at runtime (one
+  bound asserted at entry either way; only the chunk loop's trip count
+  was constant), the sink tables carry one chunk-major row table per
+  level, and the step recurses with alternating placement — in place, out
+  of place, in place — so no level copies; the scratch is `n + n/R_0 +
+  n/(R_0 R_1) + ...`. 8192 to 32768 on the runtime block length read
+  within 2% of their two-level runs. The pinned probe
+  now measures 65536, 131072 and 262144 under a slow bound derived from
+  its case count. Against the four-step standing run
+  (`output/apollo-base128/small_sizes_deep_standing_run1_2026-09-15.txt`), two
+  chain runs (`small_sizes_deep_run{1,2}_2026-09-15.txt`), apollo / RustFFT:
+  `f64` 65536 chain 1.09 / 1.08 against the four-step 0.98 on the performance core (-11% in apollo ns) and 1.02 / 0.99 against 0.95 on the efficiency core (-6%); `f32` 65536 chain 1.01 / 1.25 against the four-step 0.94 on the performance core (-18% in apollo ns) and 0.99 / 0.99 against 0.91 on the efficiency core (-8%); `f64` 131072 chain 1.01 / 1.00 against the four-step 1.13 on the performance core (+13% in apollo ns) and 1.03 / 1.05 against 1.05 on the efficiency core (-0%); `f32` 131072 chain 1.03 / 1.03 against the four-step 1.24 on the performance core (+17% in apollo ns) and 1.00 / 0.94 against 0.85 on the efficiency core (-19%). The chain lands at RustFFT's time, its shape, so it wins
+  where the four-step was over RustFFT and loses where the four-step
+  already beat it: 65536 keeps the four-step at both widths, 131072
+  chains `[8, 8, 8]` over the 256 base at four lanes and keeps the
+  four-step at eight (the 19% efficiency-core loss there is unattributed
+  — `APOLLO-FOUR-STEP-E-CORE-F32-131072`). 262144 keeps the four-step
+  unmeasured against the chain: at 4 MB working sets the instrument's
+  performance-core readings swung 0.91 / 1.06 (`f64`) and 0.94 / 1.09
+  (`f32`) between two quiet runs with RustFFT's own arm moving 15%,
+  invalid evidence for a verdict (`APOLLO-PROBE-4MB-VARIANCE`). Standing
+  after, on the selection tree
+  (`small_sizes_sel_run{1,2}_2026-09-15.txt`, performance / efficiency
+  core): `f64` 65536 0.95 / 0.96 / 0.91 / 0.91; `f32` 65536 0.95 / 0.95 / 0.91 / 0.91; `f64` 131072 1.06 / 0.99 / 1.04 / 1.03; `f32` 131072 1.20 / 1.25 / 0.85 / 0.81; `f64` 262144 0.91 / 1.06 / 1.02 / 1.02; `f32` 262144 0.94 / 1.09 / 0.87 / 0.87.
