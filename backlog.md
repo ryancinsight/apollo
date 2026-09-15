@@ -377,7 +377,8 @@
 
 <a id="apollo-2048-column-first"></a>
 ## APOLLO-2048-COLUMN-FIRST — Improve 2048 without control regressions [patch] [perf] — in-progress
-- **Integrator:** Codex /root; **last-update:** 2026-09-11; lane `D:/atlas/worktrees/apollo-route`, branch `perf/apollo-2048-column-first`, [PR #441](https://github.com/ryancinsight/apollo/pull/441).
+- **Integrator:** claude/fable (takeover 2026-09-14: the Codex claim's last commit and edit are 2026-09-11 19:36, three days stale; its uncommitted placement variant and alternating-pairs instrument are completed under this claim); **last-update:** 2026-09-14; lane `D:/atlas/worktrees/apollo-route`, branch `perf/apollo-2048-column-first`, [PR #441](https://github.com/ryancinsight/apollo/pull/441).
+- **Policy basis (performance_engineering: regression policy, mixed results):** the 2026-09-11 revert to the sink on an unattributed control drift is the deferral channel; the column-first family is retained pending attribution — instrument validation on an isolated core, a codegen diff of the `f32` 64 control between the arms, the placement variant measured against the measured route and the sink under the predeclared instrument.
 - **Outcome/scope:** user requests a further bounded successor after the rejected trial. Preserve one generic base implementation; isolate the 2048 schedule, improve same-process paired sampling, and retain only measured gains with stable existing controls. No unrelated FFT or dependency changes.
 - **Basis:** `6e7d0031`; prior trial, rejection and artifact provenance in [ADR 0061](docs/adr/0061-l1-base-two-pass.md). Entry native baseline: 644 tests, fmt, clippy, doctest and rustdoc pass at this source.
 - **Acceptance:** two counterbalanced, core-pinned replications improve the target with no supported control regression; identical-code controls validate instrument stability. Native value oracles and configured gates pass. An inconclusive trial is removed and recorded.
