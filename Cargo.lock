@@ -370,6 +370,7 @@ dependencies = [
 name = "apollo-sft"
 version = "0.9.0"
 dependencies = [
+ "apollo-bench",
  "apollo-fft",
  "apollo-leto-interop",
  "eunomia",

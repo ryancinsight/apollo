@@ -2,6 +2,20 @@
 
 use apollo_fft::{ApolloError, ApolloResult};
 
+/// How the plan finds the sparse support (ADR 0064).
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Default)]
+pub enum RecoveryRoute {
+    /// The dense `O(N log N)` transform ranked by a top-`K` heap: exact for
+    /// every input, the oracle for the other route.
+    #[default]
+    DenseTopK,
+    /// Aliasing onto `bucket_count` buckets by downsampling and syndrome
+    /// decoding of each bucket, the count doubling on a failed round:
+    /// `O(K log K)` while no bucket holds more than four tones, exact for any
+    /// exactly `K`-sparse input.
+    Downsampled,
+}
+
 /// Validated sparse FFT configuration.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct SparseFftConfig {
@@ -10,13 +24,16 @@ pub struct SparseFftConfig {
     bucket_count: usize,
     trials: usize,
     threshold: f64,
+    route: RecoveryRoute,
 }
 
 impl SparseFftConfig {
-    /// Create a validated sparse FFT configuration.
+    /// Create a validated sparse FFT configuration on the dense route.
     ///
-    /// The bucket count is `min(max(4k, 1), n)`. The number of isolation
-    /// trials is `max(4, floor(log2(n)) + 1)`.
+    /// The bucket count is `min(next_power_of_two(4k), n)`, the aliasing
+    /// model's starting count. The number of recovery rounds is
+    /// `max(4, floor(log2(n)) + 1)`, which carries the downsampled route from
+    /// that count to `n` by doubling.
     pub fn new(n: usize, k: usize) -> ApolloResult<Self> {
         if n == 0 {
             return Err(ApolloError::validation(
@@ -36,10 +53,35 @@ impl SparseFftConfig {
         Ok(Self {
             n,
             k,
-            bucket_count: (4 * k).max(1).min(n),
+            bucket_count: (4 * k).next_power_of_two().min(n),
             trials: (n.ilog2() as usize + 1).max(4),
             threshold: 0.0,
+            route: RecoveryRoute::DenseTopK,
         })
+    }
+
+    /// Create a validated configuration on the downsampled route (ADR 0064).
+    ///
+    /// The route aliases the signal onto `bucket_count` buckets and doubles
+    /// the count on a failed round up to `n`, so every count on the way must
+    /// divide `n`: `n` must be the starting count times a power of two.
+    ///
+    /// # Errors
+    ///
+    /// The errors of [`Self::new`], and a validation error on a length the
+    /// doubling cannot reach.
+    pub fn downsampled(n: usize, k: usize) -> ApolloResult<Self> {
+        let mut cfg = Self::new(n, k)?;
+        let cofactor = n / cfg.bucket_count;
+        if !n.is_multiple_of(cfg.bucket_count) || !cofactor.is_power_of_two() {
+            return Err(ApolloError::validation(
+                "n",
+                n.to_string(),
+                "the downsampled route needs a length that is its bucket count times a power of two",
+            ));
+        }
+        cfg.route = RecoveryRoute::Downsampled;
+        Ok(cfg)
     }
 
     /// Create a sparse FFT configuration with an explicit threshold.
@@ -86,5 +128,11 @@ impl SparseFftConfig {
     #[must_use]
     pub const fn threshold(self) -> f64 {
         self.threshold
+    }
+
+    /// Return the recovery route.
+    #[must_use]
+    pub const fn route(self) -> RecoveryRoute {
+        self.route
     }
 }

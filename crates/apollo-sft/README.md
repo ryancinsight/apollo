@@ -15,7 +15,12 @@ src/
 ```
 
 `SparseFftPlan` is the plan-level SSOT for signal length, sparsity, bucket
-count, trial count, and threshold.
+count, round count, threshold, and recovery route. `SparseFftPlan::new` takes
+the dense top-`k` route; `SparseFftPlan::downsampled` aliases the signal onto
+the bucket count by downsampling and decodes each bucket's syndromes, doubling
+the count on a failed round, so an exactly `k`-sparse signal is recovered at
+`O(k log k)` while no bucket holds more than four tones and exactly in every
+case ([ADR 0064](../../docs/adr/0064-sparse-recovery-by-downsampling.md)).
 
 Typed execution supports `Complex64`, `Complex32`, and mixed `[f16; 2]`
 storage through one generic sparse API. The dense FFT, deterministic top-`k`

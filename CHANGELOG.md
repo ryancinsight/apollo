@@ -77,6 +77,12 @@ Change-class tags: [patch] backward-compatible fix, [minor] additive non-breakin
 
 ### Added
 
+- [minor] `apollo-sft` recovers a sparse support sublinearly:
+  `SparseFftPlan::downsampled` aliases the signal onto the plan's bucket
+  count by downsampling and decodes each bucket's syndromes (Hsieh, Lu, Pei),
+  doubling the count on a failed round, at `O(K log K)` while no bucket holds
+  more than four tones and exactly for any exactly `K`-sparse input;
+  `RecoveryRoute` names the route on `SparseFftConfig` (ADR 0064).
 - [minor] `apollo-fft::thread_local_scratch_hook_registered` reports whether
   the idle-scratch release holds one of Moirai's fixed idle-hook slots. A
   registry already full when Apollo first registers is recorded rather than
