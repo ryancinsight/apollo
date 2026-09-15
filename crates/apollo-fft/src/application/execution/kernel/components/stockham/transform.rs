@@ -93,9 +93,17 @@ fn transform_impl<const LOG2: u32, P: StockhamPrecision>(
         }
         return;
     }
-    debug_assert_eq!(data.len(), n);
+    // The stage loop slices the twiddle table and `scratch` without checks
+    // (`StockhamTwiddleCursor::take`, `stockham_twiddle_subslice`), so the
+    // lengths are held here, once per transform, in every build.
+    assert!(
+        data.len() == n && scratch.len() >= n && twiddles.len() >= stockham_twiddle_table_len(n),
+        "stockham: data holds {} of n = {n}, scratch {} (at least n) and twiddles {} (at least n - 1)",
+        data.len(),
+        scratch.len(),
+        twiddles.len()
+    );
     debug_assert!(n.is_power_of_two());
-    debug_assert!(twiddles.len() >= stockham_twiddle_table_len(n));
 
     // Per-LOG2 monomorphized bodies for hot PoT sizes (md-worst from benchmark_results: 32/64/128/256/512/1024/32768).
     // Structural const LOG2 selects straight-line stage sequence (no runtime while/if fusion in hot path).
@@ -177,12 +185,19 @@ fn transform_impl<const LOG2: u32, P: StockhamPrecision>(
             && P::stage_quad_enabled(stride, n, input_is_data)
         {
             let twiddle_len = fusion_twiddle_len::<StockhamFused4>(stride);
+            // SAFETY: the cursor walks the table the entry assert holds at `n - 1` entries;
+            // each stage group takes `fusion_twiddle_len` of it and the groups sum to
+            // `n - 1` (asserted after the loop), so this block lies inside the table.
             let fusion_twiddles = unsafe { cursor.take(twiddle_len) };
+            // SAFETY: `[0, s)` of the `15 s` entries this block holds, `s = stride`.
             let first_twiddles = unsafe { stockham_twiddle_subslice(fusion_twiddles, 0, stride) };
+            // SAFETY: `[s, 3 s)` of the `15 s` entries this block holds, `s = stride`.
             let second_twiddles =
                 unsafe { stockham_twiddle_subslice(fusion_twiddles, stride, stride << 1) };
+            // SAFETY: `[3 s, 7 s)` of the `15 s` entries this block holds, `s = stride`.
             let third_twiddles =
                 unsafe { stockham_twiddle_subslice(fusion_twiddles, stride * 3, stride << 2) };
+            // SAFETY: `[7 s, 15 s)` of the `15 s` entries this block holds, `s = stride`.
             let fourth_twiddles =
                 unsafe { stockham_twiddle_subslice(fusion_twiddles, stride * 7, stride << 3) };
             if input_is_data {
@@ -213,10 +228,16 @@ fn transform_impl<const LOG2: u32, P: StockhamPrecision>(
             && P::stage_triple_enabled(stride, n, input_is_data)
         {
             let twiddle_len = fusion_twiddle_len::<StockhamFused3>(stride);
+            // SAFETY: the cursor walks the table the entry assert holds at `n - 1` entries;
+            // each stage group takes `fusion_twiddle_len` of it and the groups sum to
+            // `n - 1` (asserted after the loop), so this block lies inside the table.
             let fusion_twiddles = unsafe { cursor.take(twiddle_len) };
+            // SAFETY: `[0, s)` of the `7 s` entries this block holds, `s = stride`.
             let first_twiddles = unsafe { stockham_twiddle_subslice(fusion_twiddles, 0, stride) };
+            // SAFETY: `[s, 3 s)` of the `7 s` entries this block holds, `s = stride`.
             let second_twiddles =
                 unsafe { stockham_twiddle_subslice(fusion_twiddles, stride, stride << 1) };
+            // SAFETY: `[3 s, 7 s)` of the `7 s` entries this block holds, `s = stride`.
             let third_twiddles =
                 unsafe { stockham_twiddle_subslice(fusion_twiddles, stride * 3, stride << 2) };
             if input_is_data {
@@ -244,8 +265,13 @@ fn transform_impl<const LOG2: u32, P: StockhamPrecision>(
             && fusion_fits::<StockhamFused2>(stride, n)
         {
             let twiddle_len = fusion_twiddle_len::<StockhamFused2>(stride);
+            // SAFETY: the cursor walks the table the entry assert holds at `n - 1` entries;
+            // each stage group takes `fusion_twiddle_len` of it and the groups sum to
+            // `n - 1` (asserted after the loop), so this block lies inside the table.
             let fusion_twiddles = unsafe { cursor.take(twiddle_len) };
+            // SAFETY: `[0, s)` of the `3 s` entries this block holds, `s = stride`.
             let first_twiddles = unsafe { stockham_twiddle_subslice(fusion_twiddles, 0, stride) };
+            // SAFETY: `[s, 3 s)` of the `3 s` entries this block holds, `s = stride`.
             let second_twiddles =
                 unsafe { stockham_twiddle_subslice(fusion_twiddles, stride, stride << 1) };
             if input_is_data {
@@ -257,6 +283,9 @@ fn transform_impl<const LOG2: u32, P: StockhamPrecision>(
             stride <<= StockhamFused2::STAGE_COUNT;
         } else {
             let twiddle_len = fusion_twiddle_len::<StockhamFused1>(stride);
+            // SAFETY: the cursor walks the table the entry assert holds at `n - 1` entries;
+            // each stage group takes `fusion_twiddle_len` of it and the groups sum to
+            // `n - 1` (asserted after the loop), so this block lies inside the table.
             let stage_twiddles = unsafe { cursor.take(twiddle_len) };
             if input_is_data {
                 P::stage(data, scratch, stride, stage_twiddles);

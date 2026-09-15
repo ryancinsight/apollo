@@ -123,7 +123,16 @@ impl StockhamKernel for f64 {
         twiddles: &[Complex64],
     ) {
         let n = data.len();
-        debug_assert_eq!(scratch.len(), n, "stockham scratch length mismatch");
+        // The AVX entries and the fused stages below slice `scratch` and the
+        // twiddle table without checks, so the lengths are held here, once
+        // per transform, in every build.
+        assert!(
+            data.len() == n && scratch.len() >= n && twiddles.len() + 1 >= n,
+            "stockham: data holds {} of n = {n}, scratch {} (at least n) and twiddles {} (at least n - 1)",
+            data.len(),
+            scratch.len(),
+            twiddles.len()
+        );
         debug_assert!(n.is_power_of_two());
         if n <= 1 {
             return;
@@ -157,6 +166,10 @@ impl StockhamKernel for f64 {
             if matches!(n, 2 | 4 | 8 | 16 | 32 | 64 | 128 | 1024 | 4096 | 32768) {
                 #[cfg(all(target_feature = "avx", target_feature = "fma"))]
                 {
+                    // SAFETY: AVX and FMA are established for this call — the enclosing `cfg`,
+                    // or the detection just above — and the entry assert holds `data.len() == n`,
+                    // `scratch.len() >= n` and `twiddles.len() >= n - 1`, the lengths the AVX
+                    // entry documents.
                     unsafe { forward64_avx_with_scratch(data, scratch, twiddles) };
                     return;
                 }
@@ -165,6 +178,10 @@ impl StockhamKernel for f64 {
                     if std::arch::is_x86_feature_detected!("avx")
                         && std::arch::is_x86_feature_detected!("fma")
                     {
+                        // SAFETY: AVX and FMA are established for this call — the enclosing `cfg`,
+                        // or the detection just above — and the entry assert holds `data.len() == n`,
+                        // `scratch.len() >= n` and `twiddles.len() >= n - 1`, the lengths the AVX
+                        // entry documents.
                         unsafe { forward64_avx_with_scratch(data, scratch, twiddles) };
                         return;
                     }
@@ -190,6 +207,10 @@ impl StockhamKernel for f64 {
             }
             #[cfg(all(target_feature = "avx", target_feature = "fma"))]
             {
+                // SAFETY: AVX and FMA are established for this call — the enclosing `cfg`,
+                // or the detection just above — and the entry assert holds `data.len() == n`,
+                // `scratch.len() >= n` and `twiddles.len() >= n - 1`, the lengths the AVX
+                // entry documents.
                 unsafe { forward64_avx_with_scratch(data, scratch, twiddles) };
                 return;
             }
@@ -198,6 +219,10 @@ impl StockhamKernel for f64 {
                 if std::arch::is_x86_feature_detected!("avx")
                     && std::arch::is_x86_feature_detected!("fma")
                 {
+                    // SAFETY: AVX and FMA are established for this call — the enclosing `cfg`,
+                    // or the detection just above — and the entry assert holds `data.len() == n`,
+                    // `scratch.len() >= n` and `twiddles.len() >= n - 1`, the lengths the AVX
+                    // entry documents.
                     unsafe { forward64_avx_with_scratch(data, scratch, twiddles) };
                     return;
                 }
@@ -222,7 +247,16 @@ impl StockhamKernel for f64 {
         twiddles: &[Complex64],
     ) {
         let n = 1usize << LOG2;
-        debug_assert_eq!(scratch.len(), n, "stockham scratch length mismatch");
+        // The AVX entries and the fused stages below slice `scratch` and the
+        // twiddle table without checks, so the lengths are held here, once
+        // per transform, in every build.
+        assert!(
+            data.len() == n && scratch.len() >= n && twiddles.len() + 1 >= n,
+            "stockham: data holds {} of n = {n}, scratch {} (at least n) and twiddles {} (at least n - 1)",
+            data.len(),
+            scratch.len(),
+            twiddles.len()
+        );
         debug_assert!(n.is_power_of_two());
         if n <= 1 {
             return;
@@ -239,6 +273,10 @@ impl StockhamKernel for f64 {
             if matches!(n, 2 | 4 | 8 | 16 | 32 | 64 | 128 | 1024 | 4096 | 32768) {
                 #[cfg(all(target_feature = "avx", target_feature = "fma"))]
                 {
+                    // SAFETY: AVX and FMA are established for this call — the enclosing `cfg`,
+                    // or the detection just above — and the entry assert holds `data.len() == n`,
+                    // `scratch.len() >= n` and `twiddles.len() >= n - 1`, the lengths the AVX
+                    // entry documents.
                     unsafe { forward64_avx_with_scratch_sized::<LOG2>(data, scratch, twiddles) };
                     return;
                 }
@@ -247,6 +285,10 @@ impl StockhamKernel for f64 {
                     if std::arch::is_x86_feature_detected!("avx")
                         && std::arch::is_x86_feature_detected!("fma")
                     {
+                        // SAFETY: AVX and FMA are established for this call — the enclosing `cfg`,
+                        // or the detection just above — and the entry assert holds `data.len() == n`,
+                        // `scratch.len() >= n` and `twiddles.len() >= n - 1`, the lengths the AVX
+                        // entry documents.
                         unsafe {
                             forward64_avx_with_scratch_sized::<LOG2>(data, scratch, twiddles)
                         };
@@ -272,6 +314,10 @@ impl StockhamKernel for f64 {
             }
             #[cfg(all(target_feature = "avx", target_feature = "fma"))]
             {
+                // SAFETY: AVX and FMA are established for this call — the enclosing `cfg`,
+                // or the detection just above — and the entry assert holds `data.len() == n`,
+                // `scratch.len() >= n` and `twiddles.len() >= n - 1`, the lengths the AVX
+                // entry documents.
                 unsafe { forward64_avx_with_scratch_sized::<LOG2>(data, scratch, twiddles) };
                 return;
             }
@@ -280,6 +326,10 @@ impl StockhamKernel for f64 {
                 if std::arch::is_x86_feature_detected!("avx")
                     && std::arch::is_x86_feature_detected!("fma")
                 {
+                    // SAFETY: AVX and FMA are established for this call — the enclosing `cfg`,
+                    // or the detection just above — and the entry assert holds `data.len() == n`,
+                    // `scratch.len() >= n` and `twiddles.len() >= n - 1`, the lengths the AVX
+                    // entry documents.
                     unsafe { forward64_avx_with_scratch_sized::<LOG2>(data, scratch, twiddles) };
                     return;
                 }
@@ -303,7 +353,16 @@ impl StockhamKernel for f32 {
         twiddles: &[Complex32],
     ) {
         let n = data.len();
-        debug_assert_eq!(scratch.len(), n, "stockham scratch length mismatch");
+        // The AVX entries and the fused stages below slice `scratch` and the
+        // twiddle table without checks, so the lengths are held here, once
+        // per transform, in every build.
+        assert!(
+            data.len() == n && scratch.len() >= n && twiddles.len() + 1 >= n,
+            "stockham: data holds {} of n = {n}, scratch {} (at least n) and twiddles {} (at least n - 1)",
+            data.len(),
+            scratch.len(),
+            twiddles.len()
+        );
         debug_assert!(n.is_power_of_two());
         if n <= 1 {
             return;
@@ -319,6 +378,10 @@ impl StockhamKernel for f32 {
             ) {
                 #[cfg(all(target_feature = "avx", target_feature = "fma"))]
                 {
+                    // SAFETY: AVX and FMA are established for this call — the enclosing `cfg`,
+                    // or the detection just above — and the entry assert holds `data.len() == n`,
+                    // `scratch.len() >= n` and `twiddles.len() >= n - 1`, the lengths the AVX
+                    // entry documents.
                     unsafe { forward32_avx_with_scratch(data, scratch, twiddles) };
                     return;
                 }
@@ -327,6 +390,10 @@ impl StockhamKernel for f32 {
                     if std::arch::is_x86_feature_detected!("avx")
                         && std::arch::is_x86_feature_detected!("fma")
                     {
+                        // SAFETY: AVX and FMA are established for this call — the enclosing `cfg`,
+                        // or the detection just above — and the entry assert holds `data.len() == n`,
+                        // `scratch.len() >= n` and `twiddles.len() >= n - 1`, the lengths the AVX
+                        // entry documents.
                         unsafe { forward32_avx_with_scratch(data, scratch, twiddles) };
                         return;
                     }
@@ -352,6 +419,10 @@ impl StockhamKernel for f32 {
             }
             #[cfg(all(target_feature = "avx", target_feature = "fma"))]
             {
+                // SAFETY: AVX and FMA are established for this call — the enclosing `cfg`,
+                // or the detection just above — and the entry assert holds `data.len() == n`,
+                // `scratch.len() >= n` and `twiddles.len() >= n - 1`, the lengths the AVX
+                // entry documents.
                 unsafe { forward32_avx_with_scratch(data, scratch, twiddles) };
                 return;
             }
@@ -360,6 +431,10 @@ impl StockhamKernel for f32 {
                 if std::arch::is_x86_feature_detected!("avx")
                     && std::arch::is_x86_feature_detected!("fma")
                 {
+                    // SAFETY: AVX and FMA are established for this call — the enclosing `cfg`,
+                    // or the detection just above — and the entry assert holds `data.len() == n`,
+                    // `scratch.len() >= n` and `twiddles.len() >= n - 1`, the lengths the AVX
+                    // entry documents.
                     unsafe { forward32_avx_with_scratch(data, scratch, twiddles) };
                     return;
                 }
@@ -384,7 +459,16 @@ impl StockhamKernel for f32 {
         twiddles: &[Complex32],
     ) {
         let n = 1usize << LOG2;
-        debug_assert_eq!(scratch.len(), n, "stockham scratch length mismatch");
+        // The AVX entries and the fused stages below slice `scratch` and the
+        // twiddle table without checks, so the lengths are held here, once
+        // per transform, in every build.
+        assert!(
+            data.len() == n && scratch.len() >= n && twiddles.len() + 1 >= n,
+            "stockham: data holds {} of n = {n}, scratch {} (at least n) and twiddles {} (at least n - 1)",
+            data.len(),
+            scratch.len(),
+            twiddles.len()
+        );
         debug_assert!(n.is_power_of_two());
         if n <= 1 {
             return;
@@ -397,6 +481,10 @@ impl StockhamKernel for f32 {
             ) {
                 #[cfg(all(target_feature = "avx", target_feature = "fma"))]
                 {
+                    // SAFETY: AVX and FMA are established for this call — the enclosing `cfg`,
+                    // or the detection just above — and the entry assert holds `data.len() == n`,
+                    // `scratch.len() >= n` and `twiddles.len() >= n - 1`, the lengths the AVX
+                    // entry documents.
                     unsafe { forward32_avx_with_scratch_sized::<LOG2>(data, scratch, twiddles) };
                     return;
                 }
@@ -405,6 +493,10 @@ impl StockhamKernel for f32 {
                     if std::arch::is_x86_feature_detected!("avx")
                         && std::arch::is_x86_feature_detected!("fma")
                     {
+                        // SAFETY: AVX and FMA are established for this call — the enclosing `cfg`,
+                        // or the detection just above — and the entry assert holds `data.len() == n`,
+                        // `scratch.len() >= n` and `twiddles.len() >= n - 1`, the lengths the AVX
+                        // entry documents.
                         unsafe {
                             forward32_avx_with_scratch_sized::<LOG2>(data, scratch, twiddles)
                         };
@@ -430,6 +522,10 @@ impl StockhamKernel for f32 {
             }
             #[cfg(all(target_feature = "avx", target_feature = "fma"))]
             {
+                // SAFETY: AVX and FMA are established for this call — the enclosing `cfg`,
+                // or the detection just above — and the entry assert holds `data.len() == n`,
+                // `scratch.len() >= n` and `twiddles.len() >= n - 1`, the lengths the AVX
+                // entry documents.
                 unsafe { forward32_avx_with_scratch_sized::<LOG2>(data, scratch, twiddles) };
                 return;
             }
@@ -438,6 +534,10 @@ impl StockhamKernel for f32 {
                 if std::arch::is_x86_feature_detected!("avx")
                     && std::arch::is_x86_feature_detected!("fma")
                 {
+                    // SAFETY: AVX and FMA are established for this call — the enclosing `cfg`,
+                    // or the detection just above — and the entry assert holds `data.len() == n`,
+                    // `scratch.len() >= n` and `twiddles.len() >= n - 1`, the lengths the AVX
+                    // entry documents.
                     unsafe { forward32_avx_with_scratch_sized::<LOG2>(data, scratch, twiddles) };
                     return;
                 }
