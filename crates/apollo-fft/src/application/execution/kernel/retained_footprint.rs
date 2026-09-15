@@ -770,7 +770,7 @@ fn worker_scratch_retention() {
         });
         worker_quiescence::wait_for_phase();
         assert!(
-            crate::thread_local_scratch_release_count() > 0,
+            crate::application::execution::kernel::scratch_hook::release_count() > 0,
             "Moirai idle hooks must invoke Apollo scratch reclamation"
         );
     });

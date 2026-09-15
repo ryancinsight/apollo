@@ -77,6 +77,11 @@ Change-class tags: [patch] backward-compatible fix, [minor] additive non-breakin
 
 ### Added
 
+- [minor] `apollo-fft::thread_local_scratch_hook_registered` reports whether
+  the idle-scratch release holds one of Moirai's fixed idle-hook slots. A
+  registry already full when Apollo first registers is recorded rather than
+  fatal: plans build and transforms run unchanged, and idle scratch is then
+  reclaimed by explicit `release_thread_local_scratch` calls.
 - [minor] `apollo-fft` transforms a real 3-D field through its half spectrum.
   `fft_3d_array_half_into` writes the `(nx, ny, nz/2 + 1)` bins a real field's
   spectrum does not repeat: each z lane goes through the real split (`nz` reals

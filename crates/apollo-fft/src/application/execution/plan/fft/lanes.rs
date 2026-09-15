@@ -83,7 +83,7 @@ pub(super) fn execute<F, const FORWARD: bool>(
     F: MixedRadixScalar<Complex = Complex<F>>,
 {
     assert!(lane_len > 0 && active.len().is_multiple_of(lane_len));
-    crate::ensure_thread_local_scratch_hook_registered();
+    crate::application::execution::kernel::scratch_hook::ensure_registered();
     let Some(required) = workspace(lane_len).filter(|&required| required <= companion.len()) else {
         each(active, lane_len, direct);
         return;
