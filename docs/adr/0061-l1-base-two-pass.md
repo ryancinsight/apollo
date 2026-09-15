@@ -869,3 +869,25 @@ base); the two-block form of the step is deleted, and the step serves
   control sit inside the band identical code shows on this host under
   concurrent compilation (1 to 4.5% on the efficiency core, 40% under
   one load spike).
+
+- **2026-09-14, 384 as three 128-blocks under a radix-3 pass ahead of
+  them at eight lanes (`APOLLO-384-F32-GATHER`, rescoped).** The
+  stride-three gather first filed for the `f32` residue is superseded by
+  the column-first form: the column-pass and interleave kernels take the
+  radix as a parameter — the register radix-3 with two chunk-major
+  twiddle registers a chunk, and hermes' three-way pair interleave back —
+  so three blocks at eight lanes run RustFFT's shape at 384 (its 128
+  butterfly under one 3xn pass) with no gather and no strided parent
+  read; four lanes keep the direct read under the radix-3 sink (0.83 to
+  0.89 of RustFFT). Pinned probe, two runs on a quiet host
+  (`output/apollo-base128/small_sizes_column384_run{1,2}_2026-09-14.txt`),
+  apollo / RustFFT: `f32` 384 on the performance core 1.02 / 1.06
+  (193.5, 200.2 ns against 189.0, 188.4; the three-block sink form 213.4
+  / 218.4, 1.10), the efficiency core 1.06 / 1.06 (416.7, 416.4 against
+  394.6, 393.7; the sink form 456.1 / 462.6, 1.16 / 1.17); no other
+  length moved (`f32` 2048 0.97 / 0.98 and `f64` 384 0.89 / 0.88 inside
+  their bands). Kept: 9% under the sink form on both cores. The residue
+  (2 to 6% over RustFFT) is the 128-block itself at eight lanes (`f32`
+  128 reads 0.92 to 0.95 standalone) plus the two passes; RustFFT's 3xn
+  column loop runs 34 instructions per three registers, the sink form's
+  last-block column group ran 106.
