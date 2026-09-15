@@ -1,13 +1,16 @@
 //! Reusable sliding DFT plan and state.
 //!
 //! `SdftState` owns the current real-valued window and tracked DFT bins. Each
-//! update removes the oldest sample, appends the new sample, and updates all
-//! tracked bins through the sliding DFT recurrence.
+//! update removes the oldest sample, appends the new sample, advances every
+//! tracked bin in the modulated form, and re-sums one bin from the window on
+//! a fixed cadence so the rounding a bin carries is bounded at every update
+//! count (`SdftPlan::drift_bound`).
 
 use crate::domain::contracts::error::{SdftError, SdftResult};
 use crate::domain::metadata::window::SlidingDftConfig;
 use crate::infrastructure::kernel::sliding::{
-    direct_bins, direct_bins_into, update_bins, update_twiddles,
+    direct_bins, direct_bins_into, initialize_bins, modulation_table, refresh_bin, update_bins,
+    ModulatedBin,
 };
 use apollo_fft::{CpuElement, CpuStorage, PrecisionProfile};
 use eunomia::Complex64;
@@ -17,15 +20,15 @@ use std::collections::VecDeque;
 #[derive(Debug, Clone, PartialEq)]
 pub struct SdftPlan {
     config: SlidingDftConfig,
-    twiddles: Vec<Complex64>,
+    table: Vec<Complex64>,
 }
 
 impl SdftPlan {
     /// Create a validated SDFT plan.
     pub fn new(window_len: usize, bin_count: usize) -> SdftResult<Self> {
         let config = SlidingDftConfig::new(window_len, bin_count)?;
-        let twiddles = update_twiddles(window_len, bin_count);
-        Ok(Self { config, twiddles })
+        let table = modulation_table(window_len);
+        Ok(Self { config, table })
     }
 
     /// Return the validated configuration.
@@ -44,6 +47,47 @@ impl SdftPlan {
     #[must_use]
     pub const fn bin_count(&self) -> usize {
         self.config.bin_count()
+    }
+
+    /// The bound on a tracked bin's distance from the exact DFT of its window
+    /// that holds at every update count, for a stream whose samples satisfy
+    /// `|x| <= amplitude`.
+    ///
+    /// With `u = 2^-53` the unit roundoff, `N` the window length and `K` the
+    /// bin count, the bound is
+    /// `u · amplitude · (N² + 4N + max(K, N) · (N + 6))`:
+    ///
+    /// - a refreshed accumulator is an `N`-term sum whose partial sums stay
+    ///   below `N · amplitude`, so its additions round by at most
+    ///   `u · N · (N · amplitude)`, and each of its `N` products carries a
+    ///   table entry within `u` of the unit circle and one product rounding,
+    ///   `2u · amplitude` each: `u · amplitude · (N² + 2N)`;
+    /// - between refreshes a bin advances at most `K · max(1, ⌊N / K⌋)`
+    ///   times, which is at most `max(K, N)`; each advance adds one product
+    ///   to a sum below `N · amplitude`, rounding the sum by
+    ///   `u · (N + 2) · amplitude` and the product by `4u · amplitude`:
+    ///   `u · amplitude · max(K, N) · (N + 6)` in all;
+    /// - the output multiplies the sum by one table entry: `2u · N · amplitude`.
+    ///
+    /// The bound is independent of the update count because every bin is
+    /// re-summed from the window on that cadence (see [`SdftState::update`]).
+    #[must_use]
+    pub fn drift_bound(&self, amplitude: f64) -> f64 {
+        let n = self.window_len() as f64;
+        let k = self.bin_count() as f64;
+        f64::EPSILON / 2.0 * amplitude * (n * n + 4.0 * n + k.max(n) * (n + 6.0))
+    }
+
+    /// Updates between two refreshes: one bin is re-summed every
+    /// `max(1, ⌊N / K⌋)` updates, so the refresh costs no more per update than
+    /// the `K` advances it guards and a bin waits at most `max(K, N)` updates.
+    const fn refresh_period(&self) -> usize {
+        let period = self.window_len() / self.bin_count();
+        if period == 0 {
+            1
+        } else {
+            period
+        }
     }
 
     /// Create zero-initialized streaming state.
@@ -177,31 +221,59 @@ fn validate_profile(actual: PrecisionProfile, expected: PrecisionProfile) -> Sdf
 pub struct SdftState {
     plan: SdftPlan,
     window: VecDeque<f64>,
+    tracked: Vec<ModulatedBin>,
     bins: Vec<Complex64>,
     updates: usize,
 }
 
 impl SdftState {
     fn from_validated_window(plan: SdftPlan, window: Vec<f64>) -> Self {
-        let bins = direct_bins(&window, plan.bin_count())
+        let mut tracked: Vec<ModulatedBin> = (0..plan.bin_count())
+            .map(|bin| ModulatedBin::new(bin, plan.window_len()))
+            .collect();
+        let mut bins = vec![Complex64::new(0.0, 0.0); plan.bin_count()];
+        initialize_bins(&window, &plan.table, &mut tracked, &mut bins)
             .expect("invariant: validated plan has consistent window_len and bin_count");
         Self {
             plan,
             window: VecDeque::from(window),
+            tracked,
             bins,
             updates: 0,
         }
     }
 
     /// Push one new sample and return the updated bins.
+    ///
+    /// Every tracked bin advances in the modulated form; then, once per
+    /// refresh period, the next bin in round-robin order is re-summed from
+    /// the window, so no bin carries more than `max(K, N)` advances of
+    /// rounding (the bound on [`SdftPlan::drift_bound`]).
     pub fn update(&mut self, sample: f64) -> &[Complex64] {
         let outgoing = self
             .window
             .pop_front()
-            .expect("validated SDFT window is non-empty");
+            .expect("invariant: a validated window is never empty");
         self.window.push_back(sample);
-        update_bins(&mut self.bins, &self.plan.twiddles, outgoing, sample);
-        self.updates += 1;
+        update_bins(
+            &mut self.tracked,
+            &mut self.bins,
+            &self.plan.table,
+            outgoing,
+            sample,
+        );
+        self.updates = self.updates.wrapping_add(1);
+        let period = self.plan.refresh_period();
+        if self.updates % period == 0 {
+            let bin = (self.updates / period) % self.tracked.len();
+            refresh_bin(
+                bin,
+                &mut self.tracked[bin],
+                &mut self.bins[bin],
+                &self.plan.table,
+                self.window.as_slices(),
+            );
+        }
         &self.bins
     }
 
