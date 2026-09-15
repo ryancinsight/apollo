@@ -130,6 +130,7 @@ impl ProbeScalar for f32 {
     }
 }
 
+mod chain_phases;
 mod codelet_selection;
 mod composite_split_ab;
 mod lane_routes;

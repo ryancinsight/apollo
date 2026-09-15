@@ -136,9 +136,12 @@ where
 /// One column-first step over `parent`: the radix pass in place, its
 /// slices through `transform` (the slice, then its destination block) into
 /// `blocks`, and the interleave into `out` — `parent` itself where `out`
-/// is none. `rows` are the level's `(radix - 1)` registers a chunk.
-fn step<F, const INVERSE: bool>(
+/// is none. `rows` are the level's `(radix - 1)` registers a chunk. Under
+/// `MEASURE` (the separately instantiated attribution variant) each phase
+/// stamps the meter at `level`.
+fn step<F, const INVERSE: bool, const MEASURE: bool>(
     eight_lanes: bool,
+    level: usize,
     radix: usize,
     parent: &mut [F::Complex],
     blocks: &mut [F::Complex],
@@ -152,24 +155,56 @@ where
     >,
     eunomia::Complex<F>: eunomia::layout::Pod,
 {
+    #[cfg(not(all(test, windows, target_arch = "x86_64")))]
+    let _ = level;
     let n = parent.len();
     debug_assert!(n % radix == 0 && blocks.len() == n);
     let block_len = n / radix;
+    #[cfg(all(test, windows, target_arch = "x86_64"))]
+    let t0 = if MEASURE {
+        instance_major::phase_meter::stamp()
+    } else {
+        0
+    };
     if !column_pass::<F, INVERSE>(eight_lanes, radix, parent, rows, 2 * block_len) {
         return false;
     }
+    #[cfg(all(test, windows, target_arch = "x86_64"))]
+    let t1 = if MEASURE {
+        let t = instance_major::phase_meter::stamp();
+        instance_major::phase_meter::add_chain(level, 0, t - t0);
+        t
+    } else {
+        0
+    };
     let transformed = parent
         .chunks_exact_mut(block_len)
         .zip(blocks.chunks_exact_mut(block_len))
         .all(|(slice, dst)| transform(slice, dst));
-    transformed
+    #[cfg(all(test, windows, target_arch = "x86_64"))]
+    let t2 = if MEASURE {
+        let t = instance_major::phase_meter::stamp();
+        instance_major::phase_meter::add_chain(level, 1, t - t1);
+        t
+    } else {
+        0
+    };
+    let interleaved = transformed
         && interleave::<F>(
             eight_lanes,
             radix,
             blocks,
             out.unwrap_or(parent),
             2 * block_len,
-        )
+        );
+    #[cfg(all(test, windows, target_arch = "x86_64"))]
+    if MEASURE {
+        let t = instance_major::phase_meter::stamp();
+        instance_major::phase_meter::add_chain(level, 2, t - t2);
+        instance_major::phase_meter::CHAIN_CALLS[level]
+            .fetch_add(1, core::sync::atomic::Ordering::Relaxed);
+    }
+    interleaved
 }
 
 /// The scratch a chain over `n` samples needs: every level stages its
@@ -184,10 +219,10 @@ pub(super) fn scratch_len<F>(n: usize, levels: &[instance_major::ChainLevel<F>])
     total
 }
 
-/// The radix chain `levels` (outermost first) over `parent`, in place
-/// where `out` is none and into `out` otherwise, its blocks staged in
-/// `spare` ([`scratch_len`] lanes at the top level) — the base blocks
-/// where no level remains.
+/// The radix chain `levels` (outermost first) over `parent` at `depth`
+/// below the top, in place where `out` is none and into `out` otherwise,
+/// its blocks staged in `spare` ([`scratch_len`] lanes at the top level)
+/// — the base blocks where no level remains.
 fn chain_from<
     F,
     const INVERSE: bool,
@@ -198,6 +233,7 @@ fn chain_from<
     const TABLE_LANES: usize,
 >(
     eight_lanes: bool,
+    depth: usize,
     levels: &[instance_major::ChainLevel<F>],
     parent: &mut [F::Complex],
     spare: &mut [F::Complex],
@@ -225,8 +261,9 @@ where
     };
     let n = parent.len();
     let (blocks, spare) = spare.split_at_mut(n);
-    step::<F, INVERSE>(
+    step::<F, INVERSE, MEASURE>(
         eight_lanes,
+        depth,
         level.radix(),
         parent,
         blocks,
@@ -235,6 +272,7 @@ where
         |slice, dst| {
             chain_from::<F, INVERSE, MEASURE, ROWS, ROW_LEN, BLOCK_LANES, TABLE_LANES>(
                 eight_lanes,
+                depth + 1,
                 below,
                 slice,
                 spare,
@@ -279,6 +317,7 @@ where
     debug_assert!(!levels.is_empty() && scratch.len() >= scratch_len(data.len(), levels));
     chain_from::<F, INVERSE, MEASURE, ROWS, ROW_LEN, BLOCK_LANES, TABLE_LANES>(
         plan.native_eight_lanes(),
+        0,
         levels,
         data,
         scratch,
