@@ -209,14 +209,16 @@ fn census_line(
 
 /// The processor an arm binds out of one class's `members`, in index order.
 ///
-/// With a sibling table (`core_of` answers), the first member that is not
-/// processor 0, shares no execution core with processor 0 — the conventional
-/// Windows interrupt and DPC target — and shares none with a core an earlier
-/// arm already holds (`taken`). Without one, the second member: skipping the
-/// first avoids processor 0 by a rule that applies to every arm rather than
-/// by special-casing one host's indices. Either way a class with no clear
-/// member still yields its second (or only) member, since one arm beats none
-/// and the census prints the core it landed on.
+/// The index rule comes first: the class's first member is skipped, which
+/// avoids processor 0 — the conventional Windows interrupt and DPC target —
+/// by a rule that applies to every arm rather than by special-casing one
+/// host's indices, and keeps a host without SMT selecting exactly as it did.
+/// With a sibling table (`core_of` answers) the arm is then the first
+/// remaining member that is not processor 0, shares no execution core with
+/// processor 0, and shares none with a core an earlier arm already holds
+/// (`taken`); without one it is the second member. Either way a class with
+/// no clear member still yields its second (or only) member, since one arm
+/// beats none and the census prints the core it landed on.
 fn choose<C: Copy + PartialEq>(
     members: impl Iterator<Item = u32>,
     core_of: impl Fn(u32) -> Option<C>,
@@ -230,6 +232,7 @@ fn choose<C: Copy + PartialEq>(
     members
         .iter()
         .copied()
+        .skip(1)
         .find(|&processor| {
             processor != 0
                 && core_of(processor)
