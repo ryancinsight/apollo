@@ -1,5 +1,13 @@
 # Apollo Backlog
 
+<a id="apollo-lane-unit-tasks"></a>
+
+## APOLLO-LANE-UNIT-TASKS-2026-09-15 — Lane passes decide scheduling through moirai unit tasks [patch] [perf] — in-progress
+
+- **Outcome:** `lanes::each` and `lanes::paired` run on moirai `for_each_unit_task_mut_with` (moirai #346, [ADR 0059](../moirai/docs/adr/0059-byte-sized-unit-tasks.md)); apollo's `TASK_BYTES`, `lanes_per_task` and the hand `Parallel`/`Sequential` branch are deleted. `each` keeps `LaneTasks` through the default `parallelize_work`; `paired` takes `WorkBytes<PARALLEL_BYTES>`.
+- **Acceptance:** identical scheduling (same task width and decision) with `apollo-fft` gates green; `lane_threshold_crossover` reproduces its 32³ and 64³ pair timings.
+- **Integrator:** claude-opus-5; **branch:** `perf/apollo-lane-unit-tasks`; **last-update:** 2026-09-15. Parent: [`MOI-BYTE-SIZED-TASKS`](../moirai/docs/backlog.md#MOI-BYTE-SIZED-TASKS-2026-09-15).
+
 <a id="apollo-half-volume-fallback-scratch"></a>
 
 ## APOLLO-HALF-VOLUME-FALLBACK-SCRATCH-2026-09-15 — The half-volume real fallback allocates one `nz` lane per scheduled task [patch] [perf] — done 2026-09-15
