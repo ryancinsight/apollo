@@ -22,7 +22,8 @@
 - Evidence: removing the unused `rand` edge drops `getrandom` 0.4 from the `apollo-fft` target graph; 613/613 native Nextest, warning-denied native Clippy, and locked wasm32 check pass. The consumer verification remains pending Coeus PR #393, which removes its transitive Mnemosyne revision pin.
 
 <a id="apollo-small-pot-arms-probe-guard"></a>
-## APOLLO-SMALL-POT-ARMS-PROBE-GUARD — Guard the `small_pot_arms` direct arms with the frame probe [patch] — todo
+## APOLLO-SMALL-POT-ARMS-PROBE-GUARD — Guard the `small_pot_arms` direct arms with the frame probe [patch] — in-progress
+- **Integrator:** claude-fable-5.1 (session 5bed7001); **branch:** `fix/apollo-small-pot-arms-probe-guard` (lane apollo-route, stacked on #461); **lease:** `crates/apollo-fft/src/application/execution/kernel/components/base128/pinned_probe/small_pot_arms.rs`, this entry; **last-update:** 2026-09-15.
 - **Finding:** `pinned_probe/small_pot_arms.rs` runs `n8_vector_arm_unchecked`, `n16_vector_arm_unchecked`, and the framed lane passes under a SAFETY comment reading "the caller establishes AVX and FMA once before the loop", and nothing in `small_pot_arms_by_core_type` or `assert_arms_agree` does; a host without the frame would execute AVX instructions from a test-only path. Test-only, `windows` and `x86_64` gated, an ignored measurement instrument — no shipped path.
 - **Scope:** `vector_frame_available()` checked once at the top of both, the direct and framed arms skipped with a printed reason on a host without it, the SAFETY comments made true. **Acceptance:** the probe compiles and runs on this host unchanged; the comments name the probe that discharges them.
 - **Dependencies:** none. **Verification:** `small_pot_arms_by_core_type` (ignored, bench-quick profile).
