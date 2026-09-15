@@ -6,8 +6,8 @@
 //! 512 as sixteen 32-sample rows, the column pass a sixteen-point DIF);
 //! 1024 is four 256-blocks; f64 2048 is four 512-blocks, the radix-4 step
 //! riding the last block's column pass in both. At eight lanes, 2048 runs
-//! a radix-8 column pass into scratch, eight in-place 256-blocks, then
-//! a fused transpose into the parent.
+//! a radix-8 column pass over the parent in place, eight 256-blocks out of
+//! place into scratch, then a fused transpose back into the parent.
 //! For the four-block route, each four-lane block loads samples from the
 //! parent, so the route is the blocks' own passes and nothing else; at
 //! eight lanes those blocks are gathered first, the measured better of the
@@ -228,9 +228,9 @@ where
 /// Both forms run the first three blocks into scratch and the last
 /// through the radix-4 sink, so no intermediate pair is written. Eight
 /// blocks take RustFFT's column-first form at either width: the radix-8
-/// pass from the parent into scratch ahead of the blocks, the eighths
-/// transformed in place, and one fused interleave pass back
-/// ([`eight_blocks_column_first`]).
+/// pass over the parent in place ahead of the blocks, the eighths
+/// transformed out of place into scratch, and one fused interleave pass
+/// back ([`eight_blocks_column_first`]).
 ///
 /// Reports whether the dispatched width ran it.
 fn transform_via_base<
@@ -411,11 +411,18 @@ where
     >(out, source, plan, sink)
 }
 
-/// Eight blocks under a column-first radix-8 decomposition. The column pass
-/// reads the parent and writes disjoint scratch; existing in-place base
-/// kernels transform each scratch block before the final fused transpose.
-/// Compared with the rejected column-first trial, scratch capacity and
-/// the number of full-array passes do not increase.
+/// Eight blocks under a column-first radix-8 decomposition, RustFFT's shape:
+/// the column pass runs over the parent in place ([`split_boundary::ColumnRadix8`]
+/// — eight registers `BASE` samples apart, the register radix-8, the twiddle
+/// `W_{8 BASE}^{q c}` after the butterfly from one chunk-major stream), each
+/// eighth then transforms out of place into scratch as a contiguous block,
+/// and one pass of fused four-way pair deinterleaves transposes the blocks
+/// back into the parent ([`split_boundary::InterleaveBlocks`]). Nine
+/// streams a pass. The placement is measured (ADR 0061): against the
+/// radix-8 sink over seven spectra it reads 17% under on the performance
+/// core and 4 to 5% under on the efficiency core at `f32` 2048, and
+/// against the column pass written into scratch with the blocks in place
+/// there 4% under on the performance core.
 ///
 /// For `n = c + BASE r` and `k = q + 8 p`, the DFT phase factors as
 /// `rq/8 + cq/(8 BASE) + cp/BASE`: the radix-8 across blocks, its twiddle,
@@ -453,8 +460,8 @@ where
     let passed = at_plan_width::<F, _>(
         eight_lanes,
         split_boundary::ColumnRadix8::<F, _, BLOCK_LANES, INVERSE> {
-            source: instance_major::ParentSplit::<F, 1, 0>(lanes::<F>(data)),
-            dst: lanes_mut::<F>(scratch),
+            source: instance_major::SelfSplit::<1, 0>,
+            dst: lanes_mut::<F>(data),
             twiddles: sinks.rows(),
             eighth_one: eighth(1.0),
             eighth_three: eighth(3.0),
@@ -463,19 +470,17 @@ where
     if !passed {
         return false;
     }
-    // Reuse the same in-place base instantiation as a standalone block:
-    // only the parent-to-scratch column pass and final interleave vary.
-    let transformed = scratch.chunks_exact_mut(BASE).all(|sub| {
-        instance_major::transform_block::<
-            F,
-            INVERSE,
-            MEASURE,
-            ROWS,
-            ROW_LEN,
-            BLOCK_LANES,
-            TABLE_LANES,
-        >(sub, plan)
-    });
+    let transformed = data
+        .chunks_exact(BASE)
+        .zip(scratch.chunks_exact_mut(BASE))
+        .all(|(eighth, sub)| {
+            block::<F, INVERSE, MEASURE, ROWS, ROW_LEN, BLOCK_LANES, TABLE_LANES, _, _>(
+                sub,
+                instance_major::ParentSplit::<F, 1, 0>(lanes::<F>(eighth)),
+                plan,
+                instance_major::DirectSink,
+            )
+        });
     transformed
         && at_plan_width::<F, _>(
             eight_lanes,
