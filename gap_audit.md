@@ -1,3 +1,9 @@
+# Apollo gap audit
+
+Open risks with their re-open triggers, and the findings the board, the ADRs
+and the session notes cite, one anchored section each. Compacted by
+`scripts/compact_gap_audit.py`: a section keeps its heading, its lead and its
+re-open lines; the narrative behind a finding is the commit that recorded it.
 
 ## Per-thread scratch holds its high-water mark for the thread's life (2026-09-02, corrected 2026-09-03) <a id="scratch-pool-retention"></a>
 Every transform crate reaches `mnemosyne::scratch::ScratchPool` through a
