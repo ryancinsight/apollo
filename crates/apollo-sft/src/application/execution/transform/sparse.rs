@@ -55,8 +55,9 @@
 //! O(N log N) butterfly network, bounding per-coefficient error at
 //! O(N log N · ε_machine). □
 
-use crate::domain::plan::config::SparseFftConfig;
+use crate::domain::plan::config::{RecoveryRoute, SparseFftConfig};
 use crate::domain::spectrum::sparse::SparseSpectrum;
+use crate::infrastructure::kernel::downsampled;
 use apollo_fft::{ApolloError, ApolloResult, CpuStorage, PrecisionProfile, F16};
 use eunomia::{Complex32, Complex64};
 use leto::Array1;
@@ -138,11 +139,32 @@ pub struct SparseLetoSpectrum<T> {
 }
 
 impl SparseFftPlan {
-    /// Create a new sparse FFT plan.
+    /// Create a new sparse FFT plan on the dense top-`K` route.
     pub fn new(n: usize, k: usize) -> ApolloResult<Self> {
         Ok(Self {
             config: SparseFftConfig::new(n, k)?,
         })
+    }
+
+    /// Create a sparse FFT plan on the downsampled route (ADR 0064): the
+    /// support is found by aliasing the signal onto `bucket_count` buckets
+    /// and decoding each, at `O(K log K)` while no bucket holds more than
+    /// four tones and exactly for any exactly `K`-sparse input.
+    ///
+    /// # Errors
+    ///
+    /// The errors of [`Self::new`], and a validation error on a length the
+    /// route cannot alias (see [`SparseFftConfig::downsampled`]).
+    pub fn downsampled(n: usize, k: usize) -> ApolloResult<Self> {
+        Ok(Self {
+            config: SparseFftConfig::downsampled(n, k)?,
+        })
+    }
+
+    /// Return the recovery route.
+    #[must_use]
+    pub const fn route(&self) -> RecoveryRoute {
+        self.config.route()
     }
 
     /// Return the validated plan configuration.
@@ -190,8 +212,11 @@ impl SparseFftPlan {
     /// Forward transform from a complex signal to a sparse spectrum.
     ///
     /// ## Complexity
-    /// Spectrum density computation: O(N log N) via apollo-fft auto-selecting kernel.
-    /// Top-K selection: O(N log K) via min-heap of size K.
+    /// On the dense route, spectrum density computation is O(N log N) via the
+    /// apollo-fft auto-selecting kernel and top-K selection O(N log K) via a
+    /// min-heap of size K. On the downsampled route the candidates come from
+    /// `O(K log K)` aliased transforms while no bucket holds more than four
+    /// tones (ADR 0064), the same heap ranking them.
     ///
     /// ## Recovery guarantee
     /// If the signal is K-sparse in the frequency domain, recovery is exact up to
@@ -208,11 +233,32 @@ impl SparseFftPlan {
             });
         }
 
-        // O(N log N) via apollo-fft auto-selecting kernel.
-        let dense: Vec<Complex64> = {
-            let mut arr = Array1::from(signal.to_vec());
-            apollo_fft::fft_1d_complex_inplace(&mut arr);
-            arr.into_vec()
+        // Candidates in ascending frequency order: every bin on the dense
+        // route, the resolved tones on the downsampled one, whose count is
+        // what keeps that route's ranking sublinear.
+        let candidates: Vec<(usize, Complex64)> = match self.route() {
+            RecoveryRoute::DenseTopK => {
+                // O(N log N) via apollo-fft auto-selecting kernel.
+                let mut arr = Array1::from(signal.to_vec());
+                apollo_fft::fft_1d_complex_inplace(&mut arr);
+                arr.into_vec().into_iter().enumerate().collect()
+            }
+            RecoveryRoute::Downsampled => {
+                let mut resolved = downsampled::recover(signal, self.bucket_count(), self.trials()).map_err(
+                    |unresolved| {
+                        ApolloError::validation(
+                            "signal",
+                            format!(
+                                "{} of {} buckets unresolved",
+                                unresolved.buckets, unresolved.bucket_count
+                            ),
+                            "the downsampled route resolves an exactly K-sparse signal; this one collided at every bucket count tried",
+                        )
+                    },
+                )?;
+                resolved.sort_by_key(|&(frequency, _)| frequency);
+                resolved
+            }
         };
 
         // O(N log K) top-K selection via min-heap of size K.
@@ -220,7 +266,7 @@ impl SparseFftPlan {
         // with the smallest magnitude (highest index on tie) -- the K-th best.
         let k = self.sparsity();
         let mut heap: BinaryHeap<Reverse<MagIdx>> = BinaryHeap::with_capacity(k + 1);
-        for (i, coeff) in dense.iter().enumerate() {
+        for &(i, coeff) in &candidates {
             heap.push(Reverse(MagIdx(coeff.norm_sqr(), i)));
             if heap.len() > k {
                 heap.pop();
@@ -230,7 +276,12 @@ impl SparseFftPlan {
         // Collect in ascending frequency order and apply threshold filter.
         let mut top_k: Vec<(usize, Complex64)> = heap
             .into_iter()
-            .map(|Reverse(MagIdx(_, idx))| (idx, dense[idx]))
+            .map(|Reverse(MagIdx(_, idx))| {
+                let position = candidates
+                    .binary_search_by_key(&idx, |&(frequency, _)| frequency)
+                    .expect("invariant: the heap holds candidate frequencies");
+                candidates[position]
+            })
             .collect();
         top_k.sort_by_key(|&(idx, _)| idx);
 

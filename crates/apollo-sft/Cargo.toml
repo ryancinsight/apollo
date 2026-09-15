@@ -33,7 +33,12 @@ serde = { workspace = true }
 thiserror = { workspace = true }
 
 [dev-dependencies]
+apollo-bench = { path = "../apollo-bench" }
 proptest.workspace = true
+
+[[bench]]
+name = "recovery"
+harness = false
 
 [lints]
 workspace = true

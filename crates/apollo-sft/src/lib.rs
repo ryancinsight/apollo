@@ -19,6 +19,7 @@ mod tests;
 pub use application::execution::transform::sparse::{
     SparseComplexStorage, SparseFftPlan, SparseLetoSpectrum,
 };
+pub use domain::plan::config::{RecoveryRoute, SparseFftConfig};
 pub use domain::spectrum::sparse::SparseSpectrum;
 #[cfg(feature = "wgpu")]
 #[cfg(feature = "wgpu")]
