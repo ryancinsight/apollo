@@ -112,7 +112,11 @@ Change-class tags: [patch] backward-compatible fix, [minor] additive non-breakin
   `ifft_2d_array_half_into` inverts it as the real part of the full inverse
   of the Hermitian completion. `RealFftData` carries the pair
   (`forward_2d_half_into`, `inverse_2d_half_into`), and `FftPlan2D` reports
-  `ny_c` and `dimensions` like the 3-D plan.
+  `ny_c` and `dimensions` like the 3-D plan. The full-spectrum 2-D entries
+  (`fft_2d_array`, `fft_2d_array_into`, `ifft_2d_array`, `ifft_2d_array_into`,
+  `ifft_2d_array_into_spectrum_scratch`) route through the pair where the
+  split admits `ny`: the forward expands the half plane in place and the
+  inverses read only the lower `ny/2 + 1` bins of each row.
 
 - [minor] `apollo-fft` 3-D plans gain a transform pair that keeps the
   spectrum in `(z, x, y)` order: `FftPlan3D::forward_complex_rotated` returns a

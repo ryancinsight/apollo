@@ -87,7 +87,7 @@ pub(super) fn execute<F, const FORWARD: bool>(
     assert!(lane_len > 0 && active.len().is_multiple_of(lane_len));
     crate::application::execution::kernel::scratch_hook::ensure_registered();
     let Some(required) = workspace(lane_len).filter(|&required| required <= companion.len()) else {
-        each(active, lane_len, direct);
+        each(active, lane_len, |_, lane| direct(lane));
         return;
     };
     assert!(companion.len() >= active.len());
@@ -118,8 +118,8 @@ pub(super) fn execute<F, const FORWARD: bool>(
     }
 }
 
-/// Runs `lane` over every `lane_len`-element lane of `data`, several lanes to a
-/// scheduled task.
+/// Runs `lane(index, lane)` over every `lane_len`-element lane of `data`,
+/// several lanes to a scheduled task.
 ///
 /// A task is a whole number of lanes, and `data` is a whole number of lanes,
 /// so every task boundary is a lane boundary and the shorter final task moirai
@@ -127,7 +127,7 @@ pub(super) fn execute<F, const FORWARD: bool>(
 pub(super) fn each<T: Send + 'static>(
     data: &mut [T],
     lane_len: usize,
-    lane: impl Fn(&mut [T]) + Send + Sync,
+    lane: impl Fn(usize, &mut [T]) + Send + Sync,
 ) {
     assert!(lane_len > 0 && data.len().is_multiple_of(lane_len));
     moirai::for_each_unit_task_mut_with::<LaneTasks<T>, _, _, _, _>(
@@ -135,11 +135,11 @@ pub(super) fn each<T: Send + 'static>(
         lane_len,
         lane_len.saturating_mul(core::mem::size_of::<T>()),
         || (),
-        |(), _, lanes| {
+        |(), first_lane, lanes| {
             #[cfg(all(test, not(miri)))]
             crate::application::execution::kernel::worker_quiescence::record_worker();
-            for one in lanes.chunks_exact_mut(lane_len) {
-                lane(one);
+            for (offset, one) in lanes.chunks_exact_mut(lane_len).enumerate() {
+                lane(first_lane + offset, one);
             }
         },
     );

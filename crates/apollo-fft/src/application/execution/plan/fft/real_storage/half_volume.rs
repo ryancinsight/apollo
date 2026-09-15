@@ -128,7 +128,7 @@ pub(super) fn inverse<T>(
         // both are written: the retangle and half-length inverse in place on
         // the spectrum's lanes, then the unpack into the output's.
         let half_lane = plan.half_z_lane::<false>();
-        lanes::each(bins, depth, |lane| {
+        lanes::each(bins, depth, |_, lane| {
             split::inverse_packed::<T>(lane, nz, plan.split_twiddles().iter().copied(), &half_lane);
         });
         let packed = nz / 2;
