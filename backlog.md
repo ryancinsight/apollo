@@ -131,7 +131,8 @@
 - **State (2026-09-01, Claude `/root`, claim four weeks stale).** The workspace half is done: `mnemosyne = { package = "mnemosyne-memory" }` and `moirai = { package = "moirai-runtime" }` bind the published identities at the root (`0917a6a6`) without changing imports, and the gate is green. The remaining half — publishing through the OIDC release workflow — is the release state, which needs explicit authority; re-open trigger: a release authorization naming the crates.
 
 <a id="apollo-real-static-split-bound"></a>
-## APOLLO-REAL-STATIC-SPLIT-BOUND — Let the static-length real transforms take the split [major] — todo
+## APOLLO-REAL-STATIC-SPLIT-BOUND — Let the static-length real transforms take the split [major] — in-progress
+- **Integrator:** claude-fable-5.1 (session 5bed7001); **branch:** `feat/apollo-real-static-split` (lane apollo-route, stacked on #477); **lease:** `docs/adr/0063-*.md`, `docs/adr/README.md`, `crates/apollo-fft/src/application/execution/plan/fft/real_storage/mod.rs`, `crates/apollo-fft/src/api/{rfft,irfft}.rs`, `crates/apollo-fft/tests/real_half_api/`, this entry; **last-update:** 2026-09-15. First step: the ADR over the four bound options, then the recommended route.
 - **Finding:** `fft_1d_array_static_into` and `ifft_1d_array_static_into` bound `T: RealFftData` only, so they have no plan provider for the half-length plan and keep the widening path at every length (recorded under `#atlas-apollo-real-split-coverage`).
 - **Outcome:** the static forms take the split where it admits `N`, through a `StaticFftPlan1D<_, N / 2>` or a `PlanCacheProvider` bound — the bound change is the decision.
 - **Acceptance:** agreement with the dynamic split forms at every admitted `N`; `cargo-semver-checks` names the bound change as the one [major] surface; migration guide for the two entry points.
