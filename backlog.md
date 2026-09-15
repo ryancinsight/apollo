@@ -1,10 +1,5 @@
 # Apollo Backlog
 
-<a id="apollo-lane-unit-tasks"></a>
-## APOLLO-LANE-UNIT-TASKS-2026-09-15 — Lane passes decide scheduling through moirai unit tasks [patch] [perf] — done
-- #460: `lanes::each` (under `LaneTasks`) and `lanes::paired` (under `WorkBytes<PARALLEL_BYTES>`) run on moirai `for_each_unit_task_mut_with`; apollo's `TASK_BYTES`, `lanes_per_task` and hand branch deleted; workspace clippy clean, 1,525 nextest passed; `lane_threshold` per-run minima within 1%.
-- The moirai advance shares moirai's `melinoe` `rev` source identity so `apollo-validation`'s `MelinoeCell` unifies with `par_partition_for_each` (quarantine; removal with moirai's pin).
-
 <a id="apollo-melinoe-executor-receiver"></a>
 ## APOLLO-MELINOE-EXECUTOR-RECEIVER-2026-09-11 — Track unpublished provider receiver construction [patch] — blocked
 - Scope: upstream Melinoe executor registration at local `af052fc`; independent of the lane-policy change and absent from its standalone dependency pins.
@@ -166,7 +161,8 @@
 - **State (2026-09-01, Claude `/root`, claim four weeks stale).** The workspace half is done: `mnemosyne = { package = "mnemosyne-memory" }` and `moirai = { package = "moirai-runtime" }` bind the published identities at the root (`0917a6a6`) without changing imports, and the gate is green. The remaining half — publishing through the OIDC release workflow — is the release state, which needs explicit authority; re-open trigger: a release authorization naming the crates.
 
 <a id="apollo-gap-audit-compaction"></a>
-## APOLLO-GAP-AUDIT-COMPACTION — Compact gap_audit.md to its open risks [patch] — todo
+## APOLLO-GAP-AUDIT-COMPACTION — Compact gap_audit.md to its open risks [patch] — in-progress
+- **Integrator:** claude-fable-5.1 (session 5bed7001); **branch:** `docs/apollo-gap-audit-compaction` (lane apollo-route, stacked on #466); **lease:** `gap_audit.md`, `scripts/compact_gap_audit.py`, `scripts/tests/test_compact_gap_audit.py`, this entry; **last-update:** 2026-09-15.
 - **Scope:** `gap_audit.md` is 10577 lines against the 1000-line artifact budget; resolved findings (`Resolution:`, `Correction:` sections) stand beside the open risks.
 - **Outcome:** a closed finding's durable residue moves to its owner — a lint or script check, an ADR revision note, or a slop-pattern entry — and the entry deletes; an open risk keeps its anchor, one paragraph, and its re-open trigger.
 - **Acceptance:** under 1000 lines; every anchor linked from `backlog.md`, the ADRs, the memory notes' cited anchors, or a sibling board resolves; a second run of the compaction changes nothing.
@@ -447,3 +443,4 @@ One line an item: the anchor, the identity, the outcome with its commit or PR; t
 <a id="atlas-apollo-workspace-rustdoc-runtime"></a>- **ATLAS-APOLLO-WORKSPACE-RUSTDOC-RUNTIME-2026-08-26** — Bound the workspace documentation gate [patch]. Landed as dca1139d (option 1): a `plan` job partitions the member list from `cargo metadata` at runtime into four shards and a matrix job documents each with its own doc directory, every crate covered; the four `rustdoc (...)` jobs and `rustdoc shards` run green on every PR (verified 2026-09-15 on #459).
 <a id="apollo-lane-unit-tasks-review"></a>- **APOLLO-LANE-UNIT-TASKS-REVIEW** — Post-merge review of the lane unit-task migration [patch]. Reviewed [#460](https://github.com/ryancinsight/apollo/pull/460) at 7d82a896 against moirai f89c9acf: `paired` derives each group's input offset from `first_unit = task · per_task` exactly as `for_each_unit_task_mut_with` indexes its runs, `WorkBytes<PARALLEL_BYTES>` reproduces the removed `lanes · pair_bytes >= PARALLEL_BYTES` branch, and `each` keeps `LaneTasks` through the default `parallelize_work`; the lock it brings resolves melinoe through two source strings (excess 1), bounded by the provider baseline #459 set. Its record [#463](https://github.com/ryancinsight/apollo/pull/463) leaves the done heading in the open section; the next compaction folds it. Findings: none.
 <a id="atlas-apollo-measurement-smt-siblings"></a>- **ATLAS-APOLLO-MEASUREMENT-SMT-SIBLINGS-2026-09-02** — The pinned instruments do not know a processor's SMT sibling [patch]. [#465](https://github.com/ryancinsight/apollo/pull/465): `measurement_cores` selects through themis `CpuTopology::smt()` — with a sibling table an arm is the first class member that is not processor 0, shares no core with it and none with an earlier arm; without one the index rule stands — and the census prints each processor’s core; the decision is a pure `choose` tested on a synthetic four-core table (this host has no SMT) and the live topology in both profiles.
+<a id="apollo-lane-unit-tasks"></a>- **APOLLO-LANE-UNIT-TASKS-2026-09-15** — Lane passes decide scheduling through moirai unit tasks [patch] [perf]. #460: `lanes::each` (under `LaneTasks`) and `lanes::paired` (under `WorkBytes<PARALLEL_BYTES>`) run on moirai `for_each_unit_task_mut_with`; apollo's `TASK_BYTES`, `lanes_per_task` and hand branch deleted; workspace clippy clean, 1,525 nextest passed; `lane_threshold` per-run minima within 1%.
