@@ -1,10 +1,9 @@
+use super::super::lanes;
 use super::super::twiddles::cached_power_of_two_twiddle;
 use super::passes::{self, AxisLanes};
 use super::rotated::RotatedSpectrum;
 use crate::application::execution::kernel::mixed_radix::scalar::plan_scratch::PlanScratch;
-use crate::application::execution::kernel::mixed_radix::{
-    dispatch_inplace, forward_inplace, inverse_inplace, MixedRadixScalar,
-};
+use crate::application::execution::kernel::mixed_radix::MixedRadixScalar;
 use crate::application::execution::kernel::real_fft::split_twiddle_table;
 use crate::application::execution::plan::fft::layout::with_c_order_view;
 use crate::domain::metadata::shape::Shape3D;
@@ -247,7 +246,7 @@ where
         } else {
             &self.twiddle_half_z_inv
         };
-        lane_over::<F, FORWARD>(twiddles.as_deref())
+        lanes::lane_over::<F, FORWARD>(twiddles.as_deref())
     }
 
     /// The real split's twiddles for the z lanes, `W_nz^k` for `k = 1..⌈nz/4⌉`.
@@ -328,24 +327,6 @@ where
             _ => unreachable!("invariant: the entry points validate the axis"),
         }
         .as_deref();
-        lane_over::<F, FORWARD>(twiddles)
-    }
-}
-
-/// One direction's transform of a lane of the table's length: the cached
-/// power-of-two twiddles where the length has them, the generic mixed radix
-/// otherwise.
-fn lane_over<F, const FORWARD: bool>(
-    twiddles: Option<&[F::Complex]>,
-) -> impl Fn(&mut [F::Complex]) + Send + Sync + '_
-where
-    F: MixedRadixScalar<Complex = Complex<F>>,
-    F::Complex: PlanScratch,
-{
-    move |lane: &mut [F::Complex]| match (FORWARD, twiddles) {
-        (true, Some(twiddles)) => dispatch_inplace::<F, false, false>(lane, Some(twiddles)),
-        (false, Some(twiddles)) => dispatch_inplace::<F, true, true>(lane, Some(twiddles)),
-        (true, None) => forward_inplace::<F>(lane),
-        (false, None) => inverse_inplace::<F>(lane),
+        lanes::lane_over::<F, FORWARD>(twiddles)
     }
 }

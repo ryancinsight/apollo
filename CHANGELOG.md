@@ -106,6 +106,13 @@ Change-class tags: [patch] backward-compatible fix, [minor] additive non-breakin
   new: `ifft_1d_slice_half_into` and `RealFftData::inverse_1d_half_into`
   retangle the `n/2 + 1` bins and run a half-length inverse, allocating nothing
   where the split applies; lengths it does not admit widen to complex.
+- [minor] `apollo-fft` transforms a real 2-D field through its half spectrum
+  the same way: `fft_2d_array_half_into` writes the `(nx, ny/2 + 1)` bins,
+  each row through the real split and the x pass on the half plane, and
+  `ifft_2d_array_half_into` inverts it as the real part of the full inverse
+  of the Hermitian completion. `RealFftData` carries the pair
+  (`forward_2d_half_into`, `inverse_2d_half_into`), and `FftPlan2D` reports
+  `ny_c` and `dimensions` like the 3-D plan.
 
 - [minor] `apollo-fft` 3-D plans gain a transform pair that keeps the
   spectrum in `(z, x, y)` order: `FftPlan3D::forward_complex_rotated` returns a
