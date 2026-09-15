@@ -447,7 +447,7 @@ dependencies = [
  "hephaestus-core",
  "hephaestus-wgpu",
  "leto",
- "melinoe 0.9.0 (git+https://github.com/ryancinsight/melinoe.git)",
+ "melinoe 0.9.0 (git+https://github.com/ryancinsight/melinoe.git?rev=059e5891584918938c739e4885f861b7753d45b6)",
  "mnemosyne-memory",
  "moirai-runtime",
  "serde",
