@@ -159,11 +159,18 @@ impl<T: MixedRadixScalar<Complex = Complex<T>>> SplitSinks<T> {
         };
         let first: Vec<Complex<T>> = (0..base).map(w).collect();
         let second: Vec<Complex<T>> = (0..base).map(|j| w(2 * j)).collect();
+        // The same twiddles chunk-major for the radix-3 pass ahead of the
+        // blocks: per register chunk, `W^{k}` then `W^{2 k}`.
+        debug_assert_eq!(base % samples, 0);
+        let rows: Vec<Complex<T>> = (0..base / samples)
+            .flat_map(|c| (1..3).flat_map(move |j| (0..samples).map(move |s| (j, samples * c + s))))
+            .map(|(j, k)| w(j * k))
+            .collect();
         Self {
             inner: AlignedLanes::new(&dup_split(samples, &first), zero),
             second: AlignedLanes::new(&dup_split(samples, &second), zero),
             outer: AlignedLanes::empty(zero),
-            rows: AlignedLanes::empty(zero),
+            rows: AlignedLanes::new(&interleaved(&rows), zero),
         }
     }
 
@@ -227,8 +234,9 @@ impl<T: MixedRadixScalar<Complex = Complex<T>>> SplitSinks<T> {
         self.outer.as_slice()
     }
 
-    /// `W_{8 BASE}^{j k}` for `j` in `1..8`, `k < BASE`, interleaved and
-    /// chunk-major; empty except under the radix-8 pass.
+    /// `W_{R BASE}^{j k}` for `j` in `1..R`, `k < BASE`, interleaved and
+    /// chunk-major (`R - 1` registers a chunk), the radix-`R` pass ahead of
+    /// the blocks; empty below three blocks.
     pub(crate) fn rows(&self) -> &[T] {
         self.rows.as_slice()
     }

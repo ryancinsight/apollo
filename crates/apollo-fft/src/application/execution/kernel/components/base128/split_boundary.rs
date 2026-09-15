@@ -33,7 +33,7 @@
 
 use super::instance_major::BlockSource;
 use crate::application::execution::kernel::components::register_butterfly::{
-    radix8, DupSplitEighths,
+    radix3, radix8, DupSplitEighths, Thirds,
 };
 use crate::application::execution::kernel::mixed_radix::MixedRadixScalar;
 use hermes_simd::{
@@ -147,34 +147,42 @@ where
         source.chunk::<A, 2>(simd, out, c)
     }
 }
-/// The radix-8 pass over eight contiguous parent eighths, in place or into scratch:
-/// RustFFT's column pass ahead of its inner butterflies. For input
-/// `x[c + BASE r]`, `r < 8`, chunk `c` loads the eight eighths' registers
-/// (eight streams `BASE` samples apart), runs the register radix-8 across
-/// them, and stores `Y_0` and `W_{8 BASE}^{q c} Y_q` into the corresponding output block
-/// — the twiddle after the butterfly, from one contiguous chunk-major
-/// stream ([`super::instance_major::SplitSinks::rows`]) — so eighth `q`
-/// then transforms as a contiguous `BASE`-point block whose spectrum is
-/// `X[8 k + q]`.
-pub(crate) struct ColumnRadix8<'a, T, S, const BLOCK_LANES: usize, const INVERSE: bool> {
-    /// The parent, `8 BLOCK_LANES` lanes.
+/// The radix-`RADIX` pass over `RADIX` contiguous parent slices, in place or
+/// into scratch: RustFFT's column pass ahead of its inner butterflies. For
+/// input `x[c + BASE r]`, `r < RADIX`, chunk `c` loads the slices' registers
+/// (`RADIX` streams `BASE` samples apart), runs the register radix across
+/// them, and stores `Y_0` and `W_{RADIX BASE}^{q c} Y_q` into the
+/// corresponding output slice — the twiddle after the butterfly, from one
+/// contiguous chunk-major stream ([`super::instance_major::SplitSinks::rows`])
+/// — so slice `q` then transforms as a contiguous `BASE`-point block whose
+/// spectrum is `X[RADIX k + q]`. Radices 3 and 8.
+pub(crate) struct ColumnPass<
+    'a,
+    T,
+    S,
+    const RADIX: usize,
+    const BLOCK_LANES: usize,
+    const INVERSE: bool,
+> {
+    /// The parent, `RADIX BLOCK_LANES` lanes.
     pub(crate) source: S,
-    /// Eight contiguous output blocks.
+    /// `RADIX` contiguous output blocks.
     pub(crate) dst: &'a mut [T],
-    /// `7 BLOCK_LANES` lanes, chunk-major.
+    /// `(RADIX - 1) BLOCK_LANES` lanes, chunk-major.
     pub(crate) twiddles: &'a [T],
-    /// `W_8^1` as `(re, im)` for the eighths.
+    /// `W_8^1` as `(re, im)` for the eighths; unread at radix 3.
     pub(crate) eighth_one: [T; 2],
-    /// `W_8^3` as `(re, im)` for the eighths.
+    /// `W_8^3` as `(re, im)` for the eighths; unread at radix 3.
     pub(crate) eighth_three: [T; 2],
 }
 
 impl<
         T: LaneScalar + MixedRadixScalar,
         S: BlockSource<T>,
+        const RADIX: usize,
         const BLOCK_LANES: usize,
         const INVERSE: bool,
-    > LaneKernel<T> for ColumnRadix8<'_, T, S, BLOCK_LANES, INVERSE>
+    > LaneKernel<T> for ColumnPass<'_, T, S, RADIX, BLOCK_LANES, INVERSE>
 {
     /// Whether the dispatched width handled the pass.
     type Output = bool;
@@ -192,13 +200,35 @@ impl<
         }
         // One bound for the whole pass, so the per-chunk compares vanish.
         assert!(
-            S::BLOCKS == 1
-                && self.source.parent_lanes(self.dst) == 8 * BLOCK_LANES
-                && self.dst.len() == 8 * BLOCK_LANES
-                && self.twiddles.len() == 7 * BLOCK_LANES,
-            "invariant: eight eighths and seven twiddle rows of one base length"
+            (RADIX == 3 || RADIX == 8)
+                && S::BLOCKS == 1
+                && self.source.parent_lanes(self.dst) == RADIX * BLOCK_LANES
+                && self.dst.len() == RADIX * BLOCK_LANES
+                && self.twiddles.len() == (RADIX - 1) * BLOCK_LANES,
+            "invariant: the radix's slices and twiddle rows of one base length"
         );
         let cpb = BLOCK_LANES / lanes;
+        let source = self.source;
+        let out = self.dst;
+        if RADIX == 3 {
+            let thirds = Thirds::new(simd);
+            for c in 0..cpb {
+                let y = radix3::<T, A, INVERSE>(
+                    [
+                        ComplexReg::from_interleaved(column_input(simd, &source, out, c)),
+                        ComplexReg::from_interleaved(column_input(simd, &source, out, cpb + c)),
+                        ComplexReg::from_interleaved(column_input(simd, &source, out, 2 * cpb + c)),
+                    ],
+                    &thirds,
+                );
+                let t1 = ComplexReg::<T, A>::from_interleaved(chunk(self.twiddles, 2 * c));
+                let t2 = ComplexReg::<T, A>::from_interleaved(chunk(self.twiddles, 2 * c + 1));
+                put_chunk(y[0].into_interleaved(), out, c);
+                put_chunk((y[1] * t1).into_interleaved(), out, cpb + c);
+                put_chunk((y[2] * t2).into_interleaved(), out, 2 * cpb + c);
+            }
+            return true;
+        }
         let eighths = DupSplitEighths {
             one: (
                 simd.splat(self.eighth_one[0]),
@@ -209,8 +239,6 @@ impl<
                 simd.splat(self.eighth_three[1]),
             ),
         };
-        let source = self.source;
-        let out = self.dst;
         for c in 0..cpb {
             let y = radix8::<T, A, INVERSE, _>(
                 [
@@ -246,23 +274,23 @@ impl<
     }
 }
 
-/// Interleaves eight transformed eighths into natural order: block `q` of
-/// `src` holds `X[8 k + q]` at `k`, and `dst` receives `X` in order —
+/// Interleaves `BLOCKS` transformed slices into natural order: block `q` of
+/// `src` holds `X[BLOCKS k + q]` at `k`, and `dst` receives `X` in order —
 /// RustFFT's transpose after its inner butterflies, run as pair
-/// interleaves in registers. Chunk `k` of every block loads (eight streams
-/// `BASE` samples apart) and the eight registers of consecutive output
-/// store contiguously: at four complexes a register one fused four-way
-/// transpose handles each four-block tile; at two, one pairwise level joins the
-/// even and odd blocks.
-pub(crate) struct InterleaveBlocks<'a, T, const BLOCK_LANES: usize> {
-    /// Eight transformed blocks, `8 BLOCK_LANES` lanes.
+/// interleaves in registers. Chunk `k` of every block loads (`BLOCKS`
+/// streams `BASE` samples apart) and the `BLOCKS` registers of consecutive
+/// output store contiguously: eight blocks at four complexes a register are
+/// two fused four-way tile transposes and at two a pairing of even and odd
+/// blocks; three blocks are one three-way pair interleave at either width.
+pub(crate) struct InterleaveBlocks<'a, T, const BLOCKS: usize, const BLOCK_LANES: usize> {
+    /// `BLOCKS` transformed blocks, `BLOCKS BLOCK_LANES` lanes.
     pub(crate) src: &'a [T],
-    /// The parent, `8 BLOCK_LANES` lanes.
+    /// The parent, `BLOCKS BLOCK_LANES` lanes.
     pub(crate) dst: &'a mut [T],
 }
 
-impl<T: LaneScalar + MixedRadixScalar, const BLOCK_LANES: usize> LaneKernel<T>
-    for InterleaveBlocks<'_, T, BLOCK_LANES>
+impl<T: LaneScalar + MixedRadixScalar, const BLOCKS: usize, const BLOCK_LANES: usize> LaneKernel<T>
+    for InterleaveBlocks<'_, T, BLOCKS, BLOCK_LANES>
 {
     /// Whether the dispatched width handled the pass.
     type Output = bool;
@@ -281,10 +309,24 @@ impl<T: LaneScalar + MixedRadixScalar, const BLOCK_LANES: usize> LaneKernel<T>
         }
         // One bound for the whole pass, so the per-chunk compares vanish.
         assert!(
-            self.src.len() == 8 * BLOCK_LANES && self.dst.len() == self.src.len(),
-            "invariant: eight blocks of one base length"
+            (BLOCKS == 3 || BLOCKS == 8)
+                && self.src.len() == BLOCKS * BLOCK_LANES
+                && self.dst.len() == self.src.len(),
+            "invariant: the blocks of one base length"
         );
         let cpb = BLOCK_LANES / lanes;
+        if BLOCKS == 3 {
+            for k in 0..cpb {
+                let r0 = chunk::<T, A>(self.src, k);
+                let r1 = chunk::<T, A>(self.src, cpb + k);
+                let r2 = chunk::<T, A>(self.src, 2 * cpb + k);
+                let (o0, o1, o2) = r0.interleave_pairs3(r1, r2);
+                put_chunk(o0, self.dst, 3 * k);
+                put_chunk(o1, self.dst, 3 * k + 1);
+                put_chunk(o2, self.dst, 3 * k + 2);
+            }
+            return true;
+        }
         for k in 0..cpb {
             let r0 = chunk::<T, A>(self.src, k);
             let r1 = chunk::<T, A>(self.src, cpb + k);

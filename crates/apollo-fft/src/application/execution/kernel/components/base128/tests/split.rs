@@ -57,15 +57,14 @@ fn normalized_inverse_matches_independent_direct_sum() {
     }
 }
 
-/// The eight-block interleave against the scalar reference: block `q` at
-/// `k` lands at `8 k + q`. The pass moves values, so both widths must match
-/// bit-exactly where they handle the request.
-fn assert_interleave_matches_reference<T>()
+/// The `BLOCKS`-block interleave against the scalar reference: block `q`
+/// at `k` lands at `BLOCKS k + q`. The pass moves values, so both widths
+/// must match bit-exactly where they handle the request.
+fn assert_interleave_matches_reference<T, const BLOCKS: usize>()
 where
     T: crate::application::execution::kernel::mixed_radix::MixedRadixScalar
         + hermes_simd::LaneScalar,
 {
-    const BLOCKS: usize = 8;
     let n = BLOCKS * 256;
     let lanes: Vec<T> = (0..2 * n).map(|i| T::from_precise(i as f64)).collect();
     let mut reference = vec![T::from_precise(0.0); 2 * n];
@@ -80,6 +79,7 @@ where
     let narrow_handled =
         hermes_simd::vectorize_lanes::<4, T, _>(super::super::split_boundary::InterleaveBlocks::<
             T,
+            BLOCKS,
             512,
         > {
             src: &lanes,
@@ -89,6 +89,7 @@ where
     let wide_handled =
         hermes_simd::vectorize_lanes::<8, T, _>(super::super::split_boundary::InterleaveBlocks::<
             T,
+            BLOCKS,
             512,
         > {
             src: &lanes,
@@ -110,6 +111,8 @@ where
 
 #[test]
 fn interleave_matches_the_strided_reference_at_both_widths() {
-    assert_interleave_matches_reference::<f64>();
-    assert_interleave_matches_reference::<f32>();
+    assert_interleave_matches_reference::<f64, 8>();
+    assert_interleave_matches_reference::<f32, 8>();
+    assert_interleave_matches_reference::<f64, 3>();
+    assert_interleave_matches_reference::<f32, 3>();
 }
