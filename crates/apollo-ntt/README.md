@@ -14,7 +14,12 @@ src/
 
 `NttPlan` is the single source of truth for transform length, modulus,
 primitive root, derived forward/inverse roots, inverse length factor, and stage
-twiddles.
+twiddles. `CircleNttPlan` is the second plan kind: for a prime `p ≡ 3 (mod 4)`
+with `2n | p + 1`, such as Mersenne `2³¹ − 1`, it evaluates and interpolates
+over a size-`n` twin-coset of the circle group `x² + y² = 1` in the circle
+FFT basis — a multipoint evaluation rather than the cyclic transform, whose
+pointwise product is the polynomial product modulo the domain's vanishing
+polynomial ([ADR 0065](../../docs/adr/0065-circle-group-ntt-lengths.md)).
 
 ## Mathematical Contract
 

@@ -83,6 +83,12 @@ Change-class tags: [patch] backward-compatible fix, [minor] additive non-breakin
   doubling the count on a failed round, at `O(K log K)` while no bucket holds
   more than four tones and exactly for any exactly `K`-sparse input;
   `RecoveryRoute` names the route on `SparseFftConfig` (ADR 0064).
+- [minor] `apollo-ntt` transforms power-of-two lengths over primes whose
+  `p + 1` is two-adic, such as Mersenne `2³¹ − 1`: `CircleNttPlan` runs the
+  circle FFT of Haböck, Levit and Papini over a twin-coset of the circle group
+  in its FFT basis, exact in both directions, with the pointwise product the
+  polynomial product modulo the domain's vanishing polynomial (ADR 0065).
+  `CirclePoint` and `MERSENNE31` are exported beside it.
 - [minor] `apollo-fft::thread_local_scratch_hook_registered` reports whether
   the idle-scratch release holds one of Moirai's fixed idle-hook slots. A
   registry already full when Apollo first registers is recorded rather than

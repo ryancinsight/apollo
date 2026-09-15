@@ -8,8 +8,10 @@ pub mod domain;
 /// Infrastructure pointers.
 pub mod infrastructure;
 
+pub use application::execution::plan::ntt::circle::CircleNttPlan;
 pub use application::execution::plan::ntt::dimension_1d::NttPlan;
-pub use domain::contracts::config::{DEFAULT_MODULUS, DEFAULT_PRIMITIVE_ROOT};
+pub use domain::contracts::circle::CirclePoint;
+pub use domain::contracts::config::{DEFAULT_MODULUS, DEFAULT_PRIMITIVE_ROOT, MERSENNE31};
 pub use domain::contracts::error::NttError;
 pub use infrastructure::transport::cpu::{intt, intt_leto, ntt, ntt_leto};
 
