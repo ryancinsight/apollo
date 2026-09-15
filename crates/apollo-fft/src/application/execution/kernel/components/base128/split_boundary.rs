@@ -156,20 +156,16 @@ where
 /// contiguous chunk-major stream ([`super::instance_major::SplitSinks::rows`])
 /// — so slice `q` then transforms as a contiguous `BASE`-point block whose
 /// spectrum is `X[RADIX k + q]`. Radices 3 and 8.
-pub(crate) struct ColumnPass<
-    'a,
-    T,
-    S,
-    const RADIX: usize,
-    const BLOCK_LANES: usize,
-    const INVERSE: bool,
-> {
-    /// The parent, `RADIX BLOCK_LANES` lanes.
+pub(crate) struct ColumnPass<'a, T, S, const RADIX: usize, const INVERSE: bool> {
+    /// The parent, `RADIX` blocks of `block_lanes` lanes.
     pub(crate) source: S,
     /// `RADIX` contiguous output blocks.
     pub(crate) dst: &'a mut [T],
-    /// `(RADIX - 1) BLOCK_LANES` lanes, chunk-major.
+    /// `(RADIX - 1) block_lanes` lanes, chunk-major.
     pub(crate) twiddles: &'a [T],
+    /// One block in scalar lanes: a runtime value, so one pass serves every
+    /// level of a chain (the bound is asserted once at entry either way).
+    pub(crate) block_lanes: usize,
     /// `W_8^1` as `(re, im)` for the eighths; read at radix 8 only.
     pub(crate) eighth_one: [T; 2],
     /// `W_8^3` as `(re, im)` for the eighths; read at radix 8 only.
@@ -180,9 +176,8 @@ impl<
         T: LaneScalar + MixedRadixScalar,
         S: BlockSource<T>,
         const RADIX: usize,
-        const BLOCK_LANES: usize,
         const INVERSE: bool,
-    > LaneKernel<T> for ColumnPass<'_, T, S, RADIX, BLOCK_LANES, INVERSE>
+    > LaneKernel<T> for ColumnPass<'_, T, S, RADIX, INVERSE>
 {
     /// Whether the dispatched width handled the pass.
     type Output = bool;
@@ -202,12 +197,13 @@ impl<
         assert!(
             (RADIX == 3 || RADIX == 4 || RADIX == 8)
                 && S::BLOCKS == 1
-                && self.source.parent_lanes(self.dst) == RADIX * BLOCK_LANES
-                && self.dst.len() == RADIX * BLOCK_LANES
-                && self.twiddles.len() == (RADIX - 1) * BLOCK_LANES,
-            "invariant: the radix's slices and twiddle rows of one base length"
+                && self.block_lanes % lanes == 0
+                && self.source.parent_lanes(self.dst) == RADIX * self.block_lanes
+                && self.dst.len() == RADIX * self.block_lanes
+                && self.twiddles.len() == (RADIX - 1) * self.block_lanes,
+            "invariant: the radix's slices and twiddle rows of one block length"
         );
-        let cpb = BLOCK_LANES / lanes;
+        let cpb = self.block_lanes / lanes;
         let source = self.source;
         let out = self.dst;
         if RADIX == 3 {
@@ -301,15 +297,17 @@ impl<
 /// two fused four-way tile transposes and at two a pairing of even and odd
 /// blocks, four blocks one tile transpose and one pairing; three blocks
 /// are one three-way pair interleave at either width.
-pub(crate) struct InterleaveBlocks<'a, T, const BLOCKS: usize, const BLOCK_LANES: usize> {
-    /// `BLOCKS` transformed blocks, `BLOCKS BLOCK_LANES` lanes.
+pub(crate) struct InterleaveBlocks<'a, T, const BLOCKS: usize> {
+    /// `BLOCKS` transformed blocks, `BLOCKS block_lanes` lanes.
     pub(crate) src: &'a [T],
-    /// The parent, `BLOCKS BLOCK_LANES` lanes.
+    /// The parent, `BLOCKS block_lanes` lanes.
     pub(crate) dst: &'a mut [T],
+    /// One block in scalar lanes (as [`ColumnPass::block_lanes`]).
+    pub(crate) block_lanes: usize,
 }
 
-impl<T: LaneScalar + MixedRadixScalar, const BLOCKS: usize, const BLOCK_LANES: usize> LaneKernel<T>
-    for InterleaveBlocks<'_, T, BLOCKS, BLOCK_LANES>
+impl<T: LaneScalar + MixedRadixScalar, const BLOCKS: usize> LaneKernel<T>
+    for InterleaveBlocks<'_, T, BLOCKS>
 {
     /// Whether the dispatched width handled the pass.
     type Output = bool;
@@ -329,11 +327,12 @@ impl<T: LaneScalar + MixedRadixScalar, const BLOCKS: usize, const BLOCK_LANES: u
         // One bound for the whole pass, so the per-chunk compares vanish.
         assert!(
             (BLOCKS == 3 || BLOCKS == 4 || BLOCKS == 8)
-                && self.src.len() == BLOCKS * BLOCK_LANES
+                && self.block_lanes % lanes == 0
+                && self.src.len() == BLOCKS * self.block_lanes
                 && self.dst.len() == self.src.len(),
-            "invariant: the blocks of one base length"
+            "invariant: the blocks of one block length"
         );
-        let cpb = BLOCK_LANES / lanes;
+        let cpb = self.block_lanes / lanes;
         if BLOCKS == 3 {
             for k in 0..cpb {
                 let r0 = chunk::<T, A>(self.src, k);

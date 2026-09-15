@@ -224,13 +224,11 @@ where
             } else {
                 T::cached_twiddle_fwd(n)
             };
-            // Eight blocks take the column-first step; 32 and 64 the
-            // chain of two (radix 4 or 8 over eight-block slices).
-            match n / base {
-                8 => SplitSinks::build_column_first(samples, &twiddles, base, 1),
-                32 => SplitSinks::build_column_first(samples, &twiddles, base, 4),
-                64 => SplitSinks::build_column_first(samples, &twiddles, base, 8),
-                _ => SplitSinks::build(samples, &twiddles, base, n),
+            // Eights over the base with at most one four outside them take
+            // the column-first chain; two and four blocks the sink route.
+            match super::chain_radices(n / base) {
+                Some(radices) => SplitSinks::build_column_first(samples, &twiddles, base, &radices),
+                None => SplitSinks::build(samples, &twiddles, base, n),
             }
         } else {
             SplitSinks::empty()

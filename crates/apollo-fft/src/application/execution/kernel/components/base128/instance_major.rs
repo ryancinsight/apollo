@@ -39,7 +39,9 @@ use crate::application::execution::kernel::components::aligned::CacheLineAligned
 use plan::{native_width, BaseLaneWidth};
 pub(crate) use plan::{BasePlan, BasePlanState};
 pub(crate) use rows::{BlockSource, ParentSplit, SelfSplit};
-pub(crate) use store::{DirectSink, FinalRadix3Sink, FinalRadix4Sink, SplitSinks, StoreSink};
+pub(crate) use store::{
+    chain_radices, ChainLevel, DirectSink, FinalRadix3Sink, FinalRadix4Sink, SplitSinks, StoreSink,
+};
 
 /// Per-phase TSC accumulators for the separately instantiated attribution
 /// instrument.

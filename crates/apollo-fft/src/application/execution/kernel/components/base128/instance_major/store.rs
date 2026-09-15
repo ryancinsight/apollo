@@ -79,15 +79,54 @@ pub(crate) struct SplitSinks<T> {
     /// second twiddle; empty elsewhere.
     second: AlignedLanes<T>,
     outer: AlignedLanes<T>,
-    /// `W_{R BASE}^{j k}` for `j` in `1..R`, `k < BASE`, interleaved and
-    /// chunk-major — for each register chunk of `samples` complexes the
-    /// `R - 1` twiddle registers `j = 1..R` in turn — so the radix-`R`
-    /// pass ahead of the blocks reads one contiguous twiddle stream
-    /// (RustFFT's table shape); empty elsewhere.
+    /// The column-first chain's levels, outermost first, each the
+    /// chunk-major rows of its radix pass; empty for the sink routes.
+    chain: Box<[ChainLevel<T>]>,
+}
+
+/// One level of the column-first chain: the radix of its pass over the
+/// level above and the pass's twiddles `W_n^{j k}` for `j` in `1..R`,
+/// `k < n / R`, interleaved and chunk-major — for each register chunk of
+/// `samples` complexes the `R - 1` twiddle registers `j = 1..R` in turn —
+/// so the pass reads one contiguous twiddle stream (RustFFT's table shape).
+pub(crate) struct ChainLevel<T> {
+    radix: usize,
     rows: AlignedLanes<T>,
-    /// The same shape for the radix-`R` pass of the chain's outer step,
-    /// `W_n^{j k}` for `k < 8 BASE`, `n = 8 R BASE`; empty below the chain.
-    outer_rows: AlignedLanes<T>,
+}
+
+impl<T> ChainLevel<T> {
+    /// The radix of this level's pass.
+    pub(crate) fn radix(&self) -> usize {
+        self.radix
+    }
+}
+
+impl<T: Copy> ChainLevel<T> {
+    /// The pass's twiddle lanes, `(radix - 1)` registers a chunk.
+    pub(crate) fn rows(&self) -> &[T] {
+        self.rows.as_slice()
+    }
+}
+
+/// The chain's radices, outermost first, for `blocks` base blocks: a chain
+/// of eights over the base with at most one radix 4 outside them
+/// (RustFFT's `8xn` chain with its closing `4xn`), or none where the block
+/// count is not of that form (the sink routes at two, three and four).
+pub(crate) fn chain_radices(blocks: usize) -> Option<Vec<usize>> {
+    let mut radices = Vec::new();
+    let mut rest = blocks;
+    while rest % 8 == 0 {
+        radices.push(8);
+        rest /= 8;
+    }
+    if radices.is_empty() || !(rest == 1 || rest == 4) {
+        return None;
+    }
+    if rest == 4 {
+        radices.push(4);
+    }
+    radices.reverse();
+    Some(radices)
 }
 
 /// Lanes starting on a 64-byte boundary: a `Box<[T]>` lands at the
@@ -144,8 +183,7 @@ impl<T: MixedRadixScalar<Complex = Complex<T>>> SplitSinks<T> {
             inner,
             second: AlignedLanes::empty(zero),
             outer,
-            rows: AlignedLanes::empty(zero),
-            outer_rows: AlignedLanes::empty(zero),
+            chain: Box::new([]),
         }
     }
 
@@ -174,38 +212,45 @@ impl<T: MixedRadixScalar<Complex = Complex<T>>> SplitSinks<T> {
             inner: AlignedLanes::new(&dup_split(samples, &first), zero),
             second: AlignedLanes::new(&dup_split(samples, &second), zero),
             outer: AlignedLanes::empty(zero),
-            rows: AlignedLanes::new(&interleaved(&rows), zero),
-            outer_rows: AlignedLanes::empty(zero),
+            chain: Box::new([ChainLevel {
+                radix: 3,
+                rows: AlignedLanes::new(&interleaved(&rows), zero),
+            }]),
         }
     }
 
-    /// The tables for the column-first routes over `base`-blocks with
-    /// `samples` complex samples a register: the radix-8 pass over eight
-    /// blocks (`rows`) and, for `outer > 1`, the radix-`outer` pass over
-    /// `outer` slices of those (`outer_rows`), both chunk-major from the
-    /// stage-major table `twiddles` of the route's length.
+    /// The tables for the column-first chain over `base`-blocks with
+    /// `samples` complex samples a register: one level per radix of
+    /// `radices` (outermost first, the innermost over the base itself),
+    /// each chunk-major from the stage-major table `twiddles` of the
+    /// route's length.
     pub(crate) fn build_column_first(
         samples: usize,
         twiddles: &[Complex<T>],
         base: usize,
-        outer: usize,
+        radices: &[usize],
     ) -> Self {
         let zero = T::from_precise(0.0);
-        let rows = chunk_major_rows(samples, twiddles, 8, base);
-        let outer_rows = if outer > 1 {
-            AlignedLanes::new(
-                &interleaved(&chunk_major_rows(samples, twiddles, outer, 8 * base)),
-                zero,
-            )
-        } else {
-            AlignedLanes::empty(zero)
-        };
+        let n = base * radices.iter().product::<usize>();
+        let mut block = n;
+        let chain: Vec<ChainLevel<T>> = radices
+            .iter()
+            .map(|&radix| {
+                block /= radix;
+                ChainLevel {
+                    radix,
+                    rows: AlignedLanes::new(
+                        &interleaved(&chunk_major_rows(samples, twiddles, radix, block)),
+                        zero,
+                    ),
+                }
+            })
+            .collect();
         Self {
             inner: AlignedLanes::empty(zero),
             second: AlignedLanes::empty(zero),
             outer: AlignedLanes::empty(zero),
-            rows: AlignedLanes::new(&interleaved(&rows), zero),
-            outer_rows,
+            chain: chain.into_boxed_slice(),
         }
     }
 
@@ -213,11 +258,10 @@ impl<T: MixedRadixScalar<Complex = Complex<T>>> SplitSinks<T> {
     pub(crate) fn empty() -> Self {
         let zero = T::from_precise(0.0);
         Self {
-            outer_rows: AlignedLanes::empty(zero),
+            chain: Box::new([]),
             inner: AlignedLanes::empty(zero),
             second: AlignedLanes::empty(zero),
             outer: AlignedLanes::empty(zero),
-            rows: AlignedLanes::empty(zero),
         }
     }
 
@@ -237,17 +281,10 @@ impl<T: MixedRadixScalar<Complex = Complex<T>>> SplitSinks<T> {
         self.outer.as_slice()
     }
 
-    /// `W_{R BASE}^{j k}` for `j` in `1..R`, `k < BASE`, interleaved and
-    /// chunk-major (`R - 1` registers a chunk), the radix-`R` pass ahead of
-    /// the blocks; empty below three blocks.
-    pub(crate) fn rows(&self) -> &[T] {
-        self.rows.as_slice()
-    }
-
-    /// The chain's outer pass: `W_n^{j k}` for `j` in `1..R`, `k < 8
-    /// BASE`, chunk-major; empty below the chain.
-    pub(crate) fn outer_rows(&self) -> &[T] {
-        self.outer_rows.as_slice()
+    /// The column-first chain's levels, outermost first; empty for the
+    /// sink routes.
+    pub(crate) fn chain(&self) -> &[ChainLevel<T>] {
+        &self.chain
     }
 }
 

@@ -7,8 +7,8 @@
 //! 1024 is four 256-blocks, the radix-4 step riding the last block's
 //! column pass. 2048 runs a radix-8 column pass over the parent in place,
 //! eight 256-blocks out of place into scratch, then a fused transpose back
-//! into the parent; 4096 the same over eight 512-blocks, and 8192 to 32768
-//! the chain of two such steps ([`column_first`]).
+//! into the parent; 4096 the same over eight 512-blocks, and 8192 to
+//! 262144 chains of two and three such steps ([`column_first`]).
 //! For the four-block route, each four-lane block loads samples from the
 //! parent, so the route is the blocks' own passes and nothing else; at
 //! eight lanes those blocks are gathered first, the measured better of the
@@ -120,7 +120,6 @@ where
         256,
         512,
         1024,
-        4096,
         { instance_major::table_lanes(8, 32) },
     >(data, plan, sinks)
 }
@@ -154,7 +153,6 @@ where
                 128,
                 256,
                 512,
-                2048,
                 { instance_major::table_lanes(8, 16) },
             >(data, plan, sinks)
         }
@@ -173,7 +171,6 @@ where
                 128,
                 256,
                 512,
-                2048,
                 { instance_major::table_lanes(4, 32) },
             >(data, plan, sinks)
         }
@@ -206,7 +203,6 @@ where
         512,
         1024,
         2048,
-        8192,
         { instance_major::table_lanes(16, 32) },
     >(data, plan, sinks)
 }
@@ -248,7 +244,6 @@ fn transform_via_base<
     const BASE: usize,
     const BLOCK_LANES: usize,
     const SINK_LANES: usize,
-    const CHAIN_LANES: usize,
     const TABLE_LANES: usize,
 >(
     data: &mut [F::Complex],
@@ -263,19 +258,9 @@ where
 {
     let n = data.len();
     debug_assert!(
-        BASE == ROWS * ROW_LEN
-            && BLOCK_LANES == 2 * BASE
-            && SINK_LANES == 2 * BLOCK_LANES
-            && CHAIN_LANES == 8 * BLOCK_LANES
+        BASE == ROWS * ROW_LEN && BLOCK_LANES == 2 * BASE && SINK_LANES == 2 * BLOCK_LANES
     );
-    debug_assert!(
-        n == BASE
-            || n == 3 * BASE
-            || n == 4 * BASE
-            || n == 8 * BASE
-            || n == 32 * BASE
-            || n == 64 * BASE
-    );
+    debug_assert!(n == BASE || n == 3 * BASE || n == 4 * BASE || !sinks.chain().is_empty());
     if n == BASE {
         return instance_major::transform_block::<
             F,
@@ -294,21 +279,25 @@ where
         0
     };
     let blocks = n / BASE;
-    debug_assert!(match blocks {
-        8 => sinks.rows().len() == 7 * BLOCK_LANES,
-        32 | 64 => {
-            sinks.rows().len() == 7 * BLOCK_LANES
-                && sinks.outer_rows().len() == (blocks / 8 - 1) * CHAIN_LANES
-        }
-        _ => sinks.inner().len() == SINK_LANES,
+    debug_assert!(if blocks == 3 || blocks == 4 {
+        sinks.inner().len() == SINK_LANES
+    } else {
+        sinks
+            .chain()
+            .last()
+            .is_some_and(|level| level.radix() == 8 && level.rows().len() == 7 * BLOCK_LANES)
     });
     // Three blocks read the parent directly at four lanes (a stride-three
     // register from three-sample-apart windows) and take the radix-3 pass
     // ahead of them at eight; four gather at eight.
     let gathered_width = blocks == 4 && plan.native_eight_lanes();
     let column_first_three = blocks == 3 && plan.native_eight_lanes();
-    // The chain stages one eight-block slice's base blocks past its scratch.
-    let scratch_len = if blocks >= 32 { n + 8 * BASE } else { n };
+    // Each chain level stages its blocks past the level above.
+    let scratch_len = if blocks == 3 || blocks == 4 {
+        n
+    } else {
+        column_first::scratch_len(n, sinks.chain())
+    };
     <F as crate::application::execution::kernel::mixed_radix::MixedRadixScalar>::with_scratch(
         scratch_len,
         |scratch| {
@@ -336,56 +325,10 @@ where
             } else {
                 0
             };
-            let ran = if blocks == 64 {
-                column_first::two_level::<
-                    F,
-                    INVERSE,
-                    MEASURE,
-                    ROWS,
-                    ROW_LEN,
-                    BASE,
-                    BLOCK_LANES,
-                    CHAIN_LANES,
-                    TABLE_LANES,
-                    8,
-                >(data, scratch, plan, sinks)
-            } else if blocks == 32 {
-                column_first::two_level::<
-                    F,
-                    INVERSE,
-                    MEASURE,
-                    ROWS,
-                    ROW_LEN,
-                    BASE,
-                    BLOCK_LANES,
-                    CHAIN_LANES,
-                    TABLE_LANES,
-                    4,
-                >(data, scratch, plan, sinks)
-            } else if blocks == 8 {
-                column_first::one_level::<
-                    F,
-                    INVERSE,
-                    MEASURE,
-                    ROWS,
-                    ROW_LEN,
-                    BASE,
-                    BLOCK_LANES,
-                    TABLE_LANES,
-                    8,
-                >(data, scratch, plan, sinks)
-            } else if column_first_three {
-                column_first::one_level::<
-                    F,
-                    INVERSE,
-                    MEASURE,
-                    ROWS,
-                    ROW_LEN,
-                    BASE,
-                    BLOCK_LANES,
-                    TABLE_LANES,
-                    3,
-                >(data, scratch, plan, sinks)
+            let ran = if column_first_three || (blocks != 3 && blocks != 4) {
+                column_first::chain::<F, INVERSE, MEASURE, ROWS, ROW_LEN, BLOCK_LANES, TABLE_LANES>(
+                    data, scratch, plan, sinks,
+                )
             } else if blocks == 3 {
                 three_blocks_direct::<
                     F,
