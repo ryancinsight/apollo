@@ -1003,3 +1003,25 @@ base); the two-block form of the step is deleted, and the step serves
   (`APOLLO-CHAIN-DUP-SPLIT-ROWS`): the sinks already store their twiddles
   dup-split so the complex multiply needs no swap, the chain rows are
   interleaved.
+
+- **2026-09-15, dup-split rows for the column pass, falsified
+  (`APOLLO-CHAIN-DUP-SPLIT-ROWS`).** Storing each chain level's twiddle
+  registers dup-split (the sinks' layout; one shuffle a multiply instead
+  of three) doubles the level's twiddle stream. Per-level phases
+  (`output/apollo-base128/chain_phases_dup_split_2026-09-15.txt` against
+  `chain_phases_2026-09-15.txt`, TSC cycles a step): at `f32` 131072 the
+  column passes moved -79%, -5%, +7% on the performance core and -9%, -1%, +15% on
+  the efficiency core at levels 0, 1, 2 — the innermost level, whose
+  dup-split table (28 KB at eight lanes over the 256 base) stays
+  L1-resident, gains the shuffles' worth; the outer levels, whose tables
+  reach 1.8 MB, lose to the doubled stream — the transform
+  -11% on the performance core and
+  +1% on the efficiency core, and
+  -11% / -7%
+  at `f64`, -8% /
+  -6% at `f32` 262144. Not retained (the
+  branch carries the reading, not the code). The innermost pass keeps its
+  2x efficiency-core ratio with a third fewer shuffles, so the shuffle
+  count is not what that core charges the passes for; the next spike is
+  an instruction census of the pass loop under the two cores' port models
+  (`APOLLO-CHAIN-PASS-E-CORE-CENSUS`).
