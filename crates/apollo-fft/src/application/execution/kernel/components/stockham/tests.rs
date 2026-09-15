@@ -231,6 +231,8 @@ fn precise_hybrid_radix8x512_matches_stockham_n4096() {
         &twiddles,
         None,
     );
+    // SAFETY: the test returned above unless the host reports AVX and FMA, and the
+    // buffers and the twiddle table were built for this `n`.
     unsafe {
         hybrid_radix8x512_precise_avx_fma::<false>(&mut actual, &mut actual_scratch, &twiddles);
     }
@@ -266,6 +268,8 @@ fn reduced_hybrid_radix8x512_matches_stockham_n4096() {
         &twiddles,
         None,
     );
+    // SAFETY: the test returned above unless the host reports AVX and FMA, and the
+    // buffers and the twiddle table were built for this `n`.
     unsafe {
         hybrid_radix8x512_reduced_avx_fma::<false>(&mut actual, &mut actual_scratch, &twiddles);
     }
@@ -300,6 +304,8 @@ fn precise_hybrid_radix8x512_inverse_roundtrip_n4096() {
         <f64 as crate::application::execution::kernel::real_fft::RealFft>::build_inverse_twiddle_table(n);
     let mut scratch = vec![Complex64::new(0.0, 0.0); n];
 
+    // SAFETY: the test returned above unless the host reports AVX and FMA, and the
+    // buffers and the twiddle table were built for this `n`.
     unsafe {
         hybrid_radix8x512_precise_avx_fma::<false>(&mut data, &mut scratch, &forward);
         hybrid_radix8x512_precise_avx_fma::<true>(&mut data, &mut scratch, &inverse);
@@ -332,6 +338,8 @@ fn reduced_hybrid_radix8x512_inverse_roundtrip_n4096() {
         <f32 as crate::application::execution::kernel::real_fft::RealFft>::build_inverse_twiddle_table(n);
     let mut scratch = vec![Complex32::new(0.0, 0.0); n];
 
+    // SAFETY: the test returned above unless the host reports AVX and FMA, and the
+    // buffers and the twiddle table were built for this `n`.
     unsafe {
         hybrid_radix8x512_reduced_avx_fma::<false>(&mut data, &mut scratch, &forward);
         hybrid_radix8x512_reduced_avx_fma::<true>(&mut data, &mut scratch, &inverse);
@@ -401,6 +409,9 @@ fn precise_avx_schedule_roundtrip_holds_for_n8192() {
 #[test]
 #[cfg(target_arch = "x86_64")]
 fn test_small_sizes_correctness() {
+    if !std::arch::is_x86_feature_detected!("avx") || !std::arch::is_x86_feature_detected!("fma") {
+        return;
+    }
     // We will test sizes 2, 4, 8, 16 for both f32 (reduced) and f64 (precise)
     // against a simple scalar DFT.
     fn dft<T: eunomia::RealField>(
@@ -433,6 +444,8 @@ fn test_small_sizes_correctness() {
             .map(|k| Complex32::new((k as f32 * 0.123).sin(), (k as f32 * 0.456).cos()))
             .collect();
         let twiddles = <f32 as crate::application::execution::kernel::real_fft::RealFft>::build_forward_twiddle_table(n);
+        // SAFETY: the test returned above unless the host reports AVX and FMA, and the
+        // buffers and the twiddle table were built for this `n`.
         let mut scratch = vec![Complex32::new(0.0, 0.0); n];
 
         let ref_fwd = dft(&data, false);
@@ -449,6 +462,8 @@ fn test_small_sizes_correctness() {
             );
         }
 
+        // SAFETY: the test returned above unless the host reports AVX and FMA, and the
+        // buffers and the twiddle table were built for this `n`.
         // Test inverse
         let twiddles_inv = <f32 as crate::application::execution::kernel::real_fft::RealFft>::build_inverse_twiddle_table(n);
         let ref_inv = dft(&data, true);
@@ -472,6 +487,8 @@ fn test_small_sizes_correctness() {
             .map(|k| Complex64::new((k as f64 * 0.123).sin(), (k as f64 * 0.456).cos()))
             .collect();
         let twiddles = <f64 as crate::application::execution::kernel::real_fft::RealFft>::build_forward_twiddle_table(n);
+        // SAFETY: the test returned above unless the host reports AVX and FMA, and the
+        // buffers and the twiddle table were built for this `n`.
         let mut scratch = vec![Complex64::new(0.0, 0.0); n];
 
         let ref_fwd = dft(&data, false);
@@ -491,6 +508,8 @@ fn test_small_sizes_correctness() {
         // Test inverse
         let twiddles_inv = <f64 as crate::application::execution::kernel::real_fft::RealFft>::build_inverse_twiddle_table(n);
         let ref_inv = dft(&data, true);
+        // SAFETY: the test returned above unless the host reports AVX and FMA, and the
+        // buffers and the twiddle table were built for this `n`.
         unsafe {
             super::butterfly::forward64_avx_with_scratch(&mut data, &mut scratch, &twiddles_inv);
         }
