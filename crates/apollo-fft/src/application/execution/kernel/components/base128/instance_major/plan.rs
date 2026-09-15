@@ -204,9 +204,9 @@ where
     /// The sink tables for `n` at the plan's register width: empty when
     /// the route is one block, computed for the radix-3 step over three
     /// blocks, and relaid from the stage-major table for the radix-4 and
-    /// radix-8 steps — so a single-block plan never touches the twiddle
-    /// cache, and a three-block one never asks it for a length it does not
-    /// serve.
+    /// radix-8 steps and the chain — so a single-block plan never touches
+    /// the twiddle cache, and a three-block one never asks it for a length
+    /// it does not serve.
     fn sinks_for<const INVERSE: bool>(
         plan: &BasePlan<T, ROWS, ROW_LEN, TABLE_LANES>,
         n: usize,
@@ -224,10 +224,13 @@ where
             } else {
                 T::cached_twiddle_fwd(n)
             };
-            if n == 8 * base {
-                SplitSinks::build_radix8(samples, &twiddles, base)
-            } else {
-                SplitSinks::build(samples, &twiddles, base, n)
+            // Eight blocks take the column-first step; 32 and 64 the
+            // chain of two (radix 4 or 8 over eight-block slices).
+            match n / base {
+                8 => SplitSinks::build_column_first(samples, &twiddles, base, 1),
+                32 => SplitSinks::build_column_first(samples, &twiddles, base, 4),
+                64 => SplitSinks::build_column_first(samples, &twiddles, base, 8),
+                _ => SplitSinks::build(samples, &twiddles, base, n),
             }
         } else {
             SplitSinks::empty()

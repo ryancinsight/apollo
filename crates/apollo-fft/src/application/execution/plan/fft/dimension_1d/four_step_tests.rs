@@ -88,11 +88,11 @@ where
         assert_spectrum::<F, N>(&static_output, direction, unit_roundoff);
     }
 
-    // 2048 is eight 256-blocks under a radix-8 pass where the 256 base
-    // builds (ADR 0061); the four-step route starts past 4096 there.
+    // 2048 to 32768 are column-first steps over the width's base where it
+    // builds (ADR 0061); the four-step route starts past 32768 there.
     if N == 1024
-        || (N == 2048 && dynamic.base256.is_some())
-        || (N == 4096 && dynamic.base512.is_some())
+        || ((N == 2048 || N == 8192 || N == 16384) && dynamic.base256.is_some())
+        || ((N == 4096 || N == 32_768) && dynamic.base512.is_some())
     {
         assert!(matches!(dynamic.strategy, PlanStrategy::PowerOfTwo { .. }));
         assert_eq!(dynamic.twiddle_fwd.as_deref().map_or(0, <[_]>::len), 0);
@@ -118,6 +118,8 @@ where
     check_length::<F, 1024>(unit_roundoff);
     check_length::<F, 2048>(unit_roundoff);
     check_length::<F, 4096>(unit_roundoff);
+    check_length::<F, 8192>(unit_roundoff);
+    check_length::<F, 16_384>(unit_roundoff);
     check_length::<F, 32_768>(unit_roundoff);
     check_length::<F, 65_536>(unit_roundoff);
     check_length::<F, 131_072>(unit_roundoff);

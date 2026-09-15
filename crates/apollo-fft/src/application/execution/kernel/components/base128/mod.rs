@@ -4,10 +4,11 @@
 //! One instance-major kernel serves 64, 128, 256, and 512 points (128 as
 //! eight 16-sample rows at four lanes and four 32-sample rows at eight,
 //! 512 as sixteen 32-sample rows, the column pass a sixteen-point DIF);
-//! 1024 is four 256-blocks; f64 2048 is four 512-blocks, the radix-4 step
-//! riding the last block's column pass in both. At eight lanes, 2048 runs
-//! a radix-8 column pass over the parent in place, eight 256-blocks out of
-//! place into scratch, then a fused transpose back into the parent.
+//! 1024 is four 256-blocks, the radix-4 step riding the last block's
+//! column pass. 2048 runs a radix-8 column pass over the parent in place,
+//! eight 256-blocks out of place into scratch, then a fused transpose back
+//! into the parent; 4096 the same over eight 512-blocks, and 8192 to 32768
+//! the chain of two such steps ([`column_first`]).
 //! For the four-block route, each four-lane block loads samples from the
 //! parent, so the route is the blocks' own passes and nothing else; at
 //! eight lanes those blocks are gathered first, the measured better of the
@@ -24,6 +25,7 @@
 //! phase attribution runs as a separate const-specialized pass.
 
 pub(crate) mod cmul;
+mod column_first;
 pub(crate) mod split_boundary;
 
 /// The base kernels: registers hold two FFT instances rather than two
@@ -118,6 +120,7 @@ where
         256,
         512,
         1024,
+        4096,
         { instance_major::table_lanes(8, 32) },
     >(data, plan, sinks)
 }
@@ -151,6 +154,7 @@ where
                 128,
                 256,
                 512,
+                2048,
                 { instance_major::table_lanes(8, 16) },
             >(data, plan, sinks)
         }
@@ -169,6 +173,7 @@ where
                 128,
                 256,
                 512,
+                2048,
                 { instance_major::table_lanes(4, 32) },
             >(data, plan, sinks)
         }
@@ -201,6 +206,7 @@ where
         512,
         1024,
         2048,
+        8192,
         { instance_major::table_lanes(16, 32) },
     >(data, plan, sinks)
 }
@@ -242,6 +248,7 @@ fn transform_via_base<
     const BASE: usize,
     const BLOCK_LANES: usize,
     const SINK_LANES: usize,
+    const CHAIN_LANES: usize,
     const TABLE_LANES: usize,
 >(
     data: &mut [F::Complex],
@@ -256,9 +263,19 @@ where
 {
     let n = data.len();
     debug_assert!(
-        BASE == ROWS * ROW_LEN && BLOCK_LANES == 2 * BASE && SINK_LANES == 2 * BLOCK_LANES
+        BASE == ROWS * ROW_LEN
+            && BLOCK_LANES == 2 * BASE
+            && SINK_LANES == 2 * BLOCK_LANES
+            && CHAIN_LANES == 8 * BLOCK_LANES
     );
-    debug_assert!(n == BASE || n == 3 * BASE || n == 4 * BASE || n == 8 * BASE);
+    debug_assert!(
+        n == BASE
+            || n == 3 * BASE
+            || n == 4 * BASE
+            || n == 8 * BASE
+            || n == 32 * BASE
+            || n == 64 * BASE
+    );
     if n == BASE {
         return instance_major::transform_block::<
             F,
@@ -277,17 +294,21 @@ where
         0
     };
     let blocks = n / BASE;
-    debug_assert!(if blocks == 8 {
-        sinks.rows().len() == 7 * BLOCK_LANES
-    } else {
-        sinks.inner().len() == SINK_LANES
+    debug_assert!(match blocks {
+        8 => sinks.rows().len() == 7 * BLOCK_LANES,
+        32 | 64 => {
+            sinks.rows().len() == 7 * BLOCK_LANES
+                && sinks.outer_rows().len() == (blocks / 8 - 1) * CHAIN_LANES
+        }
+        _ => sinks.inner().len() == SINK_LANES,
     });
     // Three blocks read the parent directly at four lanes (a stride-three
     // register from three-sample-apart windows) and take the radix-3 pass
     // ahead of them at eight; four gather at eight.
     let gathered_width = blocks == 4 && plan.native_eight_lanes();
     let column_first_three = blocks == 3 && plan.native_eight_lanes();
-    let scratch_len = n;
+    // The chain stages one eight-block slice's base blocks past its scratch.
+    let scratch_len = if blocks >= 32 { n + 8 * BASE } else { n };
     <F as crate::application::execution::kernel::mixed_radix::MixedRadixScalar>::with_scratch(
         scratch_len,
         |scratch| {
@@ -315,8 +336,34 @@ where
             } else {
                 0
             };
-            let ran = if blocks == 8 {
-                blocks_column_first::<
+            let ran = if blocks == 64 {
+                column_first::two_level::<
+                    F,
+                    INVERSE,
+                    MEASURE,
+                    ROWS,
+                    ROW_LEN,
+                    BASE,
+                    BLOCK_LANES,
+                    CHAIN_LANES,
+                    TABLE_LANES,
+                    8,
+                >(data, scratch, plan, sinks)
+            } else if blocks == 32 {
+                column_first::two_level::<
+                    F,
+                    INVERSE,
+                    MEASURE,
+                    ROWS,
+                    ROW_LEN,
+                    BASE,
+                    BLOCK_LANES,
+                    CHAIN_LANES,
+                    TABLE_LANES,
+                    4,
+                >(data, scratch, plan, sinks)
+            } else if blocks == 8 {
+                column_first::one_level::<
                     F,
                     INVERSE,
                     MEASURE,
@@ -328,7 +375,7 @@ where
                     8,
                 >(data, scratch, plan, sinks)
             } else if column_first_three {
-                blocks_column_first::<
+                column_first::one_level::<
                     F,
                     INVERSE,
                     MEASURE,
@@ -424,90 +471,6 @@ where
         Src,
         S,
     >(out, source, plan, sink)
-}
-
-/// `BLOCKS` blocks under a column-first radix-`BLOCKS` decomposition,
-/// RustFFT's shape: the column pass runs over the parent in place
-/// ([`split_boundary::ColumnPass`] — `BLOCKS` registers `BASE` samples
-/// apart, the register radix, the twiddle `W_{BLOCKS BASE}^{q c}` after the
-/// butterfly from one chunk-major stream), each slice then transforms out
-/// of place into scratch as a contiguous block, and one pass of pair
-/// interleaves transposes the blocks back into the parent
-/// ([`split_boundary::InterleaveBlocks`]). `BLOCKS + 1` streams a pass. At
-/// eight the placement is measured (ADR 0061): against the radix-8 sink
-/// over seven spectra it reads 17% under on the performance core and 4 to
-/// 5% under on the efficiency core at `f32` 2048, and against the column
-/// pass written into scratch with the blocks in place there 4% under on the
-/// performance core. At three it serves 384 at eight lanes in place of the
-/// stride-three parent read.
-///
-/// For `n = c + BASE r` and `k = q + BLOCKS p`, the DFT phase factors as
-/// `rq/BLOCKS + cq/(BLOCKS BASE) + cp/BASE`: the radix across blocks, its
-/// twiddle, then one base transform. Scratch block `q` holds
-/// `X[BLOCKS p + q]` and the final interleave restores natural order. The
-/// inverse changes the phase sign; normalization belongs to the public plan.
-/// Independent direct-sum and exact-permutation tests cover these
-/// conventions.
-fn blocks_column_first<
-    F,
-    const INVERSE: bool,
-    const MEASURE: bool,
-    const ROWS: usize,
-    const ROW_LEN: usize,
-    const BASE: usize,
-    const BLOCK_LANES: usize,
-    const TABLE_LANES: usize,
-    const BLOCKS: usize,
->(
-    data: &mut [F::Complex],
-    scratch: &mut [F::Complex],
-    plan: &instance_major::BasePlan<F, ROWS, ROW_LEN, TABLE_LANES>,
-    sinks: &instance_major::SplitSinks<F>,
-) -> bool
-where
-    F: crate::application::execution::kernel::mixed_radix::MixedRadixScalar<
-        Complex = eunomia::Complex<F>,
-    >,
-    eunomia::Complex<F>: eunomia::layout::Pod,
-{
-    let eight_lanes = plan.native_eight_lanes();
-    let dir = if INVERSE { 1.0_f64 } else { -1.0_f64 };
-    let eighth = |j: f64| -> [F; 2] {
-        let (s, c) = (dir * core::f64::consts::TAU * j / 8.0).sin_cos();
-        [F::from_precise(c), F::from_precise(s)]
-    };
-    let passed = at_plan_width::<F, _>(
-        eight_lanes,
-        split_boundary::ColumnPass::<F, _, BLOCKS, BLOCK_LANES, INVERSE> {
-            source: instance_major::SelfSplit::<1, 0>,
-            dst: lanes_mut::<F>(data),
-            twiddles: sinks.rows(),
-            eighth_one: eighth(1.0),
-            eighth_three: eighth(3.0),
-        },
-    );
-    if !passed {
-        return false;
-    }
-    let transformed = data
-        .chunks_exact(BASE)
-        .zip(scratch.chunks_exact_mut(BASE))
-        .all(|(eighth, sub)| {
-            block::<F, INVERSE, MEASURE, ROWS, ROW_LEN, BLOCK_LANES, TABLE_LANES, _, _>(
-                sub,
-                instance_major::ParentSplit::<F, 1, 0>(lanes::<F>(eighth)),
-                plan,
-                instance_major::DirectSink,
-            )
-        });
-    transformed
-        && at_plan_width::<F, _>(
-            eight_lanes,
-            split_boundary::InterleaveBlocks::<F, BLOCKS, BLOCK_LANES> {
-                src: lanes::<F>(scratch),
-                dst: lanes_mut::<F>(data),
-            },
-        )
 }
 
 /// Three blocks, each reading the parent: subsequences 0 and 1 into

@@ -52,12 +52,14 @@ pub struct FftPlan1D<F: MixedRadixScalar> {
     pub(crate) base128: Option<Arc<State128<F>>>,
     /// The 256-point two-pass base (ADR 0061), built at n = 256 in place of
     /// the split state where its width runs, as four blocks under the
-    /// radix-4 sink at n = 1024, and as eight blocks under a radix-8 pass
-    /// ahead of them at n = 2048 at either width.
+    /// radix-4 sink at n = 1024, as eight blocks under a radix-8 pass
+    /// ahead of them at n = 2048, and under the chain of two such passes
+    /// at n = 8192 and 16384, at either width.
     pub(crate) base256: Option<Arc<State256<F>>>,
     /// The 512-point single-pass base (sixteen rows of thirty-two), built
-    /// at n = 512 at either native width and as eight blocks under a
-    /// radix-8 pass ahead of them at n = 4096 (ADR 0061).
+    /// at n = 512 at either native width, as eight blocks under a radix-8
+    /// pass ahead of them at n = 4096, and under the chain of two at
+    /// n = 32768 (ADR 0061).
     pub(crate) base512: Option<Arc<State512<F>>>,
     pub(crate) base64: Option<Arc<State64<F>>>,
     /// The 180 column route (ADR 0062): five register-resident 36-point
@@ -186,13 +188,16 @@ impl<F: MixedRadixScalar<Complex = Complex<F>>> FftPlan1D<F> {
         // RustFFT's shape, one column pass over its 256-point butterfly —
         // measured against the four 512-blocks under the radix-4 sink at
         // both (ADR 0061). 4096 is eight 512-blocks under the same radix-8
-        // pass, RustFFT's shape there (its 512 butterfly under one 8xn pass).
-        let base512 = if n == 512 || n == 4096 {
+        // pass, RustFFT's shape there (its 512 butterfly under one 8xn pass),
+        // and 8192 to 32768 are RustFFT's chains over the same bases: 8192 a
+        // radix-4 pass over four 2048-slices, 16384 and 32768 a radix-8 pass
+        // over eight slices of 2048 and 4096.
+        let base512 = if n == 512 || n == 4096 || n == 32768 {
             State512::new_if_supported(n).map(Arc::new)
         } else {
             None
         };
-        let base256 = if (256..=2048).contains(&n) && n.is_power_of_two() && base512.is_none() {
+        let base256 = if (256..=16384).contains(&n) && n.is_power_of_two() && base512.is_none() {
             State256::new_if_supported(n).map(Arc::new)
         } else {
             None
@@ -522,12 +527,12 @@ impl<F: MixedRadixScalar<Complex = Complex<F>>> FftPlan1D<F> {
                             inverse_unnorm_impl = exec_pot_inverse_unnorm_sized::<F, 10>;
                         }
                     }
-                    11 if base256.is_some() => {
+                    11 | 13 | 14 if base256.is_some() => {
                         forward_impl = exec_base256_forward::<F>;
                         inverse_impl = exec_base256_inverse::<F>;
                         inverse_unnorm_impl = exec_base256_inverse_unnorm::<F>;
                     }
-                    11 | 12 if base512.is_some() => {
+                    11 | 12 | 15 if base512.is_some() => {
                         forward_impl = exec_base512_forward::<F>;
                         inverse_impl = exec_base512_inverse::<F>;
                         inverse_unnorm_impl = exec_base512_inverse_unnorm::<F>;

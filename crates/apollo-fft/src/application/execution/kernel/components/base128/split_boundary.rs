@@ -33,7 +33,7 @@
 
 use super::instance_major::BlockSource;
 use crate::application::execution::kernel::components::register_butterfly::{
-    radix3, radix8, DupSplitEighths, Thirds,
+    radix3, radix4, radix8, DupSplitEighths, Thirds,
 };
 use crate::application::execution::kernel::mixed_radix::MixedRadixScalar;
 use hermes_simd::{
@@ -170,9 +170,9 @@ pub(crate) struct ColumnPass<
     pub(crate) dst: &'a mut [T],
     /// `(RADIX - 1) BLOCK_LANES` lanes, chunk-major.
     pub(crate) twiddles: &'a [T],
-    /// `W_8^1` as `(re, im)` for the eighths; unread at radix 3.
+    /// `W_8^1` as `(re, im)` for the eighths; read at radix 8 only.
     pub(crate) eighth_one: [T; 2],
-    /// `W_8^3` as `(re, im)` for the eighths; unread at radix 3.
+    /// `W_8^3` as `(re, im)` for the eighths; read at radix 8 only.
     pub(crate) eighth_three: [T; 2],
 }
 
@@ -200,7 +200,7 @@ impl<
         }
         // One bound for the whole pass, so the per-chunk compares vanish.
         assert!(
-            (RADIX == 3 || RADIX == 8)
+            (RADIX == 3 || RADIX == 4 || RADIX == 8)
                 && S::BLOCKS == 1
                 && self.source.parent_lanes(self.dst) == RADIX * BLOCK_LANES
                 && self.dst.len() == RADIX * BLOCK_LANES
@@ -226,6 +226,24 @@ impl<
                 put_chunk(y[0].into_interleaved(), out, c);
                 put_chunk((y[1] * t1).into_interleaved(), out, cpb + c);
                 put_chunk((y[2] * t2).into_interleaved(), out, 2 * cpb + c);
+            }
+            return true;
+        }
+        if RADIX == 4 {
+            for c in 0..cpb {
+                let y = radix4::<T, A, INVERSE>([
+                    ComplexReg::from_interleaved(column_input(simd, &source, out, c)),
+                    ComplexReg::from_interleaved(column_input(simd, &source, out, cpb + c)),
+                    ComplexReg::from_interleaved(column_input(simd, &source, out, 2 * cpb + c)),
+                    ComplexReg::from_interleaved(column_input(simd, &source, out, 3 * cpb + c)),
+                ]);
+                let t1 = ComplexReg::<T, A>::from_interleaved(chunk(self.twiddles, 3 * c));
+                let t2 = ComplexReg::<T, A>::from_interleaved(chunk(self.twiddles, 3 * c + 1));
+                let t3 = ComplexReg::<T, A>::from_interleaved(chunk(self.twiddles, 3 * c + 2));
+                put_chunk(y[0].into_interleaved(), out, c);
+                put_chunk((y[1] * t1).into_interleaved(), out, cpb + c);
+                put_chunk((y[2] * t2).into_interleaved(), out, 2 * cpb + c);
+                put_chunk((y[3] * t3).into_interleaved(), out, 3 * cpb + c);
             }
             return true;
         }
@@ -281,7 +299,8 @@ impl<
 /// streams `BASE` samples apart) and the `BLOCKS` registers of consecutive
 /// output store contiguously: eight blocks at four complexes a register are
 /// two fused four-way tile transposes and at two a pairing of even and odd
-/// blocks; three blocks are one three-way pair interleave at either width.
+/// blocks, four blocks one tile transpose and one pairing; three blocks
+/// are one three-way pair interleave at either width.
 pub(crate) struct InterleaveBlocks<'a, T, const BLOCKS: usize, const BLOCK_LANES: usize> {
     /// `BLOCKS` transformed blocks, `BLOCKS BLOCK_LANES` lanes.
     pub(crate) src: &'a [T],
@@ -309,7 +328,7 @@ impl<T: LaneScalar + MixedRadixScalar, const BLOCKS: usize, const BLOCK_LANES: u
         }
         // One bound for the whole pass, so the per-chunk compares vanish.
         assert!(
-            (BLOCKS == 3 || BLOCKS == 8)
+            (BLOCKS == 3 || BLOCKS == 4 || BLOCKS == 8)
                 && self.src.len() == BLOCKS * BLOCK_LANES
                 && self.dst.len() == self.src.len(),
             "invariant: the blocks of one base length"
@@ -324,6 +343,29 @@ impl<T: LaneScalar + MixedRadixScalar, const BLOCKS: usize, const BLOCK_LANES: u
                 put_chunk(o0, self.dst, 3 * k);
                 put_chunk(o1, self.dst, 3 * k + 1);
                 put_chunk(o2, self.dst, 3 * k + 2);
+            }
+            return true;
+        }
+        if BLOCKS == 4 {
+            for k in 0..cpb {
+                let r0 = chunk::<T, A>(self.src, k);
+                let r1 = chunk::<T, A>(self.src, cpb + k);
+                let r2 = chunk::<T, A>(self.src, 2 * cpb + k);
+                let r3 = chunk::<T, A>(self.src, 3 * cpb + k);
+                let (o0, o1, o2, o3) = if lanes == 8 {
+                    // The four registers are one 4-by-4 complex tile.
+                    r0.deinterleave_pairs4(r1, r2, r3)
+                } else {
+                    // Output register `4 k + 2 s + p` holds blocks `2 p` and
+                    // `2 p + 1` at sample `2 k + s`.
+                    let (o0, o2) = r0.interleave_pairs(r1);
+                    let (o1, o3) = r2.interleave_pairs(r3);
+                    (o0, o1, o2, o3)
+                };
+                put_chunk(o0, self.dst, 4 * k);
+                put_chunk(o1, self.dst, 4 * k + 1);
+                put_chunk(o2, self.dst, 4 * k + 2);
+                put_chunk(o3, self.dst, 4 * k + 3);
             }
             return true;
         }

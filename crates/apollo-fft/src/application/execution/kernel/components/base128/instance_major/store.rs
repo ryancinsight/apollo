@@ -79,12 +79,15 @@ pub(crate) struct SplitSinks<T> {
     /// second twiddle; empty elsewhere.
     second: AlignedLanes<T>,
     outer: AlignedLanes<T>,
-    /// `W_{8 BASE}^{j k}` for `j` in `1..8`, `k < BASE`, interleaved and
+    /// `W_{R BASE}^{j k}` for `j` in `1..R`, `k < BASE`, interleaved and
     /// chunk-major — for each register chunk of `samples` complexes the
-    /// seven twiddle registers `j = 1..8` in turn — so the radix-8 pass
-    /// ahead of the blocks reads one contiguous twiddle stream (RustFFT's
-    /// table shape); empty elsewhere.
+    /// `R - 1` twiddle registers `j = 1..R` in turn — so the radix-`R`
+    /// pass ahead of the blocks reads one contiguous twiddle stream
+    /// (RustFFT's table shape); empty elsewhere.
     rows: AlignedLanes<T>,
+    /// The same shape for the radix-`R` pass of the chain's outer step,
+    /// `W_n^{j k}` for `k < 8 BASE`, `n = 8 R BASE`; empty below the chain.
+    outer_rows: AlignedLanes<T>,
 }
 
 /// Lanes starting on a 64-byte boundary: a `Box<[T]>` lands at the
@@ -142,6 +145,7 @@ impl<T: MixedRadixScalar<Complex = Complex<T>>> SplitSinks<T> {
             second: AlignedLanes::empty(zero),
             outer,
             rows: AlignedLanes::empty(zero),
+            outer_rows: AlignedLanes::empty(zero),
         }
     }
 
@@ -171,39 +175,37 @@ impl<T: MixedRadixScalar<Complex = Complex<T>>> SplitSinks<T> {
             second: AlignedLanes::new(&dup_split(samples, &second), zero),
             outer: AlignedLanes::empty(zero),
             rows: AlignedLanes::new(&interleaved(&rows), zero),
+            outer_rows: AlignedLanes::empty(zero),
         }
     }
 
-    /// The table for the radix-8 pass over eight `base`-blocks with
-    /// `samples` complex samples a register: `W_{8 base}^{j k}`, `j` in
-    /// `1..8`, `k < base`, chunk-major, from the stage-major table
-    /// `twiddles` of `8 base` — its last level holds `W_{8 base}^m` for
-    /// `m < 4 base`, and the upper half of the circle is that level negated
-    /// — so the pass multiplies by exactly the cache's values.
-    pub(crate) fn build_radix8(samples: usize, twiddles: &[Complex<T>], base: usize) -> Self {
+    /// The tables for the column-first routes over `base`-blocks with
+    /// `samples` complex samples a register: the radix-8 pass over eight
+    /// blocks (`rows`) and, for `outer > 1`, the radix-`outer` pass over
+    /// `outer` slices of those (`outer_rows`), both chunk-major from the
+    /// stage-major table `twiddles` of the route's length.
+    pub(crate) fn build_column_first(
+        samples: usize,
+        twiddles: &[Complex<T>],
+        base: usize,
+        outer: usize,
+    ) -> Self {
         let zero = T::from_precise(0.0);
-        let n = 8 * base;
-        let half = n / 2;
-        let level = &twiddles[half - 1..n - 1];
-        let power = |m: usize| -> Complex<T> {
-            let m = m % n;
-            if m < half {
-                level[m]
-            } else {
-                let w = level[m - half];
-                Complex::new(-w.re, -w.im)
-            }
+        let rows = chunk_major_rows(samples, twiddles, 8, base);
+        let outer_rows = if outer > 1 {
+            AlignedLanes::new(
+                &interleaved(&chunk_major_rows(samples, twiddles, outer, 8 * base)),
+                zero,
+            )
+        } else {
+            AlignedLanes::empty(zero)
         };
-        debug_assert_eq!(base % samples, 0);
-        let rows: Vec<Complex<T>> = (0..base / samples)
-            .flat_map(|c| (1..8).flat_map(move |j| (0..samples).map(move |s| (j, samples * c + s))))
-            .map(|(j, k)| power(j * k))
-            .collect();
         Self {
             inner: AlignedLanes::empty(zero),
             second: AlignedLanes::empty(zero),
             outer: AlignedLanes::empty(zero),
             rows: AlignedLanes::new(&interleaved(&rows), zero),
+            outer_rows,
         }
     }
 
@@ -211,6 +213,7 @@ impl<T: MixedRadixScalar<Complex = Complex<T>>> SplitSinks<T> {
     pub(crate) fn empty() -> Self {
         let zero = T::from_precise(0.0);
         Self {
+            outer_rows: AlignedLanes::empty(zero),
             inner: AlignedLanes::empty(zero),
             second: AlignedLanes::empty(zero),
             outer: AlignedLanes::empty(zero),
@@ -240,6 +243,44 @@ impl<T: MixedRadixScalar<Complex = Complex<T>>> SplitSinks<T> {
     pub(crate) fn rows(&self) -> &[T] {
         self.rows.as_slice()
     }
+
+    /// The chain's outer pass: `W_n^{j k}` for `j` in `1..R`, `k < 8
+    /// BASE`, chunk-major; empty below the chain.
+    pub(crate) fn outer_rows(&self) -> &[T] {
+        self.outer_rows.as_slice()
+    }
+}
+
+/// `W_n^{j k}` for `j` in `1..radix`, `k < block`, `n = radix block`,
+/// chunk-major for `samples` complexes a register — for each register
+/// chunk the `radix - 1` twiddle registers `j = 1..radix` in turn — from
+/// the stage-major table `twiddles` of a length at least `n`: its level
+/// for `n` holds `W_n^m` for `m < n / 2` at `n / 2 - 1`, and the upper
+/// half of the circle is that level negated, so the pass multiplies by
+/// exactly the cache's values.
+fn chunk_major_rows<T: MixedRadixScalar<Complex = Complex<T>>>(
+    samples: usize,
+    twiddles: &[Complex<T>],
+    radix: usize,
+    block: usize,
+) -> Vec<Complex<T>> {
+    let n = radix * block;
+    let half = n / 2;
+    let level = &twiddles[half - 1..n - 1];
+    let power = |m: usize| -> Complex<T> {
+        let m = m % n;
+        if m < half {
+            level[m]
+        } else {
+            let w = level[m - half];
+            Complex::new(-w.re, -w.im)
+        }
+    };
+    debug_assert_eq!(block % samples, 0);
+    (0..block / samples)
+        .flat_map(|c| (1..radix).flat_map(move |j| (0..samples).map(move |s| (j, samples * c + s))))
+        .map(|(j, k)| power(j * k))
+        .collect()
 }
 
 /// `w` as interleaved lanes: the outer level's table, kept compact so the
