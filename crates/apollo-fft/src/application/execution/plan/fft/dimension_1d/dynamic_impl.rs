@@ -1,3 +1,4 @@
+use crate::application::execution::kernel::components::base128::instance_major;
 use crate::application::execution::kernel::components::base128::instance_major::{
     Plan64, State128, State256, State512, State64,
 };
@@ -53,13 +54,14 @@ pub struct FftPlan1D<F: MixedRadixScalar> {
     /// The 256-point two-pass base (ADR 0061), built at n = 256 in place of
     /// the split state where its width runs, as four blocks under the
     /// radix-4 sink at n = 1024, as eight blocks under a radix-8 pass
-    /// ahead of them at n = 2048, and under chains of two and three such
-    /// passes at n = 8192, 16384, 65536 and 131072, at either width.
+    /// ahead of them at n = 2048, under the chain of two such passes at
+    /// n = 8192 and 16384 at either width, and under the chain of three
+    /// at n = 131072 at four lanes.
     pub(crate) base256: Option<Arc<State256<F>>>,
     /// The 512-point single-pass base (sixteen rows of thirty-two), built
     /// at n = 512 at either native width, as eight blocks under a radix-8
-    /// pass ahead of them at n = 4096, and under chains of two and three
-    /// at n = 32768 and 262144 (ADR 0061).
+    /// pass ahead of them at n = 4096, and under the chain of two at
+    /// n = 32768 (ADR 0061).
     pub(crate) base512: Option<Arc<State512<F>>>,
     pub(crate) base64: Option<Arc<State64<F>>>,
     /// The 180 column route (ADR 0062): five register-resident 36-point
@@ -189,16 +191,22 @@ impl<F: MixedRadixScalar<Complex = Complex<F>>> FftPlan1D<F> {
         // measured against the four 512-blocks under the radix-4 sink at
         // both (ADR 0061). 4096 is eight 512-blocks under the same radix-8
         // pass, RustFFT's shape there (its 512 butterfly under one 8xn pass),
-        // and 8192 to 262144 are RustFFT's chains over the same bases: eights
+        // and 8192 to 32768 are RustFFT's chains over the same bases: eights
         // over the base with its closing four outside them (8192 = 4 x 8 x
-        // 256, 65536 = 4 x 8 x 8 x 256), the 512 base where the power of two
-        // is a multiple of three.
-        let base512 = if n == 512 || n == 4096 || n == 32768 || n == 262_144 {
+        // 256), the 512 base where the power of two is a multiple of three.
+        // Past that the chain is the width's measured choice (ADR 0061):
+        // 65536 keeps the four-step at both widths, 131072 chains three
+        // passes over the 256 base at four lanes and keeps the four-step at
+        // eight, where the efficiency core reads 19% over on the chain.
+        let chain_at_131072 = n == 131_072 && !instance_major::native_eight_lanes::<F>();
+        let base512 = if n == 512 || n == 4096 || n == 32768 {
             State512::new_if_supported(n).map(Arc::new)
         } else {
             None
         };
-        let base256 = if (256..=131_072).contains(&n) && n.is_power_of_two() && base512.is_none() {
+        let base256 = if ((256..=16384).contains(&n) && n.is_power_of_two() && base512.is_none())
+            || chain_at_131072
+        {
             State256::new_if_supported(n).map(Arc::new)
         } else {
             None
@@ -528,12 +536,12 @@ impl<F: MixedRadixScalar<Complex = Complex<F>>> FftPlan1D<F> {
                             inverse_unnorm_impl = exec_pot_inverse_unnorm_sized::<F, 10>;
                         }
                     }
-                    11 | 13 | 14 | 16 | 17 if base256.is_some() => {
+                    11 | 13 | 14 | 17 if base256.is_some() => {
                         forward_impl = exec_base256_forward::<F>;
                         inverse_impl = exec_base256_inverse::<F>;
                         inverse_unnorm_impl = exec_base256_inverse_unnorm::<F>;
                     }
-                    11 | 12 | 15 | 18 if base512.is_some() => {
+                    11 | 12 | 15 if base512.is_some() => {
                         forward_impl = exec_base512_forward::<F>;
                         inverse_impl = exec_base512_inverse::<F>;
                         inverse_unnorm_impl = exec_base512_inverse_unnorm::<F>;

@@ -43,6 +43,13 @@ pub(crate) use store::{
     chain_radices, ChainLevel, DirectSink, FinalRadix3Sink, FinalRadix4Sink, SplitSinks, StoreSink,
 };
 
+/// Whether the base kernel runs `T` at eight lanes on this host — four
+/// interleaved complex samples a register — the width whose routes the
+/// plan selects by measurement (ADR 0061).
+pub(crate) fn native_eight_lanes<T: MixedRadixScalar>() -> bool {
+    matches!(native_width::<T>(), Some(BaseLaneWidth::Eight))
+}
+
 /// Per-phase TSC accumulators for the separately instantiated attribution
 /// instrument.
 #[cfg(all(test, windows, target_arch = "x86_64"))]
