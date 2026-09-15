@@ -144,7 +144,8 @@
 - **Claim released:** 2026-09-15, the last update 2026-08-27 older than the stale-claim window; reclaim by re-syncing the board.
 
 <a id="atlas-apollo-real-split-coverage"></a>
-## ATLAS-APOLLO-REAL-SPLIT-COVERAGE-2026-08-25 — Extend the split past the 1-D forward slice [patch] — todo
+## ATLAS-APOLLO-REAL-SPLIT-COVERAGE-2026-08-25 — Extend the split past the 1-D forward slice [patch] — in-progress
+- **Integrator:** claude-fable-5.1 (session 5bed7001); **branch:** `perf/apollo-real-inverse-split` (lane apollo-route, stacked on #468); **lease:** `crates/apollo-fft/src/api/irfft.rs`, `crates/apollo-fft/tests/real_half_api/inverse.rs`, `crates/apollo-fft/benches/engine_census.rs`, this entry; **last-update:** 2026-09-15. Slice: the full-spectrum 1-D inverse entry points through the half inverse.
 - **Outcome:** every real-input entry point benefits from the split, not only `fft_1d_slice`.
 - **Finding:** the split is currently reached from one API. `fft_1d_array`, `fft_1d_array_into`, `fft_1d_leto`, the static-length variants, and the 2-D and 3-D real paths still widen to complex and transform at full length, so they carry the 2x arithmetic the split removes. The inverse direction (`inverse_1d_slice_owned`) additionally does `input.to_owned()` followed by a `collect`, which is two transient allocations per call where one would do.
 - **Scope:** route the remaining real entry points through `forward_1d_slice_owned_via_split` or `forward_1d_half_into`, and give the inverse a complex-to-real counterpart of the untangle. **Non-goals:** the complex kernel, which is `ATLAS-APOLLO-POT-PASS-REDUCTION-2026-08-25`.
