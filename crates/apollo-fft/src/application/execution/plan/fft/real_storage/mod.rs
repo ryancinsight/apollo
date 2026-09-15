@@ -19,9 +19,10 @@ use eunomia::Complex;
 use leto::{Array1, Array2, Array3};
 
 mod compact;
+mod expand;
 pub(super) mod fill;
 pub(crate) mod half_plane;
-mod half_volume;
+pub(crate) mod half_volume;
 mod precise;
 mod reduced;
 mod split;

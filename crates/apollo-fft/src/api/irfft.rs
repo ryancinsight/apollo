@@ -3,7 +3,9 @@
 use crate::application::execution::kernel::mixed_radix::scalar::plan_scratch::{
     with_view_staging, PlanScratch,
 };
-use crate::application::execution::plan::fft::real_storage::{half_plane, RealFftData};
+use crate::application::execution::plan::fft::real_storage::{
+    half_plane, half_volume, RealFftData,
+};
 use crate::application::orchestration::cache::plans::PlanCacheProvider;
 use crate::domain::metadata::shape::{Shape1D, Shape2D, Shape3D};
 use apollo_leto_interop::view_cow;
@@ -413,6 +415,12 @@ pub fn ifft_2d_array_static_into<T, const NX: usize, const NY: usize>(
 }
 
 /// Inverse 3D FFT of a complex spectrum using generic storage dispatch.
+///
+/// Where the real split admits `nz`, only the lower `nz/2 + 1` bins of each z
+/// lane are read (the rest of a real field's spectrum is their conjugate
+/// mirror) and the lanes run at half length through the half-spectrum pair
+/// ([`ifft_3d_array_half_into`]); other lengths take the full inverse. One
+/// allocation, the returned volume.
 #[must_use]
 pub fn ifft_3d_array<T>(field_hat: &Array3<Complex<T::PlanScalar>>) -> Array3<T>
 where
@@ -421,16 +429,20 @@ where
     <T as RealFftData>::PlanScalar: PlanCacheProvider,
 {
     let [nx, ny, nz] = field_hat.shape();
-    T::inverse_3d(
-        T::get_3d_plan(
-            Shape3D::new(nx, ny, nz).expect("ifft_3d_array requires non-zero dimensions"),
-        )
-        .as_ref(),
-        field_hat,
-    )
+    let plan = T::get_3d_plan(
+        Shape3D::new(nx, ny, nz).expect("ifft_3d_array requires non-zero dimensions"),
+    );
+    if let Some(out) = half_volume::inverse_owned_via_split::<T>(plan.as_ref(), field_hat) {
+        return out;
+    }
+    T::inverse_3d(plan.as_ref(), field_hat)
 }
 
 /// Inverse 3D FFT into caller-owned typed real storage and typed scratch spectrum.
+///
+/// Routed like [`ifft_3d_array`] where the split admits `nz` and the three
+/// arrays are C-contiguous, packing the lower bins into the front of
+/// `scratch`; allocates nothing on a warm plan.
 pub fn ifft_3d_array_into<T>(
     field_hat: &Array3<Complex<T::PlanScalar>>,
     out: &mut Array3<T>,
@@ -441,21 +453,22 @@ pub fn ifft_3d_array_into<T>(
     <T as RealFftData>::PlanScalar: PlanCacheProvider,
 {
     let [nx, ny, nz] = field_hat.shape();
-    T::inverse_3d_into(
-        T::get_3d_plan(
-            Shape3D::new(nx, ny, nz).expect("ifft_3d_array_into requires non-zero dimensions"),
-        )
-        .as_ref(),
-        field_hat,
-        out,
-        scratch,
-    )
+    let plan = T::get_3d_plan(
+        Shape3D::new(nx, ny, nz).expect("ifft_3d_array_into requires non-zero dimensions"),
+    );
+    if half_volume::inverse_into_via_split::<T>(plan.as_ref(), field_hat, out, scratch) {
+        return;
+    }
+    T::inverse_3d_into(plan.as_ref(), field_hat, out, scratch);
 }
 
 /// Inverse 3D FFT into caller-owned typed real storage, reusing the mutable
 /// typed spectrum as scratch.
 ///
-/// This mutates `field_hat`.
+/// This mutates `field_hat`. Routed like [`ifft_3d_array`] where the split
+/// admits `nz` and both arrays are C-contiguous: the lower bins of each lane
+/// are packed in place and nothing else is read. Allocates nothing on a warm
+/// plan.
 pub fn ifft_3d_array_into_spectrum_scratch<T>(
     field_hat: &mut Array3<Complex<T::PlanScalar>>,
     out: &mut Array3<T>,
@@ -470,15 +483,14 @@ pub fn ifft_3d_array_into_spectrum_scratch<T>(
         [nx, ny, nz],
         "ifft_3d_array_into_spectrum_scratch: shape mismatch"
     );
-    T::inverse_3d_spectrum_into(
-        T::get_3d_plan(
-            Shape3D::new(nx, ny, nz)
-                .expect("ifft_3d_array_into_spectrum_scratch requires non-zero dimensions"),
-        )
-        .as_ref(),
-        field_hat,
-        out,
+    let plan = T::get_3d_plan(
+        Shape3D::new(nx, ny, nz)
+            .expect("ifft_3d_array_into_spectrum_scratch requires non-zero dimensions"),
     );
+    if half_volume::inverse_spectrum_via_split::<T>(plan.as_ref(), field_hat, out) {
+        return;
+    }
+    T::inverse_3d_spectrum_into(plan.as_ref(), field_hat, out);
 }
 
 /// Inverse 3D FFT of a `(nx, ny, nz/2 + 1)` half spectrum into real storage.

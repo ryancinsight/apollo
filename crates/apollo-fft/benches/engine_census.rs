@@ -37,7 +37,8 @@
 //! is worth seeing rather than hiding. The 2-D real rows
 //! (`real_half_forward_2d_f64` and the inverse) have no RealFFT pairing and
 //! stand beside the full-spectrum 2-D forms the same way, with the widened
-//! routes those forms replaced as a third arm.
+//! routes those forms replaced as a third arm; the 3-D real rows repeat the
+//! pattern on the batched shape and on a cube at the owned route floor.
 //!
 //! ## Interpreting the allocation column
 //!
@@ -132,6 +133,10 @@ const TWO_D_SHAPES: [(usize, usize); 4] = [(4_096, 16), (4_096, 64), (16_384, 16
 /// X lanes. It exercises both the volume-wide X transpose and 4096 adjacent
 /// 4x4 Y/Z planes while retaining the cache-resident 65,536-element regime.
 const THREE_D_SHAPE: [usize; 3] = [4_096, 4, 4];
+
+/// Real 3-D volumes: the batched-layout shape above (1 MiB of spectrum, under
+/// the owned forward's route floor) and a cube at the floor.
+const THREE_D_REAL_SHAPES: [[usize; 3]; 2] = [[4_096, 4, 4], [64, 64, 64]];
 
 /// Tile edge for [`transpose_into`], matching the kernel's own choice.
 const TRANSPOSE_TILE: usize = 32;
@@ -1076,6 +1081,97 @@ fn main() -> Result<(), apollo_bench::BenchmarkError> {
         apollo.forward_complex_inplace(&mut volume);
     });
     eprintln!("engine_census: 3-D {shape:<10} apollo allocations/call — {allocs} ({bytes} B)");
+
+    // The real 3-D rows mirror the 2-D ones: the half pair into caller-owned
+    // storage, the full-spectrum forms it now serves, and the widened routes
+    // they replaced, on the batched shape and on a cube at the owned floor.
+    for &[nx, ny, nz] in &THREE_D_REAL_SHAPES {
+        const REAL_HALF: &str = "real_half_forward_3d_f64";
+        const REAL_FULL: &str = "real_full_forward_3d_f64";
+        const REAL_HALF_INVERSE: &str = "real_half_inverse_3d_f64";
+        const REAL_FULL_INVERSE: &str = "real_full_inverse_3d_f64";
+        let shape = format!("{nx}x{ny}x{nz}");
+        let plan = apollo_fft::FftPlan3D::<f64>::new(
+            apollo_fft::Shape3D::new(nx, ny, nz).expect("invariant: shape lengths are non-zero"),
+        );
+        let src = complex_signal(nx * ny * nz);
+        let real_volume = Array3::from_shape_vec([nx, ny, nz], src.iter().map(|v| v.re).collect())
+            .expect("shape matches the data");
+        let mut half_volume = Array3::from_elem([nx, ny, nz / 2 + 1], Complex64::default());
+        flush_cache(&mut flush);
+        suite.run_with_config(
+            config,
+            BenchmarkCase::new(REAL_HALF, "apollo", shape.clone()),
+            || {
+                apollo_fft::fft_3d_array_half_into::<f64>(
+                    black_box(&real_volume),
+                    black_box(&mut half_volume),
+                );
+                black_box(&half_volume);
+            },
+        );
+        flush_cache(&mut flush);
+        suite.run_with_config(
+            config,
+            BenchmarkCase::new(REAL_FULL, "apollo", shape.clone()),
+            || {
+                black_box(apollo_fft::fft_3d_array::<f64>(black_box(&real_volume)));
+            },
+        );
+        flush_cache(&mut flush);
+        suite.run_with_config(
+            config,
+            BenchmarkCase::new(REAL_FULL, "apollo (widened)", shape.clone()),
+            || {
+                black_box(<f64 as apollo_fft::RealFftData>::forward_3d(
+                    &plan,
+                    black_box(&real_volume),
+                ));
+            },
+        );
+        let full_volume = apollo_fft::fft_3d_array::<f64>(&real_volume);
+        let mut half_work = half_volume.clone();
+        let mut real_out = Array3::from_elem([nx, ny, nz], 0.0_f64);
+        flush_cache(&mut flush);
+        suite.run_with_config(
+            config,
+            BenchmarkCase::new(REAL_HALF_INVERSE, "apollo", shape.clone()),
+            || {
+                half_work.assign(&half_volume.view());
+                apollo_fft::ifft_3d_array_half_into::<f64>(
+                    black_box(&mut half_work),
+                    black_box(&mut real_out),
+                );
+                black_box(&real_out);
+            },
+        );
+        flush_cache(&mut flush);
+        suite.run_with_config(
+            config,
+            BenchmarkCase::new(REAL_FULL_INVERSE, "apollo", shape.clone()),
+            || {
+                black_box(apollo_fft::ifft_3d_array::<f64>(black_box(&full_volume)));
+            },
+        );
+        flush_cache(&mut flush);
+        suite.run_with_config(
+            config,
+            BenchmarkCase::new(REAL_FULL_INVERSE, "apollo (widened)", shape.clone()),
+            || {
+                black_box(<f64 as apollo_fft::RealFftData>::inverse_3d(
+                    &plan,
+                    black_box(&full_volume),
+                ));
+            },
+        );
+        let (half_allocs, half_bytes) = count_allocations(|| {
+            apollo_fft::fft_3d_array_half_into::<f64>(&real_volume, &mut half_volume);
+            apollo_fft::ifft_3d_array_half_into::<f64>(&mut half_work, &mut real_out);
+        });
+        eprintln!(
+            "engine_census: 3-D {shape:<10} apollo allocations/call — real-half pair {half_allocs} ({half_bytes} B)"
+        );
+    }
 
     assert_staged_view_allocations();
     print!("{}", suite.report());

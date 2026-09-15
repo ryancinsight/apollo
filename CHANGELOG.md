@@ -115,8 +115,14 @@ Change-class tags: [patch] backward-compatible fix, [minor] additive non-breakin
   `ny_c` and `dimensions` like the 3-D plan. The full-spectrum 2-D entries
   (`fft_2d_array`, `fft_2d_array_into`, `ifft_2d_array`, `ifft_2d_array_into`,
   `ifft_2d_array_into_spectrum_scratch`) route through the pair where the
-  split admits `ny`: the forward expands the half plane in place and the
-  inverses read only the lower `ny/2 + 1` bins of each row.
+  split admits `ny`: the forwards write the full plane once from a staged
+  half and the inverses read only the lower `ny/2 + 1` bins of each row.
+- [minor] `apollo-fft` routes the full-spectrum 3-D real entries
+  (`fft_3d_array`, `fft_3d_array_into`, `ifft_3d_array`, `ifft_3d_array_into`,
+  `ifft_3d_array_into_spectrum_scratch`) through the half volume the same
+  way where the split admits `nz`; the owned forwards of both ranks take the
+  route from 4 MiB of output, where the page faults a fresh spectrum pays
+  repay the half's staging round trip.
 
 - [minor] `apollo-fft` 3-D plans gain a transform pair that keeps the
   spectrum in `(z, x, y)` order: `FftPlan3D::forward_complex_rotated` returns a

@@ -46,10 +46,10 @@ ifft_3d_array_half_into(&mut half_volume, &mut field_back);
 ```
 
 The packing needs a length that is a positive multiple of four; other lengths
-are served through the full transform. The full-spectrum 1-D and 2-D real
-entries take the half route where the length admits it, expanding the half
-into the full spectrum by copy on the way out and reading only the lower half
-on the way back. The 2-D and 3-D inverses return the real part of the full
+are served through the full transform. The full-spectrum 1-D, 2-D and 3-D
+real entries take the half route where the length admits it, expanding the
+half into the full spectrum by copy on the way out and reading only the lower
+half on the way back. The 2-D and 3-D inverses return the real part of the full
 inverse of the half spectrum's Hermitian completion, so imaginary parts a real
 field's spectrum cannot have are ignored. `RealFftData` carries the same pairs
 for callers that hold a plan (`forward_2d_half_into`, `inverse_2d_half_into`,

@@ -1,7 +1,9 @@
 //! Forward real FFT API functions.
 
 use crate::application::execution::kernel::mixed_radix::scalar::plan_scratch::PlanScratch;
-use crate::application::execution::plan::fft::real_storage::{half_plane, RealFftData};
+use crate::application::execution::plan::fft::real_storage::{
+    half_plane, half_volume, RealFftData,
+};
 use crate::application::orchestration::cache::plans::PlanCacheProvider;
 use crate::domain::metadata::shape::{Shape1D, Shape2D, Shape3D};
 use apollo_leto_interop::view_cow;
@@ -287,6 +289,12 @@ pub fn fft_2d_array_static_into<T, const NX: usize, const NY: usize>(
 }
 
 /// Forward 3D FFT of a real array using generic storage dispatch.
+///
+/// Where the real split admits `nz` and the volume is at least the owned
+/// route's floor, the spectrum is computed through the half-spectrum pair
+/// ([`fft_3d_array_half_into`]) and written once from it, so the repeated
+/// half of every z lane costs a copy rather than a transform; otherwise the
+/// field widens to complex. One allocation, the returned spectrum.
 #[must_use]
 pub fn fft_3d_array<T>(field: &Array3<T>) -> Array3<Complex<T::PlanScalar>>
 where
@@ -295,16 +303,19 @@ where
     <T as RealFftData>::PlanScalar: PlanCacheProvider,
 {
     let [nx, ny, nz] = field.shape();
-    T::forward_3d(
-        T::get_3d_plan(
-            Shape3D::new(nx, ny, nz).expect("fft_3d_array requires non-zero dimensions"),
-        )
-        .as_ref(),
-        field,
-    )
+    let plan = T::get_3d_plan(
+        Shape3D::new(nx, ny, nz).expect("fft_3d_array requires non-zero dimensions"),
+    );
+    if let Some(out) = half_volume::forward_owned_via_split::<T>(plan.as_ref(), field) {
+        return out;
+    }
+    T::forward_3d(plan.as_ref(), field)
 }
 
 /// Forward 3D FFT of a real array into caller-owned typed spectrum storage.
+///
+/// Routed through the half-spectrum pair where the split admits `nz` and
+/// `out` is C-contiguous; allocates nothing on a warm plan.
 pub fn fft_3d_array_into<T>(field: &Array3<T>, out: &mut Array3<Complex<T::PlanScalar>>)
 where
     T: RealFftData + PlanCacheProvider,
@@ -312,14 +323,13 @@ where
     <T as RealFftData>::PlanScalar: PlanCacheProvider,
 {
     let [nx, ny, nz] = field.shape();
-    T::forward_3d_into(
-        T::get_3d_plan(
-            Shape3D::new(nx, ny, nz).expect("fft_3d_array_into requires non-zero dimensions"),
-        )
-        .as_ref(),
-        field,
-        out,
+    let plan = T::get_3d_plan(
+        Shape3D::new(nx, ny, nz).expect("fft_3d_array_into requires non-zero dimensions"),
     );
+    if half_volume::forward_full_via_split::<T>(plan.as_ref(), field, out) {
+        return;
+    }
+    T::forward_3d_into(plan.as_ref(), field, out);
 }
 
 /// Forward 3D FFT of a real array into its `(nx, ny, nz/2 + 1)` half spectrum.
