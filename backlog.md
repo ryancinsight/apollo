@@ -1,5 +1,14 @@
 # Apollo Backlog
 
+<a id="apollo-half-volume-fallback-scratch"></a>
+
+## APOLLO-HALF-VOLUME-FALLBACK-SCRATCH-2026-09-15 — The half-volume real fallback allocates one `nz` lane per scheduled task [patch] [perf] — in-progress
+
+- **Integrator:** claude-opus-5-subagent; **branch:** `perf/apollo-half-volume-fallback-scratch`.
+- **Outcome:** `half_volume::forward`/`half_volume::inverse`'s refused-length fallback (`nz` not a positive multiple of four, `real_storage/half_volume.rs`) borrows its widened `nz`-length lane from the rank-disjoint thread-local scratch role (`with_view_staging::<_, 3, _>`, the 2-D role — free while the z lanes run, since the x/y passes only touch the 3-D roles and never nest with this call) instead of allocating a fresh `Vec` per scheduled task in `lanes::paired`. `lanes::paired` changes from an `init`/`lane` (state, per-lane) pair to one `task` closure invoked once per scheduled group, so a caller acquires scratch once and reuses it across the group's own lane loop; all four call sites (`half_volume.rs`) update.
+- **Acceptance:** `tests/real_half_api/volume.rs::the_refused_length_fallback_allocates_nothing_once_warm` — zero allocations after warm-up for `8x8x6` and `64x64x30`, `f64`/`f32`/`F16`, round trip within the harness's derived bound; existing `real_half_api` oracles unchanged.
+- **Status:** implementation and test written; gates and timing pending.
+
 <a id="apollo-melinoe-executor-receiver"></a>
 ## APOLLO-MELINOE-EXECUTOR-RECEIVER-2026-09-11 — Track unpublished provider receiver construction [patch] — blocked
 - Scope: upstream Melinoe executor registration at local `af052fc`; independent of the lane-policy change and absent from its standalone dependency pins.
