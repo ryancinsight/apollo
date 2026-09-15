@@ -90,6 +90,8 @@ fn build_composite_twiddles<F: WinogradScalar, const INVERSE: bool>(
     let mut offset_idx = 0;
     for &r in radices {
         let stage_len = prev_len * r;
+        // SAFETY: `offset_idx` counts the radices walked so far, below `radices.len()`, the
+        // length `stage_offsets` was built with.
         unsafe { *stage_offsets.get_unchecked_mut(offset_idx) = tw_idx };
         offset_idx += 1;
         // Arms 1..R-1: arm-k[j] = W^{k*j}, evaluated directly.
@@ -117,6 +119,8 @@ fn build_composite_twiddles<F: WinogradScalar, const INVERSE: bool>(
                         k * j,
                         stage_len,
                     );
+                // SAFETY: `tw_idx` counts the entries written so far; the loops write exactly
+                // `prev_len * (r - 1)` per stage, the sum `total_twiddles` was built with.
                 unsafe {
                     *all_twiddles.get_unchecked_mut(tw_idx) =
                         Complex::new(F::from_precise(cos), F::from_precise(sin));

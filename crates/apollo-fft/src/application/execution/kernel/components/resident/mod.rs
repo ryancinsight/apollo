@@ -559,8 +559,10 @@ where
     #[cfg(all(test, windows, target_arch = "x86_64"))]
     macro_rules! sect {
         ($label:literal, $body:block) => {{
+            // SAFETY: `_rdtsc` reads the time-stamp counter and has no precondition on x86_64.
             let t0 = unsafe { core::arch::x86_64::_rdtsc() };
             let out = $body;
+            // SAFETY: `_rdtsc` reads the time-stamp counter and has no precondition on x86_64.
             let t1 = unsafe { core::arch::x86_64::_rdtsc() };
             static SECTIONS: std::sync::LazyLock<bool> =
                 std::sync::LazyLock::new(|| std::env::var_os("RESIDENT_SECTIONS").is_some());

@@ -90,11 +90,17 @@ impl<'a, T> StockhamTwiddleCursor<'a, T> {
         }
     }
 
+    /// The next `len` entries of the table.
+    ///
+    /// # Safety
+    /// The caller keeps `consumed + len` within the table: `transform_impl` holds
+    /// the table at `n - 1` entries and its stage groups take exactly that many.
     #[inline]
     pub(crate) unsafe fn take(&mut self, len: usize) -> &'a [T] {
         debug_assert!(self.consumed + len <= self.len);
         let start = self.consumed;
         self.consumed += len;
+        // SAFETY: the caller's contract above; `ptr` is the table's pointer, valid for `'a`.
         unsafe { std::slice::from_raw_parts(self.ptr.add(start), len) }
     }
 

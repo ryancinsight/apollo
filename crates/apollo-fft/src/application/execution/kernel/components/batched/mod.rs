@@ -35,8 +35,10 @@
 #[cfg(all(test, windows, target_arch = "x86_64"))]
 macro_rules! sect {
     ($label:expr, $body:block) => {{
+        // SAFETY: `_rdtsc` reads the time-stamp counter and has no precondition on x86_64.
         let t0 = unsafe { core::arch::x86_64::_rdtsc() };
         let out = $body;
+        // SAFETY: `_rdtsc` reads the time-stamp counter and has no precondition on x86_64.
         let t1 = unsafe { core::arch::x86_64::_rdtsc() };
         crate::application::execution::kernel::components::batched::sections::record(
             $label,

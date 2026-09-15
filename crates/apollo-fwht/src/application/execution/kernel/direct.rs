@@ -85,10 +85,10 @@ where
                 if step >= lane_count {
                     let mut i = 0;
                     while i < step {
+                        // SAFETY: step is a power of two and is at least the
+                        // SIMD lane count, so each lane-width block stays
+                        // inside the split left/right halves.
                         unsafe {
-                            // SAFETY: step is a power of two and is at least the
-                            // SIMD lane count, so each lane-width block stays
-                            // inside the split left/right halves.
                             let ptr_a = left.as_mut_ptr().add(i);
                             let ptr_b = right.as_mut_ptr().add(i);
                             let va = Vector::<T, Arch>::load_unaligned(ptr_a);
@@ -115,10 +115,10 @@ where
                 if step >= lane_count {
                     let mut i = 0;
                     while i < step {
+                        // SAFETY: step is a power of two and is at least the
+                        // SIMD lane count, so each lane-width block stays
+                        // inside the split left/right halves.
                         unsafe {
-                            // SAFETY: step is a power of two and is at least the
-                            // SIMD lane count, so each lane-width block stays
-                            // inside the split left/right halves.
                             let ptr_a = left.as_mut_ptr().add(i);
                             let ptr_b = right.as_mut_ptr().add(i);
                             let va = Vector::<T, Arch>::load_unaligned(ptr_a);
