@@ -1,1 +1,1 @@
-0  # every first-party provider resolves through one revision; see backlog.md#apollo-provider-identity
+1  # melinoe: the moirai manifest pins rev 059e5891 beside the branch source (#460); lower to 0 when moirai drops the pin; see backlog.md#apollo-provider-identity
