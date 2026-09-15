@@ -772,3 +772,39 @@ base); the two-block form of the step is deleted, and the step serves
   both replications, historical controls must show no supported regression,
   and identity intervals must contain zero. Host-load and dependence limits
   remain part of the retention decision, not a reason to widen bounds.
+
+- **2026-09-14, the column-first family retained on the quiet-host paired
+  measurement (`APOLLO-2048-COLUMN-FIRST`, takeover).** The 2026-09-11
+  revert to the sink rested on control drift its own run never
+  attributed; under the mixed-results regression policy that is the
+  deferral channel, so the family returned and the contributor's own
+  predeclared instrument decided the form — alternating paired samples,
+  seventeen same-plan identity pairs, RustFFT pairs, the historical sink
+  at seven direct lengths, and two placement pairs at `f32` 2048, per
+  scalar and core, two initial orders, two replications, 100 samples a
+  case, run with no other compiler or test process on the host
+  (`output/apollo-base128/variant-paired/`, `host_state.txt` busy=0 at
+  all eight boundaries; `pairs_summary.csv`). Every identity pair's
+  difference interval contains zero. `f32` 2048 paired differences,
+  second arm minus first, ns:
+
+  | core | sink → scratch placement | sink → in-place placement | scratch → in-place |
+  | --- | --- | --- | --- |
+  | performance | -222, -202, -198, -200 (all disjoint; -13.5 to -14.9%) | -249, -261, -253, -254 (all disjoint; -17%) | -52, -51, -49, -53 (all disjoint; -4%) |
+  | efficiency | -152, -116, -109, -108 (all disjoint; -4 to -5%) | -160, -119, -130, -122 (all disjoint; -4 to -5.5%) | -18, +11, -8, -16 (two disjoint for in-place, two containing zero) |
+
+  Against RustFFT in the same process the scratch placement reads -37,
+  -47, -24, -2 ns on the performance core and -86, -70, -118, -85 on the
+  efficiency core; the in-place placement sits a further 4% under it.
+  Historical controls: no pair regresses in both replications and both
+  orders — the largest one-off readings are `f64` 128 on the performance
+  core (+0.2 to +0.4% in the first-arm order only) and the identical-code
+  `f64` 2048 four-block pair on the efficiency core (+2.8% once, zero
+  three times), which bounds the module-placement floor there. The
+  earlier efficiency-core "slower" reading was contention. Kept: the
+  in-place column placement over the parent, the eighths out of place,
+  the fused four-way transpose back — the form measured on 2026-09-11 at
+  0.91 / 0.96 of RustFFT on the pinned probe. The scratch placement, its
+  instrument and the historical-kernel copy are removed from the tree;
+  the instrument is reproducible from PR #441's history
+  (`f5d12bd2` and the `experiment.patch` in `output/apollo-base128/`).
