@@ -14,19 +14,6 @@ const PARALLEL_THRESHOLD: usize = 32_768;
 /// spectrum moves more than its output's element count says.
 const PARALLEL_BYTES: usize = PARALLEL_THRESHOLD * core::mem::size_of::<[f64; 2]>();
 
-/// Bytes of lane data one scheduled task carries when lanes need no workspace.
-///
-/// One lane per task — the previous shape — made a 64³ pass 3.3x *slower*
-/// than running its 4,096 lanes serially on one thread: 734 µs against 225,
-/// because moirai's per-task dispatch measures about 180 ns and a length-64
-/// lane's codelet is 55 to 130 ns, so the scheduler outweighed the work it
-/// scheduled. 64 KiB is 64 such lanes, which amortises the dispatch to well
-/// under a percent, stays inside one core's L2, and measured 45 to 55 µs for
-/// the same pass — faster than a quarter-megabyte task (57 to 68 µs) and than
-/// serial (`dimension_3d::pass_attribution`, 2026-09-09). A lane at or above
-/// this size is one task, as before.
-const TASK_BYTES: usize = 64 * 1024;
-
 /// Five logical lane groups expose the packed 32³ inverse's parallel work while
 /// keeping the four-task complex 32×32×16 control serial. The element floor
 /// remains sufficient: replacing it would also serialize the four-task
@@ -44,15 +31,10 @@ impl<T: 'static> moirai::ExecutionPolicy for LaneTasks<T> {
         // Confine the extension to representations whose element floor spans
         // more than four full tasks; narrower types keep their established rule.
         Self::parallelize(len)
-            || (core::mem::size_of::<T>() > (PARALLEL_TASKS - 1) * TASK_BYTES / PARALLEL_THRESHOLD
+            || (core::mem::size_of::<T>()
+                > (PARALLEL_TASKS - 1) * moirai::UNIT_TASK_BYTES / PARALLEL_THRESHOLD
                 && chunks >= PARALLEL_TASKS)
     }
-}
-
-/// Lanes per scheduled task for `lane_len`, never fewer than one.
-fn lanes_per_task<T>(lane_len: usize) -> usize {
-    let lane_bytes = lane_len.saturating_mul(core::mem::size_of::<T>()).max(1);
-    (TASK_BYTES / lane_bytes).max(1)
 }
 
 /// Runs contiguous lanes using the same scratch role as a later transpose.
@@ -146,20 +128,19 @@ pub(super) fn each<T: Send + 'static>(
     lane: impl Fn(&mut [T]) + Send + Sync,
 ) {
     assert!(lane_len > 0 && data.len().is_multiple_of(lane_len));
-    let task_len = lane_len * lanes_per_task::<T>(lane_len);
-    let run = |task: &mut [T]| {
-        #[cfg(all(test, not(miri)))]
-        crate::application::execution::kernel::worker_quiescence::record_worker();
-        let mut lanes = task.chunks_exact_mut(lane_len);
-        for one in &mut lanes {
-            lane(one);
-        }
-        debug_assert!(
-            lanes.into_remainder().is_empty(),
-            "invariant: task boundaries fall on lane boundaries"
-        );
-    };
-    moirai::for_each_chunk_mut_with::<LaneTasks<T>, _, _>(data, task_len, run);
+    moirai::for_each_unit_task_mut_with::<LaneTasks<T>, _, _, _, _>(
+        data,
+        lane_len,
+        lane_len.saturating_mul(core::mem::size_of::<T>()),
+        || (),
+        |(), _, lanes| {
+            #[cfg(all(test, not(miri)))]
+            crate::application::execution::kernel::worker_quiescence::record_worker();
+            for one in lanes.chunks_exact_mut(lane_len) {
+                lane(one);
+            }
+        },
+    );
 }
 
 /// Runs `task(output_chunk, input_chunk)` once per scheduled task over the
@@ -193,35 +174,23 @@ pub(super) fn paired<A, B>(
         output.len(),
         input.len()
     );
-    let pair_bytes =
-        output_lane * core::mem::size_of::<A>() + input_lane * core::mem::size_of::<B>();
-    let lanes_per_task = (TASK_BYTES / pair_bytes.max(1)).max(1);
-    let run_task = |task_index: usize, outputs: &mut [A]| {
-        #[cfg(all(test, not(miri)))]
-        crate::application::execution::kernel::worker_quiescence::record_worker();
-        // The caller-visible chunk is always a whole number of lanes: `output`
-        // is a whole number of `output_lane`-sized lanes and every task's
-        // byte offset is a multiple of `output_lane * lanes_per_task`.
-        let group_lanes = outputs.len() / output_lane;
-        let input_start = task_index * lanes_per_task * input_lane;
-        let input_end = input_start + group_lanes * input_lane;
-        task(outputs, &input[input_start..input_end]);
-    };
     // Both sides count: the output's element count alone undercounts a pass
     // that also reads a wider input.
-    if lanes * pair_bytes >= PARALLEL_BYTES {
-        moirai::for_each_chunk_mut_enumerated_with::<moirai::Parallel, _, _>(
-            output,
-            output_lane * lanes_per_task,
-            run_task,
-        );
-    } else {
-        moirai::for_each_chunk_mut_enumerated_with::<moirai::Sequential, _, _>(
-            output,
-            output_lane * lanes_per_task,
-            run_task,
-        );
-    }
+    let pair_bytes =
+        output_lane * core::mem::size_of::<A>() + input_lane * core::mem::size_of::<B>();
+    moirai::for_each_unit_task_mut_with::<moirai::WorkBytes<PARALLEL_BYTES>, _, _, _, _>(
+        output,
+        output_lane,
+        pair_bytes,
+        || (),
+        |(), first_lane, outputs| {
+            #[cfg(all(test, not(miri)))]
+            crate::application::execution::kernel::worker_quiescence::record_worker();
+            let input_start = first_lane * input_lane;
+            let input_end = input_start + outputs.len() / output_lane * input_lane;
+            task(outputs, &input[input_start..input_end]);
+        },
+    );
 }
 
 fn transform<F, const FORWARD: bool>(lane: &mut [F::Complex], scratch: &mut [F::Complex])
