@@ -604,6 +604,7 @@ fn radix_chain_plans_carry_a_row_table_per_level_and_match_the_direct_sum() {
         (65_536, 256, &[4, 8, 8]),
         (131_072, 256, &[8, 8, 8]),
         (262_144, 512, &[8, 8, 8]),
+        (524_288, 256, &[4, 8, 8, 8]),
     ] {
         let plan = crate::FftPlan1D::<f64>::new(
             crate::Shape1D::new(n).expect("invariant: shape lengths are non-zero"),

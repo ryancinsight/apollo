@@ -93,7 +93,7 @@ where
     // serves the rest past 4096.
     if N == 1024
         || ((N == 2048 || N == 8192 || N == 16384 || N == 131_072) && dynamic.base256.is_some())
-        || ((N == 4096 || N == 32_768) && dynamic.base512.is_some())
+        || ((N == 4096 || N == 32_768 || N == 262_144) && dynamic.base512.is_some())
     {
         assert!(matches!(dynamic.strategy, PlanStrategy::PowerOfTwo { .. }));
         assert_eq!(dynamic.twiddle_fwd.as_deref().map_or(0, <[_]>::len), 0);
@@ -125,6 +125,7 @@ where
     check_length::<F, 65_536>(unit_roundoff);
     check_length::<F, 131_072>(unit_roundoff);
     check_length::<F, 262_144>(unit_roundoff);
+    check_length::<F, 524_288>(unit_roundoff);
 }
 
 #[test]
