@@ -15,6 +15,11 @@ on:
       - gap_audit.md
       - docs/adr/**
   pull_request:
+    # `ready_for_review` is not in the default event set, and the draft filter
+    # below skips every job of a draft's pushes: without it a draft marked
+    # ready keeps its skipped checks until its next push and the merge gate
+    # never sees a verdict (#469 on 2026-09-15).
+    types: [opened, synchronize, reopened, ready_for_review]
 
 concurrency:
   group: ci-${{ github.workflow }}-${{ github.ref }}
