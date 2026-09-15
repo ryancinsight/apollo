@@ -115,7 +115,8 @@
 - **n = 1024 needs the eight-block split, and that is real work.** The tuned construction covers 128, 256 and 512 (`BASE_SPLIT_LENGTHS`), and 1024 is 8 x 128. Extending it is not a constant change: `GatherBlocks` implements the deinterleave network for two and four blocks only and asserts on anything else, and the four-block combine chain is hand-unrolled with sinks rather than generic over levels. Filed as `#atlas-apollo-eight-block-split`.
 
 <a id="atlas-apollo-measurement-smt-siblings"></a>
-## ATLAS-APOLLO-MEASUREMENT-SMT-SIBLINGS-2026-09-02 — The pinned instruments do not know a processor's SMT sibling [patch] — todo
+## ATLAS-APOLLO-MEASUREMENT-SMT-SIBLINGS-2026-09-02 — The pinned instruments do not know a processor's SMT sibling [patch] — in-progress
+- **Integrator:** claude-fable-5.1 (session 5bed7001); **branch:** `fix/apollo-measurement-smt-siblings` (lane apollo-route, stacked on #464); **lease:** `crates/apollo-fft/src/application/execution/kernel/measurement_cores.rs`, this entry; **last-update:** 2026-09-15.
 - **Outcome:** `kernel::measurement_cores` selects each arm's processor with themis `CpuTopology::smt()` in hand: never processor 0's sibling (the interrupt target's core), and the census prints each processor's core so a reader can see when two arms or a busy peer share one.
 - **Driver:** themis `THEMIS-PLACEMENT-AXES-2026-09-01` axis 1 delivered `CpuSmtView` (`core_of`, `siblings_of`, `one_processor_per_core`) for exactly this consumer; this host (Core Ultra 9 285K) has no SMT, so the change is a guarantee for other hosts rather than a measured delta here.
 - **Acceptance oracle:** on a host reporting SMT, the selected processors' cores contain neither processor 0 nor each other; on a host without SMT or without an SMT report the selection is unchanged. Unit-tested against the queried topology (present-and-absent arms).
