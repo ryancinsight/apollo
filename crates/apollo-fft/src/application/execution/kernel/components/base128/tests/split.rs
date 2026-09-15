@@ -56,3 +56,60 @@ fn normalized_inverse_matches_independent_direct_sum() {
         assert!(error <= bound, "bin {index}: {error:e} > {bound:e}");
     }
 }
+
+/// The eight-block interleave against the scalar reference: block `q` at
+/// `k` lands at `8 k + q`. The pass moves values, so both widths must match
+/// bit-exactly where they handle the request.
+fn assert_interleave_matches_reference<T>()
+where
+    T: crate::application::execution::kernel::mixed_radix::MixedRadixScalar
+        + hermes_simd::LaneScalar,
+{
+    const BLOCKS: usize = 8;
+    let n = BLOCKS * 256;
+    let lanes: Vec<T> = (0..2 * n).map(|i| T::from_precise(i as f64)).collect();
+    let mut reference = vec![T::from_precise(0.0); 2 * n];
+    for q in 0..BLOCKS {
+        for k in 0..256 {
+            reference[(k * BLOCKS + q) * 2] = lanes[(q * 256 + k) * 2];
+            reference[(k * BLOCKS + q) * 2 + 1] = lanes[(q * 256 + k) * 2 + 1];
+        }
+    }
+    let mut narrow = vec![T::from_precise(0.0); 2 * n];
+    let mut wide = vec![T::from_precise(0.0); 2 * n];
+    let narrow_handled =
+        hermes_simd::vectorize_lanes::<4, T, _>(super::super::split_boundary::InterleaveBlocks::<
+            T,
+            512,
+        > {
+            src: &lanes,
+            dst: &mut narrow,
+        })
+        .unwrap_or(false);
+    let wide_handled =
+        hermes_simd::vectorize_lanes::<8, T, _>(super::super::split_boundary::InterleaveBlocks::<
+            T,
+            512,
+        > {
+            src: &lanes,
+            dst: &mut wide,
+        })
+        .unwrap_or(false);
+    assert!(narrow_handled, "four-lane interleave must be handled");
+    assert_eq!(narrow, reference, "four-lane interleave output mismatch");
+    let plan_is_wide = super::super::instance_major::Plan8x16::<T>::new_if_supported::<false>()
+        .is_some_and(|plan| plan.native_eight_lanes());
+    if plan_is_wide {
+        assert!(
+            wide_handled,
+            "the eight-lane interleave must handle where the plan is eight-lane"
+        );
+        assert_eq!(wide, reference, "eight-lane interleave output mismatch");
+    }
+}
+
+#[test]
+fn interleave_matches_the_strided_reference_at_both_widths() {
+    assert_interleave_matches_reference::<f64>();
+    assert_interleave_matches_reference::<f32>();
+}
