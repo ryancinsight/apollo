@@ -131,3 +131,108 @@ fn a_full_length_spectrum_is_rejected() {
     let mut out = vec![0.0_f64; 64];
     apollo_fft::ifft_1d_slice_half_into::<f64>(&mut spectrum, &mut out);
 }
+
+/// Every full-spectrum 1-D inverse entry point takes the half inverse where
+/// the split admits the length: sample for sample identical to
+/// `ifft_1d_slice_half_into` over the lower half, which is the same arithmetic.
+fn full_spectrum_inverses_take_the_half_inverse<T>()
+where
+    T: Sample + Copy,
+    T::PlanScalar: PlanCacheProvider + Into<f64>,
+    Complex<T::PlanScalar>: PlanScratch,
+{
+    for n in SPLIT_SIZES {
+        let x: Vec<T> = signal(n).into_iter().map(T::from_f64).collect();
+        let full = apollo_fft::fft_1d_slice::<T>(&x);
+        let mut half = full[..=n / 2].to_vec();
+        let mut want = vec![T::from_f64(0.0); n];
+        apollo_fft::ifft_1d_slice_half_into(&mut half, &mut want);
+        let want: Vec<u64> = want.iter().map(|v| v.to_f64().to_bits()).collect();
+        let bits = |values: &[T]| {
+            values
+                .iter()
+                .map(|v| v.to_f64().to_bits())
+                .collect::<Vec<u64>>()
+        };
+        let label = std::any::type_name::<T>();
+
+        assert_eq!(
+            bits(&apollo_fft::ifft_1d_slice::<T>(&full)),
+            want,
+            "{label} N={n}: ifft_1d_slice"
+        );
+
+        let array = leto::Array1::from(full.clone());
+        let got = apollo_fft::ifft_1d_array::<T>(&array);
+        assert_eq!(
+            bits(got.as_slice().expect("contiguous")),
+            want,
+            "{label} N={n}: ifft_1d_array"
+        );
+
+        let mut out = leto::Array1::from(vec![T::from_f64(0.0); n]);
+        let mut scratch = leto::Array1::from(vec![Complex::<T::PlanScalar>::default(); n]);
+        apollo_fft::ifft_1d_array_into::<T>(&array, &mut out, &mut scratch);
+        assert_eq!(
+            bits(out.as_slice().expect("contiguous")),
+            want,
+            "{label} N={n}: ifft_1d_array_into"
+        );
+
+        let mut spectrum = array.clone();
+        apollo_fft::ifft_1d_array_into_spectrum_scratch::<T>(&mut spectrum, &mut out);
+        assert_eq!(
+            bits(out.as_slice().expect("contiguous")),
+            want,
+            "{label} N={n}: ifft_1d_array_into_spectrum_scratch"
+        );
+    }
+}
+
+#[test]
+fn the_full_spectrum_inverses_take_the_half_inverse_for_every_storage_scalar() {
+    full_spectrum_inverses_take_the_half_inverse::<f64>();
+    full_spectrum_inverses_take_the_half_inverse::<f32>();
+    full_spectrum_inverses_take_the_half_inverse::<F16>();
+}
+
+/// The caller-owned full-spectrum inverses allocate nothing once warm, and
+/// the owned one allocates exactly its returned signal: the half copy rides
+/// the rank-one staging role.
+#[test]
+fn the_full_spectrum_inverses_allocate_only_their_output_once_warm() {
+    for n in SPLIT_SIZES {
+        let full = apollo_fft::fft_1d_slice::<f64>(&signal(n));
+        let array = leto::Array1::from(full.clone());
+        let mut out = leto::Array1::from(vec![0.0_f64; n]);
+        let mut scratch = leto::Array1::from(vec![Complex64::default(); n]);
+
+        apollo_fft::ifft_1d_array_into::<f64>(&array, &mut out, &mut scratch);
+        let ((), observed) = count_allocations(|| {
+            apollo_fft::ifft_1d_array_into::<f64>(&array, &mut out, &mut scratch);
+        });
+        assert_eq!(
+            observed, 0,
+            "N={n}: ifft_1d_array_into allocated {observed} times"
+        );
+
+        let mut spectrum = array.clone();
+        apollo_fft::ifft_1d_array_into_spectrum_scratch::<f64>(&mut spectrum, &mut out);
+        let mut spectrum = array.clone();
+        let ((), observed) = count_allocations(|| {
+            apollo_fft::ifft_1d_array_into_spectrum_scratch::<f64>(&mut spectrum, &mut out);
+        });
+        assert_eq!(
+            observed, 0,
+            "N={n}: ifft_1d_array_into_spectrum_scratch allocated {observed} times"
+        );
+
+        let _ = apollo_fft::ifft_1d_slice::<f64>(&full);
+        let (signal, observed) = count_allocations(|| apollo_fft::ifft_1d_slice::<f64>(&full));
+        assert_eq!(signal.len(), n);
+        assert_eq!(
+            observed, 1,
+            "N={n}: ifft_1d_slice allocated {observed} times, not its one signal"
+        );
+    }
+}

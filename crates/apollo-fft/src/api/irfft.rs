@@ -1,6 +1,8 @@
 //! Inverse real FFT API functions.
 
-use crate::application::execution::kernel::mixed_radix::scalar::plan_scratch::PlanScratch;
+use crate::application::execution::kernel::mixed_radix::scalar::plan_scratch::{
+    with_view_staging, PlanScratch,
+};
 use crate::application::execution::plan::fft::real_storage::RealFftData;
 use crate::application::orchestration::cache::plans::PlanCacheProvider;
 use crate::domain::metadata::shape::{Shape1D, Shape2D, Shape3D};
@@ -8,7 +10,60 @@ use apollo_leto_interop::view_cow;
 use eunomia::Complex;
 use leto::{Array1, Array2, Array3};
 
+/// Runs the half-spectrum inverse over the first `n/2 + 1` bins of a full
+/// spectrum when the real split admits `n = out.len()`.
+///
+/// A real signal's spectrum above the Nyquist bin is the conjugate mirror of
+/// the bins below it, so the inverse reads only the lower half and pays half
+/// the arithmetic; `bins` are consumed as scratch. Returns whether it ran, so
+/// a caller takes the full inverse without probing admissibility itself.
+fn inverse_via_split<T>(bins: &mut [Complex<T::PlanScalar>], out: &mut [T]) -> bool
+where
+    T: RealFftData + PlanCacheProvider,
+    Complex<T::PlanScalar>: PlanScratch,
+    <T as RealFftData>::PlanScalar: PlanCacheProvider,
+{
+    let n = out.len();
+    if !T::real_split_applies(n) || bins.len() <= n / 2 {
+        return false;
+    }
+    let half_plan = T::get_1d_plan(
+        Shape1D::new(n / 2).expect("half length is non-zero when the split applies"),
+    );
+    T::inverse_1d_half_into(half_plan.as_ref(), bins, out);
+    true
+}
+
+/// [`inverse_via_split`] over a borrowed spectrum: the lower half is copied
+/// into the rank-one staging role, so the caller pays no allocation for it.
+fn inverse_via_split_staged<T>(spectrum: &[Complex<T::PlanScalar>], out: &mut [T]) -> bool
+where
+    T: RealFftData + PlanCacheProvider,
+    Complex<T::PlanScalar>: PlanScratch,
+    <T as RealFftData>::PlanScalar: PlanCacheProvider,
+{
+    let n = out.len();
+    if !T::real_split_applies(n) || spectrum.len() <= n / 2 {
+        return false;
+    }
+    with_view_staging::<Complex<T::PlanScalar>, 1, _>(n / 2 + 1, |half| {
+        half.copy_from_slice(&spectrum[..=n / 2]);
+        inverse_via_split::<T>(half, out)
+    })
+}
+
+/// A zero-filled real signal of length `n`.
+fn zero_signal<T: RealFftData>(n: usize) -> Vec<T> {
+    (0..n)
+        .map(|_| T::from_spectrum(Complex::default()))
+        .collect()
+}
+
 /// Inverse 1D FFT of a complex spectrum using generic storage dispatch.
+///
+/// Where the real split admits the length, only the lower half of the
+/// spectrum is read (the upper half of a real signal's spectrum is its
+/// conjugate mirror) and the transform runs at half length.
 #[must_use]
 pub fn ifft_1d_array<T>(field_hat: &Array1<Complex<T::PlanScalar>>) -> Array1<T>
 where
@@ -16,6 +71,13 @@ where
     Complex<T::PlanScalar>: PlanScratch,
     <T as RealFftData>::PlanScalar: PlanCacheProvider,
 {
+    let n = field_hat.size();
+    if let Some(bins) = field_hat.as_slice().filter(|_| T::real_split_applies(n)) {
+        let mut out = zero_signal::<T>(n);
+        if inverse_via_split_staged::<T>(bins, &mut out) {
+            return Array1::from(out);
+        }
+    }
     T::inverse_1d(
         T::get_1d_plan(
             Shape1D::new(field_hat.size()).expect("ifft_1d_array requires non-zero length"),
@@ -42,6 +104,11 @@ pub fn ifft_1d_array_into_spectrum_scratch<T>(
         out.size(),
         "ifft_1d_array_into_spectrum_scratch: length mismatch"
     );
+    if let (Some(bins), Some(signal)) = (field_hat.as_slice_mut(), out.as_slice_mut()) {
+        if inverse_via_split::<T>(bins, signal) {
+            return;
+        }
+    }
     T::inverse_1d_spectrum_into(
         T::get_1d_plan(
             Shape1D::new(field_hat.size())
@@ -63,6 +130,19 @@ pub fn ifft_1d_array_into<T>(
     Complex<T::PlanScalar>: PlanScratch,
     <T as RealFftData>::PlanScalar: PlanCacheProvider,
 {
+    if let (Some(bins), Some(signal), Some(half)) = (
+        field_hat.as_slice(),
+        out.as_slice_mut(),
+        scratch.as_slice_mut(),
+    ) {
+        let n = signal.len();
+        if T::real_split_applies(n) && bins.len() > n / 2 && half.len() > n / 2 {
+            half[..=n / 2].copy_from_slice(&bins[..=n / 2]);
+            if inverse_via_split::<T>(&mut half[..=n / 2], signal) {
+                return;
+            }
+        }
+    }
     T::inverse_1d_into(
         T::get_1d_plan(
             Shape1D::new(field_hat.size()).expect("ifft_1d_array_into requires non-zero length"),
@@ -112,11 +192,15 @@ where
     Complex<T::PlanScalar>: PlanScratch,
     <T as RealFftData>::PlanScalar: PlanCacheProvider,
 {
+    let n = spectrum.len();
+    if T::real_split_applies(n) {
+        let mut out = zero_signal::<T>(n);
+        if inverse_via_split_staged::<T>(spectrum, &mut out) {
+            return out;
+        }
+    }
     T::inverse_1d_slice_owned(
-        T::get_1d_plan(
-            Shape1D::new(spectrum.len()).expect("ifft_1d_slice requires non-zero length"),
-        )
-        .as_ref(),
+        T::get_1d_plan(Shape1D::new(n).expect("ifft_1d_slice requires non-zero length")).as_ref(),
         spectrum,
     )
 }
