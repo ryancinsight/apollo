@@ -13,6 +13,13 @@ genre inside the board) are dropped whole. Anchors never change, so every
 inbound link survives; the run reports the before and after line counts,
 the anchors, and what it released, normalized and dropped.
 
+Legacy heading forms fold into the closed set: `— done 2026-09-09
+(rejected)`, `— done, by deletion`, `— closed 2026-08-25, premise false`,
+`— measured: loses to batched`, `— complete`, `— provider done` are done
+with the note kept beside the title; `— in progress` is in-progress;
+`— blocked: no hardware` is blocked with the reason as its first record.
+An anchor written inline in a heading is the item's anchor.
+
 Usage: python scripts/compact_board.py backlog.md --today 2026-09-15
        [--release-before 2026-09-14] [--out backlog.md]
 """
@@ -26,8 +33,10 @@ from pathlib import Path
 
 CLOSED = ("todo", "in-progress", "blocked", "review", "done")
 STATUS_MAP = {
-    "downgraded": "done", "measured": "done", "superseded": "done", "closed": "done",
-    "landed": "done", "merged": "done", "in_progress": "in-progress", "wip": "in-progress",
+    "done": "done", "downgraded": "done", "measured": "done", "superseded": "done", "closed": "done",
+    "landed": "done", "merged": "done", "complete": "done", "completed": "done", "provider": "done",
+    "todo": "todo", "open": "todo", "blocked": "blocked", "review": "review",
+    "in-progress": "in-progress", "in_progress": "in-progress", "wip": "in-progress", "in": "in-progress",
 }
 SECTION = re.compile(
     r"^## (Closed in this sprint|Open in this sprint|Planned next|Delivered|Sprint|Session|Wave|Tier"
@@ -36,19 +45,26 @@ SECTION = re.compile(
 )
 GLYPHS = re.compile("[←-⇿⌀-⏿─-➿⬀-⯿\U0001f000-\U0001faff]")
 ANCHOR = re.compile(r'^<a id="([^"]+)"></a>\s*$')
-STATUS = re.compile(r" — ([A-Za-z_-]+)(\s+\d{4}-\d{2}(-\d{2})?)?\s*$")
+DONE_LINE = re.compile(r'^(?:<a id="[^"]+"></a>)+- \*\*')
+LINE_ANCHORS = re.compile(r'<a id="([^"]+)"></a>')
+DONE_HEADING = "# Done"
+DONE_NOTE = "One line an item: the anchor, the identity, the outcome with its commit or PR; the narrative lives in git."
+INLINE_ANCHOR = re.compile(r'\s*<a id="([^"]+)"></a>\s*')
+DATE = re.compile(r"\b\d{4}-\d{2}(-\d{2})?\b")
 LANDED = re.compile(r"PR #\d+|pull/\d+|\b[0-9a-f]{8,40}\b|[Ll]anded|[Mm]erged|\[x\]|Outcome:\*\* built")
 ITEM_ID = re.compile(r"^## [A-Z0-9][A-Z0-9-]{6,} ")
 OPEN_LIMIT = 14
 NL = "\n"
 
 
-def split_items(text: str) -> tuple[list[str], list[dict]]:
-    """The head lines and the items, each with the anchor line before it."""
+def split_items(text: str) -> tuple[list[str], list[dict], list[str]]:
+    """The head lines, the items (each with the anchor line before it or the
+    anchor written inline in its heading), and the closing section's
+    one-line done entries of a previous compaction, kept as they are."""
     lines = text.split(NL)
     head: list[str] = []
     i = 0
-    while i < len(lines) and not lines[i].startswith("## "):
+    while i < len(lines) and not lines[i].startswith("## ") and lines[i].strip() != DONE_HEADING:
         head.append(lines[i])
         i += 1
     pending: str | None = None
@@ -58,12 +74,31 @@ def split_items(text: str) -> tuple[list[str], list[dict]]:
         if match:
             pending = match.group(1)
     items: list[dict] = []
+    done_lines: list[str] = []
     current: dict | None = None
+    in_done = False
     for line in lines[i:]:
+        if line.strip() == DONE_HEADING:
+            in_done = True
+            continue
+        if in_done:
+            if DONE_LINE.match(line):
+                done_lines.append(line.rstrip())
+            elif line.startswith("## "):
+                in_done = False
+            else:
+                continue
+        if in_done:
+            continue
         if line.startswith("## "):
             if current:
                 items.append(current)
-            current = {"anchor": pending, "heading": line, "body": []}
+            inline = INLINE_ANCHOR.search(line)
+            heading = INLINE_ANCHOR.sub(" ", line).rstrip() if inline else line
+            # Both an anchor line and an inline anchor: the line's names the
+            # item and the inline one stays beside it, so neither link breaks.
+            extra = [inline.group(1)] if (inline and pending and inline.group(1) != pending) else []
+            current = {"anchor": pending or (inline.group(1) if inline else None), "heading": heading, "body": [], "extra": extra}
             pending = None
             continue
         match = ANCHOR.match(line)
@@ -74,13 +109,14 @@ def split_items(text: str) -> tuple[list[str], list[dict]]:
             current["body"].append(line)
     if current:
         items.append(current)
-    return head, items
+    return head, items, done_lines
 
 
 def assign_anchors(items: list[dict]) -> None:
     """Existing anchors stay; a missing one is the ID lowercased without its
     trailing date, kept unique."""
     used = {it["anchor"] for it in items if it["anchor"]}
+    used |= set(getattr(assign_anchors, "reserved", ()))
     for it in items:
         if it["anchor"]:
             continue
@@ -94,9 +130,31 @@ def assign_anchors(items: list[dict]) -> None:
         it["anchor"] = candidate
 
 
-def status_of(heading: str) -> tuple[str | None, str | None]:
-    match = STATUS.search(heading)
-    return (match.group(1).lower(), match.group(2)) if match else (None, None)
+def parse_heading(heading: str) -> tuple[str, str | None, str]:
+    """The heading without its status segments, the status from the closed
+    set (none when the heading carries no status), and the note the legacy
+    form carried ('rejected', 'no AVX-512 hardware', ...)."""
+    segments = [s.strip() for s in heading.split(" — ")]
+    title_segments = [segments[0]]
+    status: str | None = None
+    note = ""
+    for segment in segments[1:]:
+        words = segment.split()
+        token = words[0].lower().rstrip(":,") if words else ""
+        if token == "in" and len(words) > 1 and words[1].lower().startswith("progress"):
+            token, words = "in-progress", ["in-progress"] + words[2:]
+        mapped = STATUS_MAP.get(token)
+        if mapped is None:
+            title_segments.append(segment)
+            continue
+        rest = " ".join(words[1:])
+        rest = DATE.sub("", rest).strip(" :,()")
+        if mapped == "todo" and status is not None and status != "todo":
+            continue  # a stray todo appended after a real status
+        status = mapped
+        if rest and mapped != "todo":
+            note = rest if not note else note
+    return " — ".join(title_segments), status, note
 
 
 def records_of(body: list[str]) -> list[str]:
@@ -119,38 +177,38 @@ def records_of(body: list[str]) -> list[str]:
 
 def compact(text: str, today: str, release_before: str) -> tuple[str, dict]:
     """The compacted board and a report of what changed."""
-    head, items = split_items(text)
+    head, items, kept_done = split_items(text)
+    reserved = {anchor for line in kept_done for anchor in LINE_ANCHORS.findall(line)}
+    for it in items:
+        if it["anchor"] in reserved:
+            it["anchor"] = None  # a fresh item cannot take a kept entry's anchor
+    assign_anchors.reserved = reserved
     assign_anchors(items)
     report: dict = {"released": [], "normalized": [], "dropped": [], "items": len(items)}
     open_lines: list[str] = []
     done_lines: list[str] = []
     for it in items:
-        heading = GLYPHS.sub("", it["heading"]).replace("  ", " ").rstrip()
-        status, date = status_of(heading)
+        raw = GLYPHS.sub("", it["heading"]).replace("  ", " ").rstrip()
+        title, status, note = parse_heading(raw)
         body_text = " ".join(line for line in it["body"] if line.strip())
         checklist_only = bool(body_text.strip()) and all(
             re.match(r"^\s*(- \[[x ]\]|\* \[[x ]\])", line) for line in it["body"] if line.strip()
         )
-        if status is None and (SECTION.match(heading) or (checklist_only and not ITEM_ID.match(heading))):
-            report["dropped"].append(heading[3:80])
+        if status is None and (SECTION.match(title) or (checklist_only and not ITEM_ID.match(title))):
+            report["dropped"].append(title[3:80])
             continue
         if status is None:
             status = "done" if LANDED.search(body_text[:600]) else "todo"
-            heading = heading + " — " + status
             report["normalized"].append((it["anchor"], f"none -> {status}"))
-        elif status not in CLOSED:
-            new = STATUS_MAP.get(status, "todo")
-            heading = re.sub(" — " + re.escape(status) + r"(\s+\d{4}-\d{2}(-\d{2})?)?\s*$", " — " + new, heading)
-            report["normalized"].append((it["anchor"], f"{status} -> {new}"))
-            status = new
-        elif date:
-            heading = re.sub(r"(\s+\d{4}-\d{2}(-\d{2})?)\s*$", "", heading)
+        elif f" — {status}" != raw[len(title):].rstrip():
+            report["normalized"].append((it["anchor"], f"{raw[len(title):].strip(' —')} -> {status}"))
         records = records_of(it["body"])
+        if status == "blocked" and note:
+            records.insert(0, f"- **Blocked:** {note}.")
         if status == "in-progress":
             match = re.search(r"last-update:\*\*\s*(\d{4}-\d{2}-\d{2})", " ".join(records))
             last = match.group(1) if match else None
             if last is not None and last < release_before:
-                heading = heading.replace(" — in-progress", " — todo")
                 records = [r for r in records if "Integrator:" not in r]
                 records.append(
                     f"- **Claim released:** {today}, the last update {last} older than the stale-claim window;"
@@ -159,22 +217,23 @@ def compact(text: str, today: str, release_before: str) -> tuple[str, dict]:
                 report["released"].append((it["anchor"], last))
                 status = "todo"
         if status == "done":
-            match = re.match(r"^## (\S+) — (.*) — done$", heading)
-            ident, title = (match.group(1), match.group(2)) if match else (heading[3:], "")
+            match = re.match(r"^## (\S+)(?: — (.*))?$", title)
+            ident, rest = (match.group(1), match.group(2) or "") if match else (title[3:], "")
             record = re.sub(r"^[-*] ", "", records[0]).strip() if records else ""
-            done_lines.append(f'<a id="{it["anchor"]}"></a>- **{ident}** — {title}. {record}')
+            noted = f"{rest} ({note})" if note else rest
+            extra = "".join(f'<a id="{a}"></a>' for a in it.get("extra", []))
+            done_lines.append(f'<a id="{it["anchor"]}"></a>{extra}- **{ident}** — {noted}. {record}'.replace(" — . ", ". "))
             continue
+        for a in it.get("extra", []):
+            open_lines.append(f'<a id="{a}"></a>')
         open_lines.append(f'<a id="{it["anchor"]}"></a>')
-        open_lines.append(heading)
+        open_lines.append(f"{title} — {status}")
         open_lines.extend(records[:OPEN_LIMIT])
         open_lines.append("")
-    closing = [
-        "# Done",
-        "",
-        "One line an item: the anchor, the identity, the outcome with its commit or PR; the narrative lives in git.",
-        "",
-    ]
-    out = NL.join(head + [""] + open_lines + closing + done_lines).rstrip(NL) + NL
+    closing = [DONE_HEADING, "", DONE_NOTE, ""]
+    while head and not head[-1].strip():
+        head.pop()
+    out = NL.join(head + [""] + open_lines + closing + kept_done + done_lines).rstrip(NL) + NL
     report["lines"] = (text.count(NL), out.count(NL))
     before = set(re.findall(r'<a id="([^"]+)"></a>', text))
     after = set(re.findall(r'<a id="([^"]+)"></a>', out))
