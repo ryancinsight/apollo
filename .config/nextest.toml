@@ -40,10 +40,10 @@ test-group = "gpu-device"
 filter = 'test(/gpu_fft/)'
 test-group = "gpu-device"
 
-# The small-sizes probe is an instrument whose runtime is its design: 21
+# The small-sizes probe is an instrument whose runtime is its design: 22
 # cases x 3 arms x 2 scalars x 2 cores under a 20 ms warm-up and 80 ms
-# measurement budget each is 25 s of sampling, plus the warm-up suite and
-# plan construction (38 s analytical, 33 s measured on the 285K host), so
+# measurement budget each is 26 s of sampling, plus the warm-up suite and
+# plan construction (40 s analytical, 35 s measured on the 285K host), so
 # its slow bound is derived from that sum, not the default.
 [[profile.default.overrides]]
 filter = 'test(/pinned_probe/)'
