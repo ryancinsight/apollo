@@ -910,3 +910,23 @@ base); the two-block form of the step is deleted, and the step serves
   5925.4, 5988.0): 9% and 9% under the
   sink form. No other length moved (`f32` 2048 0.98 / 0.93, `f64` 1024 0.92 / 0.93, `f64` 4096 0.95 / 0.86, `f64` 512 0.82 / 0.83 on the performance core).
   Kept.
+
+- **2026-09-15, 8192 to 32768 as column-first radix chains
+  (`APOLLO-POT-RADIX-CHAIN`).** The column-first step nests: in place at
+  the outer level (the radix pass over the parent, the eight-block slices
+  out of place into scratch, the interleave back) and out of place at the
+  inner (the radix-8 pass over the input slice, the base blocks into a
+  slice-length temporary, the interleave into the output slice) — RustFFT's
+  `8xn` chain over its 256 and 512 butterflies, no copy anywhere. 8192 is
+  a radix-4 pass over four 2048-slices of 256-blocks (the radix-4 arm of
+  the column pass and the four-block interleave are new), 16384 a radix-8
+  pass over eight, 32768 a radix-8 pass over eight 4096-slices of
+  512-blocks; the chunk-major rows of both levels come from the
+  stage-major cache. The pinned probe now measures 8192 and 16384, which
+  it had skipped. Standing run of the four-step route
+  (`output/apollo-base128/small_sizes_pot_standing_run1_2026-09-15.txt`)
+  against two chain runs (`small_sizes_chain_run{1,2}_2026-09-15.txt`),
+  apollo / RustFFT: `f64` 8192 0.98 / 0.97 on the performance core from 1.05 (+13% in apollo ns) and 1.00 / 0.99 on the efficiency core from 0.99 (-0%); `f32` 8192 0.97 / 0.91 on the performance core from 1.19 (+24% in apollo ns) and 1.00 / 1.00 on the efficiency core from 1.05 (+4%); `f64` 16384 0.95 / 0.91 on the performance core from 1.06 (+12% in apollo ns) and 1.00 / 0.99 on the efficiency core from 0.96 (-4%); `f32` 16384 0.95 / 0.96 on the performance core from 1.05 (+13% in apollo ns) and 1.01 / 1.01 on the efficiency core from 0.99 (-2%); `f64` 32768 0.90 / 0.97 on the performance core from 1.07 (+10% in apollo ns) and 0.96 / 0.95 on the efficiency core from 0.95 (-1%); `f32` 32768 0.91 / 0.96 on the performance core from 1.05 (+13% in apollo ns) and 0.95 / 0.94 on the efficiency core from 0.90 (-4%). No other length moved (`f32` 2048 0.96 / 0.93, `f64` 2048 0.97 / 0.89, `f32` 4096 0.87 / 0.81, `f64` 4096 0.76 / 0.59, `f64` 1024 0.95 / 0.90 on the
+  performance core). Efficiency-core changes at or under zero (`f64` 8192 -0%, `f64` 16384 -4%, `f32` 16384 -2%, `f64` 32768 -1%, `f32` 32768 -4%) sit
+  inside the identical-code control band of that core (1 to 4.5%) and are
+  not attributable to the route. Kept at every length.
