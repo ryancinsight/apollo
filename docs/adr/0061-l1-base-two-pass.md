@@ -1063,3 +1063,15 @@ base); the two-block form of the step is deleted, and the step serves
   `f64` chain, whose interleaves the meter charged 273k cycles at 131072
   against the `f32` form's 64k). The eight-lane interleave runs in its
   frame (35 instructions, 0 calls).
+
+- **2026-09-15, hermes past the in-frame `interleave_pairs`
+  (`APOLLO-HERMES-INTERLEAVE-IN-FRAME`).** The lock advances hermes to
+  7e45dda0 (hermes #175: the AVX2 and AVX-512 `interleave_pairs` gated and
+  inlined like their siblings). The four-lane eight-block interleave frame
+  censuses after it as: the eight-block interleave loop at four lanes is 27 instructions a chunk (24 vector: 8 shuffles, 8 loads, 8 stores, no spill move, no call), from 86 with 40 spill moves and 4 calls; the four-block loop 16 and the three-block loop 13, likewise call-free. Per-level phases
+  (`output/apollo-base128/chain_phases_hermes_2026-09-15.txt` against
+  `chain_phases_2026-09-15.txt`, TSC cycles): the `f64` 131072 transform
+  +1% on the performance core and +1% on the efficiency core, 32768 +7% on the performance core and +1% on the efficiency core, 262144
+  +1% on the performance core and +0% on the efficiency core (the interleaves per level in the table of the
+  evidence file); `f32` unchanged (its eight-lane interleave never left its
+  frame). On the wall clock the advance is inside the instrument bands: the small-sizes probe (two quiet runs, `small_sizes_hermes_run{1,2}_2026-09-15.txt` against `small_sizes_sel_run{1,2}`) reads `f64` 1024 to 32768 within 2% of before on both cores (2048 at 0.95 to 0.98 of RustFFT on the performance core, 32768 at 0.98 to 1.00), and the replicated large-sizes campaign (`large-hermes-2026-09-15/` against `large-chain2-2026-09-15/`) moves `f64` 131072 on the performance core from 1.00 to 1.02 and 524288 from 1.10 to 1.06 while unchanged routes move as much (`f32` 524288 on the efficiency core -8% in apollo ns on the four-step, `f64` 262144 -4%): between campaigns the lengths past the caches swing 5 to 10% on their own, so the meter's 24 to 26% cut of the outer interleave at `f64` 16384 and 32768 (a 4% share of those transforms) is below what the probe resolves. No re-selection: the out-of-line calls were a codegen defect, not what lost 65536 and 524288 to the four-step, so those lengths keep it and the chain toggle is not re-run; the lock advance is kept for the frame it restores.
