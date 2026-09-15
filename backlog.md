@@ -133,6 +133,14 @@
 - **Acceptance:** agreement with the dynamic split forms at every admitted `N`; `cargo-semver-checks` names the bound change as the one [major] surface; migration guide for the two entry points.
 - **Risk / change class:** [major]; ADR for the bound choice.
 
+<a id="apollo-real-1d-owned-forward-write-once"></a>
+## APOLLO-REAL-1D-OWNED-FORWARD-WRITE-ONCE — The owned 1-D real forwards fill their spectrum and write it twice [patch] [perf] — in-progress
+- **Integrator:** claude-fable-5.1 (session 5bed7001); **branch:** `perf/apollo-real-1d-owned-forward` (lane apollo-route, stacked on #476); **lease:** `crates/apollo-fft/src/application/execution/plan/fft/real_storage/{mod.rs,expand.rs}`, `crates/apollo-fft/src/api/rfft.rs`, `crates/apollo-fft/tests/real_half_api/forward.rs`, `crates/apollo-fft/benches/engine_census.rs`, this entry; **last-update:** 2026-09-15.
+- **Finding:** `fft_1d_slice` and `fft_1d_array` build their `n`-bin spectrum as `vec![default; n]`, run the half forward into its front and mirror the rest in place — a zero-fill pass, then two writes — while the widened route writes the fresh spectrum once. Probe (`output/probe1d`, minimum of 60 rounds, widened over routed): 4096 0.84x (slice) / 0.73x (array), 65536 1.15x / 0.94x, 262144 1.34x / 1.15x, 1048576 1.11x / 1.04x; the caller-owned `fft_1d_array_into` wins 1.11-1.50x at every length. The #474/#476 owned forms hit the same wall and cured it with the write-once expansion.
+- **Outcome:** the owned forwards compute the half in the rank-one staging role (free during a 1-D transform, as `ifft_1d_array` already relies on) and write the spectrum once through `expand::fresh_expanded` with one lane and its own partner; `forward_1d_slice_owned_via_split` becomes that route.
+- **Acceptance:** bit-identical to `fft_1d_slice_half_into` over the lower half and its conjugate mirror at every split size (`tests/real_half_api/forward.rs` already pins this; it must keep passing); one allocation per owned call; no routed length loses to the widened route by the minimum in the probe, and the census `real_full_forward_f64` row gains the widened arm beside it.
+- **Risk / change class:** [patch]; the `set_len` proof and miri test of `expand.rs` cover the site.
+
 # Done
 
 One line an item: the anchor, the identity, the outcome with its commit or PR; the narrative lives in git. Ordered by the hash of the anchor so concurrent records land apart; find an item by its ID.
