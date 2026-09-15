@@ -99,7 +99,7 @@ fn check_submissions<F, const D: usize>(
 {
     let _hooks = MnemosyneHooks::install();
     worker_quiescence::arm();
-    crate::ensure_thread_local_scratch_hook_registered();
+    crate::application::execution::kernel::scratch_hook::ensure_registered();
     moirai::register_idle_hook(worker_quiescence::observe_idle)
         .expect("invariant: submission observer fits Moirai's hook registry");
     let input = sparse_input(shape);

@@ -23,6 +23,7 @@ pub(crate) mod precision_bridge;
 pub(crate) mod radix_shape;
 pub(crate) mod radix_stage;
 pub mod real_fft;
+pub(crate) mod scratch_hook;
 pub(crate) mod tuning;
 pub(crate) mod twiddle_table;
 
