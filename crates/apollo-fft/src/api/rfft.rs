@@ -61,6 +61,12 @@ where
 
 /// Forward 1D FFT of a real array into caller-owned typed spectrum storage for
 /// a compile-time-known length.
+///
+/// Where the real split admits `N`, both arrays are contiguous, and `N` is
+/// at least 128 or not a power of two, the spectrum is computed through the
+/// half-length transform of the runtime kernel and mirrored (ADR 0063);
+/// other lengths widen to complex and run the zero-sized static plan, whose
+/// constant-length kernels win the short powers of two.
 pub fn fft_1d_array_static_into<T, const N: usize>(
     field: &Array1<T>,
     out: &mut Array1<Complex<T::PlanScalar>>,
