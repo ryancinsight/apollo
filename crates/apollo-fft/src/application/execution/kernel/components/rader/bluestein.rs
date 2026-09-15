@@ -231,7 +231,12 @@ pub(super) fn rader_bluestein_convolve_inplace<
     let kernel_fft = cached_bluestein_entry::<F, INVERSE>(n, generator_inverse);
     let p = kernel_fft.len();
     debug_assert!(is_7_smooth(p));
-    debug_assert!(p >= 2 * m - 1);
+    // The fold below reads `data_buf[j + m]` for `j` up to `m - 2` unchecked, so the
+    // padded length is held here, once per convolution, in every build.
+    assert!(
+        p >= 2 * m - 1,
+        "bluestein: a pad of {p} cannot hold the linear convolution of {m} samples"
+    );
 
     // ── 1-4. Zero-pad → Forward FFT → pointwise → Inverse FFT ────────────
     F::with_bluestein_scratch(p, |data_buf| {
@@ -312,6 +317,8 @@ pub(super) fn rader_bluestein_convolve_inplace<
         let m4 = (last / 4) * 4;
         let mut j = 0usize;
         while j < m4 {
+            // SAFETY: `j + 3 < m4 <= m - 1` and `j + m + 3 <= 2 m - 2 < p <= data_buf.len()` (the
+            // entry assert), and `padded` holds `m` entries, so every index is in bounds.
             unsafe {
                 let d0 = data_buf.get_unchecked(j);
                 let d1 = data_buf.get_unchecked(j + 1);
@@ -333,6 +340,8 @@ pub(super) fn rader_bluestein_convolve_inplace<
             j += 4;
         }
         while j < last {
+            // SAFETY: `j < m - 1` and `j + m < 2 m - 1 <= p <= data_buf.len()` (the entry assert),
+            // and `padded` holds `m` entries.
             unsafe {
                 let d = data_buf.get_unchecked(j);
                 let t = data_buf.get_unchecked(j + m);
@@ -341,6 +350,7 @@ pub(super) fn rader_bluestein_convolve_inplace<
             }
             j += 1;
         }
+        // SAFETY: `last = m - 1` indexes the last entry of `padded` and of the `p >= m` `data_buf`.
         unsafe {
             let d_last = data_buf.get_unchecked(last);
             padded.get_unchecked_mut(last).re = d_last.re * scale;

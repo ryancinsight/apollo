@@ -112,6 +112,8 @@ macro_rules! fft_precision_impl {
                         dft8_array_impl::<$scalar, false, false>(data_ref);
                     }
                     $(
+                        // SAFETY: this arm of the match on `data.len()` is `$pot`, the sized entry's whole
+                        // contract.
                         $pot => unsafe {
                             <$scalar as mixed_radix::MixedRadixScalar>::small_pot_inplace_sized::<$pot, false, false>(data);
                         }
@@ -166,6 +168,8 @@ macro_rules! fft_precision_impl {
                         dft8_array_impl::<$scalar, true, true>(data_ref);
                     }
                     $(
+                        // SAFETY: this arm of the match on `data.len()` is `$pot`, the sized entry's whole
+                        // contract.
                         $pot => unsafe {
                             <$scalar as mixed_radix::MixedRadixScalar>::small_pot_inplace_sized::<$pot, true, true>(data);
                         }
@@ -221,6 +225,8 @@ macro_rules! fft_precision_impl {
                         dft8_array_impl::<$scalar, true, false>(data_ref);
                     }
                     $(
+                        // SAFETY: this arm of the match on `data.len()` is `$pot`, the sized entry's whole
+                        // contract.
                         $pot => unsafe {
                             <$scalar as mixed_radix::MixedRadixScalar>::small_pot_inplace_sized::<$pot, true, false>(data);
                         }

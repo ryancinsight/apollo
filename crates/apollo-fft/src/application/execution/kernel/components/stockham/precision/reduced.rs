@@ -371,6 +371,9 @@ impl StockhamPrecision for ReducedStockhamAvxFma {
     ) {
         let groups = src.len() / (radix << 1);
         if groups == 8 {
+            // SAFETY: this precision is selected only after AVX and FMA were established on the
+            // host, and `groups == 8` with the stage loop's stride-aligned slices is the kernel's
+            // shape.
             unsafe {
                 <f32 as StockhamAvxBackend>::stockham_quad_groups_eight(
                     src,
@@ -456,6 +459,9 @@ impl StockhamPrecision for ReducedStockhamAvx512 {
             }
         } else if groups == 8 && radix >= 2 {
             // avx512 pairs require multiples of 8
+            // SAFETY: this precision is selected only after AVX-512F was established on the host
+            // (`stockham/mod.rs`), and the group count with the stage loop's stride-aligned slices
+            // is the kernel's shape.
             unsafe {
                 <crate::application::execution::kernel::components::stockham::avx::reduced::avx512_backend::Avx512BackendReduced as StockhamAvxBackend>::stage_pair_groups_two(
                     src,
@@ -542,6 +548,9 @@ impl StockhamPrecision for ReducedStockhamAvx512 {
     ) {
         let groups = src.len() / (radix << 1);
         if groups == 8 {
+            // SAFETY: this precision is selected only after AVX-512F was established on the host
+            // (`stockham/mod.rs`), and the group count with the stage loop's stride-aligned slices
+            // is the kernel's shape.
             unsafe {
                 <crate::application::execution::kernel::components::stockham::avx::reduced::avx512_backend::Avx512BackendReduced
                     as StockhamAvxBackend>::stockham_quad_groups_eight_low_live(

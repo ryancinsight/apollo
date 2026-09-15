@@ -1,18 +1,1 @@
-{
-  "crates/apollo-fft/src/application/execution/kernel/auto_dispatch.rs": 3,
-  "crates/apollo-fft/src/application/execution/kernel/components/batched/mod.rs": 2,
-  "crates/apollo-fft/src/application/execution/kernel/components/rader/bluestein.rs": 3,
-  "crates/apollo-fft/src/application/execution/kernel/components/radix_composite/cache.rs": 2,
-  "crates/apollo-fft/src/application/execution/kernel/components/resident/mod.rs": 2,
-  "crates/apollo-fft/src/application/execution/kernel/components/resident/planar.rs": 2,
-  "crates/apollo-fft/src/application/execution/kernel/components/stockham/precision/precise.rs": 3,
-  "crates/apollo-fft/src/application/execution/kernel/components/stockham/precision/reduced.rs": 3,
-  "crates/apollo-fft/src/application/execution/kernel/components/stockham/precision/traits.rs": 1,
-  "crates/apollo-fft/src/application/execution/kernel/components/stockham/tests.rs": 3,
-  "crates/apollo-fft/src/application/execution/kernel/components/winograd/composite/power.rs": 2,
-  "crates/apollo-fft/src/application/execution/kernel/mixed_radix/traits.rs": 1,
-  "crates/apollo-fft/src/application/execution/kernel/twiddle_table.rs": 1,
-  "crates/apollo-fft/src/application/utilities/shift.rs": 1,
-  "crates/apollo-fwht/src/application/execution/kernel/direct.rs": 2,
-  "crates/apollo-nufft/src/infrastructure/transport/gpu/verification/mod.rs": 2
-}
+{}

@@ -371,6 +371,8 @@ pub(crate) fn dft64_array_impl<F: WinogradScalar, const INVERSE: bool, const NOR
     F::with_winograd_scratch(64, |scratch| {
         let ptr = scratch.as_mut_ptr();
         for i in 0..32 {
+            // SAFETY: `scratch` holds at least the requested length, twice the loop bound, so `i`
+            // and `i + half` are inside it; `data` is the fixed array the loop indexes within.
             unsafe {
                 std::ptr::write(ptr.add(i), data[2 * i]);
                 std::ptr::write(ptr.add(i + 32), data[2 * i + 1]);
@@ -435,6 +437,8 @@ pub(crate) fn dft128_array_impl<F: WinogradScalar, const INVERSE: bool, const NO
     F::with_winograd_scratch(128, |scratch| {
         let ptr = scratch.as_mut_ptr();
         for i in 0..64 {
+            // SAFETY: `scratch` holds at least the requested length, twice the loop bound, so `i`
+            // and `i + half` are inside it; `data` is the fixed array the loop indexes within.
             unsafe {
                 std::ptr::write(ptr.add(i), data[2 * i]);
                 std::ptr::write(ptr.add(i + 64), data[2 * i + 1]);

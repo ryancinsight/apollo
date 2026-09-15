@@ -42,10 +42,12 @@ struct CountingAllocator;
 unsafe impl GlobalAlloc for CountingAllocator {
     unsafe fn alloc(&self, layout: Layout) -> *mut u8 {
         note_allocation();
+        // SAFETY: forwarded unchanged to the system allocator under the caller's `layout`.
         unsafe { System.alloc(layout) }
     }
 
     unsafe fn dealloc(&self, pointer: *mut u8, layout: Layout) {
+        // SAFETY: forwarded unchanged; `pointer` came from `alloc` with this `layout`.
         unsafe { System.dealloc(pointer, layout) }
     }
 }

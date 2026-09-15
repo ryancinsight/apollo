@@ -199,10 +199,10 @@ pub(crate) fn build_twiddle_table<C: TwiddleOutput>(n: usize, sign: f64) -> Vec<
     let log_n = n.trailing_zeros() as usize;
     let total = n - 1; // proved in module docs: sum of stage halves = n-1
                        // Pre-allocate exact capacity; set_len skips zero-init.
-                       // SAFETY: C: TwiddleOutput + Copy has no Drop. Every slot is overwritten
-                       // below before the Vec is returned. The cursor advances by half=2^(s-1)
-                       // per stage; sum over all stages = n-1 = total.
     let mut table: Vec<C> = Vec::with_capacity(total);
+    // SAFETY: `C: TwiddleOutput + Copy` has no drop glue, and every slot is
+    // overwritten below before the table is returned: the cursor advances by
+    // `half = 2^(s - 1)` per stage and the stages sum to `n - 1 = total`.
     unsafe { table.set_len(total) };
     let mut cursor = 0usize;
     let mut len = 2usize;

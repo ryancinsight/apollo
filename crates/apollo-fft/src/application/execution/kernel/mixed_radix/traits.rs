@@ -138,15 +138,12 @@ macro_rules! impl_short_dft {
     ($n:expr, winograd_impl, $func:ident $(, $schedule:ty)?) => {
         impl<F: ShortWinogradScalar> ShortDft<$n> for F {
             #[inline]
-            #[allow(unused_unsafe)]
             fn dft<const INVERSE: bool>(data: &mut [eunomia::Complex<Self>; $n]) {
-                unsafe {
-                    crate::application::execution::kernel::components::butterflies::dft::$func::<
-                        Self,
-                        INVERSE,
-                        $($schedule,)?
-                    >(data);
-                }
+                crate::application::execution::kernel::components::butterflies::dft::$func::<
+                    Self,
+                    INVERSE,
+                    $($schedule,)?
+                >(data);
             }
         }
     };

@@ -95,6 +95,9 @@ fn shift_left<T: Copy>(input: &[T], shift: usize) -> Vec<T> {
     // Bulk memory copy instead of extend_from_slice loops.
     // copy_from_nonoverlapping compiles to a single memcpy for large FFTs.
     let mut output = Vec::with_capacity(n);
+    // SAFETY: `output` has capacity `n`; the two copies fill `[0, n - split)` and
+    // `[n - split, n)` from the two halves of `input`, `n` elements in all and no
+    // overlap with `input`, before `set_len(n)` claims them; `T: Copy`.
     unsafe {
         let ptr: *mut T = output.as_mut_ptr();
         // First part: input[split..] has n - split elements
