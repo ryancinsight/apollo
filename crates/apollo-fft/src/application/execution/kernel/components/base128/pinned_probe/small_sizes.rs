@@ -15,9 +15,10 @@ use std::time::Duration;
 ///
 /// `BenchmarkConfig::regression()` spends 100 ms of warm-up and 400 ms of
 /// measurement, which is the right budget for *one* case. This sweep runs
-/// about ninety: seventeen lengths against apollo and RustFFT at both scalars,
-/// PhastFT at the eleven powers of two, plus the base-128 and half-storage
-/// cases. The discarded warm-up pass repeats the set, and both core types run
+/// about a hundred: nineteen lengths against apollo and RustFFT at both
+/// scalars, PhastFT at the eleven powers of two, plus the base-128 and
+/// half-storage cases; the lengths past the caches run in the large-sizes
+/// sweep beside it, where a reading is a median over replicated runs. The discarded warm-up pass repeats the set, and both core types run
 /// the whole thing, so half a second per case is 184 s against a committed
 /// nextest bound of 60 s — the sweep has been terminated rather than reported.
 ///
@@ -27,7 +28,7 @@ use std::time::Duration;
 /// N = 1024 and a handful at N = 32768. Sizing the instrument to a committed
 /// bound is instrument design; the alternative — raising the bound — would be
 /// hiding a breach.
-fn sweep_config() -> BenchmarkConfig {
+pub(super) fn sweep_config() -> BenchmarkConfig {
     BenchmarkConfig::try_with_budgets(Duration::from_millis(20), Duration::from_millis(80))
         .expect("invariant: both budgets above are non-zero")
 }
@@ -41,14 +42,14 @@ fn sweep_config() -> BenchmarkConfig {
 /// reproducible to about 1% once the machine is warm, so what the discarded
 /// pass buys is not precision but the absence of a cold first run — and it
 /// buys that only if it is long enough to do the warming.
-fn sweep_warm_up_config() -> BenchmarkConfig {
+pub(super) fn sweep_warm_up_config() -> BenchmarkConfig {
     BenchmarkConfig::try_with_budgets(Duration::from_millis(10), Duration::from_millis(40))
         .expect("invariant: both budgets above are non-zero")
 }
 
-const SMALL_SIZE_CASES: [usize; 22] = [
-    8, 16, 32, 64, 128, 256, 512, 1024, 2048, 4096, 8192, 16384, 32768, 65536, 131_072, 262_144,
-    100, 180, 384, 1000, 101, 1009,
+const SMALL_SIZE_CASES: [usize; 19] = [
+    8, 16, 32, 64, 128, 256, 512, 1024, 2048, 4096, 8192, 16384, 32768, 100, 180, 384, 1000, 101,
+    1009,
 ];
 const LIVENESS_CASES: [usize; 3] = [16, 32, 64];
 
@@ -59,15 +60,19 @@ const LIVENESS_CASES: [usize; 3] = [16, 32, 64];
 /// 10% between builds whose kernels the meter read as identical. Every arm
 /// works in such a buffer, so the instrument measures the kernels, not the
 /// heap.
-fn aligned_work<T: Copy>(fill: T, n: usize) -> (Vec<T>, core::ops::Range<usize>) {
+pub(super) fn aligned_work<T: Copy>(fill: T, n: usize) -> (Vec<T>, core::ops::Range<usize>) {
     let slack = 64 / size_of::<T>();
     let buffer = vec![fill; n + slack];
     let misalignment = buffer.as_ptr().align_offset(64);
     (buffer, misalignment..misalignment + n)
 }
 
-fn small_sizes_for_scalar<T>(suite: &mut BenchmarkSuite, core: &str, scalar: &str, sizes: &[usize])
-where
+pub(super) fn sizes_for_scalar<T>(
+    suite: &mut BenchmarkSuite,
+    core: &str,
+    scalar: &str,
+    sizes: &[usize],
+) where
     T: ProbeScalar + MixedRadixScalar<Complex = eunomia::Complex<T>>,
     eunomia::Complex<T>: eunomia::layout::Pod,
 {
@@ -260,12 +265,12 @@ fn small_sizes_against_the_references_by_core_type() {
         let core = core.label();
         // Discarded pass: see `half_storage_promotion_cost_by_core_type`.
         let mut warmup = BenchmarkSuite::new(sweep_warm_up_config());
-        small_sizes_for_scalar::<f64>(&mut warmup, core, "f64", &SMALL_SIZE_CASES);
-        small_sizes_for_scalar::<f32>(&mut warmup, core, "f32", &SMALL_SIZE_CASES);
+        sizes_for_scalar::<f64>(&mut warmup, core, "f64", &SMALL_SIZE_CASES);
+        sizes_for_scalar::<f32>(&mut warmup, core, "f32", &SMALL_SIZE_CASES);
         drop(warmup);
         let mut suite = BenchmarkSuite::new(sweep_config());
-        small_sizes_for_scalar::<f64>(&mut suite, core, "f64", &SMALL_SIZE_CASES);
-        small_sizes_for_scalar::<f32>(&mut suite, core, "f32", &SMALL_SIZE_CASES);
+        sizes_for_scalar::<f64>(&mut suite, core, "f64", &SMALL_SIZE_CASES);
+        sizes_for_scalar::<f32>(&mut suite, core, "f32", &SMALL_SIZE_CASES);
         {
             let src: Vec<Complex64> = (0..128)
                 .map(|i| {
@@ -361,11 +366,11 @@ fn n32_f64_liveness_against_rustfft() {
 
     let core = core.label();
     let mut warmup = BenchmarkSuite::new(BenchmarkConfig::regression());
-    small_sizes_for_scalar::<f64>(&mut warmup, core, "f64", &LIVENESS_CASES);
+    sizes_for_scalar::<f64>(&mut warmup, core, "f64", &LIVENESS_CASES);
     drop(warmup);
 
     let mut suite = BenchmarkSuite::new(BenchmarkConfig::regression());
-    small_sizes_for_scalar::<f64>(&mut suite, core, "f64", &LIVENESS_CASES);
+    sizes_for_scalar::<f64>(&mut suite, core, "f64", &LIVENESS_CASES);
     println!("SML liveness cpu={landed} ({core})");
     print!("{}", suite.report());
 }
