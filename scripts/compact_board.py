@@ -206,7 +206,7 @@ def compact(text: str, today: str, release_before: str) -> tuple[str, dict]:
         if status == "blocked" and note:
             records.insert(0, f"- **Blocked:** {note}.")
         if status == "in-progress":
-            match = re.search(r"last-update:\*\*\s*(\d{4}-\d{2}-\d{2})", " ".join(records))
+            match = re.search(r"last[- ]update:\*\*\s*(\d{4}-\d{2}-\d{2})", " ".join(records), re.I)
             last = match.group(1) if match else None
             if last is not None and last < release_before:
                 records = [r for r in records if "Integrator:" not in r]

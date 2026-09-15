@@ -53,6 +53,10 @@ Lines of narrative that the record does not keep.
 
 ## SAMPLE-SPACED-2026-09-09 — An old spelling [patch] — in progress
 - **Integrator:** peer/y; **last-update:** 2026-09-15.
+
+## SAMPLE-CAPS-2026-09-10 — A capitalized claim [patch] — in-progress
+- **Integrator:** peer/z. **Last update:** 2026-09-02.
+- **Scope:** five.
 """
 
 
@@ -72,7 +76,8 @@ class Compaction(unittest.TestCase):
         self.assertIn("**Claim released:** 2026-09-15, the last update 2026-09-01", self.out)
         self.assertNotIn("Integrator:** peer/x", self.out)
         self.assertNotIn("Lines of narrative", self.out)
-        self.assertEqual(self.report["released"], [("sample-stale", "2026-09-01")])
+        self.assertEqual(self.report["released"], [("sample-stale", "2026-09-01"), ("sample-caps", "2026-09-02")])
+        self.assertIn("## SAMPLE-CAPS-2026-09-10 — A capitalized claim [patch] — todo\n- **Scope:** five.\n- **Claim released:**", self.out)
 
     def test_drops_sprint_sections_and_folds_legacy_statuses(self):
         self.assertNotIn("Closed in this sprint", self.out)
