@@ -69,4 +69,5 @@
 | [0061](0061-l1-base-two-pass.md) | A two-pass base of 256 for the L1-resident powers of two | Accepted |
 | [0062](0062-composite-bases-as-register-kernels.md) | Composite bases as register kernels under column passes | Accepted |
 | [0064](0064-sparse-recovery-by-downsampling.md) | Sparse recovery by downsampling and syndrome decoding | Accepted |
+| [0065](0065-circle-group-ntt-lengths.md) | Power-of-two transform lengths over the circle group | Accepted |
 | [0066](0066-sub-bin-peak-estimation.md) | Sub-bin peak parameters from three bins and estimate-and-subtract | Accepted |
