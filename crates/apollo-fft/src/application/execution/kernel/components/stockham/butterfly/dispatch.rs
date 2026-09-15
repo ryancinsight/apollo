@@ -3,6 +3,12 @@ use super::super::transform::{transform_len4096_four_triples, transform_sized};
 use super::lanes::{fixed_len32_lanes, fixed_len64_lanes};
 use eunomia::Complex64;
 
+/// # Safety
+/// The host runs AVX and FMA: callers gate on the compile-time features or on
+/// `is_x86_feature_detected!`. `data.len()` is the transform length (`1 << LOG2`
+/// for the sized form), `scratch.len() >= data.len()` and
+/// `twiddles.len() >= data.len() - 1`; the fixed-length kernels and the stage
+/// loop slice all three on those lengths.
 pub(crate) unsafe fn forward64_avx_with_scratch(
     data: &mut [Complex64],
     scratch: &mut [Complex64],
@@ -41,6 +47,12 @@ pub(crate) unsafe fn forward64_avx_with_scratch(
 /// Sized variant for const LOG2 flow from forward_with_scratch_sized (plan PoT ZST path).
 /// Avoids runtime trailing_zeros() and len() in hot AVX PoT sized path; passes const LOG2
 /// to transform_sized for better monomorph/DCE to len* bodies.
+/// # Safety
+/// The host runs AVX and FMA: callers gate on the compile-time features or on
+/// `is_x86_feature_detected!`. `data.len()` is the transform length (`1 << LOG2`
+/// for the sized form), `scratch.len() >= data.len()` and
+/// `twiddles.len() >= data.len() - 1`; the fixed-length kernels and the stage
+/// loop slice all three on those lengths.
 #[cfg_attr(debug_assertions, inline(never))]
 #[cfg_attr(not(debug_assertions), inline)]
 pub(crate) unsafe fn forward64_avx_with_scratch_sized<const LOG2: u32>(

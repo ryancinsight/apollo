@@ -489,6 +489,12 @@ unsafe fn fixed_len4_reduced_avx_fma(
     }
 }
 
+/// # Safety
+/// The host runs AVX and FMA: callers gate on the compile-time features or on
+/// `is_x86_feature_detected!`. `data.len()` is the transform length (`1 << LOG2`
+/// for the sized form), `scratch.len() >= data.len()` and
+/// `twiddles.len() >= data.len() - 1`; the fixed-length kernels and the stage
+/// loop slice all three on those lengths.
 #[inline]
 pub(crate) unsafe fn forward32_avx_with_scratch(
     data: &mut [Complex32],
@@ -517,6 +523,12 @@ pub(crate) unsafe fn forward32_avx_with_scratch(
 
 /// Sized variant (const LOG2) to complete ZST/const flow in f32 reduced AVX PoT sized paths.
 /// Avoids runtime len() / transform runtime log2; passes LOG2 to transform_sized.
+/// # Safety
+/// The host runs AVX and FMA: callers gate on the compile-time features or on
+/// `is_x86_feature_detected!`. `data.len()` is the transform length (`1 << LOG2`
+/// for the sized form), `scratch.len() >= data.len()` and
+/// `twiddles.len() >= data.len() - 1`; the fixed-length kernels and the stage
+/// loop slice all three on those lengths.
 #[cfg_attr(debug_assertions, inline(never))]
 #[cfg_attr(not(debug_assertions), inline)]
 pub(crate) unsafe fn forward32_avx_with_scratch_sized<const LOG2: u32>(
