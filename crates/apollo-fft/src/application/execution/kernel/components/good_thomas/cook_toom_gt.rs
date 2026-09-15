@@ -52,6 +52,9 @@ pub(crate) fn dft84_impl<F: WinogradScalar, const INVERSE: bool>(data: &mut [eun
             let mut src_idx = src_idx2;
             let mut row_arr = [eunomia::Complex::<F>::ZERO; 7];
             for i3 in 0..7 {
+                // SAFETY: `src_idx` starts below 84 (`src_idx2` is `i1 * 21 + i2 * 28`, at most
+                // 119, wrapped once) and is wrapped once past 84 after every step of 12, so it
+                // stays below 84; the entry assert holds `data.len() >= 84`.
                 row_arr[i3] = unsafe { *data.get_unchecked(src_idx) };
                 src_idx += 12;
                 if src_idx >= 84 {
@@ -60,6 +63,8 @@ pub(crate) fn dft84_impl<F: WinogradScalar, const INVERSE: bool>(data: &mut [eun
             }
             dft7_impl::<F, INVERSE, false>(&mut row_arr);
             let row_start = (i1 * 3 + i2) * 7;
+            // SAFETY: `row_start` is `(i1 * 3 + i2) * 7`, at most 77, so the seven slots
+            // end at 83, inside the 84-entry `scratch` array.
             unsafe {
                 *scratch.get_unchecked_mut(row_start) = row_arr[0];
                 *scratch.get_unchecked_mut(row_start + 1) = row_arr[1];
@@ -80,6 +85,8 @@ pub(crate) fn dft84_impl<F: WinogradScalar, const INVERSE: bool>(data: &mut [eun
             let idx1 = idx0 + 7;
             let idx2 = idx0 + 14;
 
+            // SAFETY: `idx0` is `i1 * 21 + i3`, at most 69, and `idx2 = idx0 + 14` at most
+            // 83: inside the 84-entry `scratch` array.
             let mut col = unsafe {
                 [
                     *scratch.get_unchecked(idx0),
@@ -88,6 +95,7 @@ pub(crate) fn dft84_impl<F: WinogradScalar, const INVERSE: bool>(data: &mut [eun
                 ]
             };
             dft3_impl::<F, INVERSE, false>(&mut col);
+            // SAFETY: the three indices read above, all below 84.
             unsafe {
                 *scratch.get_unchecked_mut(idx0) = col[0];
                 *scratch.get_unchecked_mut(idx1) = col[1];
@@ -106,6 +114,8 @@ pub(crate) fn dft84_impl<F: WinogradScalar, const INVERSE: bool>(data: &mut [eun
             let idx2 = idx0 + 42;
             let idx3 = idx0 + 63;
 
+            // SAFETY: `idx0` is `i2 * 7 + i3`, at most 20, and `idx3 = idx0 + 63` at most
+            // 83: inside the 84-entry `scratch` array.
             let mut col = unsafe {
                 [
                     *scratch.get_unchecked(idx0),
@@ -134,6 +144,9 @@ pub(crate) fn dft84_impl<F: WinogradScalar, const INVERSE: bool>(data: &mut [eun
                 dest_idx3 -= 84;
             }
 
+            // SAFETY: `dest_idx0` is reduced modulo 84, and each of `dest_idx1..3` is
+            // `dest_idx0` plus an offset below 84, wrapped once past 84, so all four are
+            // below 84; the entry assert holds `data.len() >= 84`.
             unsafe {
                 *data.get_unchecked_mut(dest_idx0) = col[0];
                 *data.get_unchecked_mut(dest_idx1) = col[1];
@@ -168,6 +181,9 @@ pub(crate) fn dft60_impl<F: WinogradScalar, const INVERSE: bool>(data: &mut [eun
             let mut src_idx = src_idx2;
             let mut row_arr = [eunomia::Complex::<F>::ZERO; 5];
             for i3 in 0..5 {
+                // SAFETY: `src_idx` starts below 60 (`src_idx2` is `i1 * 15 + i2 * 20`, at most
+                // 85, wrapped once) and is wrapped once past 60 after every step of 12, so it
+                // stays below 60; the entry assert holds `data.len() >= 60`.
                 row_arr[i3] = unsafe { *data.get_unchecked(src_idx) };
                 src_idx += 12;
                 if src_idx >= 60 {
@@ -176,6 +192,8 @@ pub(crate) fn dft60_impl<F: WinogradScalar, const INVERSE: bool>(data: &mut [eun
             }
             dft5_array_impl::<F, INVERSE, false>(&mut row_arr);
             let row_start = (i1 * 3 + i2) * 5;
+            // SAFETY: `row_start` is `(i1 * 3 + i2) * 5`, at most 55, so the five slots
+            // end at 59, inside the 60-entry `scratch` array.
             unsafe {
                 *scratch.get_unchecked_mut(row_start) = row_arr[0];
                 *scratch.get_unchecked_mut(row_start + 1) = row_arr[1];
@@ -194,6 +212,8 @@ pub(crate) fn dft60_impl<F: WinogradScalar, const INVERSE: bool>(data: &mut [eun
             let idx1 = idx0 + 5;
             let idx2 = idx0 + 10;
 
+            // SAFETY: `idx0` is `i1 * 15 + i3`, at most 49, and `idx2 = idx0 + 10` at most
+            // 59: inside the 60-entry `scratch` array.
             let mut col = unsafe {
                 [
                     *scratch.get_unchecked(idx0),
@@ -202,6 +222,7 @@ pub(crate) fn dft60_impl<F: WinogradScalar, const INVERSE: bool>(data: &mut [eun
                 ]
             };
             dft3_impl::<F, INVERSE, false>(&mut col);
+            // SAFETY: the three indices read above, all below 60.
             unsafe {
                 *scratch.get_unchecked_mut(idx0) = col[0];
                 *scratch.get_unchecked_mut(idx1) = col[1];
@@ -220,6 +241,8 @@ pub(crate) fn dft60_impl<F: WinogradScalar, const INVERSE: bool>(data: &mut [eun
             let idx2 = idx0 + 30;
             let idx3 = idx0 + 45;
 
+            // SAFETY: `idx0` is `i2 * 5 + i3`, at most 14, and `idx3 = idx0 + 45` at most
+            // 59: inside the 60-entry `scratch` array.
             let mut col = unsafe {
                 [
                     *scratch.get_unchecked(idx0),
@@ -248,6 +271,9 @@ pub(crate) fn dft60_impl<F: WinogradScalar, const INVERSE: bool>(data: &mut [eun
                 dest_idx3 -= 60;
             }
 
+            // SAFETY: `dest_idx0` is reduced modulo 60, and each of `dest_idx1..3` is
+            // `dest_idx0` plus an offset below 60, wrapped once past 60, so all four are
+            // below 60; the entry assert holds `data.len() >= 60`.
             unsafe {
                 *data.get_unchecked_mut(dest_idx0) = col[0];
                 *data.get_unchecked_mut(dest_idx1) = col[1];
@@ -284,6 +310,9 @@ pub(crate) fn dft90_impl<F: ShortWinogradScalar, const INVERSE: bool>(
             let mut src_idx = src_idx2;
             let mut row_arr = [eunomia::Complex::<F>::ZERO; 5];
             for i3 in 0..5 {
+                // SAFETY: `src_idx` starts below 90 (`src_idx2` is `i1 * 45 + i2 * 10`, at most
+                // 125, wrapped once) and is wrapped once past 90 after every step of 18, so it
+                // stays below 90; the entry assert holds `data.len() >= 90`.
                 row_arr[i3] = unsafe { *data.get_unchecked(src_idx) };
                 src_idx += 18;
                 if src_idx >= 90 {
@@ -292,6 +321,8 @@ pub(crate) fn dft90_impl<F: ShortWinogradScalar, const INVERSE: bool>(
             }
             dft5_array_impl::<F, INVERSE, false>(&mut row_arr);
             let row_start = (i1 * 9 + i2) * 5;
+            // SAFETY: `row_start` is `(i1 * 9 + i2) * 5`, at most 85, so the five slots
+            // end at 89, inside the 90-entry `scratch` array.
             unsafe {
                 *scratch.get_unchecked_mut(row_start) = row_arr[0];
                 *scratch.get_unchecked_mut(row_start + 1) = row_arr[1];
@@ -307,6 +338,8 @@ pub(crate) fn dft90_impl<F: ShortWinogradScalar, const INVERSE: bool>(
         let offset1 = i1 * 45;
         for i3 in 0..5 {
             let offset = offset1 + i3;
+            // SAFETY: `offset` is `i1 * 45 + i3`, at most 49, and the nine reads end at
+            // `offset + 40`, at most 89: inside the 90-entry `scratch` array.
             let mut col = unsafe {
                 [
                     *scratch.get_unchecked(offset),
@@ -322,6 +355,7 @@ pub(crate) fn dft90_impl<F: ShortWinogradScalar, const INVERSE: bool>(
             };
 
             dft9_impl::<F, INVERSE>(&mut col);
+            // SAFETY: the nine indices read above, all below 90.
             unsafe {
                 *scratch.get_unchecked_mut(offset) = col[0];
                 *scratch.get_unchecked_mut(offset + 5) = col[1];
@@ -344,6 +378,8 @@ pub(crate) fn dft90_impl<F: ShortWinogradScalar, const INVERSE: bool>(
             let idx0 = offset + i3;
             let idx1 = idx0 + 45;
 
+            // SAFETY: `idx0` is `i2 * 5 + i3`, at most 44, and `idx1 = idx0 + 45` at most
+            // 89: inside the 90-entry `scratch` array.
             let mut col = unsafe { [*scratch.get_unchecked(idx0), *scratch.get_unchecked(idx1)] };
             F::dft2(&mut col);
 
@@ -355,6 +391,9 @@ pub(crate) fn dft90_impl<F: ShortWinogradScalar, const INVERSE: bool>(
                 dest_idx1 -= 90;
             }
 
+            // SAFETY: `dest_idx0` is reduced modulo 90 and `dest_idx1` is `dest_idx0 + 45`
+            // wrapped once past 90, so both are below 90; the entry assert holds
+            // `data.len() >= 90`.
             unsafe {
                 *data.get_unchecked_mut(dest_idx0) = col[0];
                 *data.get_unchecked_mut(dest_idx1) = col[1];
@@ -389,6 +428,9 @@ pub(crate) fn dft150_impl<F: ShortWinogradScalar, const INVERSE: bool>(
             let mut src_idx = src_idx2;
             let mut row_arr = [eunomia::Complex::<F>::ZERO; 25];
             for i3 in 0..25 {
+                // SAFETY: `src_idx` starts below 150 (`src_idx2` is `i1 * 75 + i2 * 50`, at
+                // most 175, wrapped once) and is wrapped once past 150 after every step of 6,
+                // so it stays below 150; the entry assert holds `data.len() >= 150`.
                 row_arr[i3] = unsafe { *data.get_unchecked(src_idx) };
                 src_idx += 6;
                 if src_idx >= 150 {
@@ -398,6 +440,8 @@ pub(crate) fn dft150_impl<F: ShortWinogradScalar, const INVERSE: bool>(
             dft25_impl::<F, INVERSE>(&mut row_arr);
             let row_start = (i1 * 3 + i2) * 25;
             for i3 in 0..25 {
+                // SAFETY: `row_start` is `(i1 * 3 + i2) * 25`, at most 125, and `i3` at most
+                // 24, so the slot is at most 149: inside the 150-entry `scratch` array.
                 unsafe {
                     *scratch.get_unchecked_mut(row_start + i3) = row_arr[i3];
                 }
@@ -413,6 +457,8 @@ pub(crate) fn dft150_impl<F: ShortWinogradScalar, const INVERSE: bool>(
             let idx1 = idx0 + 25;
             let idx2 = idx0 + 50;
 
+            // SAFETY: `idx0` is `i1 * 75 + i3`, at most 99, and `idx2 = idx0 + 50` at most
+            // 149: inside the 150-entry `scratch` array.
             let mut col = unsafe {
                 [
                     *scratch.get_unchecked(idx0),
@@ -421,6 +467,7 @@ pub(crate) fn dft150_impl<F: ShortWinogradScalar, const INVERSE: bool>(
                 ]
             };
             dft3_impl::<F, INVERSE, false>(&mut col);
+            // SAFETY: the three indices read above, all below 150.
             unsafe {
                 *scratch.get_unchecked_mut(idx0) = col[0];
                 *scratch.get_unchecked_mut(idx1) = col[1];
@@ -437,6 +484,8 @@ pub(crate) fn dft150_impl<F: ShortWinogradScalar, const INVERSE: bool>(
             let idx0 = offset + i3;
             let idx1 = idx0 + 75;
 
+            // SAFETY: `idx0` is `i2 * 25 + i3`, at most 74, and `idx1 = idx0 + 75` at most
+            // 149: inside the 150-entry `scratch` array.
             let mut col = unsafe { [*scratch.get_unchecked(idx0), *scratch.get_unchecked(idx1)] };
             F::dft2(&mut col);
 
@@ -448,6 +497,9 @@ pub(crate) fn dft150_impl<F: ShortWinogradScalar, const INVERSE: bool>(
                 dest_idx1 -= 150;
             }
 
+            // SAFETY: `dest_idx0` is reduced modulo 150 and `dest_idx1` is `dest_idx0 + 75`
+            // wrapped once past 150, so both are below 150; the entry assert holds
+            // `data.len() >= 150`.
             unsafe {
                 *data.get_unchecked_mut(dest_idx0) = col[0];
                 *data.get_unchecked_mut(dest_idx1) = col[1];
