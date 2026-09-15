@@ -152,7 +152,8 @@
 - **State (2026-09-01, Claude `/root`, claim four weeks stale).** The workspace half is done: `mnemosyne = { package = "mnemosyne-memory" }` and `moirai = { package = "moirai-runtime" }` bind the published identities at the root (`0917a6a6`) without changing imports, and the gate is green. The remaining half — publishing through the OIDC release workflow — is the release state, which needs explicit authority; re-open trigger: a release authorization naming the crates.
 
 <a id="atlas-apollo-caches-misc-junk-drawer"></a>
-## ATLAS-APOLLO-CACHES-MISC-JUNK-DRAWER — Split `mixed_radix/caches/misc.rs` by concern [patch] — todo
+## ATLAS-APOLLO-CACHES-MISC-JUNK-DRAWER — Split `mixed_radix/caches/misc.rs` by concern [patch] — in-progress
+- **Integrator:** claude-fable-5.1 (session 5bed7001); **branch:** `refactor/apollo-caches-split` (lane apollo-route, stacked on #469); **lease:** `crates/apollo-fft/src/application/execution/kernel/mixed_radix/caches/`, this entry; **last-update:** 2026-09-15.
 - **Finding:** the crate keeps one junk-drawer module: `caches/misc.rs`, 449 lines holding the 2-3-smooth radix cache, coprime factorisation and primality caches, the PFA permutation builder, and the Rader order and negacyclic spectrum caches.
 - **Outcome:** leaf modules named for their concern under `mixed_radix/caches/` (radices, coprime, pfa, rader), `caches/mod.rs` a manifest re-exporting the same names; no `misc`.
 - **Acceptance:** no `helpers`, `utils`, `misc` or `common` module in apollo-fft; call sites unchanged through the manifest; tests and gates green; the conformance junk-drawer count for apollo falls 1 to 0.
