@@ -110,8 +110,9 @@ fn normalized_inverse_recovers_every_power_of_two_routing_rung() {
     // constant scale named after the route left 256 doubled and 512
     // quadrupled; no per-size normalized-inverse round trip existed to see it.
     // Every power-of-two rung the planner dispatches is covered here so a
-    // route serving more than one length cannot mis-scale again unseen.
-    for log2n in 0..=14u32 {
+    // route serving more than one length cannot mis-scale again unseen —
+    // through the chains and the four-step to 2^20.
+    for log2n in 0..=20u32 {
         let n = 1usize << log2n;
         let plan = FftPlan1D::<f64>::new(Shape1D::new(n).expect("shape"));
         let input = signal64(n);
@@ -132,6 +133,43 @@ fn normalized_inverse_recovers_every_power_of_two_routing_rung() {
              derived bound {bound:.3e}"
         );
     }
+}
+
+/// The cheapest oracle that a transform ran: an impulse at zero becomes
+/// a flat spectrum of its amplitude, every bin within the route's rounding
+/// (sixteen contributions a binary stage at unit roundoff, on an input of
+/// unit L1 norm). A plan dispatched to an executor that skips — the
+/// generic power-of-two executor once returned untouched data when the
+/// plan carried no forward table — leaves the impulse in place and fails
+/// at every bin but the first.
+fn assert_impulse_spectrum_is_flat_at_every_power_of_two<T, const LOG2_MAX: u32>(unit_roundoff: f64)
+where
+    T: crate::application::execution::kernel::mixed_radix::MixedRadixScalar<
+            Complex = eunomia::Complex<T>,
+        > + Into<f64>,
+{
+    for log2n in 0..=LOG2_MAX {
+        let n = 1usize << log2n;
+        let plan = FftPlan1D::<T>::new(Shape1D::new(n).expect("shape"));
+        let zero = T::from_precise(0.0);
+        let mut data = vec![eunomia::Complex::new(zero, zero); n];
+        data[0] = eunomia::Complex::new(T::from_precise(1.0), zero);
+        plan.forward_complex_slice_inplace(&mut data);
+        let bound = 16.0 * f64::from(log2n.max(1)) * unit_roundoff;
+        for (k, value) in data.iter().enumerate() {
+            let error = (value.re.into() - 1.0).hypot(value.im.into());
+            assert!(
+                error <= bound,
+                "N={n} bin {k}: the impulse's spectrum is off by {error:.3e} > {bound:.3e}"
+            );
+        }
+    }
+}
+
+#[test]
+fn every_power_of_two_transforms_an_impulse_into_a_flat_spectrum() {
+    assert_impulse_spectrum_is_flat_at_every_power_of_two::<f64, 20>(f64::EPSILON / 2.0);
+    assert_impulse_spectrum_is_flat_at_every_power_of_two::<f32, 20>(f64::from(f32::EPSILON) / 2.0);
 }
 
 #[test]
