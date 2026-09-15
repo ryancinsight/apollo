@@ -6,9 +6,10 @@ use eunomia::{Complex, Complex64};
 use leto::Array3;
 
 /// Shapes exercising the split (`nz` a multiple of four), each refusal (an odd
-/// `nz`, an even one that is not a multiple of four, one below four), and an
-/// extent of one on each axis in turn.
-const SHAPES: [[usize; 3]; 11] = [
+/// `nz`, an even one that is not a multiple of four, one below four), an
+/// extent of one on each axis in turn, one volume of lanes under the
+/// caller-owned routes' lane floor, and one at the owned forward's byte floor.
+const SHAPES: [[usize; 3]; 13] = [
     [8, 6, 12],
     [16, 16, 16],
     [32, 32, 16],
@@ -20,6 +21,8 @@ const SHAPES: [[usize; 3]; 11] = [
     [1, 4, 8],
     [4, 1, 8],
     [4, 6, 1],
+    [16, 4, 4],
+    [64, 64, 64],
 ];
 
 fn field<T: Sample>([nx, ny, nz]: [usize; 3]) -> Array3<T> {
@@ -223,6 +226,156 @@ fn the_refused_length_fallback_allocates_nothing_once_warm() {
     the_fallback_allocates_nothing_once_warm::<f64>();
     the_fallback_allocates_nothing_once_warm::<f32>();
     the_fallback_allocates_nothing_once_warm::<F16>();
+}
+
+/// Bitwise identity of two bins, through f64.
+fn same_bin<P: Copy + Into<f64>>(a: Complex<P>, b: Complex<P>) -> bool {
+    let (a_re, a_im, b_re, b_im): (f64, f64, f64, f64) =
+        (a.re.into(), a.im.into(), b.re.into(), b.im.into());
+    a_re.to_bits() == b_re.to_bits() && a_im.to_bits() == b_im.to_bits()
+}
+
+/// The full-spectrum 3-D entries route through the pair where the split
+/// admits `nz`, so their bins and samples are bit-identical to the pair's: the
+/// forwards' lower bins to the half forward's and their upper bins to its
+/// conjugate mirrors, and every inverse form to the half inverse. The
+/// caller-owned forms take the route from 8-long lanes
+/// (`half_volume::ROUTED_LANE_FLOOR`) and the owned forward from 4 MiB of
+/// output (`expand::OWNED_ROUTE_BYTES`); under those they are the widened
+/// routes, whose agreement within the derived bound the pair test already
+/// pins, so each form is checked where it is routed. The inverses read the
+/// pair's own Hermitian completion, so their check does not depend on which
+/// route the forward took.
+fn the_full_spectrum_entries_are_the_pair<T>()
+where
+    T: Sample,
+    T::PlanScalar: PlanCacheProvider + Into<f64>,
+    Complex<T::PlanScalar>: PlanScratch,
+{
+    for shape @ [nx, ny, nz] in SHAPES {
+        if !T::real_split_applies(nz) {
+            continue;
+        }
+        let depth = nz / 2 + 1;
+        let real = field::<T>(shape);
+        let mut half = Array3::from_elem([nx, ny, depth], Complex::<T::PlanScalar>::default());
+        apollo_fft::fft_3d_array_half_into(&real, &mut half);
+
+        let owned = apollo_fft::fft_3d_array::<T>(&real);
+        let owned_routed = nx * ny * nz * core::mem::size_of::<Complex<T::PlanScalar>>() >= 4 << 20;
+        let lanes_routed = nz >= 8;
+        let mut into = Array3::from_elem(shape, Complex::<T::PlanScalar>::default());
+        apollo_fft::fft_3d_array_into(&real, &mut into);
+        for i in 0..nx {
+            for j in 0..ny {
+                for k in 0..nz {
+                    let want = if k < depth {
+                        half[[i, j, k]]
+                    } else {
+                        let bin = half[[(nx - i) % nx, (ny - j) % ny, nz - k]];
+                        Complex::new(bin.re, -bin.im)
+                    };
+                    assert!(
+                        !owned_routed || same_bin(owned[[i, j, k]], want),
+                        "{} {shape:?} bin ({i}, {j}, {k}): fft_3d_array {:?} against the pair's {want:?}",
+                        std::any::type_name::<T>(),
+                        owned[[i, j, k]]
+                    );
+                    assert!(
+                        !lanes_routed || same_bin(into[[i, j, k]], want),
+                        "{} {shape:?} bin ({i}, {j}, {k}): fft_3d_array_into {:?} against the pair's {want:?}",
+                        std::any::type_name::<T>(),
+                        into[[i, j, k]]
+                    );
+                }
+            }
+        }
+
+        let completed = Array3::from_shape_fn(shape, |[i, j, k]| {
+            if k < depth {
+                half[[i, j, k]]
+            } else {
+                let bin = half[[(nx - i) % nx, (ny - j) % ny, nz - k]];
+                Complex::new(bin.re, -bin.im)
+            }
+        });
+        let mut want = Array3::from_elem(shape, T::from_f64(0.0));
+        apollo_fft::ifft_3d_array_half_into(&mut half.clone(), &mut want);
+        let owned_back = apollo_fft::ifft_3d_array::<T>(&completed);
+        let mut into_back = Array3::from_elem(shape, T::from_f64(0.0));
+        let mut scratch = Array3::from_elem(shape, Complex::<T::PlanScalar>::default());
+        apollo_fft::ifft_3d_array_into(&completed, &mut into_back, &mut scratch);
+        let mut consumed = completed.clone();
+        let mut spectrum_back = Array3::from_elem(shape, T::from_f64(0.0));
+        apollo_fft::ifft_3d_array_into_spectrum_scratch(&mut consumed, &mut spectrum_back);
+        for (index, (((want, owned), into), spectrum)) in want
+            .iter()
+            .zip(owned_back.iter())
+            .zip(into_back.iter())
+            .zip(spectrum_back.iter())
+            .enumerate()
+        {
+            let want = want.to_f64();
+            for (entry, got, routed) in [
+                ("ifft_3d_array", owned.to_f64(), true),
+                ("ifft_3d_array_into", into.to_f64(), lanes_routed),
+                (
+                    "ifft_3d_array_into_spectrum_scratch",
+                    spectrum.to_f64(),
+                    lanes_routed,
+                ),
+            ] {
+                assert!(
+                    !routed || got.to_bits() == want.to_bits(),
+                    "{} {shape:?} sample {index}: {entry} {got} against the pair's {want}",
+                    std::any::type_name::<T>()
+                );
+            }
+        }
+    }
+}
+
+#[test]
+fn the_full_spectrum_entries_are_bit_identical_to_the_pair() {
+    the_full_spectrum_entries_are_the_pair::<f64>();
+    the_full_spectrum_entries_are_the_pair::<f32>();
+    the_full_spectrum_entries_are_the_pair::<F16>();
+}
+
+#[test]
+fn the_full_spectrum_entries_allocate_only_their_returns_once_warm() {
+    let shape = [8, 6, 12];
+    let real = field::<f64>(shape);
+    let mut full = Array3::from_elem(shape, Complex64::default());
+    let mut back = Array3::from_elem(shape, 0.0_f64);
+    let mut scratch = Array3::from_elem(shape, Complex64::default());
+    // One warm call per form: the plan, its tables and every thread-local
+    // scratch role a form touches (the owned inverse packs into the 2-D
+    // staging role) are built on first use, not a per-call cost.
+    apollo_fft::fft_3d_array_into(&real, &mut full);
+    apollo_fft::ifft_3d_array_into(&full, &mut back, &mut scratch);
+    drop(apollo_fft::fft_3d_array::<f64>(&real));
+    drop(apollo_fft::ifft_3d_array::<f64>(&full));
+
+    let ((), forward_into) = count_allocations(|| apollo_fft::fft_3d_array_into(&real, &mut full));
+    let ((), inverse_into) =
+        count_allocations(|| apollo_fft::ifft_3d_array_into(&full, &mut back, &mut scratch));
+    let ((), spectrum_into) = count_allocations(|| {
+        scratch.assign(&full.view());
+        apollo_fft::ifft_3d_array_into_spectrum_scratch(&mut scratch, &mut back);
+    });
+    assert_eq!(
+        (forward_into, inverse_into, spectrum_into),
+        (0, 0, 0),
+        "the caller-owned forms allocated on a warm plan"
+    );
+    let ((), owned_forward) = count_allocations(|| drop(apollo_fft::fft_3d_array::<f64>(&real)));
+    let ((), owned_inverse) = count_allocations(|| drop(apollo_fft::ifft_3d_array::<f64>(&full)));
+    assert_eq!(
+        (owned_forward, owned_inverse),
+        (1, 1),
+        "the owned forms allocate exactly their returned volume"
+    );
 }
 
 #[test]

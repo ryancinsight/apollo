@@ -15,22 +15,20 @@
 //!
 //! The full-spectrum entries route through the pair where the split admits
 //! `ny`. The forwards compute the half plane in the rank-one staging role and
-//! write the `(nx, ny)` output once, in parallel over blocks of rows, each row
-//! its head followed by the conjugate mirror of its partner row's head — the
+//! write the `(nx, ny)` output once through [`expand`](super::expand) — the
 //! same pass whether the output is caller storage or fresh capacity, so the
 //! owned form never fills its plane twice (at short rows a zero-fill of a
 //! fresh plane costs as much as the transform, and the page faults a fresh
 //! plane pays are what the parallel pass spreads). The inverses pack the
 //! lower `ny/2 + 1` bins of each row and read nothing else.
 
-use super::{split, RealFftData};
+use super::{expand, split, RealFftData};
 use crate::application::execution::kernel::mixed_radix::scalar::plan_scratch::{
     with_view_staging, PlanScratch,
 };
 use crate::application::execution::plan::fft::dimension_2d::FftPlan2D;
 use crate::application::execution::plan::fft::lanes;
 use apollo_leto_interop::view_cow;
-use core::mem::MaybeUninit;
 use eunomia::Complex;
 use leto::Array2;
 
@@ -231,7 +229,7 @@ where
     };
     let source = view_cow(&input.view());
     with_staged_half(plan, &source, nx * depth, |half| {
-        write_expanded(full, half, nx, ny, depth);
+        expand::write_expanded(full, half, ny, depth, |i| (nx - i) % nx);
     });
     true
 }
@@ -241,7 +239,7 @@ where
 /// plane and never fills it twice.
 ///
 /// Returns `None` where the split does not admit `ny`, `input` is not the
-/// plan's shape, or the plane is under [`OWNED_ROUTE_BYTES`]: unlike the
+/// plan's shape, or the plane is under [`expand::OWNED_ROUTE_BYTES`]: unlike the
 /// caller-owned form this one pays the half plane's staging round trip on
 /// top of the write, and a fresh plane's page faults, which the parallel
 /// pass spreads over the workers, are what buys that back — so below the
@@ -258,37 +256,15 @@ where
     let depth = plan.ny_c();
     if !T::real_split_applies(ny)
         || input.shape() != [nx, ny]
-        || nx * ny * core::mem::size_of::<Complex<T::PlanScalar>>() < OWNED_ROUTE_BYTES
+        || nx * ny * core::mem::size_of::<Complex<T::PlanScalar>>() < expand::OWNED_ROUTE_BYTES
     {
         return None;
     }
     let source = view_cow(&input.view());
     let full = with_staged_half(plan, &source, nx * depth, |half| {
-        expanded_plane(half, nx, ny, depth)
+        expand::fresh_expanded(half, nx, ny, depth, |i| (nx - i) % nx)
     });
     Some(Array2::from_shape_vec([nx, ny], full).expect("invariant: nx * ny elements were written"))
-}
-
-/// The `(nx, ny)` spectrum whose half plane is `half`, in fresh capacity
-/// written exactly once.
-fn expanded_plane<P>(half: &[Complex<P>], nx: usize, ny: usize, depth: usize) -> Vec<Complex<P>>
-where
-    P: crate::application::execution::kernel::mixed_radix::MixedRadixScalar<Complex = Complex<P>>,
-{
-    let mut full = Vec::with_capacity(nx * ny);
-    write_expanded(
-        &mut full.spare_capacity_mut()[..nx * ny],
-        half,
-        nx,
-        ny,
-        depth,
-    );
-    // SAFETY: `write_expanded` sets every one of the `nx * ny` slots of the
-    // spare capacity it was handed — each row's `depth` head bins and its
-    // `ny - depth` mirror bins, over every row of the plane — before this
-    // point, and `full` held no elements before it.
-    unsafe { full.set_len(nx * ny) };
-    full
 }
 
 /// Runs `consumer` over the half plane of `source`, held in the rank-one
@@ -337,7 +313,7 @@ where
     let (Some(full), Some(values)) = (spectrum.as_slice_mut(), output.as_slice_mut()) else {
         return false;
     };
-    pack_half_plane_in_place(full, nx, ny, depth);
+    expand::pack_lanes_in_place(full, ny, depth);
     inverse_half(plan, &mut full[..nx * depth], values);
     true
 }
@@ -371,7 +347,7 @@ where
         return false;
     };
     let half = &mut work[..nx * depth];
-    pack_half_plane(full, half, ny, depth);
+    expand::pack_lanes(full, half, ny, depth);
     inverse_half(plan, half, values);
     true
 }
@@ -403,138 +379,8 @@ where
     // The rank-one staging role is free here for the reason `with_staged_half`
     // gives, and the inverse borrows nothing of it beyond the pack.
     with_view_staging::<Complex<T::PlanScalar>, 1, _>(nx * depth, |half| {
-        pack_half_plane(full, half, ny, depth);
+        expand::pack_lanes(full, half, ny, depth);
         inverse_half(plan, half, values);
     });
     Some(output)
-}
-
-/// A place the expansion writes one bin into: an initialized bin of caller
-/// storage, or a slot of fresh capacity.
-trait Slot<C> {
-    fn set(&mut self, value: C);
-}
-
-impl<C> Slot<C> for C {
-    #[inline]
-    fn set(&mut self, value: C) {
-        *self = value;
-    }
-}
-
-impl<C> Slot<C> for MaybeUninit<C> {
-    #[inline]
-    fn set(&mut self, value: C) {
-        self.write(value);
-    }
-}
-
-/// Writes the `(nx, ny)` spectrum whose half plane is `half` into `rows`,
-/// every slot exactly once: row `i` is row `i` of the half followed by the
-/// mirror `X[i, ny - j] = conj(X[(nx - i) % nx, j])` for `j = 1..ny/2`.
-///
-/// Parallel over blocks of about [`EXPANSION_BLOCK_BYTES`] of rows — enough
-/// rows that scheduling a task costs less than the rows it writes, which at
-/// the shortest rows the split admits is thousands of them — with the
-/// remainder past the last whole block written here. The blocks are what
-/// spread a fresh plane's page faults over the workers.
-fn write_expanded<P, S>(rows: &mut [S], half: &[Complex<P>], nx: usize, ny: usize, depth: usize)
-where
-    P: crate::application::execution::kernel::mixed_radix::MixedRadixScalar<Complex = Complex<P>>,
-    S: Slot<Complex<P>> + Send + 'static,
-{
-    debug_assert_eq!(rows.len(), nx * ny);
-    debug_assert_eq!(half.len(), nx * depth);
-    let mirrored = ny - depth;
-    let write_row = |i: usize, row: &mut [S]| {
-        let head = &half[i * depth..(i + 1) * depth];
-        let mirror = (nx - i) % nx;
-        let partner = &half[mirror * depth + 1..=mirror * depth + mirrored];
-        let (front, tail) = row.split_at_mut(depth);
-        for (slot, &bin) in front.iter_mut().zip(head) {
-            slot.set(bin);
-        }
-        // `tail` is `conj(partner[mirrored - 1])`, ..., `conj(partner[0])`.
-        for (slot, bin) in tail.iter_mut().zip(partner.iter().rev()) {
-            slot.set(Complex::new(bin.re, -bin.im));
-        }
-    };
-    let rows_per_block = (EXPANSION_BLOCK_BYTES / (ny * core::mem::size_of::<S>())).max(1);
-    let block = rows_per_block * ny;
-    let scheduled = rows.len() / block * block;
-    let (blocks, remainder) = rows.split_at_mut(scheduled);
-    lanes::each(blocks, block, |b, rows| {
-        for (k, row) in rows.chunks_exact_mut(ny).enumerate() {
-            write_row(b * rows_per_block + k, row);
-        }
-    });
-    for (k, row) in remainder.chunks_exact_mut(ny).enumerate() {
-        write_row(scheduled / ny + k, row);
-    }
-}
-
-/// Bytes of rows one expansion task writes.
-const EXPANSION_BLOCK_BYTES: usize = 64 << 10;
-
-/// Output bytes from which the owned forward takes the pair.
-///
-/// Measured on the census host (`output/probe2d`, 2026-09-15): against the
-/// widened route the owned pair ran 0.86-0.97x at 1-2 MiB planes, 1.01-1.41x
-/// at 4 MiB and 1.57x at 8 MiB, the fixed staging round trip losing to the
-/// parallel fault spread as the plane grows; the caller-owned form, which
-/// pays neither, wins at every shape and has no floor.
-const OWNED_ROUTE_BYTES: usize = 4 << 20;
-
-/// Packs the lower `depth` bins of every row of the `(nx, ny)` spectrum `full`
-/// into the `(nx, depth)` half plane at its front, in place.
-///
-/// Row `i`'s packed slot ends before row `i + 1`'s bins begin, so walking the
-/// rows upward overwrites nothing unread.
-fn pack_half_plane_in_place<C: Copy>(full: &mut [C], nx: usize, ny: usize, depth: usize) {
-    debug_assert_eq!(full.len(), nx * ny);
-    for i in 1..nx {
-        full.copy_within(i * ny..i * ny + depth, i * depth);
-    }
-}
-
-/// Packs the lower `depth` bins of every row of the `(nx, ny)` spectrum `full`
-/// into the `(nx, depth)` half plane `half`.
-fn pack_half_plane<C: Copy + Send + Sync>(full: &[C], half: &mut [C], ny: usize, depth: usize) {
-    lanes::paired(half, depth, full, ny, |halves, rows| {
-        for (packed, row) in halves.chunks_exact_mut(depth).zip(rows.chunks_exact(ny)) {
-            packed.copy_from_slice(&row[..depth]);
-        }
-    });
-}
-
-#[cfg(test)]
-mod tests {
-    use super::expanded_plane;
-    use eunomia::Complex;
-
-    /// Every bin of the fresh plane is the half's or a mirror of it, for an
-    /// odd `nx`, an even one (whose Nyquist row mirrors itself) and one row —
-    /// small enough for miri to walk the `set_len` site's proof.
-    #[test]
-    fn the_fresh_plane_is_the_half_and_its_mirrors() {
-        for (nx, ny) in [(5usize, 8usize), (4, 8), (1, 4), (6, 4)] {
-            let depth = ny / 2 + 1;
-            let half: Vec<Complex<f64>> = (0..nx * depth)
-                .map(|k| Complex::new(k as f64, 0.5 - k as f64))
-                .collect();
-            let full = expanded_plane(&half, nx, ny, depth);
-            assert_eq!(full.len(), nx * ny);
-            for i in 0..nx {
-                for j in 0..ny {
-                    let want = if j < depth {
-                        half[i * depth + j]
-                    } else {
-                        let bin = half[((nx - i) % nx) * depth + ny - j];
-                        Complex::new(bin.re, -bin.im)
-                    };
-                    assert_eq!(full[i * ny + j], want, "{nx}x{ny} bin ({i}, {j})");
-                }
-            }
-        }
-    }
 }
