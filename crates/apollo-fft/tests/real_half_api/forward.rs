@@ -2,6 +2,7 @@
 
 use crate::{count_allocations, l1, signal, tolerance, FALLBACK_SIZES, SPLIT_SIZES};
 use eunomia::Complex64;
+use leto::Array1;
 use realfft::RealFftPlanner;
 
 #[test]
@@ -99,4 +100,42 @@ fn a_wrong_output_length_is_rejected() {
     let src = signal(64);
     let mut out = vec![Complex64::default(); 64];
     apollo_fft::fft_1d_slice_half_into::<f64>(&src, &mut out);
+}
+
+/// The owned forwards are one write of a staged half: `fft_1d_array` returns
+/// the same bins as `fft_1d_slice`, both bit-identical to the half form over
+/// the lower half and to its conjugate mirror over the upper, and each
+/// allocates exactly its returned spectrum.
+#[test]
+fn the_owned_forms_are_the_half_and_its_mirror_in_one_allocation() {
+    for &n in &SPLIT_SIZES {
+        let src = signal(n);
+        let array = Array1::from(src.clone());
+        let mut half = vec![Complex64::default(); n / 2 + 1];
+        apollo_fft::fft_1d_slice_half_into::<f64>(&src, &mut half);
+        let slice = apollo_fft::fft_1d_slice::<f64>(&src);
+        let owned = apollo_fft::fft_1d_array::<f64>(&array);
+        for k in 0..n {
+            let want = if k <= n / 2 {
+                half[k]
+            } else {
+                Complex64::new(half[n - k].re, -half[n - k].im)
+            };
+            for (form, got) in [("fft_1d_slice", slice[k]), ("fft_1d_array", owned[k])] {
+                assert!(
+                    got.re.to_bits() == want.re.to_bits() && got.im.to_bits() == want.im.to_bits(),
+                    "n={n} bin {k}: {form} {got:?} against the half form's {want:?}"
+                );
+            }
+        }
+        let ((), slice_allocations) =
+            count_allocations(|| drop(apollo_fft::fft_1d_slice::<f64>(&src)));
+        let ((), array_allocations) =
+            count_allocations(|| drop(apollo_fft::fft_1d_array::<f64>(&array)));
+        assert_eq!(
+            (slice_allocations, array_allocations),
+            (1, 1),
+            "n={n}: the owned forms allocate exactly their returned spectrum"
+        );
+    }
 }

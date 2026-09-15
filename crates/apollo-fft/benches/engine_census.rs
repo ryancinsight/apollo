@@ -786,11 +786,23 @@ fn main() -> Result<(), apollo_bench::BenchmarkError> {
         });
 
         // Unpaired on purpose: the distance from the Apollo row above is the
-        // cost of materializing the redundant half plus its allocation.
+        // cost of materializing the redundant half plus its allocation; the
+        // widened route it replaced stands beside it.
         flush_cache(&mut flush);
         suite.run_with_config(config, BenchmarkCase::new(REAL_FULL, "apollo", n), || {
             black_box(apollo_fft::fft_1d_slice::<f64>(black_box(&real_src)));
         });
+        flush_cache(&mut flush);
+        suite.run_with_config(
+            config,
+            BenchmarkCase::new(REAL_FULL, "apollo (widened)", n),
+            || {
+                black_box(<f64 as apollo_fft::RealFftData>::forward_1d_slice_owned(
+                    &apollo,
+                    black_box(&real_src),
+                ));
+            },
+        );
 
         // The inverse rows mirror the forward ones: the half-spectrum inverse
         // into caller-owned storage against RealFFT's c2r, then the
