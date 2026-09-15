@@ -227,10 +227,10 @@ where
 /// ([`split_boundary::GatherBlocks`]) and every block reads contiguously.
 /// Both forms run the first three blocks into scratch and the last
 /// through the radix-4 sink, so no intermediate pair is written. Eight
-/// blocks take RustFFT's column-first form at either width: the radix-8
-/// pass over the parent in place ahead of the blocks, the eighths
-/// transformed out of place into scratch, and one fused interleave pass
-/// back ([`eight_blocks_column_first`]).
+/// blocks take RustFFT's column-first form at either width, and three
+/// blocks take it at eight lanes: the radix pass over the parent in place
+/// ahead of the blocks, the slices transformed out of place into scratch,
+/// and one interleave pass back ([`blocks_column_first`]).
 ///
 /// Reports whether the dispatched width ran it.
 fn transform_via_base<
@@ -282,9 +282,11 @@ where
     } else {
         sinks.inner().len() == SINK_LANES
     });
-    // Three blocks read the parent directly at either width (a stride-three
-    // register from three-sample-apart windows); four gather at eight.
+    // Three blocks read the parent directly at four lanes (a stride-three
+    // register from three-sample-apart windows) and take the radix-3 pass
+    // ahead of them at eight; four gather at eight.
     let gathered_width = blocks == 4 && plan.native_eight_lanes();
+    let column_first_three = blocks == 3 && plan.native_eight_lanes();
     let scratch_len = n;
     <F as crate::application::execution::kernel::mixed_radix::MixedRadixScalar>::with_scratch(
         scratch_len,
@@ -314,7 +316,7 @@ where
                 0
             };
             let ran = if blocks == 8 {
-                eight_blocks_column_first::<
+                blocks_column_first::<
                     F,
                     INVERSE,
                     MEASURE,
@@ -323,6 +325,19 @@ where
                     BASE,
                     BLOCK_LANES,
                     TABLE_LANES,
+                    8,
+                >(data, scratch, plan, sinks)
+            } else if column_first_three {
+                blocks_column_first::<
+                    F,
+                    INVERSE,
+                    MEASURE,
+                    ROWS,
+                    ROW_LEN,
+                    BASE,
+                    BLOCK_LANES,
+                    TABLE_LANES,
+                    3,
                 >(data, scratch, plan, sinks)
             } else if blocks == 3 {
                 three_blocks_direct::<
@@ -411,26 +426,29 @@ where
     >(out, source, plan, sink)
 }
 
-/// Eight blocks under a column-first radix-8 decomposition, RustFFT's shape:
-/// the column pass runs over the parent in place ([`split_boundary::ColumnRadix8`]
-/// — eight registers `BASE` samples apart, the register radix-8, the twiddle
-/// `W_{8 BASE}^{q c}` after the butterfly from one chunk-major stream), each
-/// eighth then transforms out of place into scratch as a contiguous block,
-/// and one pass of fused four-way pair deinterleaves transposes the blocks
-/// back into the parent ([`split_boundary::InterleaveBlocks`]). Nine
-/// streams a pass. The placement is measured (ADR 0061): against the
-/// radix-8 sink over seven spectra it reads 17% under on the performance
-/// core and 4 to 5% under on the efficiency core at `f32` 2048, and
-/// against the column pass written into scratch with the blocks in place
-/// there 4% under on the performance core.
+/// `BLOCKS` blocks under a column-first radix-`BLOCKS` decomposition,
+/// RustFFT's shape: the column pass runs over the parent in place
+/// ([`split_boundary::ColumnPass`] — `BLOCKS` registers `BASE` samples
+/// apart, the register radix, the twiddle `W_{BLOCKS BASE}^{q c}` after the
+/// butterfly from one chunk-major stream), each slice then transforms out
+/// of place into scratch as a contiguous block, and one pass of pair
+/// interleaves transposes the blocks back into the parent
+/// ([`split_boundary::InterleaveBlocks`]). `BLOCKS + 1` streams a pass. At
+/// eight the placement is measured (ADR 0061): against the radix-8 sink
+/// over seven spectra it reads 17% under on the performance core and 4 to
+/// 5% under on the efficiency core at `f32` 2048, and against the column
+/// pass written into scratch with the blocks in place there 4% under on the
+/// performance core. At three it serves 384 at eight lanes in place of the
+/// stride-three parent read.
 ///
-/// For `n = c + BASE r` and `k = q + 8 p`, the DFT phase factors as
-/// `rq/8 + cq/(8 BASE) + cp/BASE`: the radix-8 across blocks, its twiddle,
-/// then one base transform. Scratch block `q` holds `X[8 p + q]` and the
-/// final interleave restores natural order. The inverse changes the phase
-/// sign; normalization belongs to the public plan. Independent direct-sum
-/// and exact-permutation tests cover these conventions.
-fn eight_blocks_column_first<
+/// For `n = c + BASE r` and `k = q + BLOCKS p`, the DFT phase factors as
+/// `rq/BLOCKS + cq/(BLOCKS BASE) + cp/BASE`: the radix across blocks, its
+/// twiddle, then one base transform. Scratch block `q` holds
+/// `X[BLOCKS p + q]` and the final interleave restores natural order. The
+/// inverse changes the phase sign; normalization belongs to the public plan.
+/// Independent direct-sum and exact-permutation tests cover these
+/// conventions.
+fn blocks_column_first<
     F,
     const INVERSE: bool,
     const MEASURE: bool,
@@ -439,6 +457,7 @@ fn eight_blocks_column_first<
     const BASE: usize,
     const BLOCK_LANES: usize,
     const TABLE_LANES: usize,
+    const BLOCKS: usize,
 >(
     data: &mut [F::Complex],
     scratch: &mut [F::Complex],
@@ -459,7 +478,7 @@ where
     };
     let passed = at_plan_width::<F, _>(
         eight_lanes,
-        split_boundary::ColumnRadix8::<F, _, BLOCK_LANES, INVERSE> {
+        split_boundary::ColumnPass::<F, _, BLOCKS, BLOCK_LANES, INVERSE> {
             source: instance_major::SelfSplit::<1, 0>,
             dst: lanes_mut::<F>(data),
             twiddles: sinks.rows(),
@@ -484,7 +503,7 @@ where
     transformed
         && at_plan_width::<F, _>(
             eight_lanes,
-            split_boundary::InterleaveBlocks::<F, BLOCK_LANES> {
+            split_boundary::InterleaveBlocks::<F, BLOCKS, BLOCK_LANES> {
                 src: lanes::<F>(scratch),
                 dst: lanes_mut::<F>(data),
             },
