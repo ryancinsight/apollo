@@ -355,6 +355,11 @@ Change-class tags: [patch] backward-compatible fix, [minor] additive non-breakin
 
 ### Fixed
 
+- [patch] `apollo-fft` Stockham entries (`forward_with_scratch`, its sized form,
+  `transform_impl`) assert in every build that `data` holds `n`, `scratch` at
+  least `n` and the twiddle table at least `n - 1` entries before the stage
+  loop slices them unchecked; a short table or scratch from a safe caller was
+  release-mode undefined behaviour and is now a panic naming the lengths.
 - [patch] `FftPlan1D`/`StaticFftPlan1D` `*_leto_inplace` entry points accept
   every valid Leto layout: a C-dense view transforms in place and a strided
   view is staged through the rank-one thread-local scratch role and written
