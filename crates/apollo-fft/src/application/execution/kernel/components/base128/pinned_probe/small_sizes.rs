@@ -46,8 +46,9 @@ fn sweep_warm_up_config() -> BenchmarkConfig {
         .expect("invariant: both budgets above are non-zero")
 }
 
-const SMALL_SIZE_CASES: [usize; 17] = [
-    8, 16, 32, 64, 128, 256, 512, 1024, 2048, 4096, 32768, 100, 180, 384, 1000, 101, 1009,
+const SMALL_SIZE_CASES: [usize; 19] = [
+    8, 16, 32, 64, 128, 256, 512, 1024, 2048, 4096, 8192, 16384, 32768, 100, 180, 384, 1000, 101,
+    1009,
 ];
 const LIVENESS_CASES: [usize; 3] = [16, 32, 64];
 
