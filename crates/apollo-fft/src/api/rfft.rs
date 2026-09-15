@@ -1,7 +1,7 @@
 //! Forward real FFT API functions.
 
 use crate::application::execution::kernel::mixed_radix::scalar::plan_scratch::PlanScratch;
-use crate::application::execution::plan::fft::real_storage::RealFftData;
+use crate::application::execution::plan::fft::real_storage::{half_plane, RealFftData};
 use crate::application::orchestration::cache::plans::PlanCacheProvider;
 use crate::domain::metadata::shape::{Shape1D, Shape2D, Shape3D};
 use apollo_leto_interop::view_cow;
@@ -194,6 +194,11 @@ where
 }
 
 /// Forward 2D FFT of a real array using generic storage dispatch.
+///
+/// Where the real split admits `ny`, the spectrum is computed through the
+/// half-spectrum pair ([`fft_2d_array_half_into`]) and expanded in place, so
+/// the repeated half of every row costs a copy rather than a transform; other
+/// lengths widen the field to complex. One allocation, the returned spectrum.
 #[must_use]
 pub fn fft_2d_array<T>(field: &Array2<T>) -> Array2<Complex<T::PlanScalar>>
 where
@@ -202,14 +207,18 @@ where
     <T as RealFftData>::PlanScalar: PlanCacheProvider,
 {
     let [nx, ny] = field.shape();
-    T::forward_2d(
-        T::get_2d_plan(Shape2D::new(nx, ny).expect("fft_2d_array requires non-zero dimensions"))
-            .as_ref(),
-        field,
-    )
+    let plan =
+        T::get_2d_plan(Shape2D::new(nx, ny).expect("fft_2d_array requires non-zero dimensions"));
+    if let Some(out) = half_plane::forward_owned_via_split::<T>(plan.as_ref(), field) {
+        return out;
+    }
+    T::forward_2d(plan.as_ref(), field)
 }
 
 /// Forward 2D FFT of a real array into caller-owned typed spectrum storage.
+///
+/// Routed like [`fft_2d_array`] where the split admits `ny` and `out` is
+/// C-contiguous; allocates nothing on a warm plan.
 pub fn fft_2d_array_into<T>(field: &Array2<T>, out: &mut Array2<Complex<T::PlanScalar>>)
 where
     T: RealFftData + PlanCacheProvider,
@@ -217,14 +226,13 @@ where
     <T as RealFftData>::PlanScalar: PlanCacheProvider,
 {
     let [nx, ny] = field.shape();
-    T::forward_2d_into(
-        T::get_2d_plan(
-            Shape2D::new(nx, ny).expect("fft_2d_array_into requires non-zero dimensions"),
-        )
-        .as_ref(),
-        field,
-        out,
+    let plan = T::get_2d_plan(
+        Shape2D::new(nx, ny).expect("fft_2d_array_into requires non-zero dimensions"),
     );
+    if half_plane::forward_full_via_split::<T>(plan.as_ref(), field, out) {
+        return;
+    }
+    T::forward_2d_into(plan.as_ref(), field, out);
 }
 
 /// Forward 2D FFT of a real array into its `(nx, ny/2 + 1)` half spectrum.

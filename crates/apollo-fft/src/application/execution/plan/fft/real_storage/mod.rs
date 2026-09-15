@@ -20,7 +20,7 @@ use leto::{Array1, Array2, Array3};
 
 mod compact;
 pub(super) mod fill;
-mod half_plane;
+pub(crate) mod half_plane;
 mod half_volume;
 mod precise;
 mod reduced;

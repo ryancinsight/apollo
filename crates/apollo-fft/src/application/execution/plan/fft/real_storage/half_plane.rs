@@ -12,6 +12,16 @@
 //! a real row, so the per-row real inverse applies, and it agrees with the
 //! real part of the full complex inverse of the Hermitian completion for any
 //! half spectrum, not only for one a real field produced.
+//!
+//! The full-spectrum entries route through the pair where the split admits
+//! `ny`. The forwards compute the half plane in the rank-one staging role and
+//! write the `(nx, ny)` output once, in parallel over blocks of rows, each row
+//! its head followed by the conjugate mirror of its partner row's head — the
+//! same pass whether the output is caller storage or fresh capacity, so the
+//! owned form never fills its plane twice (at short rows a zero-fill of a
+//! fresh plane costs as much as the transform, and the page faults a fresh
+//! plane pays are what the parallel pass spreads). The inverses pack the
+//! lower `ny/2 + 1` bins of each row and read nothing else.
 
 use super::{split, RealFftData};
 use crate::application::execution::kernel::mixed_radix::scalar::plan_scratch::{
@@ -20,6 +30,7 @@ use crate::application::execution::kernel::mixed_radix::scalar::plan_scratch::{
 use crate::application::execution::plan::fft::dimension_2d::FftPlan2D;
 use crate::application::execution::plan::fft::lanes;
 use apollo_leto_interop::view_cow;
+use core::mem::MaybeUninit;
 use eunomia::Complex;
 use leto::Array2;
 
@@ -33,7 +44,6 @@ pub(super) fn forward<T>(
     Complex<T::PlanScalar>: PlanScratch,
 {
     let (nx, ny) = plan.dimensions();
-    let depth = plan.ny_c();
     assert_eq!(
         input.shape(),
         [nx, ny],
@@ -41,17 +51,60 @@ pub(super) fn forward<T>(
     );
     assert_eq!(
         output.shape(),
-        [nx, depth],
+        [nx, plan.ny_c()],
         "forward_2d_half_into: the half spectrum must be (nx, ny/2 + 1)"
     );
     let source = view_cow(&input.view());
     let spectrum = output
         .as_slice_mut()
         .expect("forward_2d_half_into: the half spectrum must be C-contiguous");
+    forward_half(plan, &source, spectrum);
+}
 
+/// See [`RealFftData::inverse_2d_half_into`].
+pub(super) fn inverse<T>(
+    plan: &FftPlan2D<T::PlanScalar>,
+    spectrum: &mut Array2<Complex<T::PlanScalar>>,
+    output: &mut Array2<T>,
+) where
+    T: RealFftData,
+    Complex<T::PlanScalar>: PlanScratch,
+{
+    let (nx, ny) = plan.dimensions();
+    assert_eq!(
+        spectrum.shape(),
+        [nx, plan.ny_c()],
+        "inverse_2d_half_into: the half spectrum must be (nx, ny/2 + 1)"
+    );
+    assert_eq!(
+        output.shape(),
+        [nx, ny],
+        "inverse_2d_half_into: the output must be the plan's shape"
+    );
+    let bins = spectrum
+        .as_slice_mut()
+        .expect("inverse_2d_half_into: the half spectrum must be C-contiguous");
+    let values = output
+        .as_slice_mut()
+        .expect("inverse_2d_half_into: the output must be C-contiguous");
+    inverse_half(plan, bins, values);
+}
+
+/// The forward of the `(nx, ny)` real plane `source` into the C-order
+/// `(nx, ny/2 + 1)` half plane `spectrum`, both of the plan's shape.
+fn forward_half<T>(
+    plan: &FftPlan2D<T::PlanScalar>,
+    source: &[T],
+    spectrum: &mut [Complex<T::PlanScalar>],
+) where
+    T: RealFftData,
+    Complex<T::PlanScalar>: PlanScratch,
+{
+    let (_, ny) = plan.dimensions();
+    let depth = plan.ny_c();
     if T::real_split_applies(ny) {
         let half_lane = plan.half_y_lane::<true>();
-        lanes::paired(spectrum, depth, &source, ny, |bins_group, reals_group| {
+        lanes::paired(spectrum, depth, source, ny, |bins_group, reals_group| {
             for (bins, reals) in bins_group
                 .chunks_exact_mut(depth)
                 .zip(reals_group.chunks_exact(ny))
@@ -66,7 +119,7 @@ pub(super) fn forward<T>(
         });
     } else {
         let y_lane = plan.y_lane::<true>();
-        lanes::paired(spectrum, depth, &source, ny, |bins_group, reals_group| {
+        lanes::paired(spectrum, depth, source, ny, |bins_group, reals_group| {
             // The rank-two staging role is one no pass of this plan borrows
             // (the x pass below uses the 2-D role), and every task in this
             // group is disjoint and runs on its own thread at most once at a
@@ -90,41 +143,25 @@ pub(super) fn forward<T>(
     plan.x_axis_inplace::<true>(spectrum, depth);
 }
 
-/// See [`RealFftData::inverse_2d_half_into`].
-pub(super) fn inverse<T>(
+/// The inverse of the C-order `(nx, ny/2 + 1)` half plane `bins`, consumed as
+/// scratch, into the `(nx, ny)` real plane `values`.
+fn inverse_half<T>(
     plan: &FftPlan2D<T::PlanScalar>,
-    spectrum: &mut Array2<Complex<T::PlanScalar>>,
-    output: &mut Array2<T>,
+    bins: &mut [Complex<T::PlanScalar>],
+    values: &mut [T],
 ) where
     T: RealFftData,
     Complex<T::PlanScalar>: PlanScratch,
 {
-    let (nx, ny) = plan.dimensions();
+    let (_, ny) = plan.dimensions();
     let depth = plan.ny_c();
-    assert_eq!(
-        spectrum.shape(),
-        [nx, depth],
-        "inverse_2d_half_into: the half spectrum must be (nx, ny/2 + 1)"
-    );
-    assert_eq!(
-        output.shape(),
-        [nx, ny],
-        "inverse_2d_half_into: the output must be the plan's shape"
-    );
-    let bins = spectrum
-        .as_slice_mut()
-        .expect("inverse_2d_half_into: the half spectrum must be C-contiguous");
-    let values = output
-        .as_slice_mut()
-        .expect("inverse_2d_half_into: the output must be C-contiguous");
-
     plan.x_axis_inplace::<false>(bins, depth);
     if T::real_split_applies(ny) {
         // Two passes, because the rows on the two sides differ in length and
         // both are written: the retangle and half-length inverse in place on
         // the spectrum's rows, then the unpack into the output's.
         let half_lane = plan.half_y_lane::<false>();
-        lanes::each(bins, depth, |lane| {
+        lanes::each(bins, depth, |_, lane| {
             split::inverse_packed::<T>(lane, ny, plan.split_twiddles().iter().copied(), &half_lane);
         });
         let packed = ny / 2;
@@ -165,5 +202,339 @@ pub(super) fn inverse<T>(
                 }
             });
         });
+    }
+}
+
+/// The full `(nx, ny)` forward through the pair into caller storage: the half
+/// plane is computed in the rank-one staging role and `output` written once
+/// from it, so every row's repeated half costs a copy rather than a transform.
+///
+/// Returns whether it ran, which it does when the split admits `ny` and
+/// `output` is a C-contiguous array of the plan's shape; a caller takes the
+/// widening path otherwise without probing admissibility itself.
+pub(crate) fn forward_full_via_split<T>(
+    plan: &FftPlan2D<T::PlanScalar>,
+    input: &Array2<T>,
+    output: &mut Array2<Complex<T::PlanScalar>>,
+) -> bool
+where
+    T: RealFftData,
+    Complex<T::PlanScalar>: PlanScratch,
+{
+    let (nx, ny) = plan.dimensions();
+    let depth = plan.ny_c();
+    if !T::real_split_applies(ny) || input.shape() != [nx, ny] || output.shape() != [nx, ny] {
+        return false;
+    }
+    let Some(full) = output.as_slice_mut() else {
+        return false;
+    };
+    let source = view_cow(&input.view());
+    with_staged_half(plan, &source, nx * depth, |half| {
+        write_expanded(full, half, nx, ny, depth);
+    });
+    true
+}
+
+/// The full `(nx, ny)` forward through the pair into an owned plane, written
+/// exactly once into fresh capacity: the call allocates only its returned
+/// plane and never fills it twice.
+///
+/// Returns `None` where the split does not admit `ny`, `input` is not the
+/// plan's shape, or the plane is under [`OWNED_ROUTE_BYTES`]: unlike the
+/// caller-owned form this one pays the half plane's staging round trip on
+/// top of the write, and a fresh plane's page faults, which the parallel
+/// pass spreads over the workers, are what buys that back — so below the
+/// floor the widened route's single fused write stays ahead.
+pub(crate) fn forward_owned_via_split<T>(
+    plan: &FftPlan2D<T::PlanScalar>,
+    input: &Array2<T>,
+) -> Option<Array2<Complex<T::PlanScalar>>>
+where
+    T: RealFftData,
+    Complex<T::PlanScalar>: PlanScratch,
+{
+    let (nx, ny) = plan.dimensions();
+    let depth = plan.ny_c();
+    if !T::real_split_applies(ny)
+        || input.shape() != [nx, ny]
+        || nx * ny * core::mem::size_of::<Complex<T::PlanScalar>>() < OWNED_ROUTE_BYTES
+    {
+        return None;
+    }
+    let source = view_cow(&input.view());
+    let full = with_staged_half(plan, &source, nx * depth, |half| {
+        expanded_plane(half, nx, ny, depth)
+    });
+    Some(Array2::from_shape_vec([nx, ny], full).expect("invariant: nx * ny elements were written"))
+}
+
+/// The `(nx, ny)` spectrum whose half plane is `half`, in fresh capacity
+/// written exactly once.
+fn expanded_plane<P>(half: &[Complex<P>], nx: usize, ny: usize, depth: usize) -> Vec<Complex<P>>
+where
+    P: crate::application::execution::kernel::mixed_radix::MixedRadixScalar<Complex = Complex<P>>,
+{
+    let mut full = Vec::with_capacity(nx * ny);
+    write_expanded(
+        &mut full.spare_capacity_mut()[..nx * ny],
+        half,
+        nx,
+        ny,
+        depth,
+    );
+    // SAFETY: `write_expanded` sets every one of the `nx * ny` slots of the
+    // spare capacity it was handed — each row's `depth` head bins and its
+    // `ny - depth` mirror bins, over every row of the plane — before this
+    // point, and `full` held no elements before it.
+    unsafe { full.set_len(nx * ny) };
+    full
+}
+
+/// Runs `consumer` over the half plane of `source`, held in the rank-one
+/// staging role.
+///
+/// No pass of the 2-D plan borrows that role (the x pass takes the 2-D role,
+/// the split rows none, the refused-length rows the rank-two role), so the
+/// half stays live while the output is written from it, without a fourth
+/// full-plane scratch.
+fn with_staged_half<T, R>(
+    plan: &FftPlan2D<T::PlanScalar>,
+    source: &[T],
+    len: usize,
+    consumer: impl FnOnce(&[Complex<T::PlanScalar>]) -> R,
+) -> R
+where
+    T: RealFftData,
+    Complex<T::PlanScalar>: PlanScratch,
+{
+    with_view_staging::<Complex<T::PlanScalar>, 1, _>(len, |half| {
+        forward_half(plan, source, half);
+        consumer(half)
+    })
+}
+
+/// The full inverse reading only the lower `ny/2 + 1` bins of each row of
+/// `spectrum`, which it consumes as scratch: the rows are packed in place into
+/// the half plane at the front and the pair's inverse runs on it.
+///
+/// Returns whether it ran (the split admits `ny`, both arrays C-contiguous and
+/// of the plan's shape).
+pub(crate) fn inverse_spectrum_via_split<T>(
+    plan: &FftPlan2D<T::PlanScalar>,
+    spectrum: &mut Array2<Complex<T::PlanScalar>>,
+    output: &mut Array2<T>,
+) -> bool
+where
+    T: RealFftData,
+    Complex<T::PlanScalar>: PlanScratch,
+{
+    let (nx, ny) = plan.dimensions();
+    let depth = plan.ny_c();
+    if !T::real_split_applies(ny) || spectrum.shape() != [nx, ny] || output.shape() != [nx, ny] {
+        return false;
+    }
+    let (Some(full), Some(values)) = (spectrum.as_slice_mut(), output.as_slice_mut()) else {
+        return false;
+    };
+    pack_half_plane_in_place(full, nx, ny, depth);
+    inverse_half(plan, &mut full[..nx * depth], values);
+    true
+}
+
+/// [`inverse_spectrum_via_split`] over a borrowed spectrum, packing the lower
+/// bins into the front of the caller's `scratch`.
+pub(crate) fn inverse_into_via_split<T>(
+    plan: &FftPlan2D<T::PlanScalar>,
+    input: &Array2<Complex<T::PlanScalar>>,
+    output: &mut Array2<T>,
+    scratch: &mut Array2<Complex<T::PlanScalar>>,
+) -> bool
+where
+    T: RealFftData,
+    Complex<T::PlanScalar>: PlanScratch,
+{
+    let (nx, ny) = plan.dimensions();
+    let depth = plan.ny_c();
+    if !T::real_split_applies(ny)
+        || input.shape() != [nx, ny]
+        || output.shape() != [nx, ny]
+        || scratch.shape() != [nx, ny]
+    {
+        return false;
+    }
+    let (Some(full), Some(values), Some(work)) = (
+        input.as_slice(),
+        output.as_slice_mut(),
+        scratch.as_slice_mut(),
+    ) else {
+        return false;
+    };
+    let half = &mut work[..nx * depth];
+    pack_half_plane(full, half, ny, depth);
+    inverse_half(plan, half, values);
+    true
+}
+
+/// [`inverse_spectrum_via_split`] over a borrowed spectrum into an owned real
+/// plane: the lower bins are packed into the rank-one staging role, so the
+/// call allocates exactly its returned plane.
+///
+/// Returns `None` where the split does not admit `ny` or `input` is not a
+/// C-contiguous array of the plan's shape.
+pub(crate) fn inverse_owned_via_split<T>(
+    plan: &FftPlan2D<T::PlanScalar>,
+    input: &Array2<Complex<T::PlanScalar>>,
+) -> Option<Array2<T>>
+where
+    T: RealFftData,
+    Complex<T::PlanScalar>: PlanScratch,
+{
+    let (nx, ny) = plan.dimensions();
+    let depth = plan.ny_c();
+    if !T::real_split_applies(ny) || input.shape() != [nx, ny] {
+        return None;
+    }
+    let full = input.as_slice()?;
+    let mut output = Array2::from_elem([nx, ny], T::from_spectrum(Complex::default()));
+    let values = output
+        .as_slice_mut()
+        .expect("invariant: a freshly built plane is C-contiguous");
+    // The rank-one staging role is free here for the reason `with_staged_half`
+    // gives, and the inverse borrows nothing of it beyond the pack.
+    with_view_staging::<Complex<T::PlanScalar>, 1, _>(nx * depth, |half| {
+        pack_half_plane(full, half, ny, depth);
+        inverse_half(plan, half, values);
+    });
+    Some(output)
+}
+
+/// A place the expansion writes one bin into: an initialized bin of caller
+/// storage, or a slot of fresh capacity.
+trait Slot<C> {
+    fn set(&mut self, value: C);
+}
+
+impl<C> Slot<C> for C {
+    #[inline]
+    fn set(&mut self, value: C) {
+        *self = value;
+    }
+}
+
+impl<C> Slot<C> for MaybeUninit<C> {
+    #[inline]
+    fn set(&mut self, value: C) {
+        self.write(value);
+    }
+}
+
+/// Writes the `(nx, ny)` spectrum whose half plane is `half` into `rows`,
+/// every slot exactly once: row `i` is row `i` of the half followed by the
+/// mirror `X[i, ny - j] = conj(X[(nx - i) % nx, j])` for `j = 1..ny/2`.
+///
+/// Parallel over blocks of about [`EXPANSION_BLOCK_BYTES`] of rows — enough
+/// rows that scheduling a task costs less than the rows it writes, which at
+/// the shortest rows the split admits is thousands of them — with the
+/// remainder past the last whole block written here. The blocks are what
+/// spread a fresh plane's page faults over the workers.
+fn write_expanded<P, S>(rows: &mut [S], half: &[Complex<P>], nx: usize, ny: usize, depth: usize)
+where
+    P: crate::application::execution::kernel::mixed_radix::MixedRadixScalar<Complex = Complex<P>>,
+    S: Slot<Complex<P>> + Send + 'static,
+{
+    debug_assert_eq!(rows.len(), nx * ny);
+    debug_assert_eq!(half.len(), nx * depth);
+    let mirrored = ny - depth;
+    let write_row = |i: usize, row: &mut [S]| {
+        let head = &half[i * depth..(i + 1) * depth];
+        let mirror = (nx - i) % nx;
+        let partner = &half[mirror * depth + 1..=mirror * depth + mirrored];
+        let (front, tail) = row.split_at_mut(depth);
+        for (slot, &bin) in front.iter_mut().zip(head) {
+            slot.set(bin);
+        }
+        // `tail` is `conj(partner[mirrored - 1])`, ..., `conj(partner[0])`.
+        for (slot, bin) in tail.iter_mut().zip(partner.iter().rev()) {
+            slot.set(Complex::new(bin.re, -bin.im));
+        }
+    };
+    let rows_per_block = (EXPANSION_BLOCK_BYTES / (ny * core::mem::size_of::<S>())).max(1);
+    let block = rows_per_block * ny;
+    let scheduled = rows.len() / block * block;
+    let (blocks, remainder) = rows.split_at_mut(scheduled);
+    lanes::each(blocks, block, |b, rows| {
+        for (k, row) in rows.chunks_exact_mut(ny).enumerate() {
+            write_row(b * rows_per_block + k, row);
+        }
+    });
+    for (k, row) in remainder.chunks_exact_mut(ny).enumerate() {
+        write_row(scheduled / ny + k, row);
+    }
+}
+
+/// Bytes of rows one expansion task writes.
+const EXPANSION_BLOCK_BYTES: usize = 64 << 10;
+
+/// Output bytes from which the owned forward takes the pair.
+///
+/// Measured on the census host (`output/probe2d`, 2026-09-15): against the
+/// widened route the owned pair ran 0.86-0.97x at 1-2 MiB planes, 1.01-1.41x
+/// at 4 MiB and 1.57x at 8 MiB, the fixed staging round trip losing to the
+/// parallel fault spread as the plane grows; the caller-owned form, which
+/// pays neither, wins at every shape and has no floor.
+const OWNED_ROUTE_BYTES: usize = 4 << 20;
+
+/// Packs the lower `depth` bins of every row of the `(nx, ny)` spectrum `full`
+/// into the `(nx, depth)` half plane at its front, in place.
+///
+/// Row `i`'s packed slot ends before row `i + 1`'s bins begin, so walking the
+/// rows upward overwrites nothing unread.
+fn pack_half_plane_in_place<C: Copy>(full: &mut [C], nx: usize, ny: usize, depth: usize) {
+    debug_assert_eq!(full.len(), nx * ny);
+    for i in 1..nx {
+        full.copy_within(i * ny..i * ny + depth, i * depth);
+    }
+}
+
+/// Packs the lower `depth` bins of every row of the `(nx, ny)` spectrum `full`
+/// into the `(nx, depth)` half plane `half`.
+fn pack_half_plane<C: Copy + Send + Sync>(full: &[C], half: &mut [C], ny: usize, depth: usize) {
+    lanes::paired(half, depth, full, ny, |halves, rows| {
+        for (packed, row) in halves.chunks_exact_mut(depth).zip(rows.chunks_exact(ny)) {
+            packed.copy_from_slice(&row[..depth]);
+        }
+    });
+}
+
+#[cfg(test)]
+mod tests {
+    use super::expanded_plane;
+    use eunomia::Complex;
+
+    /// Every bin of the fresh plane is the half's or a mirror of it, for an
+    /// odd `nx`, an even one (whose Nyquist row mirrors itself) and one row —
+    /// small enough for miri to walk the `set_len` site's proof.
+    #[test]
+    fn the_fresh_plane_is_the_half_and_its_mirrors() {
+        for (nx, ny) in [(5usize, 8usize), (4, 8), (1, 4), (6, 4)] {
+            let depth = ny / 2 + 1;
+            let half: Vec<Complex<f64>> = (0..nx * depth)
+                .map(|k| Complex::new(k as f64, 0.5 - k as f64))
+                .collect();
+            let full = expanded_plane(&half, nx, ny, depth);
+            assert_eq!(full.len(), nx * ny);
+            for i in 0..nx {
+                for j in 0..ny {
+                    let want = if j < depth {
+                        half[i * depth + j]
+                    } else {
+                        let bin = half[((nx - i) % nx) * depth + ny - j];
+                        Complex::new(bin.re, -bin.im)
+                    };
+                    assert_eq!(full[i * ny + j], want, "{nx}x{ny} bin ({i}, {j})");
+                }
+            }
+        }
     }
 }
