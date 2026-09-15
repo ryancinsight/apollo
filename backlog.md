@@ -141,6 +141,14 @@
 - **Acceptance:** agreement with the dynamic split forms at every admitted `N`; `cargo-semver-checks` names the bound change as the one [major] surface; migration guide for the two entry points.
 - **Risk / change class:** [major]; ADR for the bound choice.
 
+<a id="apollo-real-3d-full-routing"></a>
+## APOLLO-REAL-3D-FULL-ROUTING — Route the full-spectrum 3-D real entries through the half volume [minor] [perf] — in-progress
+- **Integrator:** claude-fable-5.1 (session 5bed7001); **branch:** `perf/apollo-real-3d-full-routing` (lane apollo-route, stacked on #474); **lease:** `crates/apollo-fft/src/application/execution/plan/fft/real_storage/{half_volume.rs,mod.rs}`, `crates/apollo-fft/src/api/{rfft,irfft}.rs`, `crates/apollo-fft/tests/real_half_api/volume.rs`, `crates/apollo-fft/benches/engine_census.rs`, this entry; **last-update:** 2026-09-15.
+- **Finding:** `fft_3d_array`, `fft_3d_array_into`, `ifft_3d_array`, `ifft_3d_array_into` and `ifft_3d_array_into_spectrum_scratch` widen the field to complex and transform every z lane at full length, while `fft_3d_array_half_into`/`ifft_3d_array_half_into` (#a8cd1c94) and, since #474, the 2-D full-spectrum entries take the half route.
+- **Outcome:** the five entries route through the half volume where the split admits `nz`: the forwards stage the half volume in the 2-D scratch role (free once the split applies — the x and y passes hold the two 3-D roles and only the refused-length z lanes borrow the 2-D one) and write the `(nx, ny, nz)` output once in parallel lane blocks, into caller storage or fresh capacity through the #474 slot pass; the inverses pack the lower `nz/2 + 1` bins of each lane, in place, into caller scratch, or into the 2-D role.
+- **Acceptance:** every routed form bit-identical to the half pair over the split shapes of `tests/real_half_api/volume.rs`; caller-owned forms allocate nothing once warm, owned forms exactly their returned volume; the census gains the widened routes as a third arm beside `real_*_3d_f64` rows and no routed row loses to its widened arm by the minimum — an owned form that loses below a measured volume size takes a floor like `half_plane::OWNED_ROUTE_BYTES`, measured first with the `output/probe2d` method.
+- **Risk / change class:** [minor]; behaviour-preserving within rounding on the routed entries, one `set_len` site under the same proof and miri-scale test as #474.
+
 # Done
 
 One line an item: the anchor, the identity, the outcome with its commit or PR; the narrative lives in git.
