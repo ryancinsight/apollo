@@ -1,5 +1,12 @@
 # Apollo Backlog
 
+<a id="apollo-real-split-twiddles"></a>
+
+## APOLLO-REAL-SPLIT-TWIDDLES-2026-09-11 — The real split recomputes its twiddles per lane [patch] [perf] — done 2026-09-11
+
+- a07d0a56: untangle and retangle take their twiddles from an iterator; `FftPlan3D` keeps the table for its lanes. Quiet crossover runs, complex arms flat as control: real pair 9.9 to 8.2 µs at 16³, 36.1 to 31.4 at 24³, 40.9 to 37.1–38.3 at 32×32×16; 32³ and 48³ within noise.
+- The acceptance set the serial 32³ real pair against the serial complex 32×32×16 pair as equal work, but the real pair splits 32,768 reals, twice that volume: its premise was wrong. The 32³ gap stays with [#apollo-lane-parallel-threshold](#apollo-lane-parallel-threshold).
+
 <a id="apollo-lane-parallel-threshold"></a>
 
 ## APOLLO-LANE-PARALLEL-THRESHOLD-2026-09-11 — Lane passes under 32,768 elements run on one thread whether or not that is faster [patch] [perf] — in-progress
@@ -11,6 +18,8 @@
   16,384-element passes go parallel (46.4 against 54.5 in a loaded run). One element count cannot serve both,
   so the constant stays at 32,768. **Next:** a decision keyed to each pass's lane length and task count, read
   by the same probe.
+- Checked against per-lane twiddle work ([#apollo-real-split-twiddles](#apollo-real-split-twiddles)): the table cut the real pair
+  13–17% at 16³ and 24³ but left serial 32³ within noise, so the 32³ gap is this threshold.
 - **Finding.** `lanes::PARALLEL_THRESHOLD = 32_768` total complex elements decides
   serial against moirai-parallel for every lane pass, and no measurement is recorded
   for it (it arrived as the "existing multidimensional crossover", 9db2f6ea). The real

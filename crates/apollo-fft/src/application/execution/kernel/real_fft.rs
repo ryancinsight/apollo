@@ -103,8 +103,11 @@ impl RealFft for f32 {
 /// ## Panics
 ///
 /// Panics if `out.len() < n / 2 + 1` or if `n` is not even.
-pub(crate) fn untangle_real_half<T>(out: &mut [eunomia::Complex<T>], n: usize)
-where
+pub(crate) fn untangle_real_half<T>(
+    out: &mut [eunomia::Complex<T>],
+    n: usize,
+    twiddles: impl IntoIterator<Item = eunomia::Complex<T>>,
+) where
     T: crate::application::execution::kernel::mixed_radix::MixedRadixScalar<
         Complex = eunomia::Complex<T>,
     >,
@@ -129,39 +132,25 @@ where
     out[0] = eunomia::Complex::new(z0.re + z0.im, zero);
     out[m] = eunomia::Complex::new(z0.re - z0.im, zero);
 
-    // Directly seed each short block, then advance in native precision. The
-    // restart bounds recurrence error by eight bins rather than N while
-    // amortizing each transcendental evaluation over the block. A retained
-    // twiddle table would remove the recurrence but add O(N) plan memory.
-    const TWIDDLE_RESTART_INTERVAL: usize = 8;
-    let scale = -core::f64::consts::TAU / n as f64;
-    let (step_sin, step_cos) = scale.sin_cos();
-    let (step_re, step_im) = (T::from_precise(step_cos), T::from_precise(step_sin));
-    let limit = m.div_ceil(2);
-    for block_start in (1..limit).step_by(TWIDDLE_RESTART_INTERVAL) {
-        let block_end = block_start
-            .saturating_add(TWIDDLE_RESTART_INTERVAL)
-            .min(limit);
-        let (seed_sin, seed_cos) = (scale * block_start as f64).sin_cos();
-        let (mut wr, mut wi) = (T::from_precise(seed_cos), T::from_precise(seed_sin));
+    let mut twiddles = twiddles.into_iter();
+    for k in 1..m.div_ceil(2) {
+        let w = twiddles
+            .next()
+            .expect("invariant: the split twiddles cover every bin pair below N/4");
+        let (wr, wi) = (w.re, w.im);
+        let a = out[k];
+        let b = out[m - k];
 
-        for k in block_start..block_end {
-            let a = out[k];
-            let b = out[m - k];
+        let fe_re = (a.re + b.re) / two;
+        let fe_im = (a.im - b.im) / two;
+        let fo_re = (a.im + b.im) / two;
+        let fo_im = (b.re - a.re) / two;
 
-            let fe_re = (a.re + b.re) / two;
-            let fe_im = (a.im - b.im) / two;
-            let fo_re = (a.im + b.im) / two;
-            let fo_im = (b.re - a.re) / two;
+        let t_re = fo_re * wr - fo_im * wi;
+        let t_im = fo_re * wi + fo_im * wr;
 
-            let t_re = fo_re * wr - fo_im * wi;
-            let t_im = fo_re * wi + fo_im * wr;
-
-            out[k] = eunomia::Complex::new(fe_re + t_re, fe_im + t_im);
-            out[m - k] = eunomia::Complex::new(fe_re - t_re, t_im - fe_im);
-
-            (wr, wi) = (wr * step_re - wi * step_im, wr * step_im + wi * step_re);
-        }
+        out[k] = eunomia::Complex::new(fe_re + t_re, fe_im + t_im);
+        out[m - k] = eunomia::Complex::new(fe_re - t_re, t_im - fe_im);
     }
 
     if m % 2 == 0 && m >= 2 {
@@ -202,8 +191,11 @@ where
 /// ## Panics
 ///
 /// Panics if `bins.len() < n / 2 + 1` or if `n` is odd.
-pub(crate) fn retangle_real_half<T>(bins: &mut [eunomia::Complex<T>], n: usize)
-where
+pub(crate) fn retangle_real_half<T>(
+    bins: &mut [eunomia::Complex<T>],
+    n: usize,
+    twiddles: impl IntoIterator<Item = eunomia::Complex<T>>,
+) where
     T: crate::application::execution::kernel::mixed_radix::MixedRadixScalar<
         Complex = eunomia::Complex<T>,
     >,
@@ -226,43 +218,88 @@ where
     let (first, last) = (bins[0].re, bins[m].re);
     bins[0] = eunomia::Complex::new((first + last) / two, (first - last) / two);
 
-    // The untangle's schedule: seed each eight-bin block directly and advance
-    // in native precision, so the recurrence error is bounded by eight steps.
-    const TWIDDLE_RESTART_INTERVAL: usize = 8;
-    let scale = -core::f64::consts::TAU / n as f64;
-    let (step_sin, step_cos) = scale.sin_cos();
-    let (step_re, step_im) = (T::from_precise(step_cos), T::from_precise(step_sin));
-    let limit = m.div_ceil(2);
-    for block_start in (1..limit).step_by(TWIDDLE_RESTART_INTERVAL) {
-        let block_end = block_start
-            .saturating_add(TWIDDLE_RESTART_INTERVAL)
-            .min(limit);
-        let (seed_sin, seed_cos) = (scale * block_start as f64).sin_cos();
-        let (mut wr, mut wi) = (T::from_precise(seed_cos), T::from_precise(seed_sin));
+    let mut twiddles = twiddles.into_iter();
+    for k in 1..m.div_ceil(2) {
+        let w = twiddles
+            .next()
+            .expect("invariant: the split twiddles cover every bin pair below N/4");
+        let (wr, wi) = (w.re, w.im);
+        let a = bins[k];
+        let b = bins[m - k];
 
-        for k in block_start..block_end {
-            let a = bins[k];
-            let b = bins[m - k];
+        let fe_re = (a.re + b.re) / two;
+        let fe_im = (a.im - b.im) / two;
+        // (a - conj(b)) · conj(w) / 2
+        let d_re = a.re - b.re;
+        let d_im = a.im + b.im;
+        let fo_re = (d_re * wr + d_im * wi) / two;
+        let fo_im = (d_im * wr - d_re * wi) / two;
 
-            let fe_re = (a.re + b.re) / two;
-            let fe_im = (a.im - b.im) / two;
-            // (a - conj(b)) · conj(w) / 2
-            let d_re = a.re - b.re;
-            let d_im = a.im + b.im;
-            let fo_re = (d_re * wr + d_im * wi) / two;
-            let fo_im = (d_im * wr - d_re * wi) / two;
-
-            bins[k] = eunomia::Complex::new(fe_re - fo_im, fe_im + fo_re);
-            bins[m - k] = eunomia::Complex::new(fe_re + fo_im, fo_re - fe_im);
-
-            (wr, wi) = (wr * step_re - wi * step_im, wr * step_im + wi * step_re);
-        }
+        bins[k] = eunomia::Complex::new(fe_re - fo_im, fe_im + fo_re);
+        bins[m - k] = eunomia::Complex::new(fe_re + fo_im, fo_re - fe_im);
     }
 
     if m % 2 == 0 && m >= 2 {
         let mid = bins[m / 2];
         bins[m / 2] = eunomia::Complex::new(mid.re, -mid.im);
     }
+}
+
+/// The split twiddles `W_N^k` for `k = 1..⌈M/2⌉` (`M = N/2`), by the
+/// block-restarted recurrence [`untangle_real_half`] and
+/// [`retangle_real_half`] consume.
+///
+/// Each eight-bin block is seeded directly and advanced in native precision, so
+/// the recurrence error is bounded by eight steps rather than `N`, and every
+/// transcendental evaluation is amortized over its block. That suits one split
+/// of a length; many splits of one length — the z lanes of a 3-D half-spectrum
+/// transform — take [`split_twiddle_table`], which evaluates each twiddle once
+/// for all of them.
+pub(crate) fn split_twiddles<T>(n: usize) -> impl Iterator<Item = eunomia::Complex<T>>
+where
+    T: crate::application::execution::kernel::mixed_radix::MixedRadixScalar<
+        Complex = eunomia::Complex<T>,
+    >,
+{
+    const TWIDDLE_RESTART_INTERVAL: usize = 8;
+    let limit = (n / 2).div_ceil(2);
+    let scale = -core::f64::consts::TAU / n as f64;
+    let (step_sin, step_cos) = scale.sin_cos();
+    let (step_re, step_im) = (T::from_precise(step_cos), T::from_precise(step_sin));
+    let mut w = eunomia::Complex::new(T::from_precise(1.0), T::from_precise(0.0));
+    (1..limit).map(move |k| {
+        if (k - 1) % TWIDDLE_RESTART_INTERVAL == 0 {
+            let (sin, cos) = (scale * k as f64).sin_cos();
+            w = eunomia::Complex::new(T::from_precise(cos), T::from_precise(sin));
+        }
+        let current = w;
+        w = eunomia::Complex::new(
+            w.re * step_re - w.im * step_im,
+            w.re * step_im + w.im * step_re,
+        );
+        current
+    })
+}
+
+/// The split twiddles for length `n`, each evaluated directly: `⌈N/4⌉ - 1`
+/// entries, the same `W_N^k` [`split_twiddles`] yields.
+///
+/// A plan that runs many real splits of one length keeps this, so the
+/// transcendental evaluations happen once per plan rather than once per split.
+pub(crate) fn split_twiddle_table<T>(n: usize) -> Box<[eunomia::Complex<T>]>
+where
+    T: crate::application::execution::kernel::mixed_radix::MixedRadixScalar<
+        Complex = eunomia::Complex<T>,
+    >,
+{
+    let limit = (n / 2).div_ceil(2);
+    let scale = -core::f64::consts::TAU / n as f64;
+    (1..limit)
+        .map(|k| {
+            let (sin, cos) = (scale * k as f64).sin_cos();
+            eunomia::Complex::new(T::from_precise(cos), T::from_precise(sin))
+        })
+        .collect()
 }
 
 /// Mirrors the `N/2 + 1` independent bins over the upper half, in place.
