@@ -12,14 +12,6 @@
 - Acceptance: upstream constructs a valid receiver or removes the receiver requirement, with an adversarial implementation test and Miri evidence; Apollo advances only to a corrected published commit.
 - Blocker: separate unpublished provider migration; re-open when its corrected Git revision is available. Basis: `src/sync/scoped/partition/executor.rs:149–215` in Melinoe `af052fc`.
 
-<a id="APOLLO-WASM-DEPENDENCY-2026-09-10"></a>
-## APOLLO-WASM-DEPENDENCY-2026-09-10 — Keep the FFT dependency graph portable on WebAssembly [patch] — todo
-- Status: review; integrator=root; branch=`codex/apollo-wasm-dependency`; last-update=2026-09-10.
-- Outcome: remove the unused production `rand` edge that pulls `getrandom` 0.4 without a browser backend into RITK's WASM graph.
-- Acceptance: Apollo's FFT package passes locked native checks/tests and wasm32 check; RITK's wasm32 check no longer fails in `getrandom` after its Coeus/Mnemosyne provider refresh. No FFT behavior changes.
-- Driver: RITK-SNAP-METIS-001 browser handoff; RITK remains the DICOM owner.
-- Evidence: removing the unused `rand` edge drops `getrandom` 0.4 from the `apollo-fft` target graph; 613/613 native Nextest, warning-denied native Clippy, and locked wasm32 check pass. The consumer verification remains pending Coeus PR #393, which removes its transitive Mnemosyne revision pin.
-
 <a id="apollo-sft-sublinear-recovery"></a>
 ## APOLLO-SFT-SUBLINEAR-RECOVERY — Deliver a sublinear sparse recovery route [minor] — todo
 - **Outcome:** `apollo-sft` offers a recovery whose cost scales with the sparsity `K` and `log N`, not with `N log N`.
@@ -46,7 +38,8 @@
 - **Risk/class:** [patch] spike. **Dependencies:** access to the 2020 reference. **Verification:** oracle errors reported with derived uncertainty per numerical discipline.
 
 <a id="apollo-worker-hook-admission"></a>
-## APOLLO-WORKER-HOOK-ADMISSION — Preserve reclamation under bounded registration [patch] [arch] — todo
+## APOLLO-WORKER-HOOK-ADMISSION — Preserve reclamation under bounded registration [patch] [arch] — in-progress
+- **Integrator:** claude-fable-5.1 (session 5bed7001); **branch:** `fix/apollo-worker-hook-admission` (lane apollo-route, stacked on #462); **lease:** `crates/apollo-fft/src/lib.rs`, its tests, this entry; **last-update:** 2026-09-15.
 - **Outcome:** adopt the current first-party runtime with explicit owner-thread idle semantics and recoverable registration exhaustion.
 - **Scope:** Moirai idle-hook provider and Apollo registration/reclamation boundary; no kernel arithmetic, workload reduction or silent loss of cleanup.
 - **Evidence:** pinned `83aa411` has 16 non-deduplicating slots; Apollo's `ensure_thread_local_scratch_hook_registered` expects capacity without reserving it. The observer also assumes hook order that the provider documentation disclaims.
@@ -481,3 +474,4 @@ One line an item: the anchor, the identity, the outcome with its commit or PR; t
 <a id="atlas-apollo-rader-59-variance"></a>- **ATLAS-APOLLO-RADER-59-VARIANCE-2026-08-29** — Rader at n = 59 is unstable across runs [patch]. Landed 0ba9c504: non-smooth `m < 128` takes the half-cyclic backend (`prefers_bluestein_for_rader`, `rader/mod.rs`) with n = 167 retained as a control; reviewed 2026-09-15 at origin/main — the rule, its doc-carried medians and the 59/83/107 tests agree with this record. Findings: none.
 <a id="apollo-sdft-recurrence-stability"></a>- **APOLLO-SDFT-RECURRENCE-STABILITY** — Bound sliding-DFT rounding drift [patch]. [#461](https://github.com/ryancinsight/apollo/pull/461): the modulated form (one N-entry table, the leaving and entering samples on the same entry, the accumulator never multiplied) with a round-robin refresh from the window every max(1, N/K) updates; `SdftPlan::drift_bound` derives u·A·(N² + 4N + max(K, N)(N + 6)), count-independent. Measured at N = 48, K = 6 over a million f64 updates against the direct DFT: the unit-circle recurrence 1.1e-12 to 2.8e-12 against the 8.3e-13 bound (oracle included), the new form 5e-15 to 8e-15 at every checkpoint. The crate computes in f64 only, so the bound is stated for one precision.
 <a id="apollo-small-pot-arms-probe-guard"></a>- **APOLLO-SMALL-POT-ARMS-PROBE-GUARD** — Guard the `small_pot_arms` direct arms with the frame probe [patch]. [#462](https://github.com/ryancinsight/apollo/pull/462): `vector_frame_available()` gates the vector-direct, vector-fused and lanes-framed arms in `assert_arms_agree` and `arms_for_size`, each arm debug-asserts the frame, and the SAFETY comments name the probe and callers that discharge them; the probe ran unchanged on this host under bench-quick, both core types, every arm reported.
+<a id="APOLLO-WASM-DEPENDENCY-2026-09-10"></a>- **APOLLO-WASM-DEPENDENCY-2026-09-10** — Keep the FFT dependency graph portable on WebAssembly [patch]. Landed as [#386](https://github.com/ryancinsight/apollo/pull/386) (cefd55ec): the unused production `rand` edge is gone from `apollo-fft`, so `getrandom` 0.4 leaves the wasm32 graph; the consumer side closed with Coeus #393 (merged 2026-09-10). Verified 2026-09-15 against origin/main: no `rand` dependency in the crate manifest.
