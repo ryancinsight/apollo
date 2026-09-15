@@ -158,6 +158,11 @@ pub fn ifft_1d_array_into<T>(
 
 /// Inverse 1D FFT into caller-owned typed real storage and typed scratch
 /// spectrum for a compile-time-known length.
+///
+/// Where the real split admits `N` and the three arrays are contiguous, only
+/// the lower `N/2 + 1` bins are read, into the front of `scratch`, and the
+/// half-length inverse runs through the runtime kernel (ADR 0063); other
+/// lengths copy the whole spectrum and run the zero-sized static plan.
 pub fn ifft_1d_array_static_into<T, const N: usize>(
     field_hat: &Array1<Complex<T::PlanScalar>>,
     out: &mut Array1<T>,

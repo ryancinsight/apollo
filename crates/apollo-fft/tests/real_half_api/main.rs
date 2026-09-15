@@ -28,6 +28,7 @@
 mod forward;
 mod inverse;
 mod plane;
+mod static_forms;
 mod volume;
 
 use apollo_fft::{PlanCacheProvider, RealFftData, F16};

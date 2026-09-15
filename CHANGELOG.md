@@ -123,6 +123,9 @@ Change-class tags: [patch] backward-compatible fix, [minor] additive non-breakin
   way where the split admits `nz`; the owned forwards of both ranks take the
   route from 4 MiB of output, where the page faults a fresh spectrum pays
   repay the half's staging round trip.
+- [minor] `fft_1d_array_static_into` and `ifft_1d_array_static_into` take the
+  real split where it admits `N`, the half-length transform through the
+  plan-free runtime kernel (ADR 0063); no bound or signature changes.
 
 - [minor] `apollo-fft` 3-D plans gain a transform pair that keeps the
   spectrum in `(z, x, y)` order: `FftPlan3D::forward_complex_rotated` returns a
