@@ -9,16 +9,19 @@ impl StockhamAvxBackend for f64 {
 
     #[inline]
     unsafe fn mul(a: __m256d, b: __m256d) -> __m256d {
+        // SAFETY: the trait's contract holds AVX and FMA on the caller; the intrinsic has no other precondition.
         unsafe { std::arch::x86_64::_mm256_mul_pd(a, b) }
     }
 
     #[inline]
     unsafe fn fmaddsub(a: __m256d, b: __m256d, c: __m256d) -> __m256d {
+        // SAFETY: the trait's contract holds AVX and FMA on the caller; the intrinsic has no other precondition.
         unsafe { std::arch::x86_64::_mm256_fmaddsub_pd(a, b, c) }
     }
 
     #[inline]
     unsafe fn permute_complex_swap(a: __m256d) -> __m256d {
+        // SAFETY: the trait's contract holds AVX and FMA on the caller; the intrinsic has no other precondition.
         unsafe { std::arch::x86_64::_mm256_permute_pd::<0b0101>(a) }
     }
 
@@ -32,6 +35,8 @@ impl StockhamAvxBackend for f64 {
         third_twiddles: &[Complex64],
         fourth_twiddles: &[Complex64],
     ) {
+        // SAFETY: forwarded under the trait's contract, which is also the callee's
+        // (`#[target_feature(enable = "avx,fma")]`), with the slices the stage loop sized.
         unsafe {
             super::quad::stockham_quad_groups_eight_precise(
                 src,
