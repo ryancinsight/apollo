@@ -2,17 +2,14 @@
 
 use super::super::super::radix_shape::{coprime_factors, is_prime};
 use super::direct_mapped::FLAT_CACHE_LIMIT;
-use parking_lot::RwLock;
+use super::tables::{shared_table, LocalTable, SharedTable};
 use rustc_hash::FxHashMap;
 use std::cell::RefCell;
 use std::sync::OnceLock;
 
-static COPRIME_FACTORS_CACHE: std::sync::LazyLock<
-    RwLock<FxHashMap<usize, Option<(usize, usize)>>>,
-> = std::sync::LazyLock::new(|| RwLock::new(FxHashMap::default()));
+static COPRIME_FACTORS_CACHE: SharedTable<usize, Option<(usize, usize)>> = shared_table();
 
-static IS_PRIME_CACHE: std::sync::LazyLock<RwLock<FxHashMap<usize, bool>>> =
-    std::sync::LazyLock::new(|| RwLock::new(FxHashMap::default()));
+static IS_PRIME_CACHE: SharedTable<usize, bool> = shared_table();
 
 static COPRIME_FACTORS_FLAT: [OnceLock<Option<(usize, usize)>>; FLAT_CACHE_LIMIT] =
     [const { OnceLock::new() }; FLAT_CACHE_LIMIT];
@@ -21,10 +18,8 @@ static IS_PRIME_FLAT: [OnceLock<bool>; FLAT_CACHE_LIMIT] =
     [const { OnceLock::new() }; FLAT_CACHE_LIMIT];
 
 thread_local! {
-    pub(super) static TL_COPRIME_FACTORS: RefCell<FxHashMap<usize, Option<(usize, usize)>>> =
-        RefCell::new(FxHashMap::with_capacity_and_hasher(16, Default::default()));
-    pub(super) static TL_IS_PRIME: RefCell<FxHashMap<usize, bool>> =
-        RefCell::new(FxHashMap::with_capacity_and_hasher(16, Default::default()));
+    pub(super) static TL_COPRIME_FACTORS: LocalTable<usize, Option<(usize, usize)>> = RefCell::new(FxHashMap::with_capacity_and_hasher(16, Default::default()));
+    pub(super) static TL_IS_PRIME: LocalTable<usize, bool> = RefCell::new(FxHashMap::with_capacity_and_hasher(16, Default::default()));
 }
 
 #[inline]

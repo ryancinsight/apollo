@@ -1,22 +1,17 @@
 use super::super::super::twiddle_table::TwiddleOutput;
+use super::tables::{shared_table, LocalTable, SharedTable};
 use eunomia::{Complex32, Complex64};
 use parking_lot::RwLock;
+use rustc_hash::FxHashMap;
 use std::cell::RefCell;
-use std::collections::HashMap;
 use std::sync::Arc;
 
-static FOUR_STEP_TW_PRECISE_CACHE: std::sync::LazyLock<
-    RwLock<HashMap<(usize, usize), Arc<[Complex64]>>>,
-> = std::sync::LazyLock::new(|| RwLock::new(HashMap::new()));
-static FOUR_STEP_TW_REDUCED_CACHE: std::sync::LazyLock<
-    RwLock<HashMap<(usize, usize), Arc<[Complex32]>>>,
-> = std::sync::LazyLock::new(|| RwLock::new(HashMap::new()));
+static FOUR_STEP_TW_PRECISE_CACHE: SharedTable<(usize, usize), Arc<[Complex64]>> = shared_table();
+static FOUR_STEP_TW_REDUCED_CACHE: SharedTable<(usize, usize), Arc<[Complex32]>> = shared_table();
 
 thread_local! {
-    static TL_FOUR_STEP_TW_PRECISE: RefCell<HashMap<(usize, usize), Arc<[Complex64]>>> =
-        RefCell::new(HashMap::with_capacity(4));
-    static TL_FOUR_STEP_TW_REDUCED: RefCell<HashMap<(usize, usize), Arc<[Complex32]>>> =
-        RefCell::new(HashMap::with_capacity(4));
+    static TL_FOUR_STEP_TW_PRECISE: LocalTable<(usize, usize), Arc<[Complex64]>> = RefCell::new(FxHashMap::with_capacity_and_hasher(4, Default::default()));
+    static TL_FOUR_STEP_TW_REDUCED: LocalTable<(usize, usize), Arc<[Complex32]>> = RefCell::new(FxHashMap::with_capacity_and_hasher(4, Default::default()));
 }
 
 declare_cache_store! {
@@ -31,7 +26,7 @@ declare_cache_store! {
     tl_get: four_step_tl_get,
     tl_insert: four_step_tl_insert,
     global: four_step_global,
-    global_ret_self: RwLock<HashMap<(usize, usize), Arc<[Self]>>>,
+    global_ret_self: RwLock<FxHashMap<(usize, usize), Arc<[Self]>>>,
     tl_precise: TL_FOUR_STEP_TW_PRECISE,
     tl_reduced: TL_FOUR_STEP_TW_REDUCED,
     global_precise: FOUR_STEP_TW_PRECISE_CACHE,
