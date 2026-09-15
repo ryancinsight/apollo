@@ -378,12 +378,8 @@
 - **Dependencies:** none; parent [beat the references](#atlas-apollo-beat-the-references).
 
 <a id="apollo-probe-4mb-variance"></a>
-## APOLLO-PROBE-4MB-VARIANCE — A valid instrument at 4 MB working sets [test] — in-progress
-- **Integrator:** claude/fable; **last-update:** 2026-09-15; lane `D:/atlas/worktrees/apollo-route` (branch `test/apollo-probe-4mb-variance`); regions `base128/pinned_probe/small_sizes.rs`, `apollo-bench` where the timed region needs a setup phase.
-- **Evidence:** two quiet pinned runs of `small_sizes_against_the_references_by_core_type` read `f64` 262144 at 0.91 and 1.06 of RustFFT on the performance core (apollo 1135200, 1126800 ns, RustFFT 1252200, 1062700) and `f32` at 0.94 and 1.09, the efficiency core stable within 1% (`../../output/apollo-base128/small_sizes_sel_run*_2026-09-15.txt`); the 80 ms per-case budget is about 70 iterations there, and the working set exceeds the performance core's L2.
-- **Scope:** a per-case budget derived from the working set (or a separate large-sizes probe with its own derived budget) so the 262144 reading's run-to-run spread falls inside the identical-code band, then the chain measured at 262144 on it. Non-goals: changing any route.
-- **Acceptance:** two quiet runs at 262144 within the band on both cores for both scalars; the chain's 262144 reading recorded and the route selected by it.
-- **Dependencies:** none; parent [beat the references](#atlas-apollo-beat-the-references).
+## APOLLO-PROBE-4MB-VARIANCE — A valid instrument at 4 MB working sets [test] — done
+- [#449](https://github.com/ryancinsight/apollo/pull/449): the lengths from 65536 up in their own sweep and `scripts/pinned_probe.py` replicating a probe over fresh processes (median of per-run minima, ratio medians with ranges; unit-tested summary), the 262144 spread traced to per-run buffer placement rather than sampling; the chain measured at 262144 and 524288 on it — f64 262144 takes the chain at four lanes (2% under the four-step on both cores, the pattern of 131072) and f32 262144 keeps the four-step (the chain reads 16% over on the efficiency core there); 524288 keeps the four-step on both widths (the chain of four passes reads within 4% of it either way, 4% over on the efficiency core at f64). A first 524288 measurement read the chain at 0.08 of RustFFT: the plan selected the base state without an executor arm for 2^19 and the generic route ran with no twiddle table, so every chain length now carries its oracles through 524288 and that campaign is not read. (`../../output/apollo-base128/large-standing-2026-09-15/`, `large-chain-2026-09-15/`); ADR 0061 note.
 
 <a id="apollo-board-compaction"></a>
 ## APOLLO-BOARD-COMPACTION — Compact the board to its line budget [patch] — todo

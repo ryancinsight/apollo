@@ -957,3 +957,23 @@ base); the two-block form of the step is deleted, and the step serves
   after, on the selection tree
   (`small_sizes_sel_run{1,2}_2026-09-15.txt`, performance / efficiency
   core): `f64` 65536 0.95 / 0.96 / 0.91 / 0.91; `f32` 65536 0.95 / 0.95 / 0.91 / 0.91; `f64` 131072 1.06 / 0.99 / 1.04 / 1.03; `f32` 131072 1.20 / 1.25 / 0.85 / 0.81; `f64` 262144 0.91 / 1.06 / 1.02 / 1.02; `f32` 262144 0.94 / 1.09 / 0.87 / 0.87.
+
+- **2026-09-15, the lengths past the caches read over replicated runs
+  (`APOLLO-PROBE-4MB-VARIANCE`).** At 262144 five quiet pinned runs of the
+  small-sizes sweep read `f64` on the performance core at 0.91, 1.06,
+  0.97, 1.01 and 0.98 of RustFFT — apollo 1048 to 1135 ns, RustFFT 1062
+  to 1252 — each run's hundred samples within 5% while the runs moved the
+  two arms independently: a per-run state (where each arm's buffers land
+  against the caches and pages), not sampling noise, so no per-case
+  budget narrows it. The lengths from 65536 up now run in their own sweep
+  (`large_sizes_against_the_references_by_core_type`, 65536 to 524288)
+  and `scripts/pinned_probe.py` replicates a probe over fresh processes,
+  reading each arm as the median of the per-run minima with its spread
+  and each ratio as the median of the per-run ratios with its range; the
+  small-sizes sweep returns to nineteen lengths. On that instrument
+  (`output/apollo-base128/large-standing-2026-09-15/`, five runs) the chain
+  was measured at 262144 (`[8, 8, 8]` over 512) and 524288 (`[4, 8, 8, 8]`
+  over 256) against the four-step
+  (`large-chain-2026-09-15/`): f64 262144 takes the chain at four lanes (2% under the four-step on both cores, the pattern of 131072) and f32 262144 keeps the four-step (the chain reads 16% over on the efficiency core there); 524288 keeps the four-step on both widths (the chain of four passes reads within 4% of it either way, 4% over on the efficiency core at f64). A first 524288 measurement read the chain at 0.08 of RustFFT: the plan selected the base state without an executor arm for 2^19 and the generic route ran with no twiddle table, so every chain length now carries its oracles through 524288 and that campaign is not read. Standing after
+  (`large-chain2-2026-09-15 (524288: large-standing-2026-09-15)`, apollo / RustFFT, performance / efficiency core):
+  `f64` 65536 0.95 / 0.96; `f32` 65536 0.97 / 0.91; `f64` 131072 1.00 / 1.03; `f32` 131072 1.23 / 0.85; `f64` 262144 1.00 / 0.99; `f32` 262144 0.89 / 0.87; `f64` 524288 1.08 / 1.10; `f32` 524288 1.03 / 1.01.
