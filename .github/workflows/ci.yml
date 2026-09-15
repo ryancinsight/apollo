@@ -24,6 +24,9 @@ concurrency:
 
 jobs:
   adr-index:
+    # A draft pull request is visibility, not a verification event: its pushes
+    # queue nothing, and marking it ready runs the one pull-request verification.
+    if: ${{ github.event_name != 'pull_request' || !github.event.pull_request.draft }}
     name: ADR index is current
     # atlas owns the one generator; this replaces the copy that lived in
     # scripts/adr-index.py and the step that ran it (ATLAS-ADR-INDEX-GUARD-2026-09-01).
@@ -43,6 +46,9 @@ jobs:
   # (ATLAS-APOLLO-SEMVER-BASELINE-UNBUILDABLE). The package list is every
   # member published on crates.io; apollo-bench and apollo-python are not.
   semver:
+    # A draft pull request is visibility, not a verification event: its pushes
+    # queue nothing, and marking it ready runs the one pull-request verification.
+    if: ${{ github.event_name != 'pull_request' || !github.event.pull_request.draft }}
     name: SemVer gate
     uses: ryancinsight/atlas/.github/workflows/semver-gate.yml@806949a176cc139efe7c514d7e42c9b9a9447f45
     with:
@@ -52,12 +58,18 @@ jobs:
       contents: read
 
   lockfile:
+    # A draft pull request is visibility, not a verification event: its pushes
+    # queue nothing, and marking it ready runs the one pull-request verification.
+    if: ${{ github.event_name != 'pull_request' || !github.event.pull_request.draft }}
     name: Lockfile integrity
     uses: ryancinsight/atlas/.github/workflows/lockfile-guard.yml@886d85b0e4bea20c8e5ec4b4239e6ba9cdbcf74d
     permissions:
       contents: read
 
   rust:
+    # A draft pull request is visibility, not a verification event: its pushes
+    # queue nothing, and marking it ready runs the one pull-request verification.
+    if: ${{ github.event_name != 'pull_request' || !github.event.pull_request.draft }}
     name: rust workspace
     runs-on: ubuntu-24.04
     timeout-minutes: 30
@@ -156,6 +168,9 @@ jobs:
   # without editing this file, and each shard documents its group into its
   # own doc directory.
   docs-plan:
+    # A draft pull request is visibility, not a verification event: its pushes
+    # queue nothing, and marking it ready runs the one pull-request verification.
+    if: ${{ github.event_name != 'pull_request' || !github.event.pull_request.draft }}
     name: rustdoc shards
     runs-on: ubuntu-24.04
     timeout-minutes: 5
@@ -201,6 +216,9 @@ jobs:
           cargo doc --locked --no-deps "${args[@]}"
 
   python:
+    # A draft pull request is visibility, not a verification event: its pushes
+    # queue nothing, and marking it ready runs the one pull-request verification.
+    if: ${{ github.event_name != 'pull_request' || !github.event.pull_request.draft }}
     name: python bindings
     runs-on: ubuntu-latest
     timeout-minutes: 20
