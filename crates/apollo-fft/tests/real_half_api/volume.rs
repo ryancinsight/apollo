@@ -157,6 +157,74 @@ fn the_pair_allocates_nothing_once_warm() {
     );
 }
 
+/// Refused-length shapes (`nz` not a positive multiple of four): one under
+/// every shipped scalar's parallel byte threshold for the widened fallback
+/// pairing, and one that clears it even for the narrowest scalar (`F16`'s
+/// `Complex<f32>` bins beside `F16` reals) — `lanes::PARALLEL_BYTES` is sized
+/// off `f64`-width lane data, so a narrower scalar needs more lanes to reach
+/// it.
+const FALLBACK_VOLUME_SHAPES: [[usize; 3]; 2] = [[8, 8, 6], [64, 64, 30]];
+
+/// The widened z-lane fallback (`nz` not a positive multiple of four) reuses
+/// thread-local scratch, sharing the retained-memory bound the x and y passes
+/// already keep, instead of allocating one `nz`-length buffer per scheduled
+/// task. Regression coverage for `half_volume::forward`/`half_volume::inverse`.
+fn the_fallback_allocates_nothing_once_warm<T>()
+where
+    T: Sample,
+    T::PlanScalar: PlanCacheProvider + Into<f64>,
+    Complex<T::PlanScalar>: PlanScratch,
+{
+    for shape @ [nx, ny, nz] in FALLBACK_VOLUME_SHAPES {
+        assert!(
+            !T::real_split_applies(nz),
+            "{shape:?}: nz={nz} must refuse the split to exercise the widened fallback"
+        );
+        let depth = nz / 2 + 1;
+        let real = field::<T>(shape);
+        let stored: Vec<f64> = real.iter().map(|&v| v.to_f64()).collect();
+        let one = tolerance(nx * ny * nz, l1(&stored), T::PLAN_UNIT);
+
+        let mut half = Array3::from_elem([nx, ny, depth], Complex::<T::PlanScalar>::default());
+        let mut back = Array3::from_elem(shape, T::from_f64(0.0));
+
+        // One warm pair: the plan, its tables, and every thread-local scratch
+        // role a call touches are built on first use, not a per-call cost.
+        apollo_fft::fft_3d_array_half_into(&real, &mut half);
+        apollo_fft::ifft_3d_array_half_into(&mut half, &mut back);
+
+        let ((), observed) = count_allocations(|| {
+            apollo_fft::fft_3d_array_half_into(&real, &mut half);
+            apollo_fft::ifft_3d_array_half_into(&mut half, &mut back);
+        });
+        assert_eq!(
+            observed,
+            0,
+            "{} {shape:?}: the refused-length fallback allocated {observed} times on a warm plan",
+            std::any::type_name::<T>()
+        );
+
+        // The round trip still reproduces the input within the derived bound:
+        // the scratch reuse must not change what the fallback computes.
+        for (index, (got, want)) in back.iter().zip(&stored).enumerate() {
+            let got = got.to_f64();
+            let bound = 2.0 * one + T::STORAGE_UNIT * (want.abs() + 2.0 * one);
+            assert!(
+                (got - want).abs() <= bound,
+                "{} {shape:?} sample {index}: {got} against {want} (bound {bound:.2e})",
+                std::any::type_name::<T>()
+            );
+        }
+    }
+}
+
+#[test]
+fn the_refused_length_fallback_allocates_nothing_once_warm() {
+    the_fallback_allocates_nothing_once_warm::<f64>();
+    the_fallback_allocates_nothing_once_warm::<f32>();
+    the_fallback_allocates_nothing_once_warm::<F16>();
+}
+
 #[test]
 #[should_panic(expected = "the half spectrum must be (nx, ny, nz/2 + 1)")]
 fn a_full_size_spectrum_is_rejected() {

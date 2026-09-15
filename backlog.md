@@ -1,5 +1,12 @@
 # Apollo Backlog
 
+<a id="apollo-half-volume-fallback-scratch"></a>
+
+## APOLLO-HALF-VOLUME-FALLBACK-SCRATCH-2026-09-15 — The half-volume real fallback allocates one `nz` lane per scheduled task [patch] [perf] — done 2026-09-15
+
+- [PR #456](https://github.com/ryancinsight/apollo/pull/456): `lanes::paired` moves from an `init`/`lane` pair to one `task` closure per scheduled group; the widened z-lane fallback borrows the 2-D thread-local scratch role (`with_view_staging::<_, 3, _>`, disjoint from the x/y passes' 3-D roles by call order) instead of allocating. `the_refused_length_fallback_allocates_nothing_once_warm` fails on origin/main (2 allocations at `[8, 8, 6]`) and passes fixed, `f64`/`f32`/`F16` at `8x8x6` and `64x64x30`.
+- Pinned probe at 32×32×30 (min of 4 runs, host load 100%→11% across the session): f64 153.1 vs 154.1 µs, f32 142.2 vs 143.8 µs, `8x8x6` f64 2.7 vs 2.8 µs — no slower than origin/main.
+
 <a id="apollo-melinoe-executor-receiver"></a>
 ## APOLLO-MELINOE-EXECUTOR-RECEIVER-2026-09-11 — Track unpublished provider receiver construction [patch] — blocked
 - Scope: upstream Melinoe executor registration at local `af052fc`; independent of the lane-policy change and absent from its standalone dependency pins.

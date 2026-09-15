@@ -162,20 +162,25 @@ pub(super) fn each<T: Send + 'static>(
     moirai::for_each_chunk_mut_with::<LaneTasks<T>, _, _>(data, task_len, run);
 }
 
-/// Runs `lane(state, output_lane, input_lane)` over the paired lanes of two
-/// volumes holding the same number of lanes at different lengths — a real
-/// field beside its half spectrum.
+/// Runs `task(output_chunk, input_chunk)` once per scheduled task over the
+/// paired lanes of two volumes holding the same number of lanes at different
+/// lengths — a real field beside its half spectrum.
 ///
 /// Parallel over `output`, with a task sized by the bytes both sides of its
-/// lanes carry. `init` runs once per task, so a lane that needs workspace pays
-/// one allocation per task rather than one per lane.
-pub(super) fn paired<A, B, S>(
+/// lanes carry. `task` receives its whole scheduled group of lanes at once —
+/// `output_chunk` a whole number of `output_lane`-sized lanes, `input_chunk`
+/// the correspondingly-aligned `input_lane`-sized lanes — so a caller that
+/// needs per-lane workspace acquires it once (e.g. through a thread-local
+/// [`PlanScratch`](crate::application::execution::kernel::mixed_radix::scalar::plan_scratch::PlanScratch)
+/// role scoped to the closure) and reuses it across its own
+/// `chunks_exact`/`chunks_exact_mut` loop over the group, rather than paying
+/// one allocation per task.
+pub(super) fn paired<A, B>(
     output: &mut [A],
     output_lane: usize,
     input: &[B],
     input_lane: usize,
-    init: impl Fn() -> S + Send + Sync,
-    lane: impl Fn(&mut S, &mut [A], &[B]) + Send + Sync,
+    task: impl Fn(&mut [A], &[B]) + Send + Sync,
 ) where
     A: Send,
     B: Sync,
@@ -191,14 +196,16 @@ pub(super) fn paired<A, B, S>(
     let pair_bytes =
         output_lane * core::mem::size_of::<A>() + input_lane * core::mem::size_of::<B>();
     let lanes_per_task = (TASK_BYTES / pair_bytes.max(1)).max(1);
-    let run_task = |task: usize, outputs: &mut [A]| {
+    let run_task = |task_index: usize, outputs: &mut [A]| {
         #[cfg(all(test, not(miri)))]
         crate::application::execution::kernel::worker_quiescence::record_worker();
-        let mut state = init();
-        let inputs = input.chunks_exact(input_lane).skip(task * lanes_per_task);
-        for (target, source) in outputs.chunks_exact_mut(output_lane).zip(inputs) {
-            lane(&mut state, target, source);
-        }
+        // The caller-visible chunk is always a whole number of lanes: `output`
+        // is a whole number of `output_lane`-sized lanes and every task's
+        // byte offset is a multiple of `output_lane * lanes_per_task`.
+        let group_lanes = outputs.len() / output_lane;
+        let input_start = task_index * lanes_per_task * input_lane;
+        let input_end = input_start + group_lanes * input_lane;
+        task(outputs, &input[input_start..input_end]);
     };
     // Both sides count: the output's element count alone undercounts a pass
     // that also reads a wider input.
