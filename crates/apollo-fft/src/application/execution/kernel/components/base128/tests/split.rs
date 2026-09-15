@@ -5,8 +5,9 @@ use eunomia::{Complex32, Complex64};
 
 const LENGTH: usize = 2048;
 /// Every length the column-first steps serve above the base.
-const COLUMN_FIRST_LENGTHS: [usize; 8] =
-    [2048, 4096, 8192, 16_384, 32_768, 65_536, 131_072, 262_144];
+const COLUMN_FIRST_LENGTHS: [usize; 9] = [
+    2048, 4096, 8192, 16_384, 32_768, 65_536, 131_072, 262_144, 524_288,
+];
 
 #[test]
 fn impulse_and_constant_have_exact_spectra() {
