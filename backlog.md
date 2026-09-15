@@ -8,7 +8,8 @@
 - Blocker: separate unpublished provider migration; re-open when its corrected Git revision is available. Basis: `src/sync/scoped/partition/executor.rs:149–215` in Melinoe `af052fc`.
 
 <a id="apollo-sft-sublinear-recovery"></a>
-## APOLLO-SFT-SUBLINEAR-RECOVERY — Deliver a sublinear sparse recovery route [minor] — todo
+## APOLLO-SFT-SUBLINEAR-RECOVERY — Deliver a sublinear sparse recovery route [minor] — in-progress
+- **Integrator:** claude-fable-5.1 (session 5bed7001); **branch:** `feat/apollo-sft-sublinear-recovery` (lane apollo-route, from main — the crate is off the apollo-fft series); **lease:** `crates/apollo-sft/`, `docs/adr/0064-*.md`, `docs/adr/README.md`, this entry; **last-update:** 2026-09-15. First step: the ADR over the two published routes with the recommended one, then the plan kind.
 - **Outcome:** `apollo-sft` offers a recovery whose cost scales with the sparsity `K` and `log N`, not with `N log N`.
 - **Evidence:** `crates/apollo-sft/src/application/execution/transform/sparse.rs:5-13` documents the current route as a dense `O(N log N)` FFT followed by an `O(N log K)` top-K heap; the README presents the crate as the sparse Fourier transform owner and cites Gilbert 2002 and Hassanieh 2012, whose algorithms are sublinear. Surveyed while adjudicating arXiv:2310.14462-adjacent literature (Shen 2024, CONF-MPCS, restates Hassanieh's `O(K log N)` bound; no new technique).
 - **Scope:** one additional plan kind implementing a published sublinear algorithm with its recovery guarantee stated (Hassanieh et al. 2012 "Simple and practical" or Hsieh–Lu–Pei 2015 downsampling); the exact top-K route stays as the oracle. Non-goals: GPU path, noisy-case guarantees beyond the chosen paper's.
