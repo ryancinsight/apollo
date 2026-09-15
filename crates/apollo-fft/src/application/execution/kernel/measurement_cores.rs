@@ -27,7 +27,7 @@
 use hermes_simd::ProcessorIndex;
 use std::fmt::Write as _;
 use std::sync::OnceLock;
-use themis::{CpuTopology, EfficiencyClass};
+use themis::{CoreId, CpuTopology, EfficiencyClass};
 
 /// Spells out a class rank, so a transcribed table header carries its meaning.
 ///
@@ -78,7 +78,7 @@ impl MeasurementCore {
 #[derive(Debug)]
 pub(crate) struct Selection {
     cores: Vec<MeasurementCore>,
-    census: Vec<(u32, EfficiencyClass)>,
+    census: Vec<(u32, EfficiencyClass, Option<CoreId>)>,
     class_count: usize,
 }
 
@@ -110,17 +110,15 @@ impl Selection {
             self.class_count,
             if self.class_count == 1 { "" } else { "es" }
         );
-        for (processor, class) in &self.census {
+        for (processor, class, core) in &self.census {
             let chosen = self
                 .cores
                 .iter()
                 .any(|core| core.processor.get() == *processor);
             let _ = writeln!(
                 out,
-                "  cpu {processor:<2} rank {:<2} {:<12}{}",
-                class.rank(),
-                label(*class, self.class_count),
-                if chosen { "  <- selected" } else { "" }
+                "  {}",
+                census_line(*processor, *class, self.class_count, *core, chosen)
             );
         }
         out
@@ -142,8 +140,8 @@ impl Selection {
     ) -> impl Iterator<Item = u32> + '_ {
         self.census
             .iter()
-            .filter(move |(_, candidate)| *candidate == class)
-            .map(|(processor, _)| *processor)
+            .filter(move |(_, candidate, _)| *candidate == class)
+            .map(|(processor, _, _)| *processor)
     }
 
     /// The class of the selected performance representative, for probes that
@@ -161,7 +159,7 @@ impl Selection {
         if self.class_count <= 1 {
             return None;
         }
-        self.census.iter().map(|(_, class)| *class).min()
+        self.census.iter().map(|(_, class, _)| *class).min()
     }
 }
 
@@ -188,6 +186,58 @@ pub(crate) fn selected() -> Option<&'static Selection> {
     SELECTION.get_or_init(build).as_ref()
 }
 
+/// One census row: the processor, its rank and label, its core when the
+/// platform reports one, and the selection mark.
+///
+/// The core column is what shows two arms, or an arm and a busy peer, sharing
+/// one execution core on a host with SMT.
+fn census_line(
+    processor: u32,
+    class: EfficiencyClass,
+    class_count: usize,
+    core: Option<CoreId>,
+    chosen: bool,
+) -> String {
+    let core = core.map_or(String::new(), |core| format!(" core {:<3}", core.get()));
+    format!(
+        "cpu {processor:<2} rank {:<2} {:<12}{core}{}",
+        class.rank(),
+        label(class, class_count),
+        if chosen { "  <- selected" } else { "" }
+    )
+}
+
+/// The processor an arm binds out of one class's `members`, in index order.
+///
+/// With a sibling table (`core_of` answers), the first member that is not
+/// processor 0, shares no execution core with processor 0 — the conventional
+/// Windows interrupt and DPC target — and shares none with a core an earlier
+/// arm already holds (`taken`). Without one, the second member: skipping the
+/// first avoids processor 0 by a rule that applies to every arm rather than
+/// by special-casing one host's indices. Either way a class with no clear
+/// member still yields its second (or only) member, since one arm beats none
+/// and the census prints the core it landed on.
+fn choose<C: Copy + PartialEq>(
+    members: impl Iterator<Item = u32>,
+    core_of: impl Fn(u32) -> Option<C>,
+    taken: &[C],
+) -> Option<u32> {
+    let members: Vec<u32> = members.collect();
+    let fallback = members.get(1).or(members.first()).copied();
+    let Some(interrupt_core) = core_of(0) else {
+        return fallback;
+    };
+    members
+        .iter()
+        .copied()
+        .find(|&processor| {
+            processor != 0
+                && core_of(processor)
+                    .is_some_and(|core| core != interrupt_core && !taken.contains(&core))
+        })
+        .or(fallback)
+}
+
 fn build() -> Option<Selection> {
     let topology = CpuTopology::detect()?;
     // The absence oracle for the whole efficiency surface: `None` here means
@@ -196,11 +246,19 @@ fn build() -> Option<Selection> {
     let class_count = topology.efficiency_class_count()?;
     let highest = topology.highest_efficiency_class()?;
 
-    let census: Vec<(u32, EfficiencyClass)> = topology
+    // The sibling table is optional in its own right: a host that reports
+    // classes but no cores selects by the index rule below and prints no
+    // core column.
+    let core_of = |processor: u32| topology.smt().and_then(|view| view.core_of(processor));
+    let census: Vec<(u32, EfficiencyClass, Option<CoreId>)> = topology
         .efficiency_classes()?
         .iter()
         .enumerate()
-        .filter_map(|(processor, class)| u32::try_from(processor).ok().map(|id| (id, *class)))
+        .filter_map(|(processor, class)| {
+            u32::try_from(processor)
+                .ok()
+                .map(|id| (id, *class, core_of(id)))
+        })
         .collect();
 
     // The instrument compares the extremes of the reported range: the most
@@ -212,15 +270,12 @@ fn build() -> Option<Selection> {
         arms.push(EfficiencyClass::LOWEST);
     }
 
-    // The second processor of each class, in index order. Skipping the first
-    // avoids processor 0 — the conventional Windows interrupt and DPC target —
-    // by a rule that applies to every arm rather than by special-casing one
-    // host's indices. Falls back to the only member when a class has one.
     let mut cores = Vec::new();
+    let mut taken = Vec::new();
     for class in arms {
-        let mut members = topology.processors_in_efficiency_class(class)?;
-        let first = members.next();
-        if let Some(processor) = members.next().or(first) {
+        let members = topology.processors_in_efficiency_class(class)?;
+        if let Some(processor) = choose(members, core_of, &taken) {
+            taken.extend(core_of(processor));
             cores.push(MeasurementCore {
                 processor: ProcessorIndex::new(processor),
                 class,
@@ -238,7 +293,73 @@ fn build() -> Option<Selection> {
 
 #[cfg(test)]
 mod tests {
-    use super::{selected, Selection};
+    use super::{choose, selected, Selection};
+    use themis::CpuTopology;
+
+    /// Eight processors as four two-thread cores: `[0, 0, 1, 1, 2, 2, 3, 3]`.
+    fn paired_core(processor: u32) -> Option<u32> {
+        (processor < 8).then_some(processor / 2)
+    }
+
+    /// With a sibling table, an arm skips processor 0 and its sibling and lands
+    /// on the next core; the second arm then skips the core the first holds.
+    #[test]
+    fn siblings_reported_arms_avoid_the_interrupt_core_and_each_other() {
+        let first = choose([0, 1, 2, 3].into_iter(), paired_core, &[]);
+        assert_eq!(first, Some(2));
+        let taken = [paired_core(2).expect("core of 2")];
+        let second = choose([2, 3, 4, 5].into_iter(), paired_core, &taken);
+        assert_eq!(second, Some(4));
+    }
+
+    /// Without a sibling table the second member is the arm, or the only one.
+    #[test]
+    fn without_a_sibling_table_the_second_member_is_chosen() {
+        let absent = |_: u32| -> Option<u32> { None };
+        assert_eq!(choose([4, 5, 6].into_iter(), absent, &[]), Some(5));
+        assert_eq!(choose([7].into_iter(), absent, &[]), Some(7));
+        assert_eq!(choose(core::iter::empty(), absent, &[]), None);
+    }
+
+    /// A class confined to processor 0's core still yields an arm — its second
+    /// member — rather than none.
+    #[test]
+    fn a_class_confined_to_the_interrupt_core_still_yields_its_second_member() {
+        assert_eq!(choose([0, 1].into_iter(), paired_core, &[]), Some(1));
+        assert_eq!(choose([1].into_iter(), paired_core, &[]), Some(1));
+    }
+
+    /// On this host, whatever it reports: with a sibling table the selected
+    /// processors hold distinct cores and none holds processor 0's; without
+    /// one the selection is the index rule.
+    #[test]
+    fn the_host_selection_holds_distinct_cores_clear_of_the_interrupt_core() {
+        let Some(selection) = selected() else {
+            return;
+        };
+        let Some(topology) = CpuTopology::detect() else {
+            return;
+        };
+        let Some(view) = topology.smt() else {
+            return;
+        };
+        let cores: Vec<_> = selection
+            .cores()
+            .iter()
+            .map(|core| {
+                view.core_of(core.processor().get())
+                    .expect("selected processor is in the snapshot")
+            })
+            .collect();
+        let interrupt = view.core_of(0).expect("processor 0 is in the snapshot");
+        for (index, core) in cores.iter().enumerate() {
+            assert_ne!(*core, interrupt, "arm {index} shares processor 0's core");
+            assert!(
+                !cores[..index].contains(core),
+                "arm {index} shares a core with an earlier arm"
+            );
+        }
+    }
 
     /// The selection must be drawn from the queried census, never assumed: a
     /// selected processor carries the class the census reports for it.
@@ -253,11 +374,17 @@ mod tests {
         );
         let census = selection.describe();
         for core in selection.cores() {
-            let expected = format!(
-                "cpu {:<2} rank {:<2} {:<12}  <- selected",
+            let reported = selection
+                .census
+                .iter()
+                .find(|(processor, _, _)| *processor == core.processor().get())
+                .and_then(|(_, _, reported)| *reported);
+            let expected = super::census_line(
                 core.processor().get(),
-                core.class().rank(),
-                core.label()
+                core.class(),
+                selection.class_count,
+                reported,
+                true,
             );
             assert!(
                 census.contains(&expected),
