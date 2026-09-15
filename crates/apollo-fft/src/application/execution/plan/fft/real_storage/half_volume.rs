@@ -17,7 +17,9 @@
 //! spectrum, not only for one a real field produced.
 
 use super::{split, RealFftData};
-use crate::application::execution::kernel::mixed_radix::scalar::plan_scratch::PlanScratch;
+use crate::application::execution::kernel::mixed_radix::scalar::plan_scratch::{
+    with_view_staging, PlanScratch,
+};
 use crate::application::execution::plan::fft::dimension_3d::FftPlan3D;
 use crate::application::execution::plan::fft::lanes;
 use apollo_leto_interop::view_cow;
@@ -52,39 +54,42 @@ pub(super) fn forward<T>(
 
     if T::real_split_applies(nz) {
         let half_lane = plan.half_z_lane::<true>();
-        lanes::paired(
-            spectrum,
-            depth,
-            &source,
-            nz,
-            || (),
-            |(), bins, reals| {
+        lanes::paired(spectrum, depth, &source, nz, |bins_group, reals_group| {
+            for (bins, reals) in bins_group
+                .chunks_exact_mut(depth)
+                .zip(reals_group.chunks_exact(nz))
+            {
                 split::forward(
                     reals,
                     bins,
                     plan.split_twiddles().iter().copied(),
                     &half_lane,
                 );
-            },
-        );
+            }
+        });
     } else {
         let z_lane = plan.z_lane::<true>();
-        lanes::paired(
-            spectrum,
-            depth,
-            &source,
-            nz,
-            || vec![Complex::<T::PlanScalar>::default(); nz],
-            |widened, bins, reals| {
-                for (slot, &value) in widened.iter_mut().zip(reals) {
-                    *slot = value.to_spectrum();
+        lanes::paired(spectrum, depth, &source, nz, |bins_group, reals_group| {
+            // Every task in this group is disjoint and each runs on its own
+            // thread at most once at a time, so the thread-local widened-lane
+            // role it borrows here never nests with the one the x/y passes
+            // borrow afterward (`Self::xy_axes_inplace` below) or with a
+            // sibling task's borrow on another thread.
+            with_view_staging::<Complex<T::PlanScalar>, 3, _>(nz, |widened| {
+                for (bins, reals) in bins_group
+                    .chunks_exact_mut(depth)
+                    .zip(reals_group.chunks_exact(nz))
+                {
+                    for (slot, &value) in widened.iter_mut().zip(reals.iter()) {
+                        *slot = value.to_spectrum();
+                    }
+                    if nz > 1 {
+                        z_lane(widened);
+                    }
+                    bins.copy_from_slice(&widened[..depth]);
                 }
-                if nz > 1 {
-                    z_lane(widened.as_mut_slice());
-                }
-                bins.copy_from_slice(&widened[..depth]);
-            },
-        );
+            });
+        });
     }
     plan.xy_axes_inplace::<true>(spectrum, depth);
 }
@@ -127,41 +132,43 @@ pub(super) fn inverse<T>(
             split::inverse_packed::<T>(lane, nz, plan.split_twiddles().iter().copied(), &half_lane);
         });
         let packed = nz / 2;
-        lanes::paired(
-            values,
-            nz,
-            &*bins,
-            depth,
-            || (),
-            |(), reals, lane| {
+        lanes::paired(values, nz, &*bins, depth, |reals_group, lanes_group| {
+            for (reals, lane) in reals_group
+                .chunks_exact_mut(nz)
+                .zip(lanes_group.chunks_exact(depth))
+            {
                 split::unpack(&lane[..packed], reals);
-            },
-        );
+            }
+        });
     } else {
         let z_lane = plan.z_lane::<false>();
         let mirrored = nz - depth;
-        lanes::paired(
-            values,
-            nz,
-            &*bins,
-            depth,
-            || vec![Complex::<T::PlanScalar>::default(); nz],
-            |full, reals, half| {
-                full[..depth].copy_from_slice(half);
-                // Bin `nz - k` of a real lane is the conjugate of bin `k`.
-                for (slot, source) in full[depth..]
-                    .iter_mut()
-                    .zip(half[1..=mirrored].iter().rev())
+        lanes::paired(values, nz, &*bins, depth, |reals_group, halves_group| {
+            // Runs after `Self::xy_axes_inplace` above has already returned,
+            // so this thread-local widened-lane borrow never nests with the
+            // x/y passes' transpose scratch; each task's own borrow never
+            // nests with a sibling task's on another thread either.
+            with_view_staging::<Complex<T::PlanScalar>, 3, _>(nz, |full| {
+                for (reals, half) in reals_group
+                    .chunks_exact_mut(nz)
+                    .zip(halves_group.chunks_exact(depth))
                 {
-                    *slot = Complex::new(source.re, -source.im);
+                    full[..depth].copy_from_slice(half);
+                    // Bin `nz - k` of a real lane is the conjugate of bin `k`.
+                    for (slot, source) in full[depth..]
+                        .iter_mut()
+                        .zip(half[1..=mirrored].iter().rev())
+                    {
+                        *slot = Complex::new(source.re, -source.im);
+                    }
+                    if nz > 1 {
+                        z_lane(full);
+                    }
+                    for (value, &sample) in reals.iter_mut().zip(full.iter()) {
+                        *value = T::from_spectrum(sample);
+                    }
                 }
-                if nz > 1 {
-                    z_lane(full.as_mut_slice());
-                }
-                for (value, &sample) in reals.iter_mut().zip(full.iter()) {
-                    *value = T::from_spectrum(sample);
-                }
-            },
-        );
+            });
+        });
     }
 }

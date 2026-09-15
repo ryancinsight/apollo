@@ -407,8 +407,10 @@ where
     /// The z lanes go through the real split straight into `output`, and x and
     /// y then run on the half volume. An `nz` the split does not admit
     /// ([`RealFftData::real_split_applies`]) widens each lane to complex
-    /// instead, with one lane of workspace per scheduled task. A strided
-    /// `input` is copied once.
+    /// instead, borrowing one lane of thread-local scratch per scheduled task
+    /// (the same rank-disjoint role a non-contiguous input view would stage
+    /// through) rather than allocating it — a warm plan costs nothing beyond
+    /// that borrow. A strided `input` is copied once.
     ///
     /// # Panics
     ///
