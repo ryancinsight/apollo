@@ -27,6 +27,30 @@ members = [
 ]
 resolver = "3"
 
+# Debuginfo discipline: line tables only for the workspace, none for
+# dependencies, build scripts and proc-macros. Full DWARF on every test
+# binary of twenty-two members is what the hosted 16 GB runner ran out of
+# while the workspace test job compiled them in parallel (five consecutive
+# runner shutdowns at the same compile step, 2026-09-11 to 2026-09-14,
+# APOLLO-CI-WORKSPACE-JOB-KILLED); backtraces keep their line tables.
+[profile.dev]
+debug = "line-tables-only"
+
+[profile.dev.package."*"]
+debug = false
+
+[profile.dev.build-override]
+debug = false
+
+[profile.test]
+debug = "line-tables-only"
+
+[profile.test.package."*"]
+debug = false
+
+[profile.test.build-override]
+debug = false
+
 [profile.release]
 # Single codegen unit: allows LLVM to inline num_complex::Complex64::mul and
 # all internal helpers into one module, enabling autovectorization of the
