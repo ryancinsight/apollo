@@ -5,41 +5,37 @@ use super::direct_mapped::{
     bounded_directional_coordinates, bounded_pair_coordinates, DirectMappedSlot,
     DIRECTIONAL_FLAT_CACHE_LIMIT, FLAT_CACHE_LIMIT,
 };
+use super::tables::{shared_table, LocalTable, SharedTable};
 use eunomia::{Complex32, Complex64};
 use parking_lot::RwLock;
 use rustc_hash::FxHashMap;
 use std::cell::RefCell;
 use std::sync::{Arc, OnceLock};
 
-static RADER_SPECTRUM_PRECISE_CACHE: std::sync::LazyLock<
-    RwLock<FxHashMap<(usize, usize, usize), Arc<[Complex64]>>>,
-> = std::sync::LazyLock::new(|| RwLock::new(FxHashMap::default()));
+static RADER_SPECTRUM_PRECISE_CACHE: SharedTable<(usize, usize, usize), Arc<[Complex64]>> =
+    shared_table();
 
-static RADER_SPECTRUM_REDUCED_CACHE: std::sync::LazyLock<
-    RwLock<FxHashMap<(usize, usize, usize), Arc<[Complex32]>>>,
-> = std::sync::LazyLock::new(|| RwLock::new(FxHashMap::default()));
+static RADER_SPECTRUM_REDUCED_CACHE: SharedTable<(usize, usize, usize), Arc<[Complex32]>> =
+    shared_table();
 
-static RADER_ORDER_CACHE: std::sync::LazyLock<RwLock<FxHashMap<(usize, usize), Arc<[usize]>>>> =
-    std::sync::LazyLock::new(|| RwLock::new(FxHashMap::default()));
+static RADER_ORDER_CACHE: SharedTable<(usize, usize), Arc<[usize]>> = shared_table();
 
 /// Negacyclic spectrum cache: (cyclic_spectrum, negacyclic_spectrum) per (n, inverse, g_inv).
-type NegacyclicEntry<C> = (Arc<[C]>, Arc<[C]>);
+pub(crate) type NegacyclicEntry<C> = (Arc<[C]>, Arc<[C]>);
 
-static RADER_NEGACYCLIC_PRECISE_CACHE: std::sync::LazyLock<
-    RwLock<FxHashMap<(usize, usize, usize), NegacyclicEntry<Complex64>>>,
-> = std::sync::LazyLock::new(|| RwLock::new(FxHashMap::default()));
+static RADER_NEGACYCLIC_PRECISE_CACHE: SharedTable<
+    (usize, usize, usize),
+    NegacyclicEntry<Complex64>,
+> = shared_table();
 
-static RADER_NEGACYCLIC_REDUCED_CACHE: std::sync::LazyLock<
-    RwLock<FxHashMap<(usize, usize, usize), NegacyclicEntry<Complex32>>>,
-> = std::sync::LazyLock::new(|| RwLock::new(FxHashMap::default()));
+static RADER_NEGACYCLIC_REDUCED_CACHE: SharedTable<
+    (usize, usize, usize),
+    NegacyclicEntry<Complex32>,
+> = shared_table();
 
-static RADER_NEG_TWIDDLES_PRECISE_CACHE: std::sync::LazyLock<
-    RwLock<FxHashMap<usize, Arc<[Complex64]>>>,
-> = std::sync::LazyLock::new(|| RwLock::new(FxHashMap::default()));
+static RADER_NEG_TWIDDLES_PRECISE_CACHE: SharedTable<usize, Arc<[Complex64]>> = shared_table();
 
-static RADER_NEG_TWIDDLES_REDUCED_CACHE: std::sync::LazyLock<
-    RwLock<FxHashMap<usize, Arc<[Complex32]>>>,
-> = std::sync::LazyLock::new(|| RwLock::new(FxHashMap::default()));
+static RADER_NEG_TWIDDLES_REDUCED_CACHE: SharedTable<usize, Arc<[Complex32]>> = shared_table();
 
 static RADER_ORDER_FLAT: [DirectMappedSlot<usize, Arc<[usize]>>; FLAT_CACHE_LIMIT] =
     [const { DirectMappedSlot::new() }; FLAT_CACHE_LIMIT];
@@ -67,20 +63,13 @@ static RADER_NEGACYCLIC_REDUCED_FLAT: [DirectMappedSlot<usize, NegacyclicEntry<C
     [const { DirectMappedSlot::new() }; DIRECTIONAL_FLAT_CACHE_LIMIT];
 
 thread_local! {
-    pub(super) static TL_RADER_SPECTRUM_PRECISE: RefCell<FxHashMap<(usize, usize, usize), Arc<[Complex64]>>> =
-        RefCell::new(FxHashMap::with_capacity_and_hasher(8, Default::default()));
-    pub(super) static TL_RADER_SPECTRUM_REDUCED: RefCell<FxHashMap<(usize, usize, usize), Arc<[Complex32]>>> =
-        RefCell::new(FxHashMap::with_capacity_and_hasher(8, Default::default()));
-    pub(super) static TL_RADER_ORDER: RefCell<FxHashMap<(usize, usize), Arc<[usize]>>> =
-        RefCell::new(FxHashMap::with_capacity_and_hasher(8, Default::default()));
-    pub(super) static TL_RADER_NEGACYCLIC_PRECISE: RefCell<FxHashMap<(usize, usize, usize), NegacyclicEntry<Complex64>>> =
-        RefCell::new(FxHashMap::with_capacity_and_hasher(8, Default::default()));
-    pub(super) static TL_RADER_NEGACYCLIC_REDUCED: RefCell<FxHashMap<(usize, usize, usize), NegacyclicEntry<Complex32>>> =
-        RefCell::new(FxHashMap::with_capacity_and_hasher(8, Default::default()));
-    pub(super) static TL_RADER_NEG_TWIDDLES_PRECISE: RefCell<FxHashMap<usize, Arc<[Complex64]>>> =
-        RefCell::new(FxHashMap::with_capacity_and_hasher(8, Default::default()));
-    pub(super) static TL_RADER_NEG_TWIDDLES_REDUCED: RefCell<FxHashMap<usize, Arc<[Complex32]>>> =
-        RefCell::new(FxHashMap::with_capacity_and_hasher(8, Default::default()));
+    pub(super) static TL_RADER_SPECTRUM_PRECISE: LocalTable<(usize, usize, usize), Arc<[Complex64]>> = RefCell::new(FxHashMap::with_capacity_and_hasher(8, Default::default()));
+    pub(super) static TL_RADER_SPECTRUM_REDUCED: LocalTable<(usize, usize, usize), Arc<[Complex32]>> = RefCell::new(FxHashMap::with_capacity_and_hasher(8, Default::default()));
+    pub(super) static TL_RADER_ORDER: LocalTable<(usize, usize), Arc<[usize]>> = RefCell::new(FxHashMap::with_capacity_and_hasher(8, Default::default()));
+    pub(super) static TL_RADER_NEGACYCLIC_PRECISE: LocalTable<(usize, usize, usize), NegacyclicEntry<Complex64>> = RefCell::new(FxHashMap::with_capacity_and_hasher(8, Default::default()));
+    pub(super) static TL_RADER_NEGACYCLIC_REDUCED: LocalTable<(usize, usize, usize), NegacyclicEntry<Complex32>> = RefCell::new(FxHashMap::with_capacity_and_hasher(8, Default::default()));
+    pub(super) static TL_RADER_NEG_TWIDDLES_PRECISE: LocalTable<usize, Arc<[Complex64]>> = RefCell::new(FxHashMap::with_capacity_and_hasher(8, Default::default()));
+    pub(super) static TL_RADER_NEG_TWIDDLES_REDUCED: LocalTable<usize, Arc<[Complex32]>> = RefCell::new(FxHashMap::with_capacity_and_hasher(8, Default::default()));
 }
 
 declare_cache_store! {

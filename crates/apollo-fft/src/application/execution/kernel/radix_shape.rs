@@ -18,8 +18,6 @@
 //! - Cooley, J.W. & Tukey, J.W. (1965). *Math. Comp.* 19, 297-301.
 //! - Van Loan, C. (1992). *Computational Frameworks for the FFT*. SIAM, §3.4.
 
-#![allow(clippy::same_item_push)]
-
 include!(concat!(
     env!("CARGO_MANIFEST_DIR"),
     "/src/application/numeric/integer_math.rs"
@@ -131,30 +129,14 @@ pub(crate) fn factorize_composite(n: usize) -> Option<Vec<usize>> {
     // trailing 2 for an odd exponent, which is what the hand-written static
     // table in `dispatch` already spelled out for the lengths it carries;
     // `derived_order_matches_the_static_table` holds the two to each other.
-    for _ in 0..count2 {
-        radices.push(2usize);
-    }
-    for _ in 0..count3 {
-        radices.push(3);
-    }
-    for _ in 0..count5 {
-        radices.push(5);
-    }
-    for _ in 0..count7 {
-        radices.push(7);
-    }
-    for _ in 0..count11 {
-        radices.push(11);
-    }
-    for _ in 0..count13 {
-        radices.push(13);
-    }
-    for _ in 0..count17 {
-        radices.push(17);
-    }
-    for _ in 0..count23 {
-        radices.push(23);
-    }
+    radices.extend(std::iter::repeat_n(2usize, count2 as usize));
+    radices.extend(std::iter::repeat_n(3usize, count3 as usize));
+    radices.extend(std::iter::repeat_n(5usize, count5 as usize));
+    radices.extend(std::iter::repeat_n(7usize, count7 as usize));
+    radices.extend(std::iter::repeat_n(11usize, count11 as usize));
+    radices.extend(std::iter::repeat_n(13usize, count13 as usize));
+    radices.extend(std::iter::repeat_n(17usize, count17 as usize));
+    radices.extend(std::iter::repeat_n(23usize, count23 as usize));
     Some(lower_radix2_pairs_to_radix4(&radices))
 }
 

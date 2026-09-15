@@ -1,7 +1,5 @@
 //! Scalar Stockham butterfly stage primitives.
 
-#![allow(clippy::many_single_char_names)]
-
 #[inline]
 pub(crate) fn stage_impl<C, const TILE_SIZE: usize>(
     src: &[C],

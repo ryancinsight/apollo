@@ -1,18 +1,18 @@
 //! The Good-Thomas CRT permutation cache: input gather and output scatter
 //! tables per coprime pair.
 
-use parking_lot::RwLock;
+use super::tables::{shared_table, LocalTable, SharedTable};
 use rustc_hash::FxHashMap;
 use std::cell::RefCell;
 use std::sync::Arc;
 
-static PFA_PERM_CACHE: std::sync::LazyLock<
-    RwLock<FxHashMap<(usize, usize), (Arc<[usize]>, Arc<[usize]>)>>,
-> = std::sync::LazyLock::new(|| RwLock::new(FxHashMap::default()));
+/// The input gather and output scatter tables of one coprime pair.
+pub(crate) type PfaPermutation = (Arc<[usize]>, Arc<[usize]>);
+
+static PFA_PERM_CACHE: SharedTable<(usize, usize), PfaPermutation> = shared_table();
 
 thread_local! {
-    pub(super) static TL_PFA_PERM: RefCell<FxHashMap<(usize, usize), (Arc<[usize]>, Arc<[usize]>)>> =
-        RefCell::new(FxHashMap::with_capacity_and_hasher(8, Default::default()));
+    pub(super) static TL_PFA_PERM: LocalTable<(usize, usize), PfaPermutation> = RefCell::new(FxHashMap::with_capacity_and_hasher(8, Default::default()));
 }
 
 /// Return precomputed Good-Thomas input and output CRT permutation tables for
@@ -23,7 +23,7 @@ thread_local! {
 ///
 /// Tables are computed once on first use and shared across threads via `Arc`.
 #[inline]
-pub(crate) fn cached_pfa_perm(n1: usize, n2: usize) -> (Arc<[usize]>, Arc<[usize]>) {
+pub(crate) fn cached_pfa_perm(n1: usize, n2: usize) -> PfaPermutation {
     let key = (n1, n2);
     if let Some(v) = TL_PFA_PERM.with(|c| c.borrow().get(&key).cloned()) {
         #[cfg(feature = "cache-profiling")]
@@ -64,7 +64,7 @@ fn mod_inverse_local(a: usize, m: usize) -> usize {
     ((x % m as i64 + m as i64) % m as i64) as usize
 }
 
-fn build_pfa_perm(n1: usize, n2: usize) -> (Arc<[usize]>, Arc<[usize]>) {
+fn build_pfa_perm(n1: usize, n2: usize) -> PfaPermutation {
     let n = n1 * n2;
     let inv_n2_n1 = mod_inverse_local(n2, n1);
     let inv_n1_n2 = mod_inverse_local(n1, n2);

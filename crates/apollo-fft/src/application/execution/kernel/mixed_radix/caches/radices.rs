@@ -2,20 +2,18 @@
 
 use super::super::super::radix_shape::factorize_composite as factorize_prime23;
 use super::direct_mapped::FLAT_CACHE_LIMIT;
-use parking_lot::RwLock;
+use super::tables::{shared_table, LocalTable, SharedTable};
 use rustc_hash::FxHashMap;
 use std::cell::RefCell;
 use std::sync::{Arc, OnceLock};
 
-static PRIME23_RADIX_CACHE: std::sync::LazyLock<RwLock<FxHashMap<usize, Option<Arc<[usize]>>>>> =
-    std::sync::LazyLock::new(|| RwLock::new(FxHashMap::default()));
+static PRIME23_RADIX_CACHE: SharedTable<usize, Option<Arc<[usize]>>> = shared_table();
 
 static PRIME23_RADIX_FLAT: [OnceLock<Option<Arc<[usize]>>>; FLAT_CACHE_LIMIT] =
     [const { OnceLock::new() }; FLAT_CACHE_LIMIT];
 
 thread_local! {
-    pub(super) static TL_PRIME23_RADIX: RefCell<FxHashMap<usize, Option<Arc<[usize]>>>> =
-        RefCell::new(FxHashMap::with_capacity_and_hasher(8, Default::default()));
+    pub(super) static TL_PRIME23_RADIX: LocalTable<usize, Option<Arc<[usize]>>> = RefCell::new(FxHashMap::with_capacity_and_hasher(8, Default::default()));
 }
 
 #[inline]

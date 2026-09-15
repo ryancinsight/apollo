@@ -90,7 +90,9 @@ pub trait MixedRadixScalar:
     fn cached_rader_negacyclic_spectra<const INVERSE: bool>(
         n: usize,
         generator_inverse: usize,
-    ) -> (Arc<[Self::Complex]>, Arc<[Self::Complex]>);
+    ) -> crate::application::execution::kernel::mixed_radix::caches::rader::NegacyclicEntry<
+        Self::Complex,
+    >;
 
     /// Return precomputed twist twiddles `e^{i*pi*j/m}` for negacyclic convolution.
     fn cached_rader_neg_twiddles(m: usize) -> Arc<[Self::Complex]>;

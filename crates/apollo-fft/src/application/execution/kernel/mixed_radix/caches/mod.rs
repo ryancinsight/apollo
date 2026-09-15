@@ -9,6 +9,7 @@ pub(crate) mod profiler;
 pub(crate) mod rader;
 pub(crate) mod radices;
 pub(crate) mod scratch;
+pub(crate) mod tables;
 pub(crate) mod twiddle;
 
 pub(crate) use factors::{cached_coprime_factors, cached_is_prime};

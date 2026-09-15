@@ -63,8 +63,6 @@
 //! - Cooley, J.W. & Tukey, J.W. (1965). *Mathematics of Computation*, 19(90), 297-301.
 //! - Van Loan, C. (1992). *Computational Frameworks for the FFT*. SIAM, §2.2.
 
-#![allow(clippy::uninit_vec)]
-
 use eunomia::{Complex, Complex32, Complex64, F16};
 
 // ── Trait ─────────────────────────────────────────────────────────────────────
@@ -188,6 +186,10 @@ pub(crate) fn twiddle_components(sign: f64, exponent: usize, period: usize) -> (
     angle.sin_cos()
 }
 
+#[expect(
+    clippy::uninit_vec,
+    reason = "every slot is written before the table is read; the SAFETY comment on the set_len carries the proof"
+)]
 pub(crate) fn build_twiddle_table<C: TwiddleOutput>(n: usize, sign: f64) -> Vec<C> {
     assert!(
         n.is_power_of_two(),
