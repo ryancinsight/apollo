@@ -114,12 +114,16 @@ pub(super) fn runtime_tiny_direct_dispatch<
     slice: &mut [F::Complex],
 ) -> bool {
     match len {
+        // SAFETY: `len` is the plan length the entry asserted `slice.len()` equal to, and this
+        // arm is that length.
         2 => unsafe { F::small_pot_inplace_sized::<2, INVERSE, NORMALIZE>(slice) },
         3 => crate::application::execution::kernel::components::butterflies::dft3_impl::<
             F,
             INVERSE,
             NORMALIZE,
         >(slice),
+        // SAFETY: `len` is the plan length the entry asserted `slice.len()` equal to, and this
+        // arm is that length.
         4 => unsafe { F::small_pot_inplace_sized::<4, INVERSE, NORMALIZE>(slice) },
         _ => return false,
     }
@@ -136,12 +140,14 @@ fn tiny_direct_dispatch<
     slice: &mut [F::Complex],
 ) -> bool {
     match N {
+        // SAFETY: the static entry asserted `slice.len() == N`, and this arm is `N`.
         2 => unsafe { F::small_pot_inplace_sized::<2, INVERSE, NORMALIZE>(slice) },
         3 => crate::application::execution::kernel::components::butterflies::dft3_impl::<
             F,
             INVERSE,
             NORMALIZE,
         >(slice),
+        // SAFETY: the static entry asserted `slice.len() == N`, and this arm is `N`.
         4 => unsafe { F::small_pot_inplace_sized::<4, INVERSE, NORMALIZE>(slice) },
         _ => return false,
     }
@@ -158,9 +164,13 @@ fn static_small_pot_dispatch<
     slice: &mut [F::Complex],
 ) -> bool {
     match N {
+        // SAFETY: the static entry asserted `slice.len() == N`, and this arm is `N`.
         8 => unsafe { F::small_pot_inplace_sized::<8, INVERSE, NORMALIZE>(slice) },
+        // SAFETY: the static entry asserted `slice.len() == N`, and this arm is `N`.
         16 => unsafe { F::small_pot_inplace_sized::<16, INVERSE, NORMALIZE>(slice) },
+        // SAFETY: the static entry asserted `slice.len() == N`, and this arm is `N`.
         32 => unsafe { F::small_pot_inplace_sized::<32, INVERSE, NORMALIZE>(slice) },
+        // SAFETY: the static entry asserted `slice.len() == N`, and this arm is `N`.
         64 => unsafe { F::small_pot_inplace_sized::<64, INVERSE, NORMALIZE>(slice) },
         _ => return false,
     }
@@ -439,6 +449,8 @@ macro_rules! define_pot_executors {
             _: &FftPlan1D<F>,
             slice: &mut [F::Complex],
         ) {
+            // SAFETY: this executor is installed for plans of length `$size` only, and every
+            // plan entry asserts the slice length before calling it.
             unsafe {
                 F::small_pot_inplace_sized::<$size, false, false>(slice);
             }
@@ -447,6 +459,8 @@ macro_rules! define_pot_executors {
             _: &FftPlan1D<F>,
             slice: &mut [F::Complex],
         ) {
+            // SAFETY: this executor is installed for plans of length `$size` only, and every
+            // plan entry asserts the slice length before calling it.
             unsafe {
                 F::small_pot_inplace_sized::<$size, true, true>(slice);
             }
@@ -455,6 +469,8 @@ macro_rules! define_pot_executors {
             _: &FftPlan1D<F>,
             slice: &mut [F::Complex],
         ) {
+            // SAFETY: this executor is installed for plans of length `$size` only, and every
+            // plan entry asserts the slice length before calling it.
             unsafe {
                 F::small_pot_inplace_sized::<$size, true, false>(slice);
             }
