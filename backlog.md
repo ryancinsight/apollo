@@ -1,5 +1,12 @@
 # Apollo Backlog
 
+<a id="apollo-pstd-consumer-transform-weight"></a>
+## APOLLO-PSTD-CONSUMER-TRANSFORM-WEIGHT-2026-09-15 — The 64 cubed real pair is most of a consumer step [patch] [perf] — todo
+- **Consumer evidence.** kwavers' split-field PSTD step at 64 cubed spends 75 to 86% of each of its two spectral phases inside apollo's 3-D real transforms, measured by `pstd_step_phase_split` with each phase timed against its own transforms one arm per repeat (kwavers PR [#787](https://github.com/ryancinsight/kwavers/pull/787), `backlog.md#kw-pstd-transform-split`): velocity 1695-1977 us of which transforms 1369-1483, density 1709-1830 of which transforms 1402-1582, across one quiet run and one under five to eight peer builds. Per transform that is roughly 340-370 us in the velocity phase (one forward, three inverse) and 234-264 us in the density phase (three of each) — against the 205-210 us `APOLLO-NATIVE-REAL-3D-2026-09-11` measured for the half-spectrum pair at the same size.
+- **Question.** Whether the consumer route reaches the half-spectrum path at all at this size, and where the gap between the consumer per-transform time and apollo's own probe comes from: the caller's buffers and layout, a widened arm, or the probe measuring a warmer state than a step does.
+- **Acceptance:** the consumer per-transform time attributed against apollo's own census at 64 cubed, with the route it takes named (half or widened) and any gap explained by a measurement rather than a guess. Whatever it names is the next apollo increment; no change is claimed by this item.
+- **Status:** todo, not claimed; filed 2026-09-15 by claude-opus-5 from the kwavers measurement.
+
 <a id="apollo-melinoe-executor-receiver"></a>
 ## APOLLO-MELINOE-EXECUTOR-RECEIVER-2026-09-11 — Track unpublished provider receiver construction [patch] — blocked
 - Scope: upstream Melinoe executor registration at local `af052fc`; independent of the lane-policy change and absent from its standalone dependency pins.
