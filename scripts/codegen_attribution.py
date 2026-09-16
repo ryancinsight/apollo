@@ -30,7 +30,7 @@ Producing the assembly, per revision, from a clean export::
     cargo rustc --manifest-path <dir>/Cargo.toml --release -p apollo-fft \
         --lib -- --emit=asm -C debuginfo=0
 
-Two traps this exists to route around, both of which cost a session:
+Three traps this exists to route around, each of which cost a session:
 
 * A proc-macro built for one export is reused for the next under a shared
   `CARGO_TARGET_DIR`, so the second build silently compiles the first
@@ -38,6 +38,17 @@ Two traps this exists to route around, both of which cost a session:
   revisions; the tell is an error naming syntax that is absent from the tree.
 * Grepping a release PE for a function name proves nothing either way: MSVC
   images carry no internal symbol table. Attribute from the assembly.
+* Every revision emits its `.s` to the same path under the shared target
+  directory, and stale ones from earlier sessions sit beside it, so picking
+  the file afterwards by newest mtime or by glob can hand back an artifact
+  hours older than the build just run -- a census that then reads as "the
+  change altered nothing", identically for both arms. Copy the emitted file
+  out to a per-revision name immediately after its own build, before the next
+  emit overwrites it, and compare the copies.
+
+Delimit a body by the next symbol, as `bodies` does, rather than by an end
+directive: this assembly tab-indents `.seh_endproc`, so a terminator anchored
+at column zero never fires and the body runs to end of file.
 
 Instruction counts, not bytes: the emitted `.s` carries no encoded lengths.
 Identical counts across every symbol of a library, together with identical
