@@ -4,6 +4,7 @@
 //! sidecar; this file crossed the 500-line gate when the parity wave landed.
 
 mod leto_reference;
+mod peak_estimation;
 
 use super::{
     inverse_real_lane_workspace_capacity, inverse_wola_workspace_capacities,
