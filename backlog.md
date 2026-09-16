@@ -31,7 +31,8 @@
 - **Verification:** attribute interpreter cost before modifying production code or its instrument; run targeted FourStep, lane and worker-idle tests with ASan once linking is available.
 
 <a id="atlas-apollo-n32-f64-liveness"></a>
-## ATLAS-APOLLO-N32-F64-LIVENESS-2026-09-04 — Bound the n=32 codelet and reduce register pressure [patch] [perf] — todo
+## ATLAS-APOLLO-N32-F64-LIVENESS-2026-09-04 — Bound the n=32 codelet and reduce register pressure [patch] [perf] — in-progress
+- **Integrator:** claude-opus-5 (session 5bed7001); **branch:** `perf/apollo-n32-f64-liveness` (lane apollo-route, from main); **lease:** `crates/apollo-fft/src/application/execution/kernel/components/stockham/`, this entry; **last-update:** 2026-09-15. Reclaimed after the released claim; the first action is the item's own oracle, the `n32_f64_liveness_against_rustfft` probe, against current main.
 - **Scope:** n=32 AVX2 codelet, its caller and regression tests; shared radix-8 changes require n=64 controls. No provider migration or public API change.
 - **Acceptance:** fixed-size safe entry; all direction/normalization and guarded-span tests pass; retain a schedule change only with counterbalanced same-host improvement and unchanged n=16/64 controls.
 - **Safety increment verified:** array borrow establishes 32 initialized values; guarded tests cover both AVX alignment residues, assert host dispatch and reject NaN output. Release run `75c7d45c-4e69-4023-bbf7-30840d0020d6` passes 526/526 enabled tests (29 ignored instruments); format, all-target Clippy, doctest, rustdoc and safety ratchet pass. All three emitted AVX bodies match the entry baseline after label normalization.
@@ -45,7 +46,6 @@
 - **Counter constraint:** Windows inventory exposes retired instructions and cycles, not established process attribution. [EnableThreadProfiling](https://learn.microsoft.com/en-us/windows/win32/api/winbase/nf-winbase-enablethreadprofiling#remarks) requires driver-configured global counters; an unconfigured requested counter returns zero. No driver or trace starts. `QueryThreadCycleTime` is not retired-instruction evidence.
 - **Profiling environment:** Ubuntu is registered, but `wsl -d Ubuntu --exec sh -lc ...` fails before executing with `Wsl/Service/CreateInstance/MountDisk/HCS/ERROR_PATH_NOT_FOUND` for its registered `ext4.vhdx` (2026-09-06). Only the Linux profiling substep is blocked; re-open on restored WSL disk access or another verified local profiling environment. No WSL registration or user data changes.
 - **Residual stash:** `cfe297dde91870790a57e02aaec5925eb91b4f9b` contains old Mnemosyne manifest work; preserved after the tool safety review refused deletion.
-- **Claim released:** 2026-09-15, the last update 2026-09-06 older than the stale-claim window; reclaim by re-syncing the board.
 
 <a id="atlas-apollo-strided-gather-upstream"></a>
 ## ATLAS-APOLLO-STRIDED-GATHER-UPSTREAM-2026-09-03 — The split's gather is hand-rolled per block count instead of a substrate primitive [minor] [arch] — todo
