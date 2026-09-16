@@ -2,6 +2,10 @@
 
 - Status: Accepted
 - Date: 2026-09-15
+- Revised 2026-09-16: the outer-tone floor was quoted as `5e-10 Hz`, which is
+  the measurement, not the bound the cited expression gives (2.1e-9 and
+  1.4e-9 Hz for the two tones), and the expression omitted the finite-length
+  bias term the test asserts alongside it. The decision is unchanged.
 - Item: `backlog.md#apollo-spectral-peak-estimation-spike`
 - Evidence:
   `crates/apollo-stft/src/application/execution/plan/stft/dimension_1d/tests/peak_estimation.rs`
@@ -67,10 +71,15 @@ the subtracted tones' kernel terms — no re-transform per round.
 | Jacobsen (4), Hann magnitudes | 1.0e-3 Hz, 5.1e-4 V, 3.3e-3 rad | 3.8e-3 Hz, 1.7e-8 V, 1.6e-2 rad | 3.1e-3 Hz, 9.2e-4 V, 9.6e-3 rad |
 
 The three-bin rectangular family lands within a factor of two of each other
-and one to three decades ahead of every alternative. Their outer-tone floor
-is the negative-frequency image: `δ(1 − δ²)(π/N)²/sin²(π(2k + δ)/N)` bins,
-5e-10 Hz here, and the measurements sit on it. The middle tone's floor is the
-noise: its Cramér–Rao bound is 3.6e-7 Hz and the measurement is 5.2e-7.
+and one to three decades ahead of every alternative. Their outer tones are
+image-limited rather than noise-limited: the negative-frequency image bounds
+the offset error at `δ(1 − δ²)(π/N)²/sin²(π(2k + δ)/N)` bins, plus Jacobsen
+(3)'s finite-length bias `δ(π/N)²/3` which Candan's factor removes — 2.1e-9
+and 1.4e-9 Hz for the two outer tones of this scene, against measurements of
+5.7e-10 and 4.8e-10, a factor of three inside. Their own Cramér–Rao bound is
+3.6e-13 Hz, three decades below, so the image and not the noise is what they
+are against. The middle tone is the other way round: its Cramér–Rao bound is
+3.6e-7 Hz and the measurement is 5.2e-7.
 
 **Aboutanios–Mulgrew is the weakest of the rectangular candidates here, not
 the strongest.** Its 1.0147×ACRB result is for one complex exponential in
