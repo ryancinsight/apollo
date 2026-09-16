@@ -175,15 +175,13 @@ where
     }
     for pair in 0..4 {
         let p0 = 2 * pair;
-        let mut columns = [ComplexReg::<f64, A>::zero(); 4];
-        for j in 0..2 {
-            let upper = load(simd, &mid[4 * p0 + 2 * j..4 * p0 + 2 * j + 2]);
-            let lower = load(simd, &mid[4 * (p0 + 1) + 2 * j..4 * (p0 + 1) + 2 * j + 2]);
-            let (even, odd) = transpose_pair(upper, lower);
-            columns[2 * j] = even;
-            columns[2 * j + 1] = odd;
-        }
-        let out = radix4::<f64, A, INVERSE>(columns);
+        let [(c0, c1), (c2, c3)] = core::array::from_fn(|j| {
+            transpose_pair(
+                load(simd, &mid[4 * p0 + 2 * j..4 * p0 + 2 * j + 2]),
+                load(simd, &mid[4 * (p0 + 1) + 2 * j..4 * (p0 + 1) + 2 * j + 2]),
+            )
+        });
+        let out = radix4::<f64, A, INVERSE>([c0, c1, c2, c3]);
         for (q, value) in out.into_iter().enumerate() {
             store(value, &mut data[8 * q + p0..8 * q + p0 + 2]);
         }
