@@ -345,32 +345,33 @@ fn small_sizes_against_the_references_by_core_type() {
 }
 
 #[test]
-#[ignore = "focused liveness instrument for the n=16/32/64 f64 codelets"]
-fn n32_f64_liveness_against_rustfft() {
+#[ignore = "focused liveness instrument for the n=16/32/64 codelets"]
+fn small_codelet_liveness_against_the_references_by_core_type() {
     let Some(selection) = measurement_cores::selected() else {
         eprintln!("host reports no processor class information; probe not measurable");
         return;
     };
-    let core = selection
-        .cores()
-        .first()
-        .expect("measurement selection must contain one processor class");
-    let cpu = core.processor().get();
-    let _binding =
-        ProcessorBinding::bind(core.processor()).expect("measurement processor must be available");
-    std::thread::yield_now();
-    let landed = ProcessorIndex::current()
-        .expect("Windows supports processor queries")
-        .get();
-    assert_eq!(landed, cpu, "processor binding must remain exact");
+    print!("{}", selection.describe());
+    for core in selection.cores() {
+        let cpu = core.processor().get();
+        let _binding = ProcessorBinding::bind(core.processor())
+            .expect("measurement processor must be available");
+        std::thread::yield_now();
+        let landed = ProcessorIndex::current()
+            .expect("Windows supports processor queries")
+            .get();
+        assert_eq!(landed, cpu, "processor binding must remain exact");
 
-    let core = core.label();
-    let mut warmup = BenchmarkSuite::new(BenchmarkConfig::regression());
-    sizes_for_scalar::<f64>(&mut warmup, core, "f64", &LIVENESS_CASES);
-    drop(warmup);
+        let core = core.label();
+        let mut warmup = BenchmarkSuite::new(BenchmarkConfig::regression());
+        sizes_for_scalar::<f64>(&mut warmup, core, "f64", &LIVENESS_CASES);
+        sizes_for_scalar::<f32>(&mut warmup, core, "f32", &LIVENESS_CASES);
+        drop(warmup);
 
-    let mut suite = BenchmarkSuite::new(BenchmarkConfig::regression());
-    sizes_for_scalar::<f64>(&mut suite, core, "f64", &LIVENESS_CASES);
-    println!("SML liveness cpu={landed} ({core})");
-    print!("{}", suite.report());
+        let mut suite = BenchmarkSuite::new(BenchmarkConfig::regression());
+        sizes_for_scalar::<f64>(&mut suite, core, "f64", &LIVENESS_CASES);
+        sizes_for_scalar::<f32>(&mut suite, core, "f32", &LIVENESS_CASES);
+        println!("SML liveness cpu={landed} ({core})");
+        print!("{}", suite.report());
+    }
 }
