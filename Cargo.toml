@@ -87,11 +87,7 @@ csv = "1.4.0"
 eunomia = { version = "0.8.0", git = "https://github.com/ryancinsight/eunomia", default-features = false, features = ["std"] }
 # Mnemosyne PR #128 is merged; Cargo.lock records the reviewed default source.
 mnemosyne = { package = "mnemosyne-memory", version = "0.7.0", git = "https://github.com/ryancinsight/Mnemosyne.git", features = ["eunomia"] }
-# Quarantine: moirai pins melinoe by `rev = 059e5891` (moirai 165f920c,
-# MOI-EXECUTOR-REGISTRATION-ORDER-2026-09-11). A different source string for the
-# same commit is a different crate, so `MelinoeCell` passed to
-# `moirai::par_partition_for_each` would not unify. Remove with moirai's pin.
-melinoe = { version = "0.9.0", git = "https://github.com/ryancinsight/melinoe.git", rev = "059e5891584918938c739e4885f861b7753d45b6", default-features = false, features = ["alloc"] }
+melinoe = { version = "0.9.0", git = "https://github.com/ryancinsight/melinoe.git", default-features = false, features = ["alloc"] }
 # Hermes PR #156 and Leto PR #168 are merged; Cargo.lock records their reviewed
 # default sources.
 hermes-simd = { version = "0.7.0", git = "https://github.com/ryancinsight/hermes.git" }

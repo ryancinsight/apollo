@@ -66,6 +66,9 @@ public API or numerical kernels.
 
 ## Revisions
 
+- **2026-09-17.** The last fork closed: Moirai dropped its Melinoe revision pin
+  (Moirai#393) and Apollo its matching quarantine pin, so every first-party
+  provider resolves through one source and `.provider-identity-baseline` is 0.
 - **2026-09-04.** The verification section asserted one revision per provider
   without measuring it; a lock scan showed four sources in excess of one per
   repository. Corrected, and the claim replaced by a committed bound the lock
