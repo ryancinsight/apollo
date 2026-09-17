@@ -212,18 +212,25 @@ impl<T: RealField> Frame<T> {
         T::from_f64(value)
     }
 
-    /// `R(u) = (e^{2πiu} − 1) / (e^{2πiu/N} − 1)`, with both phases reduced
-    /// to their principal turn so a position thousands of bins out keeps the
-    /// scalar's full precision; `N` where the denominator vanishes, the limit
-    /// at the multiples of `N`.
+    /// `R(u) = (e^{2πiu} − 1) / (e^{2πiu/N} − 1)` in the product form
+    /// `e^{iπu(N−1)/N} sin(πu) / sin(πu/N)`, evaluated without cancellation.
+    ///
+    /// `R` has period `N`, so `u` is first reduced to `w = u − N·round(u/N)`,
+    /// an exact subtraction, with `|w| ≤ N/2`. Writing `w = m + w'` for the
+    /// nearest integer `m`, `e^{iπw} sin(πw) = e^{iπw'} sin(πw')`, so
+    /// `R(w) = e^{iπw'} sin(πw') · e^{−iπw/N} / sin(πw/N)`: every factor is a
+    /// sine or phasor of an angle within `±π/2`, accurate to a few `ε`
+    /// relative even as `w'` or `w` approaches zero, where the quotient form
+    /// subtracts nearly equal numbers. `R(0) = N`.
     fn kernel(&self, u: T) -> Complex<T> {
-        let one = Complex::new(T::ONE, T::ZERO);
-        let turns = u / self.n;
-        let denominator = Complex::cis(T::TAU * (turns - turns.round())) - one;
-        if denominator.norm() < T::EPSILON {
+        let reduced = u - self.n * (u / self.n).round();
+        if reduced == T::ZERO {
             return Complex::new(self.n, T::ZERO);
         }
-        (Complex::cis(T::TAU * (u - u.round())) - one) / denominator
+        let fraction = reduced - reduced.round();
+        let near = T::PI * fraction;
+        let far = T::PI * reduced / self.n;
+        Complex::cis(near - far) * (near.sin() / far.sin())
     }
 
     /// A tone's contribution `a R(f − p) + ā R(−f − p)` to position `p`.
@@ -251,10 +258,14 @@ impl<T: RealField> Frame<T> {
         let direct = self.kernel(delta);
         let image = self.kernel(-(bin * two + delta));
         let determinant = direct.norm_sqr() - image.norm_sqr();
-        // Each squared magnitude carries at most `2ε` of rounding, so a
-        // determinant within `4ε` of `|R(δ)|²` is indistinguishable from zero.
-        let four = two * two;
-        let solvable = determinant > four * T::EPSILON * direct.norm_sqr();
+        // At `k = 0` and `k = N/2` the image's reduced argument is `−δ` and the
+        // determinant vanishes. Its computed value is not exactly zero: the
+        // argument `2k + δ` rounds by `ε (2k + 1)` bins, which moves `ln|R|` by
+        // at most twice that on the half-bin, and each squared magnitude
+        // carries `2ε` more, so a determinant within `4ε (2k + 3)` of
+        // `|R(δ)|²` is indistinguishable from zero.
+        let margin = two * two * T::EPSILON * (bin * two + two + T::ONE);
+        let solvable = determinant > margin * direct.norm_sqr();
         if !solvable {
             return None;
         }

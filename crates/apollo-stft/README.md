@@ -58,7 +58,7 @@ assert!((tone.position() - 100.25).abs() < 1e-4);
 On the ADR's three-tone scene (48 kHz, 48 000 samples, two 1 V tones around a
 1e-6 V tone, 1e-10 V noise) three rounds read the 1 V tones to 8e-10 Hz and
 the 1e-6 V tone to 6e-7 Hz, 1.7 times its Cramér–Rao bound
-(`tests/peak_estimation.rs`).
+(`src/application/execution/kernel/peak/tests/scene.rs`).
 
 ## Accelerator Execution
 
