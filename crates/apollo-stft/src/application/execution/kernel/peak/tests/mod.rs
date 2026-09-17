@@ -2,22 +2,23 @@
 //! shipped scalar, each estimate checked against a bound computed from the
 //! model's exact terms and the other estimates it actually subtracted.
 //!
-//! **Spectra.** Samples and phasors are generated in f64 and narrowed to `T`.
-//! A sample `A cos θ` with `|θ| ≤ Θ` carries `(Θ + 2) ε A` from its argument
-//! and cosine, a phasor of an angle within `2π` carries `(2π + 2) ε`, the
-//! narrowings and the product `3ε`, and recursive summation adds at most
-//! `(N − 1) ε Σ|s_t|` (Higham, *Accuracy and Stability of Numerical
-//! Algorithms*, §4.2): a bin is within `N ε Σ A (N + Θ + 2π + 7)` of its exact
-//! value ([`Model::rounding`]).
+//! **Spectra.** Samples and reduced-angle phasors are generated in f64, then
+//! narrowed to `T`. For unit roundoff `u = ε/2`, `γ_m = mu/(1-mu)` composes
+//! `m` rounded operations. A sample angle formed by five operations carries
+//! `γ₅ Θ`; each elementary sine or cosine is assumed within one epsilon in
+//! absolute error. [`Model::rounding`] composes those source errors with the
+//! narrowing, complex product, and `N - 1` recursive additions. The elementary
+//! function assumption is explicit evidence for these tests, not a portable
+//! proof of every platform's libm.
 //!
 //! **Offset.** The estimator reads bins `k − 1, k, k + 1`, each the tone's term
-//! `t_m` plus a perturbation of magnitude at most `e_m` (its own image, other
-//! tones' residuals, rounding). With `D = 2t₀ − t₋₁ − t₊₁` and
+//! `t_m` including its image, plus a perturbation of magnitude at most `e_m`
+//! (other tones' residuals, rounding). With `D = 2t₀ − t₋₁ − t₊₁` and
 //! `r₀ = (t₋₁ − t₊₁)/D`, the perturbed ratio differs from `r₀` by at most
 //! `(e₋₁ + e₊₁ + |r₀| (2e₀ + e₋₁ + e₊₁)) / (|D| (1 − q))`,
 //! `q = (2e₀ + e₋₁ + e₊₁) / |D| < 1`, by the triangle inequality. The offset
-//! errs by at most the correction factor times that, plus `|c · Re r₀ − δ|`
-//! (Candan's residual, `r₀` being exact for the tone alone), plus `8ε` for the
+//! errs by at most `tan(π/N)/(π/N)` times that (atan is 1-Lipschitz), plus
+//! the exact image-induced bias of the inverse relation, plus `8ε` for the
 //! ratio's arithmetic and `N ε` for the position's.
 //!
 //! **Amplitude and phase.** Bin `k` holds `X = a R(δ) + ā I(δ)`, `I(s) =
@@ -42,11 +43,18 @@ use std::f64::consts::{PI, TAU};
 use eunomia::{Complex, Complex64, RealField};
 
 use super::{estimate_peaks, Frame, PeakEstimate};
-use crate::domain::contracts::error::PeakEstimationError;
 
+mod boundary;
 mod scene;
+mod tones;
 
 const LEN: usize = 128;
+
+fn gamma(epsilon: f64, operations: usize) -> f64 {
+    let unit_roundoff = epsilon / 2.0;
+    let accumulated = operations as f64 * unit_roundoff;
+    accumulated / (1.0 - accumulated)
+}
 
 #[derive(Clone, Copy, Debug)]
 struct Tone {
@@ -73,7 +81,7 @@ impl Tone {
 
 /// A frame length and the f64 kernel the bounds are evaluated with; the
 /// kernel is checked against the defining sum in
-/// [`closed_form_kernel_matches_the_sum_for_every_scalar`].
+/// [`tones::closed_form_kernel_matches_the_sum_for_every_scalar`].
 struct Model {
     len: usize,
     frame: Frame<f64>,
@@ -100,7 +108,36 @@ impl Model {
     /// amplitude `total` whose sample arguments stay within `argument`.
     fn rounding<T: RealField>(&self, total: f64, argument: f64) -> f64 {
         let n = self.len as f64;
-        n * T::EPSILON.to_f64() * total * (n + argument + TAU + 7.0)
+        let source_epsilon = f64::EPSILON;
+        let source_unit = source_epsilon / 2.0;
+        let source_sample = total
+            * ((1.0 + source_unit)
+                * (gamma(source_epsilon, 5) * argument + 2.0_f64.sqrt() * source_epsilon)
+                + source_unit);
+        let source_samples = (1.0 + gamma(source_epsilon, 3)) * n * source_sample
+            + gamma(source_epsilon, 3) * n * total;
+
+        let target_epsilon = T::EPSILON.to_f64();
+        let target_unit = target_epsilon / 2.0;
+        let sample_narrowing = if target_epsilon == source_epsilon {
+            0.0
+        } else {
+            2.0_f64.sqrt() * target_unit
+        };
+        let samples = (1.0 + sample_narrowing) * source_samples + sample_narrowing * n * total;
+        let source_phasor = gamma(source_epsilon, 3) * TAU + 2.0_f64.sqrt() * source_epsilon;
+        let phasor = if target_epsilon == source_epsilon {
+            source_phasor
+        } else {
+            let phasor_narrowing = 2.0_f64.sqrt() * target_unit;
+            (1.0 + phasor_narrowing) * source_phasor + phasor_narrowing
+        };
+        // Each component of a complex product is a two-term dot product.
+        let multiplication = 2.0_f64.sqrt() * gamma(target_epsilon, 2);
+        let product = (1.0 + multiplication) * phasor + multiplication;
+        let summation = gamma(target_epsilon, self.len - 1);
+        (1.0 + summation) * (1.0 + product) * samples
+            + (product + summation * (1.0 + product)) * n * total
     }
 
     /// What `tone` leaves in bin `p` after the estimator subtracted
@@ -114,7 +151,15 @@ impl Model {
                 let size = estimate.a.norm()
                     * (self.kernel(estimate.position - p).norm()
                         + self.kernel(-estimate.position - p).norm());
-                (subtracted - truth).norm() + 16.0 * T::EPSILON.to_f64() * size
+                // |R'(u)| <= (2π/N) sum(t) = π(N-1). Forming each
+                // argument ±f-p incurs at most ε(|f|+|p|) bin error.
+                let argument_error = 2.0
+                    * estimate.a.norm()
+                    * PI
+                    * (self.len - 1) as f64
+                    * T::EPSILON.to_f64()
+                    * (estimate.position.abs() + p.abs());
+                (subtracted - truth).norm() + 16.0 * T::EPSILON.to_f64() * size + argument_error
             }
         }
     }
@@ -125,14 +170,8 @@ impl Model {
     fn offset_bound<T: RealField>(&self, tone: &Tone, k: usize, extra: [f64; 3]) -> Option<f64> {
         let len = self.len as f64;
         let eps = T::EPSILON.to_f64();
-        let a = tone.a();
-        let term = |m: usize| a * self.kernel(tone.position - (k as f64 + m as f64 - 1.0));
-        let spill: Vec<f64> = (0..3)
-            .map(|m| {
-                let p = k as f64 + m as f64 - 1.0;
-                (a.conj() * self.kernel(-tone.position - p)).norm() + extra[m]
-            })
-            .collect();
+        let term = |m: usize| self.contribution(tone.position, tone.a(), k as f64 + m as f64 - 1.0);
+        let spill = extra;
         let denominator = term(1) * 2.0 - term(0) - term(2);
         let exact_ratio = (term(0) - term(2)) / denominator;
         let spill_in_denominator = 2.0 * spill[1] + spill[0] + spill[2];
@@ -144,8 +183,9 @@ impl Model {
             / (denominator.norm() * (1.0 - swamp));
         let correction = (PI / len).tan() / (PI / len);
         let delta = tone.position - k as f64;
-        let candan = (correction * exact_ratio.re - delta).abs();
-        Some(correction * ratio + candan + 8.0 * eps + len * eps)
+        let step = PI / len;
+        let closure = ((exact_ratio.re * step.tan()).atan() / step - delta).abs();
+        Some(correction * ratio + closure + 8.0 * eps + len * eps)
     }
 
     /// The bound on `|â − a|` for the estimator's solve at offset `delta_hat`
@@ -167,7 +207,11 @@ impl Model {
         }
         let a = tone.a().norm();
         let moved = (self.kernel(delta) - direct_hat).norm() + (image(delta) - image_hat).norm();
-        Some((a * moved + extra) / gap + 16.0 * T::EPSILON.to_f64() * a)
+        // The public position rounds bin+delta; recovering delta for this
+        // oracle adds at most ε(k+1). Bound both kernel derivatives by πN.
+        let position_rounding =
+            2.0 * PI * self.len as f64 * T::EPSILON.to_f64() * (k + 1) as f64 * a;
+        Some((a * moved + extra + position_rounding) / gap + 16.0 * T::EPSILON.to_f64() * a)
     }
 
     /// Asserts `estimate` of `tone` read at bin `k` within both bounds.
@@ -239,9 +283,11 @@ impl Model {
                             .map(|j| self.residual::<T>(&tones[j], seen(j), p))
                             .sum::<f64>()
                 });
-                let resolvable = self.offset_bound::<T>(&tones[i], bins[i], extra).is_some();
+                let resolvable = self
+                    .offset_bound::<T>(&tones[i], bins[i], extra)
+                    .is_some_and(|bound| (tones[i].position - bins[i] as f64).abs() + bound <= 0.5);
                 let estimate = by_round[round][i];
-                if round == rounds || (resolvable && estimate.is_some()) {
+                if round == rounds || resolvable {
                     self.check::<T>(
                         estimate,
                         &tones[i],
@@ -317,252 +363,4 @@ fn argument(tones: &[Tone]) -> f64 {
         .iter()
         .map(|tone| TAU * tone.position.abs() + tone.phase.abs())
         .fold(0.0, f64::max)
-}
-
-const PHASES: [f64; 8] = [-3.1, -2.618, -2.5307, -1.4, -0.2, 0.7, 1.9, 3.1];
-
-/// Lone real tones across the phase circle, near DC and Nyquist where the image
-/// is strongest and on an integer bin, each read at its own bin and again at
-/// its mirror.
-fn single_tones_within_their_bounds<T: RealField>() {
-    let model = Model::new(LEN);
-    for (position, amplitude) in [
-        (1.7, 0.6),
-        (10.3, 1.0),
-        (31.0, 0.25),
-        (40.00003, 1.0),
-        (47.49, 3.0),
-        (62.2, 1.5),
-    ] {
-        for phase in PHASES {
-            let tone = Tone {
-                position,
-                amplitude,
-                phase,
-            };
-            let spectrum = real_spectrum::<T>(&[tone]);
-            let round = model.rounding::<T>(amplitude, argument(&[tone]));
-            for tone in [tone, tone.mirrored(LEN)] {
-                let k = tone.position.round() as usize;
-                let estimates = estimate_peaks(&spectrum, &[k], NonZeroUsize::MIN)
-                    .expect("invariant: a 128-bin frame and an in-range bin are valid");
-                model.check::<T>(estimates[0], &tone, k, [round; 3], "single tone");
-            }
-        }
-    }
-}
-
-#[test]
-fn single_tones_within_their_bounds_for_every_scalar() {
-    single_tones_within_their_bounds::<f64>();
-    single_tones_within_their_bounds::<f32>();
-}
-
-/// One complex exponential has no image, so its offset error is Candan's
-/// residual and rounding alone. Placing it just below `N` makes the estimator
-/// read bin `0` as the upper neighbour of bin `N − 1`. Without the correction
-/// the offset errs by about `|δ| (1 − δ²) (π/N)² / 3`, ten times Candan's
-/// residual at `δ = 0.4`, and outside this bound in f64.
-fn complex_exponential_offset_is_candans<T: RealField>() {
-    let model = Model::new(LEN);
-    let n = LEN as f64;
-    let (position, phase) = (127.4, 0.9);
-    let samples: Vec<Complex64> = (0..LEN)
-        .map(|t| Complex64::from_polar(1.0, TAU * position * t as f64 / n + phase))
-        .collect();
-    let spectrum = summed::<T>(&samples);
-    let estimates = estimate_peaks(&spectrum, &[127], NonZeroUsize::MIN)
-        .expect("invariant: a 128-bin frame and an in-range bin are valid");
-    let estimate = estimates[0].expect("the exponential's bin holds its peak");
-    let unit = Complex64::from_polar(1.0, phase);
-    let term = |m: f64| unit * model.kernel(position - (127.0 + m));
-    let denominator = term(0.0) * 2.0 - term(-1.0) - term(1.0);
-    let exact_ratio = (term(-1.0) - term(1.0)) / denominator;
-    let round = model.rounding::<T>(1.0, TAU * position + phase);
-    let ratio = (2.0 * round + exact_ratio.norm() * 4.0 * round)
-        / (denominator.norm() * (1.0 - 4.0 * round / denominator.norm()));
-    let correction = (PI / n).tan() / (PI / n);
-    let eps = T::EPSILON.to_f64();
-    let bound =
-        correction * ratio + (correction * exact_ratio.re - 0.4).abs() + 8.0 * eps + n * eps;
-    let error = (estimate.position().to_f64() - position).abs();
-    assert!(error <= bound, "offset error {error:e} exceeds {bound:e}");
-}
-
-#[test]
-fn complex_exponential_offset_is_candans_for_every_scalar() {
-    complex_exponential_offset_is_candans::<f64>();
-    complex_exponential_offset_is_candans::<f32>();
-}
-
-/// Two tones eight bins apart, the weaker at half the stronger, over three
-/// rounds: the first read of the stronger tone carries the weaker one whole
-/// (the direct pass), and every later read carries only the residual of the
-/// estimate it subtracted.
-fn separated_tones_resolve_after_peeling<T: RealField>() {
-    let model = Model::new(LEN);
-    for (strong_phase, weak_phase) in [(1.2, -0.6), (-2.9, 2.5), (0.4, 0.1)] {
-        let tones = [
-            Tone {
-                position: 20.35,
-                amplitude: 1.0,
-                phase: strong_phase,
-            },
-            Tone {
-                position: 28.1,
-                amplitude: 0.5,
-                phase: weak_phase,
-            },
-        ];
-        let spectrum = real_spectrum::<T>(&tones);
-        let round = model.rounding::<T>(1.5, argument(&tones));
-        model.check_peeled::<T>(&spectrum, &tones, &[20, 28], 3, &|_| round, "peeled pair");
-    }
-}
-
-#[test]
-fn separated_tones_resolve_after_peeling_for_every_scalar() {
-    separated_tones_resolve_after_peeling::<f64>();
-    separated_tones_resolve_after_peeling::<f32>();
-}
-
-/// Bins that hold no peak of their own are rejected, not misread: a bin two
-/// away from a lone tone reads an offset near two bins, and a tone read at DC
-/// or Nyquist is its own image. For a real signal the offset read there is
-/// exactly zero, the spectrum being conjugate-symmetric, and so is the
-/// determinant; a complex exponential near Nyquist reads a non-zero offset,
-/// and the determinant is zero only up to the rounding of `2k + δ̂`, which the
-/// estimator's margin absorbs.
-fn bins_without_a_peak_are_rejected<T: RealField>() {
-    let tone = Tone {
-        position: 10.3,
-        amplitude: 1.0,
-        phase: 0.7,
-    };
-    let spectrum = real_spectrum::<T>(&[tone]);
-    let estimates = estimate_peaks(&spectrum, &[12, 8], NonZeroUsize::MIN)
-        .expect("invariant: in-range bins are valid");
-    assert_eq!(estimates, vec![None, None], "bins two away from the tone");
-
-    for (label, position, bin) in [
-        ("DC", 0.0, 0),
-        ("near DC", 0.3, 0),
-        ("Nyquist", 64.0, 64),
-        ("near Nyquist", 64.2, 64),
-        ("near Nyquist, below", 63.7, 64),
-    ] {
-        for phase in PHASES {
-            let spectrum = real_spectrum::<T>(&[Tone {
-                position,
-                amplitude: 1.0,
-                phase,
-            }]);
-            let estimates = estimate_peaks(&spectrum, &[bin], NonZeroUsize::MIN)
-                .expect("invariant: in-range bins are valid");
-            assert_eq!(
-                estimates,
-                vec![None],
-                "a tone {label} read at bin {bin} is its own image (phase {phase})"
-            );
-        }
-    }
-
-    let n = LEN as f64;
-    for position in [64.2, 63.7, 64.45] {
-        for phase in PHASES {
-            let samples: Vec<Complex64> = (0..LEN)
-                .map(|t| Complex64::from_polar(1.0, TAU * position * t as f64 / n + phase))
-                .collect();
-            let spectrum = summed::<T>(&samples);
-            let estimates = estimate_peaks(&spectrum, &[LEN / 2], NonZeroUsize::MIN)
-                .expect("invariant: in-range bins are valid");
-            assert_eq!(
-                estimates,
-                vec![None],
-                "an exponential at {position} read at Nyquist has a singular solve (phase {phase})"
-            );
-        }
-    }
-}
-
-#[test]
-fn bins_without_a_peak_are_rejected_for_every_scalar() {
-    bins_without_a_peak_are_rejected::<f64>();
-    bins_without_a_peak_are_rejected::<f32>();
-}
-
-#[test]
-fn unreadable_inputs_are_typed_errors() {
-    let short = vec![Complex::new(1.0_f64, 0.0); 2];
-    assert_eq!(
-        estimate_peaks(&short, &[0], NonZeroUsize::MIN),
-        Err(PeakEstimationError::FrameTooShort { len: 2 })
-    );
-    let spectrum = real_spectrum::<f64>(&[Tone {
-        position: 10.3,
-        amplitude: 1.0,
-        phase: 0.0,
-    }]);
-    assert_eq!(
-        estimate_peaks(&spectrum, &[10, LEN], NonZeroUsize::MIN),
-        Err(PeakEstimationError::PeakOutOfRange { bin: LEN, len: LEN })
-    );
-    assert_eq!(
-        estimate_peaks(&spectrum, &[10, 30, 10], NonZeroUsize::MIN),
-        Err(PeakEstimationError::DuplicatePeak { bin: 10 })
-    );
-    assert_eq!(
-        estimate_peaks(&spectrum, &[10, 30, LEN - 10], NonZeroUsize::MIN),
-        Err(PeakEstimationError::MirrorPeak {
-            bin: LEN - 10,
-            mirror: 10
-        })
-    );
-    // DC and Nyquist are their own mirrors and stay readable.
-    let readable = estimate_peaks(&spectrum, &[0, LEN / 2, 10], NonZeroUsize::MIN)
-        .expect("self-mirrored bins are not a mirror pair");
-    assert!(readable[2].is_some(), "bin 10 holds the tone");
-    // `N ε = ½` at `N = 2^22` in f32.
-    let long = vec![Complex::new(0.0_f32, 0.0); 1 << 22];
-    assert_eq!(
-        estimate_peaks(&long, &[1], NonZeroUsize::MIN),
-        Err(PeakEstimationError::FrameTooLong { len: 1 << 22 })
-    );
-}
-
-/// The kernel against `Σ_{t<N} e^{2πi u t / N}` summed directly, at `u` as the
-/// scalar holds it: near zero, near integers and multiples of `N` (where a
-/// quotient form cancels), and thousands of bins away. The sum of `N` unit
-/// phasors, each within `(2π + 3) ε`, carries at most `N (N + 2π + 3) ε`; the
-/// product form a few `ε` relative to magnitudes up to `N`.
-fn closed_form_kernel_matches_the_sum<T: RealField>() {
-    let frame = Frame::<T>::new(LEN);
-    let n = LEN as f64;
-    let eps = T::EPSILON.to_f64();
-    for u in [
-        0.0, 3.1e-5, -0.37, 0.63, 1.00003, 3.5, 49.23, 127.9999, 128.00002, -98.63, 1_279.5,
-        -17_802.37,
-    ] {
-        let held = T::from_f64(u);
-        let closed = frame.kernel(held);
-        let u = held.to_f64();
-        let whole = u.round();
-        let summed = (0..LEN).fold(Complex::new(T::ZERO, T::ZERO), |sum, t| {
-            let turns = (u - whole) * t as f64 / n + (whole * t as f64).rem_euclid(n) / n;
-            let angle = TAU * turns;
-            sum + Complex::new(T::from_f64(angle.cos()), T::from_f64(angle.sin()))
-        });
-        let bound = n * (n + TAU + 3.0) * eps + 16.0 * eps * summed.norm().to_f64();
-        let error = (closed - summed).norm().to_f64();
-        assert!(
-            error <= bound,
-            "kernel at {u}: {closed:?} against the sum {summed:?}, {error:e} > {bound:e}"
-        );
-    }
-}
-
-#[test]
-fn closed_form_kernel_matches_the_sum_for_every_scalar() {
-    closed_form_kernel_matches_the_sum::<f64>();
-    closed_form_kernel_matches_the_sum::<f32>();
 }

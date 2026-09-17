@@ -80,7 +80,7 @@ Change-class tags: [patch] backward-compatible fix, [minor] additive non-breakin
 - [minor] `apollo-stft` estimates tones below bin resolution:
   `estimate_peaks` returns a `PeakEstimate` (fractional bin position,
   amplitude, phase) for each requested peak bin of a rectangular-window DFT,
-  generic over `f32` and `f64`, from Candan's corrected three-bin ratio, the
+  generic over `f32` and `f64`, from the three-bin ratio's inverse-tangent closure, the
   image-corrected amplitude and phase solve, and estimate-and-subtract across
   the set; a bin whose offset leaves the half-bin returns `None`, and
   unreadable inputs (fewer than three bins, a frame too long to resolve a

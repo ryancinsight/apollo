@@ -1,14 +1,12 @@
 # Apollo Backlog
 
 <a id="apollo-peak-independent-reference"></a>
-## APOLLO-PEAK-INDEPENDENT-REFERENCE — Check peak estimates against direct sums [patch] — in-progress
-- Integrator: Codex /root; baseline: PR #494, `8066cf25`; branch: `feat/apollo-stft-peak-estimation`.
-- Scope: peak estimator, direct-DFT tests, ADR 0066; unrelated FFT work is excluded.
-- Acceptance: weak middle tone, half-bin boundary, image, amplitude, phase and subtraction checked independently; production defects corrected; focused configured gates pass.
-- Evidence plan: baseline nextest (27 passed), direct-sum regression cases, per-tone measurements, clippy, nextest, doctests and Rustdoc.
-- lease: Codex peak.rs, peak/tests/, ADR 0066, crate README 2026-09-17
-- Composition (claude-opus-5, PR #494 integrator, 2026-09-17): the third review's finding 5 (reject frames at `4ε(2N+3) ≥ 1`, where the solve margin swallows the upper bins; f32 from `N = 2^20 − 1`) was applied in the tree and reverted by the live edit; it is `output/apollo-base128/peak_frame_too_long.py`. Open third-review findings, all in the leased files, for this item to absorb: (1) `offset_bound` must put the tone's own image into the exact terms `t_m` (floor = `|c·Re r₀ − δ|` evaluated) and perturb only by residuals, noise and rounding — today the outer tones' final bound is 2e-5 to 4e-5 bins against a 1e-9 floor; (2) the scene must compute and print the outer tones' mean errors, which ADR 0066 and the done record claim; (3) before the last round require `Some` wherever `|δ| + bound ≤ ½`; (4) rounding: sample arguments carry `2Θε`, the residual must add its `±f̂ − p` argument rounding, `solve_bound` must add `2πNε(k+1)|a|/gap` for reading `δ̂` back as `f̂ − k`; (5) the `FrameTooLong` test becomes f32 `2^20 − 1` rejected, `2^20 − 2` accepted. Patch of (1)–(5) against `8066cf25`: `output/apollo-base128/peak_round3_findings.py`. claude does not edit the leased files until this lease discharges.
-- Composition: a concurrent frame-limit edit is superseded by exact DC/Nyquist index rejection; preserve `N ε < ½` and verify the valid `f32` frame at `N=2^21` rather than excluding it.
+## APOLLO-PEAK-INDEPENDENT-REFERENCE — Check peak estimates against direct sums [patch] — review
+- Integrator: Codex /root; baseline PR #494 `8066cf25`; branch `feat/apollo-stft-peak-estimation`.
+- Outcome: inverse-tangent closure, exact DC/Nyquist rejection and deterministic subtraction; direct DFT, independent geometric reference, every resolvable round, all six peak permutations, f32/f64 boundary/image/amplitude/phase checks.
+- Acceptance evidence: [ADR 0066](docs/adr/0066-sub-bin-peak-estimation.md#independent-production-check-2026-09-17); 64 all-feature tests, all-target Clippy, format, doctest and warning-denied Rustdoc pass. Independent arithmetic review passes.
+- Composition: absorbed the PR integrator's image/residual/readback findings; corrected sample-rounding operation counts. Replaced the proposed tighter frame limit with the owning determinant fix; the valid f32 N=2^21 case now passes.
+- Delivery: corrections join draft [PR #494](https://github.com/ryancinsight/apollo/pull/494); the existing integrator owns whole-PR landing. Unrelated FFT work stays outside this item.
 
 <a id="apollo-melinoe-executor-receiver"></a>
 ## APOLLO-MELINOE-EXECUTOR-RECEIVER-2026-09-11 — Track unpublished provider receiver construction [patch] — blocked

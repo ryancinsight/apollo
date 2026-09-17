@@ -1,15 +1,23 @@
 # 0066 — Sub-bin peak parameters from three bins and estimate-and-subtract
 
 - Status: Accepted
+- Revised 2026-09-17 (independent reference check): the approximate correction
+  maps a noise-free complex exponential at offset `δ` to
+  `tan(πδ/N)/(π/N)`. At `δ = 1/2` this exceeds `1/2`, so the original
+  rejection test discards an otherwise valid boundary estimate. The selected
+  offset now inverts the tangent relation. The image solve rejects DC and
+  even-length Nyquist by index: its previous `4ε(2k+3)` relative determinant
+  threshold exceeds one at valid large-frame bins and rejects even an exact
+  on-bin tone with zero image. See [reference checks](../../backlog.md#apollo-peak-independent-reference).
 - Date: 2026-09-15
 - Revised 2026-09-16: the outer-tone floor was quoted as `5e-10 Hz`, which is
   the measurement, not the bound the cited expression gives (2.1e-9 and
   1.4e-9 Hz for the two tones), and the expression omitted the finite-length
   bias term the test asserts alongside it. The decision is unchanged.
-- Revised 2026-09-17: the decision is implemented as `apollo_stft::estimate_peaks`
+- Earlier revision, 2026-09-17: the decision was implemented as `apollo_stft::estimate_peaks`
   (`backlog.md#apollo-peak-estimation-surface`). The spike's test-only
   candidates are deleted; the oracle scene is the surface's test and
-  measures the Candan 2011 row below again (8.4e-10 and 7.8e-10 Hz, 6.0e-7
+  measured the Candan 2011 row below again (8.4e-10 and 7.8e-10 Hz, 6.0e-7
   Hz). The image-floor expression below is the first-order size of the image's
   effect, not an upper bound: review found estimates up to 15% above it near
   DC. The surface's tests instead bound every read by the triangle inequality
@@ -43,6 +51,77 @@ samples (a 1 Hz bin), three tones near 8950 Hz about 50 Hz apart, the outer
 two at 1 V and the middle at 1e-6 V, white noise at 1e-10 V, random phases —
 eight seeds, mean absolute errors.
 
+## Independent production check, 2026-09-17
+
+Baseline: draft PR #494 at `8066cf25`. Its 27 existing tests pass
+(Nextest run `3d108b4f-f148-4b49-bf44-dd4eaa7cbab8`). Two new tests fail
+against that exact production file: an offset of `-0.499999` at `N=16`,
+phase `-2.4`, is rejected; and a unit on-bin cosine at bin `1572864` of an
+`f32` frame of length `2097152` is rejected (run
+`87b64b26-2f9b-41c9-a8e3-5963e81bdac1`). The inverse-tangent closure and
+index-based singularity check correct these cases without reducing the
+accepted frame-length range.
+
+Residual subtraction now follows strength order, with bin index breaking
+equal-strength ties. Before this correction, permuting the three requested
+bins changed the weak tone's complex coefficient in its last bits. All six
+permutations now return identical corresponding estimates.
+
+The scene replaces all nine bins read by the estimator with DFT sums of
+the generated samples. It also runs a separately implemented geometric-series
+quotient, image solve and subtraction recurrence. Every resolvable read is
+checked over all three rounds. The deterministic error model includes the
+tone's own image in the reference ratio, and adds noise, other-tone residuals,
+sample/argument rounding and position readback error as perturbations. The
+Cramér–Rao value is reported only as a lower-bound reference, not an upper
+acceptance criterion.
+
+The roundoff model assumes absolute sine/cosine error no greater than the
+scalar epsilon; Rust does not guarantee this across platforms. Sample-angle
+arithmetic and direct-DFT arithmetic have separate operation-count bounds
+using `γ_m = m u/(1 − m u)`, `u = ε/2`. Integer reduction of each direct-DFT
+phase keeps its magnitude below `2π`. The previous `2εΘ` sample allowance
+omitted operations and was replaced from this derivation, not fitted to a
+failure. These are conditional floating-point bounds and observed native
+results, not a machine-checked proof of transcendental accuracy.
+
+Measured mean absolute errors over eight seeds, three rounds, Windows x64,
+Rust 1.97.0, committed dependency lock; run
+`86a3c8de-d7ce-4657-a18c-130da7316025` (64 all-feature tests passed):
+
+| Tone amplitude | FFT frequency / direct DFT (Hz) | FFT amplitude / direct DFT (V) | FFT phase / direct DFT (rad) |
+|---|---|---|---|
+| 1 V, lower | 8.01e-10 / 8.01e-10 | 1.08e-9 / 1.08e-9 | 2.51e-9 / 2.51e-9 |
+| 1e-6 V, middle | 5.96e-7 / 5.96e-7 | 1.56e-11 / 1.56e-11 | 1.57e-5 / 1.57e-5 |
+| 1 V, upper | 7.59e-10 / 7.59e-10 | 4.96e-10 / 4.96e-10 | 2.36e-9 / 2.36e-9 |
+
+Agreement at the displayed precision is not bitwise FFT/DFT equivalence or
+a statistical efficiency proof. Boundary tests cover `f32` and `f64`,
+multiple lengths/phases, direct and mirrored reads, strict interior/exterior
+offsets and exact half-bin real tones. At the exact boundary the image can
+move the estimated offset to either side. Odd-frame adjacent conjugate peaks
+remain unresolved by this isolated-tone ratio; no exact recovery is claimed
+there. No latency or throughput measurement was made.
+
+Focused gates use Rust 1.97.0 and the committed lockfile on Windows x64:
+`cargo fmt --all -- --check`, `cargo clippy -p apollo-stft --all-targets
+--all-features -- -D warnings`, `cargo nextest run -p apollo-stft
+--all-features --profile ci`, `cargo test -p apollo-stft --all-features
+--doc` (one doctest), and `RUSTDOCFLAGS="-D warnings" cargo doc -p
+apollo-stft --all-features --no-deps` pass. Dependency-resolving commands
+use `--locked`. Native tests retain the committed 30-second slow and
+60-second termination limits, with no retries. The installed nextest is
+0.9.143; the CI workflow pins 0.9.140, so runner-version parity is not claimed.
+The measured scene output and JUnit are retained under the Atlas output
+retention policy as `output/apollo-base128/peak-reference-tests.txt` and
+`peak-reference-junit.xml`. No full-workspace gate or cross-platform run is
+claimed.
+
+The release-profile peak filter (`cargo nextest run -p apollo-stft --locked
+--release --profile ci -E 'test(kernel::peak)'`) passes all 12 selected tests,
+run `f180fe37-4700-4773-b30b-91eab6220eb2`, and reproduces the table at its
+displayed precision. Its output is `output/apollo-base128/peak-reference-release.txt`.
+
 ## Findings
 
 **Candidates.** Five resolved estimators of the fractional offset `δ` from
@@ -72,12 +151,13 @@ This is the leakage floor the Prism paper's windows exist to lower.
 
 **Estimate-and-subtract removes it instead.** Estimating strongest-first on
 the residual of the other tones' synthesized contributions, three rounds,
-takes the middle tone from unresolvable to noise-limited, because a tone
+takes the middle tone from unresolvable to the errors measured below, because a tone
 estimated to relative error `ε` leaves interference `ε` for the next round.
 The DFT is linear, so the residual at any position is the raw spectrum minus
 the subtracted tones' kernel terms — no re-transform per round.
 
-**Measured, mean absolute error over eight seeds, after three rounds:**
+**Historical spike measurements, mean absolute error over eight seeds, after
+three rounds (not a measurement of the revised production implementation):**
 
 | estimator | tone 1 (1 V) | tone 2 (1e-6 V) | tone 3 (1 V) |
 |---|---|---|---|
@@ -96,8 +176,10 @@ image moves the offset by `δ(1 − δ²)(π/N)²/sin²(π(2k + δ)/N)` bins, pl
 and 1.4e-9 Hz for the two outer tones of this scene, against measurements of
 5.7e-10 and 4.8e-10, a factor of three inside. Their own Cramér–Rao bound is
 3.6e-13 Hz, three decades below, so the image and not the noise is what they
-are against. The middle tone is the other way round: its Cramér–Rao bound is
-3.6e-7 Hz and the measurement is 5.2e-7.
+are against. The middle tone's Cramér–Rao lower bound on standard deviation is
+3.6e-7 Hz and the historical mean absolute error is 5.2e-7 Hz. These are
+different statistics: proximity does not establish a noise-limited estimator,
+and a multiple of the lower bound is not an upper acceptance limit.
 
 **Aboutanios–Mulgrew is the weakest of the rectangular candidates here, not
 the strongest.** Its 1.0147×ACRB result is for one complex exponential in
@@ -122,21 +204,24 @@ so the comparison is not available and no claim about it is recorded.
 
 ## Decision
 
-Apollo owns the three-bin complex-ratio estimator with Candan's length
-correction — `δ = Re[(X_{k−1} − X_{k+1}) / (2X_k − X_{k−1} − X_{k+1})] ·
-tan(π/N)/(π/N)` on the rectangular window — with amplitude and phase from the
+Apollo owns the three-bin complex-ratio estimator with the inverse-tangent
+closure — `δ = atan(Re[(X_{k−1} − X_{k+1}) / (2X_k − X_{k−1} − X_{k+1})] ·
+tan(π/N))/(π/N)` on the rectangular window — with amplitude and phase from the
 image-corrected kernel solve, and estimate-and-subtract for multi-tone
 scenes.
 
-Candan 2011 over Jacobsen (3) at identical cost: the correction factor is
-derived rather than fitted, and removes the `δ(π/N)²/3` finite-length bias
-that dominates Jacobsen (3) at short `N` (at `N = 48 000` the two are within
-the image floor of each other, which is why they measure alike). Candan 2013's
-closure adds an `arctan` and measures no better; it is not carried.
+The inverse relation follows from the single-exponential identity
+`r = tan(πδ/N)/tan(π/N)`. Since `|δ| ≤ 1/2` and `N ≥ 3`, its argument is
+inside atan's principal branch. The earlier decision to omit this closure
+based on the long-frame scene overlooked boundary rejection at short frame
+lengths. The added atan removes that deterministic bias; it does not remove
+real-tone image bias or noise. Candan's [2013 paper](https://open.metu.edu.tr/handle/11511/35530)
+studies this bias-removal stage. No performance improvement is claimed.
 
 The public surface is an estimate-and-subtract entry over a spectrum and a
 set of peak bins, returning frequency, amplitude and phase per peak, with
-rejection when an offset leaves the half-bin. A caller with one isolated tone
+rejection when the estimated offset leaves the half-bin. Image bias and noise
+can still move a true boundary tone across that test. A caller with one isolated tone
 gets the single-pass path as the one-tone case.
 
 ## Consequences
