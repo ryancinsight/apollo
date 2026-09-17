@@ -298,6 +298,24 @@ where
         );
     }
 
+    /// Transforms axes 1 and 0 of a C-order `[nx, ny, depth]` volume and
+    /// leaves it in `(y, z, x)` order.
+    ///
+    /// For a consumer that reads that order directly; see
+    /// [`passes::xy_axes_leaving_x_last`].
+    pub(crate) fn xy_axes_leaving_x_last<const FORWARD: bool>(
+        &self,
+        data: &mut [F::Complex],
+        depth: usize,
+    ) {
+        passes::xy_axes_leaving_x_last::<F, FORWARD>(
+            data,
+            [self.nx, self.ny, depth],
+            self.lane::<FORWARD>(0),
+            self.lane::<FORWARD>(1),
+        );
+    }
+
     fn axis_pass_complex<const FORWARD: bool>(
         &self,
         mut data: ArrayViewMut3<'_, F::Complex>,

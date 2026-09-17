@@ -223,6 +223,32 @@ pub(super) fn xy_axes_from_x_last<F, const FORWARD: bool>(
     });
 }
 
+/// Axes 1 and 0 of a C-order `[nx, ny, nz]` volume, left in `(y, z, x)`
+/// order, in two moves.
+///
+/// The mirror of [`xy_axes_from_x_last`] for a consumer that reads the
+/// volume's z lanes out of that order, as the half-spectrum inverse's z sweep
+/// does. Transposing by the trailing axis moves it to the front: one
+/// `[nx * ny, nz]` transpose gives `(z, x, y)` in the X scratch with axis 1
+/// contiguous, and one `[nz * nx, ny]` transpose gives `(y, z, x)` back in
+/// `data` with axis 0 contiguous. Axis 1 is therefore visited before axis 0.
+pub(super) fn xy_axes_leaving_x_last<F, const FORWARD: bool>(
+    data: &mut [F::Complex],
+    [nx, ny, nz]: [usize; 3],
+    lane_x: impl Fn(&mut [F::Complex]) + Send + Sync,
+    lane_y: impl Fn(&mut [F::Complex]) + Send + Sync,
+) where
+    F: MixedRadixScalar<Complex = Complex<F>>,
+    F::Complex: PlanScratch,
+{
+    with_3d_x_scratch::<F::Complex, _>(nx * ny * nz, |staged| {
+        transpose_matrices(data, staged, 1, nx * ny, nz);
+        lanes::execute::<F, FORWARD>(staged, data, ny, lane_y);
+        transpose_matrices(staged, data, 1, nz * nx, ny);
+        lanes::execute::<F, FORWARD>(data, staged, nx, lane_x);
+    });
+}
+
 /// Axes 0 and 1 of a C-order `[nx, ny, nz]` volume in three moves.
 ///
 /// `(x, y, z)` transposes as one `[nx, ny * nz]` matrix into the X scratch,
