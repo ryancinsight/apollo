@@ -120,8 +120,8 @@ fn separated_tones_resolve_after_peeling_for_every_scalar() {
 /// or Nyquist is its own image. For a real signal the offset read there is
 /// exactly zero, the spectrum being conjugate-symmetric, and so is the
 /// determinant; a complex exponential near Nyquist reads a non-zero offset,
-/// and the determinant is zero only up to the rounding of `2k + δ̂`, which the
-/// estimator's margin absorbs.
+/// and the estimator refuses DC and even-length Nyquist by index before its
+/// solve.
 fn bins_without_a_peak_are_rejected<T: RealField>() {
     let tone = Tone {
         position: 10.3,

@@ -331,25 +331,12 @@ fn sparse_on_bin_cosine<T: RealField>(len: usize, bin: usize) {
     let estimate = estimate_peaks(&spectrum, &[bin], NonZeroUsize::MIN)
         .expect("invariant: the sparse spectrum and its peak bin are valid")[0]
         .unwrap_or_else(|| panic!("on-bin cosine at {bin}/{len} was rejected"));
-    let eps = T::EPSILON.to_f64();
-    let position_error = (estimate.position().to_f64() - bin as f64).abs();
-    let amplitude_error = (estimate.amplitude().to_f64() - 1.0).abs();
-    let phase_error = estimate.phase().to_f64().abs();
-    assert!(
-        position_error <= len as f64 * eps,
-        "position error {position_error:e} exceeds {:e}",
-        len as f64 * eps
-    );
-    assert!(
-        amplitude_error <= 8.0 * eps,
-        "amplitude error {amplitude_error:e} exceeds {:e}",
-        8.0 * eps
-    );
-    assert!(
-        phase_error <= 8.0 * eps,
-        "phase error {phase_error:e} exceeds {:e}",
-        8.0 * eps
-    );
+    // Exact: the zero neighbours give a zero offset, the image kernel at a
+    // non-zero integer argument is zero, and `R(0) = N`, so the solve returns
+    // the bin's value over `N` without rounding.
+    assert_eq!(estimate.position().to_f64(), bin as f64, "on-bin position");
+    assert_eq!(estimate.amplitude().to_f64(), 1.0, "on-bin amplitude");
+    assert_eq!(estimate.phase().to_f64(), 0.0, "on-bin phase");
 }
 
 #[test]
@@ -383,4 +370,52 @@ fn adjacent_images_at_the_odd_midpoint_are_unresolved() {
             vec![None]
         );
     }
+}
+
+/// Near Nyquist in a long frame the image's argument is about `N`, where f32
+/// holds only a quarter bin at `N = 2^21`. Formed as `(2k mod N) + δ`, it keeps
+/// the offset's precision, so the f32 estimate follows the f64 one: the three
+/// bins, evaluated in f64 and narrowed, differ by `ε₃₂` relative,
+/// which moves the offset by at most `2ε₃₂` (the ratio bound above), the
+/// amplitude by `(2 + π)` times that through the kernel slopes, and the
+/// solve's arithmetic by `16ε₃₂`: under `32ε₃₂` of the amplitude in all.
+#[test]
+fn long_frame_images_keep_the_offset_precision_in_f32() {
+    let len = 1 << 21;
+    let tone = Tone {
+        position: (len / 2) as f64 + 0.9,
+        amplitude: 1.0,
+        phase: 0.4,
+    };
+    let bin = len / 2 + 1;
+    // The two scalars read the same three bins, so they come from the model's
+    // closed-form kernel (checked against the defining sum by `tones`) rather
+    // than from 2^21-term sums.
+    let model = Model::new(len);
+    let bins: Vec<(usize, Complex64)> = (bin - 1..=bin + 1)
+        .map(|p| (p, model.contribution(tone.position, tone.a(), p as f64)))
+        .collect();
+    let mut wide = vec![Complex64::new(0.0, 0.0); len];
+    let mut narrow = vec![Complex::new(0.0_f32, 0.0); len];
+    for &(p, value) in &bins {
+        wide[p] = value;
+        narrow[p] = Complex::new(
+            <f32 as eunomia::FloatElement>::from_f64(value.re),
+            <f32 as eunomia::FloatElement>::from_f64(value.im),
+        );
+    }
+    let wide = estimate_peaks(&wide, &[bin], NonZeroUsize::MIN)
+        .expect("invariant: the long frame and its bin are valid")[0]
+        .expect("the f64 reading resolves the tone");
+    let narrow = estimate_peaks(&narrow, &[bin], NonZeroUsize::MIN)
+        .expect("invariant: the long frame and its bin are valid")[0]
+        .expect("the f32 reading resolves the tone");
+    let difference = (f64::from(narrow.amplitude()) - wide.amplitude()).abs();
+    let bound = 32.0 * f64::from(f32::EPSILON) * wide.amplitude();
+    assert!(
+        difference <= bound,
+        "f32 amplitude {} departs from f64 {} by {difference:e} > {bound:e}",
+        narrow.amplitude(),
+        wide.amplitude()
+    );
 }

@@ -261,7 +261,11 @@ impl Model {
     ) {
         let mut order: Vec<usize> = (0..bins.len()).collect();
         let strength = |i: usize| spectrum[bins[i]].norm().to_f64();
-        order.sort_by(|&a, &b| strength(b).total_cmp(&strength(a)));
+        order.sort_by(|&a, &b| {
+            strength(b)
+                .total_cmp(&strength(a))
+                .then_with(|| bins[a].cmp(&bins[b]))
+        });
         let by_round: Vec<Vec<Option<PeakEstimate<T>>>> = (0..=rounds)
             .map(|round| match NonZeroUsize::new(round) {
                 None => vec![None; bins.len()],
