@@ -4,6 +4,13 @@
 //! plan-owned mutex-protected buffers. The trait is sealed to the two complex
 //! scalar layouts supported by [`MixedRadixScalar`].
 //!
+//! Every role gives its storage back when a Moirai worker parks (the idle
+//! hook in `scratch_hook`), and workers park between parallel regions. A
+//! buffer a parallel task borrows is therefore allocated and zeroed again on
+//! each worker for each region: keep such borrows lane-sized. A slab-sized
+//! per-task block at 64³ made the half forward's z sweep 144-174 µs against
+//! 37 µs for a lane-sized one.
+//!
 //! [`MixedRadixScalar`]: super::MixedRadixScalar
 
 use eunomia::{Complex32, Complex64};
