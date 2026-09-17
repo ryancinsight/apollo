@@ -250,10 +250,11 @@ where
         // plan-free runtime kernel (ADR 0063): `N / 2` is not a const-generic
         // argument on the stable toolchain and the bound names no plan cache.
         // On the forward the static plan's constant-length power-of-two
-        // kernels win clearly at 4, 8 and 32 (0.44x, 0.45x, 0.86x of the
-        // split's runtime half on the census host); at 16 and 64 the two sit
-        // inside that host's run-to-run drift (1.04-1.06x, 0.95-1.25x) and at
-        // 128 at parity (1.02x). The forward keeps the static plan on powers
+        // kernels win at 4 and 8 by more than half (0.44x, 0.45x of the
+        // split's runtime half on the census host, two runs) and at 32 by
+        // 14% in one run; at 16 and 64 the two sit inside that host's
+        // run-to-run drift (1.04-1.06x, 0.95-1.25x) and at 128 at parity
+        // (1.02x, one run). The forward keeps the static plan on powers
         // of two below 128 and takes the split from there, where it wins from
         // 256 (1.35x).
         if Self::real_split_applies(N) && (N >= STATIC_FORWARD_SPLIT_FLOOR || !N.is_power_of_two())

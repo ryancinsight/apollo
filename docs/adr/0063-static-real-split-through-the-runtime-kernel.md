@@ -85,12 +85,13 @@ where the split copies half. The forward loses clearly only where the static
 plan's constant-length power-of-two kernels run — 4 and 8 are a handful of
 nanoseconds the split's untangle alone exceeds, and 32 is the strongest of
 the small kernels — and at 16 and 64 the two readings sit inside the drift.
-So the forward keeps the static plan on powers of two below 128 and takes the
-split from there, and at every non-power-of-two length, where the static plan
-has no such kernel. The floor itself is a parity reading (1.02 in one run);
-256 is the first power of two the split measurably wins (1.35-1.36). The dynamic split, on the cached plan's executor,
-stays ahead of the static route at the larger lengths (65536: 116 against
-130 µs), the cost the toolchain constraint imposes.
+So the forward keeps the static plan on powers of two below 128 and takes
+the split from there, and at every non-power-of-two length, where the static
+plan has no such kernel. The floor itself is a parity reading (1.02 in one
+run); 256 is the first power of two the split measurably wins (1.35-1.36).
+The dynamic split, on the cached plan's executor, stays ahead of the static
+route at the larger lengths (65536: 116 against 130 µs), the cost the
+toolchain constraint imposes.
 
 ## Consequences
 

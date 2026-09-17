@@ -62,7 +62,7 @@ where
     let array = Array1::from(stored.clone());
     let values: Vec<f64> = stored.iter().map(|&v| v.to_f64()).collect();
     // Two routes to one bin, each within one transform's bound of the exact
-    // value; the inverse adds one rounding to storage.
+    // value.
     let one = tolerance(N, l1(&values), T::PLAN_UNIT);
 
     let dynamic = apollo_fft::fft_1d_array::<T>(&array);
@@ -99,7 +99,13 @@ where
     apollo_fft::ifft_1d_array_static_into::<T, N>(&dynamic, &mut recovered, &mut scratch);
     for (k, (got, want)) in recovered.iter().zip(back.iter()).enumerate() {
         let (got, want) = (got.to_f64(), want.to_f64());
-        let bound = 2.0 * one + T::STORAGE_UNIT * (want.abs() + 2.0 * one);
+        // Both sides are rounded to storage. With `g` and `w` the two plan
+        // values, `|g - w| <= 2 one`, so `|got - want| <= 2 one + u|g| + u|w|`
+        // with `u` the storage unit; `|w| <= |want| / (1 - u)` and
+        // `|g| <= |w| + 2 one` bound the two roundings by
+        // `u (2 |want| + 2 one) / (1 - u)`.
+        let u = T::STORAGE_UNIT;
+        let bound = 2.0 * one + u * (2.0 * want.abs() + 2.0 * one) / (1.0 - u);
         assert!(
             (got - want).abs() <= bound,
             "{name} N={N} sample {k}: static inverse {got} against the dynamic split's {want} (bound {bound:.3e})"
