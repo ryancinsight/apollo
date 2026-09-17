@@ -43,6 +43,7 @@ pub(super) fn reference_rounds(
         spectrum[bins[b]]
             .norm()
             .total_cmp(&spectrum[bins[a]].norm())
+            .then_with(|| bins[a].cmp(&bins[b]))
     });
     let mut estimates = vec![None; bins.len()];
     let mut by_round = vec![estimates.clone()];
@@ -206,6 +207,7 @@ pub(super) fn check_geometric_rounds(
         spectrum[bins[b]]
             .norm()
             .total_cmp(&spectrum[bins[a]].norm())
+            .then_with(|| bins[a].cmp(&bins[b]))
     });
     let mut final_bounds = vec![(0.0, 0.0); bins.len()];
     for round in 1..=rounds {

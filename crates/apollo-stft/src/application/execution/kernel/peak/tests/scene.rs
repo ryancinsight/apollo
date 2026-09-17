@@ -224,7 +224,21 @@ fn the_three_tone_scene_resolves_to_its_bounds() {
         let sample_magnitude = scene.samples.iter().map(|value| value.abs()).sum::<f64>();
         let transform =
             scene.sample_rounding() + (n + n.log2() + 4.0) * f64::EPSILON * sample_magnitude;
-        let bin_error = |p: f64| scene.noise_at(p) + transform;
+        // The estimator reads only the bins beside the three peaks, so their
+        // noise is summed once rather than at every bound evaluation.
+        let noise: Vec<(usize, f64)> = bins
+            .iter()
+            .flat_map(|&bin| [bin - 1, bin, bin + 1])
+            .map(|p| (p, scene.noise_at(p as f64)))
+            .collect();
+        let noise_at = |p: f64| {
+            let bin = p as usize;
+            noise.iter().find(|&&(read, _)| read == bin).map_or_else(
+                || panic!("bin {bin} is not beside a scene peak"),
+                |&(_, value)| value,
+            )
+        };
+        let bin_error = |p: f64| noise_at(p) + transform;
         model.check_peeled::<f64>(
             &scene.spectrum,
             &scene.tones,
@@ -235,7 +249,7 @@ fn the_three_tone_scene_resolves_to_its_bounds() {
         );
         let direct_spectrum = scene.direct_spectrum(&bins);
         let direct_rounding = scene.direct_rounding();
-        let direct_bin_error = |p: f64| scene.noise_at(p) + direct_rounding;
+        let direct_bin_error = |p: f64| noise_at(p) + direct_rounding;
         model.check_peeled::<f64>(
             &direct_spectrum,
             &scene.tones,

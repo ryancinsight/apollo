@@ -272,7 +272,10 @@ impl<T: RealField> Frame<T> {
         }
         let bin = Self::index(k);
         let direct = self.kernel(delta);
-        let image = self.kernel(-(bin * two + delta));
+        // `R` has period `N`, so the image's argument `−(2k + δ)` is formed
+        // from `2k mod N`: an index below `N` keeps `δ`'s precision where
+        // `2k + δ` would round it away in a long frame.
+        let image = self.kernel(-(Self::index((2 * k) % self.len) + delta));
         let determinant = direct.norm_sqr() - image.norm_sqr();
         // A non-positive or NaN determinant cannot yield a resolved tone.
         let solvable = determinant > T::ZERO;

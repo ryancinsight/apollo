@@ -1,20 +1,12 @@
 # 0066 — Sub-bin peak parameters from three bins and estimate-and-subtract
 
 - Status: Accepted
-- Revised 2026-09-17 (independent reference check): the approximate correction
-  maps a noise-free complex exponential at offset `δ` to
-  `tan(πδ/N)/(π/N)`. At `δ = 1/2` this exceeds `1/2`, so the original
-  rejection test discards an otherwise valid boundary estimate. The selected
-  offset now inverts the tangent relation. The image solve rejects DC and
-  even-length Nyquist by index: its previous `4ε(2k+3)` relative determinant
-  threshold exceeds one at valid large-frame bins and rejects even an exact
-  on-bin tone with zero image. See [reference checks](../../backlog.md#apollo-peak-independent-reference).
 - Date: 2026-09-15
 - Revised 2026-09-16: the outer-tone floor was quoted as `5e-10 Hz`, which is
   the measurement, not the bound the cited expression gives (2.1e-9 and
   1.4e-9 Hz for the two tones), and the expression omitted the finite-length
   bias term the test asserts alongside it. The decision is unchanged.
-- Earlier revision, 2026-09-17: the decision was implemented as `apollo_stft::estimate_peaks`
+- Revised 2026-09-17 (surface): the decision was implemented as `apollo_stft::estimate_peaks`
   (`backlog.md#apollo-peak-estimation-surface`). The spike's test-only
   candidates are deleted; the oracle scene is the surface's test and
   measured the Candan 2011 row below again (8.4e-10 and 7.8e-10 Hz, 6.0e-7
@@ -29,14 +21,26 @@
   `(N/π)(tan(πδ/N) − πδ/N)`, of which `|δ|³(π/N)²/3` is the leading term. A
   real tone also appears at its mirror bin `N − k`, so the surface refuses a
   peak set holding both.
+- Revised 2026-09-17 (independent reference check, after the surface revision): the
+  approximate correction
+  maps a noise-free complex exponential at offset `δ` to
+  `tan(πδ/N)/(π/N)`. At `δ = 1/2` this exceeds `1/2`, so the original
+  rejection test discards an otherwise valid boundary estimate. The selected
+  offset now inverts the tangent relation. The image solve rejects DC and
+  even-length Nyquist by index: its previous `4ε(2k+3)` relative determinant
+  threshold exceeds one at valid large-frame bins and rejects even an exact
+  on-bin tone with zero image. See [reference checks](../../backlog.md#apollo-peak-independent-reference).
 - Items: `backlog.md#apollo-spectral-peak-estimation-spike`,
-  `backlog.md#apollo-peak-estimation-surface`
-- Evidence: `crates/apollo-stft/src/application/execution/kernel/peak/tests/scene.rs` (the oracle scene, every
-  read of its three rounds checked against its derived bound),
+  `backlog.md#apollo-peak-estimation-surface`,
+  `backlog.md#apollo-peak-independent-reference`
+- Evidence: `crates/apollo-stft/src/application/execution/kernel/peak/tests/`
+  (`scene.rs` and `scene/reference.rs`: the oracle scene, every read of its
+  three rounds checked against its derived bound, on the FFT spectrum and on
+  direct DFT sums; `boundary.rs` and `tones.rs`: per-scalar cases),
   `output/apollo-base128/peak_estimation_2026-09-15.md` (the spike's run of
   every candidate); the candidates themselves are in git history at
   `crates/apollo-stft/src/application/execution/plan/stft/dimension_1d/tests/peak_estimation.rs`
-  before this revision
+  before the surface revision
 
 ## Context
 
@@ -53,12 +57,9 @@ eight seeds, mean absolute errors.
 
 ## Independent production check, 2026-09-17
 
-Baseline: draft PR #494 at `8066cf25`. Its 27 existing tests pass
-(Nextest run `3d108b4f-f148-4b49-bf44-dd4eaa7cbab8`). Two new tests fail
-against that exact production file: an offset of `-0.499999` at `N=16`,
-phase `-2.4`, is rejected; and a unit on-bin cosine at bin `1572864` of an
-`f32` frame of length `2097152` is rejected (run
-`87b64b26-2f9b-41c9-a8e3-5963e81bdac1`). The inverse-tangent closure and
+Against the surface revision (`8066cf25`), two new cases failed: an offset of
+`-0.499999` at `N = 16`, phase `-2.4`, was rejected; and a unit on-bin cosine
+at bin `1572864` of an `f32` frame of length `2097152` was rejected. The inverse-tangent closure and
 index-based singularity check correct these cases without reducing the
 accepted frame-length range.
 
@@ -86,8 +87,8 @@ failure. These are conditional floating-point bounds and observed native
 results, not a machine-checked proof of transcendental accuracy.
 
 Measured mean absolute errors over eight seeds, three rounds, Windows x64,
-Rust 1.97.0, committed dependency lock; run
-`86a3c8de-d7ce-4657-a18c-130da7316025` (64 all-feature tests passed):
+Rust 1.97.0 (the run's output is `output/apollo-base128/peak-reference-tests.txt`;
+a release-profile run reproduces the table at its displayed precision):
 
 | Tone amplitude | FFT frequency / direct DFT (Hz) | FFT amplitude / direct DFT (V) | FFT phase / direct DFT (rad) |
 |---|---|---|---|
@@ -102,25 +103,6 @@ offsets and exact half-bin real tones. At the exact boundary the image can
 move the estimated offset to either side. Odd-frame adjacent conjugate peaks
 remain unresolved by this isolated-tone ratio; no exact recovery is claimed
 there. No latency or throughput measurement was made.
-
-Focused gates use Rust 1.97.0 and the committed lockfile on Windows x64:
-`cargo fmt --all -- --check`, `cargo clippy -p apollo-stft --all-targets
---all-features -- -D warnings`, `cargo nextest run -p apollo-stft
---all-features --profile ci`, `cargo test -p apollo-stft --all-features
---doc` (one doctest), and `RUSTDOCFLAGS="-D warnings" cargo doc -p
-apollo-stft --all-features --no-deps` pass. Dependency-resolving commands
-use `--locked`. Native tests retain the committed 30-second slow and
-60-second termination limits, with no retries. The installed nextest is
-0.9.143; the CI workflow pins 0.9.140, so runner-version parity is not claimed.
-The measured scene output and JUnit are retained under the Atlas output
-retention policy as `output/apollo-base128/peak-reference-tests.txt` and
-`peak-reference-junit.xml`. No full-workspace gate or cross-platform run is
-claimed.
-
-The release-profile peak filter (`cargo nextest run -p apollo-stft --locked
---release --profile ci -E 'test(kernel::peak)'`) passes all 12 selected tests,
-run `f180fe37-4700-4773-b30b-91eab6220eb2`, and reproduces the table at its
-displayed precision. Its output is `output/apollo-base128/peak-reference-release.txt`.
 
 ## Findings
 
@@ -215,8 +197,10 @@ The inverse relation follows from the single-exponential identity
 inside atan's principal branch. The earlier decision to omit this closure
 based on the long-frame scene overlooked boundary rejection at short frame
 lengths. The added atan removes that deterministic bias; it does not remove
-real-tone image bias or noise. Candan's [2013 paper](https://open.metu.edu.tr/handle/11511/35530)
-studies this bias-removal stage. No performance improvement is claimed.
+real-tone image bias or noise. Candan, "Analysis and Further Improvement of Fine Resolution Frequency
+Estimation Method From Three DFT Samples", IEEE Signal Processing Letters
+20(9), 913-916, 2013 (doi:10.1109/LSP.2013.2273616), analyses this bias and
+gives the bias-removed estimator. No performance improvement is claimed.
 
 The public surface is an estimate-and-subtract entry over a spectrum and a
 set of peak bins, returning frequency, amplitude and phase per peak, with
