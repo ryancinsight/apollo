@@ -566,7 +566,7 @@ fn eight_block_2048_plans_route_through_the_256_state_at_four_lanes() {
     };
     assert!(plan.base512.is_none(), "2048 routes through the 256 base");
     assert!(plan.twiddle_fwd.is_none() && plan.twiddle_inv.get().is_none());
-    assert_eq!(state.sinks().chain()[0].rows().len(), 7 * 2 * 256);
+    assert_eq!(state.sinks().chain()[0].rows().len(), 14 * 2 * 256);
     assert_eq!(state.sinks().inner().len(), 0);
     assert_eq!(state.sinks().outer().len(), 0);
     assert!(!state.inverse_is_initialized() && !state.inverse_sinks_initialized());
@@ -595,8 +595,8 @@ fn radix_chain_plans_carry_a_row_table_per_level_and_match_the_direct_sum() {
     // Eights over the base with the closing four outside them (RustFFT's
     // chain): the 256 base at 8192, 16384, 65536 and 131072, the 512 base
     // at 32768 and 262144. Each state carries one chunk-major row table per
-    // level (`radix - 1` registers a chunk over the level's block) and no
-    // sink tables.
+    // level (`radix - 1` twiddles a chunk over the level's block, one or two
+    // registers each by the table's size) and no sink tables.
     for (n, base, radices) in [
         (8192usize, 256usize, &[4usize, 8][..]),
         (16_384, 256, &[8, 8]),
@@ -646,7 +646,11 @@ fn radix_chain_plans_carry_a_row_table_per_level_and_match_the_direct_sum() {
             .iter()
             .map(|&radix| {
                 block /= radix;
-                (radix, (radix - 1) * 2 * block)
+                // Split below 256 KiB of table: four f64 lanes a twiddle
+                // twice over, so at most 8192 twiddles.
+                let twiddles = (radix - 1) * block;
+                let registers = if twiddles <= 8192 { 2 } else { 1 };
+                (radix, registers * twiddles * 2)
             })
             .collect();
         assert_eq!(levels, expected, "chain levels at {n}");
@@ -695,12 +699,13 @@ fn eight_block_2048_plans_keep_their_twiddle_rows_in_the_256_state() {
         return;
     }
     assert!(plan.twiddle_fwd.is_none() && plan.twiddle_inv.get().is_none());
-    assert_eq!(state.sinks().chain()[0].rows().len(), 7 * 2 * 256);
+    assert_eq!(state.sinks().chain()[0].rows().len(), 14 * 2 * 256);
     assert_eq!(state.sinks().inner().len(), 0);
     assert_eq!(state.sinks().outer().len(), 0);
     assert!(!state.inverse_is_initialized() && !state.inverse_sinks_initialized());
-    // Chunk-major entry `j - 1` at sample `k` is `W_2048^{j k}`, the cache value for `j k`
-    // reduced modulo 2048 and negated past the half circle.
+    // Chunk-major twiddle `j - 1` at sample `k` is `W_2048^{j k}`, the cache value for `j k`
+    // reduced modulo 2048 and negated past the half circle, held as its duplicated real
+    // register and its `(-im, im)` register.
     let rows = state.sinks().chain()[0].rows();
     let cache = <f32 as crate::application::execution::kernel::mixed_radix::MixedRadixScalar>::cached_twiddle_fwd(N);
     for j in 1..8 {
@@ -712,10 +717,11 @@ fn eight_block_2048_plans_keep_their_twiddle_rows_in_the_256_state() {
                 let w = cache[m - 1];
                 Complex32::new(-w.re, -w.im)
             };
-            let lane = (k / 4 * 7 + j - 1) * 8 + k % 4 * 2;
+            let re = (k / 4 * 14 + 2 * (j - 1)) * 8 + k % 4 * 2;
+            let im = re + 8;
             assert_eq!(
-                (rows[lane], rows[lane + 1]),
-                (expected.re, expected.im),
+                [rows[re], rows[re + 1], rows[im], rows[im + 1]],
+                [expected.re, expected.re, -expected.im, expected.im],
                 "row {j} at {k}"
             );
         }

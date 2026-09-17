@@ -1086,3 +1086,22 @@ base); the two-block form of the step is deleted, and the step serves
   same lock's baseline (`output/apollo-base128/chain_phases_spills_2026-09-15.txt`
   against `chain_phases_hermes_2026-09-15.txt`, transform performance /
   efficiency core): `f32` 131072 +5% / -1%; `f32` 32768 -5% / +2%; `f32` 16384 +0% / -1%; `f64` 131072 -2% / +2%; `f64` 32768 -1% / -0%. Not retained: the spill traffic is not on the critical path (its loads and stores overlap the arithmetic), and the shorter instruction stream of trial two comes with a longer dependency chain (critical path 37 to 45 cycles against an issue bound of 26 to 35), so the cache-resident innermost passes slowed 2 to 5% on both cores while the outer levels stayed inside their noise. The efficiency core charges the chain for its 256-bit instruction count, but a cut that lengthens the chain past the issue bound trades one bound for the other; no candidate cuts instructions without lengthening the chain, so `f32` 131072 stays on the four-step at eight lanes and the branch carries the readings and the trial patch (`output/apollo-base128/chain_pass_spill_trials_2026-09-15.patch`), not the code.
+
+- **2026-09-17, the column passes' twiddles by table size
+  (`APOLLO-COLUMN-SPLIT-TWIDDLES`).** A chain level now holds each twiddle
+  either interleaved or split, as its duplicated real register and its
+  `(-im, im)` register. Split, the pass multiplies by one swap, one
+  product and one FMA, with no twiddle shuffle; the table doubles. Split at
+  every level (`output/apollo-base128/column_twiddle_layout_2026-09-17/split_all/`,
+  alternating pinned A/B against the fused radix 3) took `f32` 2048 6% and
+  `f64` 4096 5% faster, but the chain meter read the passes 16 to 18%
+  slower at `f32` 131072 and 262144 and 10% slower at `f64` 16384 and
+  32768, where the doubled table leaves the cache. `TwiddleLayout` therefore
+  splits a level while its split table stays within 256 KiB (`f32`
+  16384's top level, 229 KiB, won; `f64` 16384's, 458 KiB, lost), and
+  the pass kernel is selected once per level. Selected against fused
+  (`selected/`), apollo ns: performance core `f32` 2048 1.28 to 1.22 µs,
+  16384 16.1 to 15.6 ms, `f64` 2048 2.8 to 2.69 µs, 4096 6.2 to 6.0 ms;
+  efficiency core `f32` 384 432 to 423 ns (1.09 to 1.07 of RustFFT), 8192
+  13.8 to 13.2 ms (1.01 to 0.97), 16384 30.1 to 29.2 ms (1.02 to 0.99);
+  no length slower, the large chains level in the meter.

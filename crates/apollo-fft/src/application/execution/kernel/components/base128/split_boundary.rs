@@ -147,6 +147,39 @@ where
         source.chunk::<A, 2>(simd, out, c)
     }
 }
+/// `v` times twiddle `j` of chunk `c` in `twiddles`, `per_chunk` twiddles a
+/// chunk: split (`SPLIT`), its duplicated real register and then its
+/// `(-im, im)` register, one swap of `v` and no shuffle of the twiddle;
+/// otherwise one interleaved register.
+#[expect(
+    clippy::inline_always,
+    reason = "must fold into the caller's target-feature scope"
+)]
+#[inline(always)]
+fn twiddled<T, A, const SPLIT: bool>(
+    v: ComplexReg<T, A>,
+    twiddles: &[T],
+    per_chunk: usize,
+    c: usize,
+    j: usize,
+) -> Vector<T, A>
+where
+    T: LaneScalar,
+    A: SimdArch + SimdKernel<T>,
+{
+    if SPLIT {
+        let at = 2 * (per_chunk * c + j);
+        let v = v.into_interleaved();
+        v.mul_add(
+            chunk(twiddles, at),
+            v.swap_adjacent() * chunk(twiddles, at + 1),
+        )
+    } else {
+        let w = ComplexReg::<T, A>::from_interleaved(chunk(twiddles, per_chunk * c + j));
+        (v * w).into_interleaved()
+    }
+}
+
 /// The radix-`RADIX` pass over `RADIX` contiguous parent slices, in place or
 /// into scratch: RustFFT's column pass ahead of its inner butterflies. For
 /// input `x[c + BASE r]`, `r < RADIX`, chunk `c` loads the slices' registers
@@ -155,13 +188,14 @@ where
 /// corresponding output slice — the twiddle after the butterfly, from one
 /// contiguous chunk-major stream ([`super::instance_major::SplitSinks::rows`])
 /// — so slice `q` then transforms as a contiguous `BASE`-point block whose
-/// spectrum is `X[RADIX k + q]`. Radices 3 and 8.
-pub(crate) struct ColumnPass<'a, T, S, const RADIX: usize, const INVERSE: bool> {
+/// spectrum is `X[RADIX k + q]`. Radices 3, 4 and 8; `SPLIT` selects the
+/// twiddle layout (`instance_major::TwiddleLayout`).
+pub(crate) struct ColumnPass<'a, T, S, const RADIX: usize, const INVERSE: bool, const SPLIT: bool> {
     /// The parent, `RADIX` blocks of `block_lanes` lanes.
     pub(crate) source: S,
     /// `RADIX` contiguous output blocks.
     pub(crate) dst: &'a mut [T],
-    /// `(RADIX - 1) block_lanes` lanes, chunk-major.
+    /// `(RADIX - 1) block_lanes` lanes a twiddle register, chunk-major.
     pub(crate) twiddles: &'a [T],
     /// One block in scalar lanes: a runtime value, so one pass serves every
     /// level of a chain (the bound is asserted once at entry either way).
@@ -177,7 +211,8 @@ impl<
         S: BlockSource<T>,
         const RADIX: usize,
         const INVERSE: bool,
-    > LaneKernel<T> for ColumnPass<'_, T, S, RADIX, INVERSE>
+        const SPLIT: bool,
+    > LaneKernel<T> for ColumnPass<'_, T, S, RADIX, INVERSE, SPLIT>
 {
     /// Whether the dispatched width handled the pass.
     type Output = bool;
@@ -200,7 +235,8 @@ impl<
                 && self.block_lanes % lanes == 0
                 && self.source.parent_lanes(self.dst) == RADIX * self.block_lanes
                 && self.dst.len() == RADIX * self.block_lanes
-                && self.twiddles.len() == (RADIX - 1) * self.block_lanes,
+                && self.twiddles.len()
+                    == if SPLIT { 2 } else { 1 } * (RADIX - 1) * self.block_lanes,
             "invariant: the radix's slices and twiddle rows of one block length"
         );
         let cpb = self.block_lanes / lanes;
@@ -217,11 +253,17 @@ impl<
                     ],
                     &thirds,
                 );
-                let t1 = ComplexReg::<T, A>::from_interleaved(chunk(self.twiddles, 2 * c));
-                let t2 = ComplexReg::<T, A>::from_interleaved(chunk(self.twiddles, 2 * c + 1));
                 put_chunk(y[0].into_interleaved(), out, c);
-                put_chunk((y[1] * t1).into_interleaved(), out, cpb + c);
-                put_chunk((y[2] * t2).into_interleaved(), out, 2 * cpb + c);
+                put_chunk(
+                    twiddled::<T, A, SPLIT>(y[1], self.twiddles, RADIX - 1, c, 0),
+                    out,
+                    cpb + c,
+                );
+                put_chunk(
+                    twiddled::<T, A, SPLIT>(y[2], self.twiddles, RADIX - 1, c, 1),
+                    out,
+                    2 * cpb + c,
+                );
             }
             return true;
         }
@@ -233,13 +275,22 @@ impl<
                     ComplexReg::from_interleaved(column_input(simd, &source, out, 2 * cpb + c)),
                     ComplexReg::from_interleaved(column_input(simd, &source, out, 3 * cpb + c)),
                 ]);
-                let t1 = ComplexReg::<T, A>::from_interleaved(chunk(self.twiddles, 3 * c));
-                let t2 = ComplexReg::<T, A>::from_interleaved(chunk(self.twiddles, 3 * c + 1));
-                let t3 = ComplexReg::<T, A>::from_interleaved(chunk(self.twiddles, 3 * c + 2));
                 put_chunk(y[0].into_interleaved(), out, c);
-                put_chunk((y[1] * t1).into_interleaved(), out, cpb + c);
-                put_chunk((y[2] * t2).into_interleaved(), out, 2 * cpb + c);
-                put_chunk((y[3] * t3).into_interleaved(), out, 3 * cpb + c);
+                put_chunk(
+                    twiddled::<T, A, SPLIT>(y[1], self.twiddles, RADIX - 1, c, 0),
+                    out,
+                    cpb + c,
+                );
+                put_chunk(
+                    twiddled::<T, A, SPLIT>(y[2], self.twiddles, RADIX - 1, c, 1),
+                    out,
+                    2 * cpb + c,
+                );
+                put_chunk(
+                    twiddled::<T, A, SPLIT>(y[3], self.twiddles, RADIX - 1, c, 2),
+                    out,
+                    3 * cpb + c,
+                );
             }
             return true;
         }
@@ -267,22 +318,43 @@ impl<
                 ],
                 &eighths,
             );
-            // The seven twiddle registers of chunk `c`, in the stream's order.
-            let t1 = ComplexReg::<T, A>::from_interleaved(chunk(self.twiddles, 7 * c));
-            let t2 = ComplexReg::<T, A>::from_interleaved(chunk(self.twiddles, 7 * c + 1));
-            let t3 = ComplexReg::<T, A>::from_interleaved(chunk(self.twiddles, 7 * c + 2));
-            let t4 = ComplexReg::<T, A>::from_interleaved(chunk(self.twiddles, 7 * c + 3));
-            let t5 = ComplexReg::<T, A>::from_interleaved(chunk(self.twiddles, 7 * c + 4));
-            let t6 = ComplexReg::<T, A>::from_interleaved(chunk(self.twiddles, 7 * c + 5));
-            let t7 = ComplexReg::<T, A>::from_interleaved(chunk(self.twiddles, 7 * c + 6));
+            // The seven twiddles of chunk `c`, two registers each.
             put_chunk(y[0].into_interleaved(), out, c);
-            put_chunk((y[1] * t1).into_interleaved(), out, cpb + c);
-            put_chunk((y[2] * t2).into_interleaved(), out, 2 * cpb + c);
-            put_chunk((y[3] * t3).into_interleaved(), out, 3 * cpb + c);
-            put_chunk((y[4] * t4).into_interleaved(), out, 4 * cpb + c);
-            put_chunk((y[5] * t5).into_interleaved(), out, 5 * cpb + c);
-            put_chunk((y[6] * t6).into_interleaved(), out, 6 * cpb + c);
-            put_chunk((y[7] * t7).into_interleaved(), out, 7 * cpb + c);
+            put_chunk(
+                twiddled::<T, A, SPLIT>(y[1], self.twiddles, RADIX - 1, c, 0),
+                out,
+                cpb + c,
+            );
+            put_chunk(
+                twiddled::<T, A, SPLIT>(y[2], self.twiddles, RADIX - 1, c, 1),
+                out,
+                2 * cpb + c,
+            );
+            put_chunk(
+                twiddled::<T, A, SPLIT>(y[3], self.twiddles, RADIX - 1, c, 2),
+                out,
+                3 * cpb + c,
+            );
+            put_chunk(
+                twiddled::<T, A, SPLIT>(y[4], self.twiddles, RADIX - 1, c, 3),
+                out,
+                4 * cpb + c,
+            );
+            put_chunk(
+                twiddled::<T, A, SPLIT>(y[5], self.twiddles, RADIX - 1, c, 4),
+                out,
+                5 * cpb + c,
+            );
+            put_chunk(
+                twiddled::<T, A, SPLIT>(y[6], self.twiddles, RADIX - 1, c, 5),
+                out,
+                6 * cpb + c,
+            );
+            put_chunk(
+                twiddled::<T, A, SPLIT>(y[7], self.twiddles, RADIX - 1, c, 6),
+                out,
+                7 * cpb + c,
+            );
         }
         true
     }
