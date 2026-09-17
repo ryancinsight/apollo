@@ -4,8 +4,10 @@
 //! the bins with `k > nz/2` repeat the others and the `(nx, ny, nz/2 + 1)` half
 //! volume holds all of it. The forward runs the z lanes first, through the real
 //! split, straight into that half volume, then x and y on it; the inverse runs
-//! x and y first and the z lanes last. The x and y passes move half the data
-//! the full complex transform moves.
+//! y and x first and the z lanes last. Where both of `nx` and `ny` exceed
+//! one the z sweeps write and read the `(y, z, x)` order the x lanes need, so
+//! each direction makes two full-volume moves rather than three. The x and y
+//! passes move half the data the full complex transform moves.
 //!
 //! After the x and y inverses every z lane is the half spectrum of a real lane.
 //! Writing `G` for the volume they leave, the inverse over x and y maps the
@@ -204,8 +206,13 @@ fn inverse_half<T>(
     T: RealFftData,
     Complex<T::PlanScalar>: PlanScratch,
 {
-    let (_, _, nz) = plan.dimensions();
+    let (nx, ny, nz) = plan.dimensions();
     let depth = plan.nz_c();
+    if T::real_split_applies(nz) && nx > 1 && ny > 1 {
+        plan.xy_axes_leaving_x_last::<false>(bins, depth);
+        inverse_z_split_x_last(plan, bins, values);
+        return;
+    }
     plan.xy_axes_inplace::<false>(bins, depth);
     if T::real_split_applies(nz) {
         inverse_z_split(plan, bins, values);
@@ -240,6 +247,52 @@ fn inverse_half<T>(
             });
         });
     }
+}
+
+/// The z inverse of a half volume stored in `(y, z, x)` order, the order
+/// [`FftPlan3D::xy_axes_leaving_x_last`] leaves, into the C-order `values`.
+///
+/// A task takes whole `x` slabs of the output, `ny * nz` reals each, and
+/// gathers each of its lanes from the `y` slab that holds it: lane `(x, y)` is
+/// every `nx`-th bin of slab `y` from offset `x`, a constant stride the
+/// prefetcher follows. Each lane is then retangled, inverted at half length
+/// and unpacked into the output as [`inverse_z_split`] does.
+fn inverse_z_split_x_last<T>(
+    plan: &FftPlan3D<T::PlanScalar>,
+    bins: &[Complex<T::PlanScalar>],
+    values: &mut [T],
+) where
+    T: RealFftData,
+    Complex<T::PlanScalar>: PlanScratch,
+{
+    let (nx, ny, nz) = plan.dimensions();
+    let depth = plan.nz_c();
+    let packed = nz / 2;
+    let y_slab = depth * nx;
+    let x_slab = ny * nz;
+    let x_slab_bytes = x_slab * core::mem::size_of::<T>()
+        + ny * depth * core::mem::size_of::<Complex<T::PlanScalar>>();
+    let half_lane = plan.half_z_lane::<false>();
+    lanes::units(values, x_slab, x_slab_bytes, |first_x, slabs| {
+        // The x and y passes have returned, so the 3-D X role is free on
+        // every thread; the 2-D role may be an owned caller's half volume.
+        with_3d_x_scratch::<Complex<T::PlanScalar>, _>(depth, |lane| {
+            for (x, output) in (first_x..).zip(slabs.chunks_exact_mut(x_slab)) {
+                for (reals, slab) in output.chunks_exact_mut(nz).zip(bins.chunks_exact(y_slab)) {
+                    for (slot, row) in lane.iter_mut().zip(slab.chunks_exact(nx)) {
+                        *slot = row[x];
+                    }
+                    split::inverse_packed::<T>(
+                        lane,
+                        nz,
+                        plan.split_twiddles().iter().copied(),
+                        &half_lane,
+                    );
+                    split::unpack(&lane[..packed], reals);
+                }
+            }
+        });
+    });
 }
 
 /// The z inverse of the half pair through the real split, in one sweep.
