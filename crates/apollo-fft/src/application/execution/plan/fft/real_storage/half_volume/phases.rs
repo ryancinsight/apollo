@@ -255,21 +255,10 @@ fn half_pair_sweeps_at_64_cubed() {
             fused_time = start.elapsed();
             (split_time, unpack_time) = split_then_unpack(&plan, &mut split_bins, &mut split_out);
         }
-        assert_eq!(
-            split_out
-                .iter()
-                .map(|v: &f64| v.to_bits())
-                .collect::<Vec<_>>(),
-            fused_out
-                .iter()
-                .map(|v: &f64| v.to_bits())
-                .collect::<Vec<_>>(),
-            "the fused z inverse must reproduce the two sweeps bit for bit"
-        );
-
-        // The forward z sweep again, now that the inverse arms have just run
-        // on the pool: the first arm of a repeat follows the serial controls,
-        // which leave the workers idle long enough to park.
+        // The forward z sweep again, directly after the inverse arms ran on
+        // the pool and before any serial work: the first arm of a repeat
+        // follows the serial controls, which leave the workers idle past
+        // moirai's spin limit, so the two forward z arms differ by the wake.
         let start = Instant::now();
         lanes::paired(
             &mut z_again,
@@ -292,6 +281,17 @@ fn half_pair_sweeps_at_64_cubed() {
             },
         );
         let forward_z_awake = start.elapsed();
+        assert_eq!(
+            split_out
+                .iter()
+                .map(|v: &f64| v.to_bits())
+                .collect::<Vec<_>>(),
+            fused_out
+                .iter()
+                .map(|v: &f64| v.to_bits())
+                .collect::<Vec<_>>(),
+            "the fused z inverse must reproduce the two sweeps bit for bit"
+        );
 
         // Serial controls: the same per-lane bodies on the calling thread
         // alone, so the parallel arms read against the work they spread.
