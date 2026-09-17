@@ -135,6 +135,7 @@ mod codelet_selection;
 mod composite_split_ab;
 mod lane_routes;
 mod large_sizes;
+mod page_offset;
 mod prime_dispatch;
 mod rader_width;
 mod radix_order;
