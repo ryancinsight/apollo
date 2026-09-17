@@ -1,5 +1,12 @@
 # Apollo Backlog
 
+<a id="apollo-ci-pr-change-scope"></a>
+## APOLLO-CI-PR-CHANGE-SCOPE — Run the Rust pipeline only for pull requests that change code [patch] — in-progress
+- **Integrator:** claude-opus-5 (session 5bed7001); **branch:** `ci/apollo-pr-change-scope` (stacked on `chore/apollo-board-done-order`); **lease:** `.github/workflows/ci.yml`, this entry; **last-update:** 2026-09-17.
+- **Outcome:** a pull request that changes only the board, the ADRs or the tooling scripts gets its verdict from the script tests, not from the whole Rust pipeline. The `push` trigger already ignores board and ADR writes; the `pull_request` trigger scoped nothing, so #485 and #487 each ran clippy, nextest, doctests, rustdoc and the bindings for a Python and Markdown change.
+- **Acceptance oracle:** a scripts-and-board pull request reports `rust workspace` green with its Rust steps skipped; a pull request touching code or the workflow runs every step; a failed scope job runs every step.
+- **Risk/class:** [patch], CI only. `rust workspace` is a required check, so it must still report on every ready pull request rather than be skipped whole.
+
 <a id="apollo-real-3d-pass-count"></a>
 ## APOLLO-REAL-3D-PASS-COUNT — Cut the passes the 64 cubed real pair makes over its volume [patch] [perf] — todo
 - **Outcome:** `forward_3d_half_into` and `inverse_3d_half_into` at 64 cubed f64 move measurably less memory per call, with the pass count that changed named and every other shape unregressed.
