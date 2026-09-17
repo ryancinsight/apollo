@@ -987,7 +987,7 @@ dependencies = [
 [[package]]
 name = "hermes-simd"
 version = "0.7.0"
-source = "git+https://github.com/ryancinsight/hermes.git#7e45dda0949d11c5f5139c7b84760fbefa55f3fc"
+source = "git+https://github.com/ryancinsight/hermes.git#e49fa1fa842b81214abc41102a5900ebc1360aa3"
 dependencies = [
  "eunomia",
  "hermes-simd-core",
@@ -1001,7 +1001,7 @@ dependencies = [
 [[package]]
 name = "hermes-simd-core"
 version = "0.7.0"
-source = "git+https://github.com/ryancinsight/hermes.git#7e45dda0949d11c5f5139c7b84760fbefa55f3fc"
+source = "git+https://github.com/ryancinsight/hermes.git#e49fa1fa842b81214abc41102a5900ebc1360aa3"
 dependencies = [
  "eunomia",
  "mnemosyne-memory",
@@ -1012,7 +1012,7 @@ dependencies = [
 [[package]]
 name = "hermes-simd-intrinsics"
 version = "0.7.0"
-source = "git+https://github.com/ryancinsight/hermes.git#7e45dda0949d11c5f5139c7b84760fbefa55f3fc"
+source = "git+https://github.com/ryancinsight/hermes.git#e49fa1fa842b81214abc41102a5900ebc1360aa3"
 dependencies = [
  "eunomia",
  "hermes-simd-core",
@@ -1021,7 +1021,7 @@ dependencies = [
 [[package]]
 name = "hermes-simd-macros"
 version = "0.7.0"
-source = "git+https://github.com/ryancinsight/hermes.git#7e45dda0949d11c5f5139c7b84760fbefa55f3fc"
+source = "git+https://github.com/ryancinsight/hermes.git#e49fa1fa842b81214abc41102a5900ebc1360aa3"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -1031,7 +1031,7 @@ dependencies = [
 [[package]]
 name = "hermes-simd-types"
 version = "0.7.0"
-source = "git+https://github.com/ryancinsight/hermes.git#7e45dda0949d11c5f5139c7b84760fbefa55f3fc"
+source = "git+https://github.com/ryancinsight/hermes.git#e49fa1fa842b81214abc41102a5900ebc1360aa3"
 dependencies = [
  "hermes-simd-core",
  "hermes-simd-intrinsics",
