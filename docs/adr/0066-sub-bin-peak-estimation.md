@@ -8,20 +8,23 @@
   bias term the test asserts alongside it. The decision is unchanged.
 - Revised 2026-09-17: the decision is implemented as `apollo_stft::estimate_peaks`
   (`backlog.md#apollo-peak-estimation-surface`). The spike's test-only
-  candidates are deleted; the oracle scene is the surface's test, which
-  reproduces the Candan 2011 row below within its reporting precision and the
-  transform's rounding. The image-floor expression below is the first-order
-  size of the image's effect, not an upper bound: review found estimates up to
-  15% above it near DC, so the surface's per-scalar tests bound the image and
-  the other tones' residuals by the triangle inequality on their exact terms
-  instead. The residual of Candan's correction for one complex exponential is
+  candidates are deleted; the oracle scene is the surface's test and
+  measures the Candan 2011 row below again (8.4e-10 and 7.8e-10 Hz, 6.0e-7
+  Hz). The image-floor expression below is the first-order size of the image's
+  effect, not an upper bound: review found estimates up to 15% above it near
+  DC. The surface's tests instead bound every read by the triangle inequality
+  on the exact image term, the residuals of the estimates actually subtracted,
+  the scene's noise at the bins read, and rounding. The kernel is evaluated in
+  the product form `e^{iπu'} sin(πu') e^{−iπw/N} / sin(πw/N)` on the argument
+  reduced modulo `N`, since the quotient form cancels near integer
+  arguments. The residual of Candan's correction for one complex exponential is
   `(N/π)(tan(πδ/N) − πδ/N)`, of which `|δ|³(π/N)²/3` is the leading term. A
   real tone also appears at its mirror bin `N − k`, so the surface refuses a
   peak set holding both.
 - Items: `backlog.md#apollo-spectral-peak-estimation-spike`,
   `backlog.md#apollo-peak-estimation-surface`
-- Evidence: `crates/apollo-stft/tests/peak_estimation.rs` (the oracle scene
-  and its derived bounds, against the surface),
+- Evidence: `crates/apollo-stft/src/application/execution/kernel/peak/tests/scene.rs` (the oracle scene, every
+  read of its three rounds checked against its derived bound),
   `output/apollo-base128/peak_estimation_2026-09-15.md` (the spike's run of
   every candidate); the candidates themselves are in git history at
   `crates/apollo-stft/src/application/execution/plan/stft/dimension_1d/tests/peak_estimation.rs`
