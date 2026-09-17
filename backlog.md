@@ -1,12 +1,5 @@
 # Apollo Backlog
 
-<a id="apollo-melinoe-executor-receiver"></a>
-## APOLLO-MELINOE-EXECUTOR-RECEIVER-2026-09-11 — Track unpublished provider receiver construction [patch] — blocked
-- Scope: upstream Melinoe executor registration at local `af052fc`; independent of the lane-policy change and absent from its standalone dependency pins.
-- Finding: `shared_instance<E>` casts a static unit value to `&E`; `E: ParallelExecutor + 'static` does not establish size, alignment or validity for that reference. Source inspection establishes the unsound generic construction; no Miri reproduction has run.
-- Acceptance: upstream constructs a valid receiver or removes the receiver requirement, with an adversarial implementation test and Miri evidence; Apollo advances only to a corrected published commit.
-- Blocker: separate unpublished provider migration; re-open when its corrected Git revision is available. Basis: `src/sync/scoped/partition/executor.rs:149–215` in Melinoe `af052fc`.
-
 <a id="apollo-workspace-instrumented-verification"></a>
 ## APOLLO-WORKSPACE-INSTRUMENTED-VERIFICATION — Close instrumented workspace coverage [patch] — blocked
 - **Scope:** borrowed FourStep workspace boundaries and existing SIMD kernels; [ADR 0048](docs/adr/0048-worker-scratch-lifetime.md).
@@ -142,6 +135,7 @@ One line an item: the anchor, the identity, the outcome with its commit or PR; t
 <a id="atlas-apollo-qft-fft"></a>- **ATLAS-APOLLO-QFT-FFT-2026-08-31** — Route reusable QFT plans through Apollo FFT [perf] [patch]. Delivered by PR #213, `39420cca`, `f3138f50`, `3e2c2edc`.
 <a id="atlas-apollo-planar-radix8"></a>- **ATLAS-APOLLO-PLANAR-RADIX8-2026-08-27** — Deeper stage fusion in the planar batched kernel [arch] (radix-8 declined by both instruments, the twiddle fold delivered instead). Closed; the delivery record is in git history.
 <a id="atlas-apollo-plan-underselects-composite"></a>- **ATLAS-APOLLO-PLAN-UNDERSELECTS-COMPOSITE-2026-09-02** — The cached plan is slower than the ad-hoc dispatcher for composite lengths [patch] [perf]. **Finding.** `FftPlan1D::forward_complex_slice_inplace` and `mixed_radix::forward_inplace` compute the same transform by different routes, and the plan — the artifact that exists precisely to hold the precomputed decomposition — is the *slower* of the two for non-power-of-two lengths. Both compiled into one binary, arms alternating in one process, `f32` forward, performance core, minimum of 100 pinned samples: | n | free function | plan | | | --- | --- | --- | --- | | 96 | 72.73 ns | 72.50 | wash | | 100 | 101.40 | 130.65 | plan +29% | | 128 | 112.40 | 60.93 | plan -46% | | 256 | 226.16 | 146.71 | plan -35% | | 384 | 281.79 | 354.34 | plan +26% | | 512 | 395.69 | 323.54 | plan -18% | | 1000 | 1036.65 | 1025.36 | wash |
+<a id="apollo-melinoe-executor-receiver"></a>- **APOLLO-MELINOE-EXECUTOR-RECEIVER-2026-09-11** — Track unpublished provider receiver construction [patch]. **Closed 2026-09-17:** Melinoe `9b7039f` (merged in `059e5891`, its main) makes `ParallelExecutor::run_indexed` an associated function, so no receiver is fabricated and `shared_instance` is gone; its non-zero-sized registration test and the four other executor tests pass under Miri (`cargo +nightly miri test --test partition -- executor`, 5/5 at `059e5891`); apollo already resolves Melinoe at `059e5891`.
 <a id="atlas-apollo-twiddle-accuracy"></a>- **ATLAS-APOLLO-TWIDDLE-ACCURACY-2026-08-25 [patch]**. Closed; the delivery record is in git history.
 <a id="✅ atlas-apollo-se"></a>- **ATLAS-APOLLO-SEMVER-BASELINE-UNBUILDABLE-2026-08-29** — cargo-semver-checks cannot build the released baseline [patch]. Delivered by `378081ec`.
 <a id="apollo-lane-unit-tasks"></a>- **APOLLO-LANE-UNIT-TASKS-2026-09-15** — Lane passes decide scheduling through moirai unit tasks [patch] [perf]. #460: `lanes::each` (under `LaneTasks`) and `lanes::paired` (under `WorkBytes<PARALLEL_BYTES>`) run on moirai `for_each_unit_task_mut_with`; apollo's `TASK_BYTES`, `lanes_per_task` and hand branch deleted; workspace clippy clean, 1,525 nextest passed; `lane_threshold` per-run minima within 1%.
