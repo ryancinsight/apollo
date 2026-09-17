@@ -28,6 +28,49 @@ concurrency:
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
+  scope:
+    # What a pull request changes. One that touches only the board, the ADRs
+    # or the tooling scripts needs the script tests and none of the Rust
+    # pipeline, which on a hosted runner is most of an hour of minutes per
+    # board record. Every other change, every push to main, and any failure
+    # of this job leaves `code` other than `false`, which runs everything:
+    # the gate defaults to blame.
+    if: ${{ github.event_name != 'pull_request' || !github.event.pull_request.draft }}
+    name: change scope
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    permissions:
+      contents: read
+    outputs:
+      code: ${{ steps.diff.outputs.code }}
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803
+        with:
+          fetch-depth: 0
+          filter: blob:none
+      - id: diff
+        env:
+          EVENT: ${{ github.event_name }}
+          BASE: ${{ github.event.pull_request.base.sha }}
+          HEAD: ${{ github.event.pull_request.head.sha }}
+        run: |
+          set -euo pipefail
+          if [ "$EVENT" != "pull_request" ]; then
+            echo "code=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          # Tree comparison only: rename detection would fetch every blob.
+          git diff --no-renames --name-only "$BASE...$HEAD" > changed.txt
+          echo "changed files:"
+          cat changed.txt
+          if grep -Evq '^(backlog\.md|checklist\.md|gap_audit\.md|docs/adr/.+|scripts/.+)$' changed.txt; then
+            echo "code=true" >> "$GITHUB_OUTPUT"
+          elif [ -s changed.txt ]; then
+            echo "code=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "code=true" >> "$GITHUB_OUTPUT"
+          fi
+
   adr-index:
     # A draft pull request is visibility, not a verification event: its pushes
     # queue nothing, and marking it ready runs the one pull-request verification.
@@ -53,7 +96,8 @@ jobs:
   semver:
     # A draft pull request is visibility, not a verification event: its pushes
     # queue nothing, and marking it ready runs the one pull-request verification.
-    if: ${{ github.event_name != 'pull_request' || !github.event.pull_request.draft }}
+    needs: scope
+    if: ${{ !cancelled() && (github.event_name != 'pull_request' || !github.event.pull_request.draft) && needs.scope.outputs.code != 'false' }}
     name: SemVer gate
     uses: ryancinsight/atlas/.github/workflows/semver-gate.yml@806949a176cc139efe7c514d7e42c9b9a9447f45
     with:
@@ -74,7 +118,8 @@ jobs:
   rust:
     # A draft pull request is visibility, not a verification event: its pushes
     # queue nothing, and marking it ready runs the one pull-request verification.
-    if: ${{ github.event_name != 'pull_request' || !github.event.pull_request.draft }}
+    needs: scope
+    if: ${{ !cancelled() && (github.event_name != 'pull_request' || !github.event.pull_request.draft) }}
     name: rust workspace
     runs-on: ubuntu-24.04
     timeout-minutes: 30
@@ -86,12 +131,15 @@ jobs:
         with:
           path: apollo
       - uses: dtolnay/rust-toolchain@889fac408b4da0905346410f253f0c55fbcb6613
+        if: needs.scope.outputs.code != 'false'
         with:
           components: clippy, rustfmt
       - uses: taiki-e/install-action@b20dedce73af6905cdc30d6611090c9b67557c8d
+        if: needs.scope.outputs.code != 'false'
         with:
           tool: cargo-nextest@0.9.140,cargo-audit@0.22.2,cargo-deny@0.20.2
       - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6
+        if: needs.scope.outputs.code != 'false'
         with:
           workspaces: apollo
           cache-targets: false
@@ -102,6 +150,7 @@ jobs:
       # excludes patched externals) so CI never lints/formats another repo's
       # source.
       - name: Format
+        if: needs.scope.outputs.code != 'false'
         run: |
           cargo metadata --locked --no-deps --format-version=1 \
             | jq -r '.packages[].name' \
@@ -111,6 +160,7 @@ jobs:
       - name: SAFETY ratchet
         run: python scripts/safety_ratchet.py check
       - name: Clippy
+        if: needs.scope.outputs.code != 'false'
         run: cargo clippy --locked --workspace --all-targets --all-features -- -D warnings
       # apollo-python builds pyo3 with the "extension-module" feature, which
       # deliberately omits linking against libpython (Python dynamically
@@ -120,8 +170,10 @@ jobs:
       # bindings" job instead (maturin develop + pytest).
       #
       - name: Tests
+        if: needs.scope.outputs.code != 'false'
         run: cargo nextest run --locked --profile ci --workspace --all-features --exclude apollo-python
       - name: Build benchmark smoke
+        if: needs.scope.outputs.code != 'false'
         run: >-
           cargo test --locked -p apollo-fft --all-features --no-run
           --bench rustfft_comparison
@@ -133,10 +185,12 @@ jobs:
           --bench twiddless_comparison
           --bench lane_threshold
       - name: Build NUFFT benchmark smoke
+        if: needs.scope.outputs.code != 'false'
         run: >-
           cargo test --locked -p apollo-nufft --all-features --no-run
           --bench buffer_reuse
       - name: Benchmark smoke
+        if: needs.scope.outputs.code != 'false'
         env:
           APOLLO_BENCH_MODE: smoke
         run: >-
@@ -150,18 +204,23 @@ jobs:
           --bench twiddless_comparison
           --bench lane_threshold
       - name: NUFFT benchmark smoke
+        if: needs.scope.outputs.code != 'false'
         env:
           APOLLO_BENCH_MODE: smoke
         run: >-
           timeout 60s cargo test --locked -p apollo-nufft --all-features
           --bench buffer_reuse
       - name: Doctests
+        if: needs.scope.outputs.code != 'false'
         run: cargo test --locked --doc --workspace --exclude apollo-python
       - name: Provider audit
+        if: needs.scope.outputs.code != 'false'
         run: cargo run --locked -p xtask -- provider-audit
       - name: RustSec audit
+        if: needs.scope.outputs.code != 'false'
         run: cargo audit --deny warnings
       - name: Dependency policy
+        if: needs.scope.outputs.code != 'false'
         run: cargo deny check
 
   # Warning-denied rustdoc over every published member. rustdoc holds the
@@ -175,7 +234,8 @@ jobs:
   docs-plan:
     # A draft pull request is visibility, not a verification event: its pushes
     # queue nothing, and marking it ready runs the one pull-request verification.
-    if: ${{ github.event_name != 'pull_request' || !github.event.pull_request.draft }}
+    needs: scope
+    if: ${{ !cancelled() && (github.event_name != 'pull_request' || !github.event.pull_request.draft) && needs.scope.outputs.code != 'false' }}
     name: rustdoc shards
     runs-on: ubuntu-24.04
     timeout-minutes: 5
@@ -223,7 +283,8 @@ jobs:
   python:
     # A draft pull request is visibility, not a verification event: its pushes
     # queue nothing, and marking it ready runs the one pull-request verification.
-    if: ${{ github.event_name != 'pull_request' || !github.event.pull_request.draft }}
+    needs: scope
+    if: ${{ !cancelled() && (github.event_name != 'pull_request' || !github.event.pull_request.draft) && needs.scope.outputs.code != 'false' }}
     name: python bindings
     runs-on: ubuntu-latest
     timeout-minutes: 20
