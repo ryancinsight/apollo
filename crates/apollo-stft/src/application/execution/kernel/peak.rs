@@ -13,16 +13,16 @@
 //! # Offset
 //!
 //! For the peak bin `k` of a tone at `f = k + δ`, the offset is Candan's
-//! corrected complex ratio (Candan, "A method for fine resolution frequency
-//! estimation from three DFT samples", IEEE SPL 18(6), 2011):
-//! `δ = Re[(X_{k−1} − X_{k+1}) / (2X_k − X_{k−1} − X_{k+1})] · tan(π/N)/(π/N)`.
+//! complex ratio with its inverse-tangent closure (ADR 0066):
+//! `δ = atan(Re[(X_{k−1} − X_{k+1}) / (2X_k − X_{k−1} − X_{k+1})] · tan(π/N))/(π/N)`.
 //! For one complex exponential the ratio `r` is exactly
-//! `tan(πδ/N) / tan(π/N)`, so the corrected ratio is `(N/π) tan(πδ/N)` and
-//! errs by `(N/π) (tan(πδ/N) − πδ/N)`, `|δ|³ (π/N)² / 3` to leading order,
-//! bins. A real tone adds its own negative-frequency image, which moves the
-//! offset by at most `|δ| (1 − δ²) (π/N)² / sin²(π (2k + δ) / N)` bins
-//! (ADR 0066). An offset outside `|δ| ≤ ½` means bin `k` holds no peak and the
-//! estimate is rejected; so is a ratio whose denominator vanishes.
+//! `tan(πδ/N) / tan(π/N)`. Inverting that relation removes the finite-length
+//! bias that otherwise pushes a half-bin offset beyond the rejection boundary.
+//! A real tone adds its own negative-frequency image. Its first-order offset
+//! error scales as `|δ| (1 − δ²) (π/N)² / sin²(π (2k + δ) / N)` bins;
+//! this is not an upper bound. An estimated offset outside `|δ| ≤ ½` is
+//! rejected, as is a ratio whose denominator vanishes. Image bias or noise
+//! can move an actual tone across this estimated-offset boundary.
 //!
 //! # Amplitude and phase
 //!
@@ -40,6 +40,8 @@
 //! number of rounds: a tone estimated to relative error `ε` leaves interference
 //! of order `ε` for the next round. The DFT is linear, so the residual at a bin
 //! is the input bin minus the estimates' `R` terms; nothing is re-transformed.
+//! Subtraction uses the same strength order, with bin index breaking ties, so
+//! permuting the requested bins changes only the output order.
 //! A round reads three bins per peak and subtracts every other estimate at
 //! each, two kernel evaluations apiece: `6 P (P − 1)` for `P` peaks.
 //!
@@ -91,7 +93,8 @@ impl<T: Copy> PeakEstimate<T> {
 /// `N/2` reads the image of the tone at `N − b`: its position is `N − f` and
 /// its phase `−φ`. `rounds` is the
 /// number of estimate-and-subtract passes over the whole set; a single peak
-/// needs one. Neighbouring bins wrap around the frame, as the DFT does.
+/// needs one. Permuting `peaks` permutes the results without changing their
+/// values. Neighbouring bins wrap around the frame, as the DFT does.
 ///
 /// # Errors
 ///
@@ -132,9 +135,9 @@ pub fn estimate_peaks<T: RealField>(
     if len < 3 {
         return Err(PeakEstimationError::FrameTooShort { len });
     }
-    // A position near `N` is resolved to `N ε` bins; from `N ε = ½` the
-    // offset, which lives in `(−½, ½]`, has no representable value left.
-    // Below that `N < ½ / ε ≤ 2^52`, so the index conversions are exact.
+    // A position near N has spacing bounded by N ε. Require that bound below
+    // half a bin; the exact DC/Nyquist rejection does not restrict frame size.
+    // Below this limit N < ½ / ε ≤ 2^52, so index conversions are exact.
     #[expect(
         clippy::cast_precision_loss,
         reason = "a length that rounds here is at least 2^53 and fails the check"
@@ -160,17 +163,21 @@ pub fn estimate_peaks<T: RealField>(
     // Strongest first. Widening a magnitude to f64 is exact for both scalars
     // and gives the total order a sort requires.
     let strength = |i: usize| spectrum[peaks[i]].norm().to_f64();
-    order.sort_by(|&a, &b| strength(b).total_cmp(&strength(a)));
+    order.sort_by(|&a, &b| {
+        strength(b)
+            .total_cmp(&strength(a))
+            .then_with(|| peaks[a].cmp(&peaks[b]))
+    });
     let mut estimates: Vec<Option<PeakEstimate<T>>> = vec![None; peaks.len()];
     for _ in 0..rounds.get() {
         for &i in &order {
             let read = |bin: usize| {
                 let position = Frame::<T>::index(bin);
-                estimates
+                order
                     .iter()
-                    .enumerate()
-                    .filter(|&(j, _)| j != i)
-                    .filter_map(|(_, estimate)| estimate.as_ref())
+                    .copied()
+                    .filter(|&j| j != i)
+                    .filter_map(|j| estimates[j].as_ref())
                     .fold(spectrum[bin], |residual, tone| {
                         residual - frame.contribution(tone, position)
                     })
@@ -186,8 +193,10 @@ pub fn estimate_peaks<T: RealField>(
 struct Frame<T> {
     len: usize,
     n: T,
-    /// `tan(π/N) / (π/N)`, Candan's correction.
-    correction: T,
+    /// `π/N`, the inverse-tangent closure's angular scale.
+    step: T,
+    /// `tan(π/N)`, relating the three-bin ratio to `tan(πδ/N)`.
+    tangent: T,
 }
 
 impl<T: RealField> Frame<T> {
@@ -197,7 +206,8 @@ impl<T: RealField> Frame<T> {
         Self {
             len,
             n,
-            correction: step.tan() / step,
+            step,
+            tangent: step.tan(),
         }
     }
 
@@ -243,12 +253,18 @@ impl<T: RealField> Frame<T> {
     /// The tone at bin `k` of the spectrum `read` returns, or `None` where its
     /// offset leaves the half-bin or the image solve is singular.
     fn estimate(&self, read: &impl Fn(usize) -> Complex<T>, k: usize) -> Option<PeakEstimate<T>> {
+        // These bins equal their own mirrors exactly. Testing indices avoids
+        // an O(k ε) determinant threshold that rejects valid large-frame bins.
+        if k == 0 || (self.len % 2 == 0 && k == self.len / 2) {
+            return None;
+        }
         let before = read((k + self.len - 1) % self.len);
         let peak = read(k);
         let after = read((k + 1) % self.len);
         let two = T::ONE + T::ONE;
         let half = T::ONE / two;
-        let delta = ((before - after) / (peak * two - before - after)).re * self.correction;
+        let ratio = ((before - after) / (peak * two - before - after)).re;
+        let delta = (ratio * self.tangent).atan2(T::ONE) / self.step;
         // False for the NaN of a vanishing denominator too.
         let within_half_bin = delta.abs() <= half;
         if !within_half_bin {
@@ -258,14 +274,8 @@ impl<T: RealField> Frame<T> {
         let direct = self.kernel(delta);
         let image = self.kernel(-(bin * two + delta));
         let determinant = direct.norm_sqr() - image.norm_sqr();
-        // At `k = 0` and `k = N/2` the image's reduced argument is `−δ` and the
-        // determinant vanishes. Its computed value is not exactly zero: the
-        // argument `2k + δ` rounds by `ε (2k + 1)` bins, which moves `ln|R|` by
-        // at most twice that on the half-bin, and each squared magnitude
-        // carries `2ε` more, so a determinant within `4ε (2k + 3)` of
-        // `|R(δ)|²` is indistinguishable from zero.
-        let margin = two * two * T::EPSILON * (bin * two + two + T::ONE);
-        let solvable = determinant > margin * direct.norm_sqr();
+        // A non-positive or NaN determinant cannot yield a resolved tone.
+        let solvable = determinant > T::ZERO;
         if !solvable {
             return None;
         }

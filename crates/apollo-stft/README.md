@@ -34,11 +34,13 @@ This gives exact reconstruction in exact arithmetic for covered samples.
 
 `estimate_peaks` reads the frequency, amplitude and phase of each tone at a
 set of peak bins of a frame's rectangular-window DFT, below bin resolution
-(ADR 0066, `docs/adr/0066-sub-bin-peak-estimation.md`): Candan's corrected
-three-bin complex ratio for the offset, the amplitude and phase solved
+(ADR 0066, `docs/adr/0066-sub-bin-peak-estimation.md`): the three-bin complex
+ratio with its inverse-tangent closure for the offset, amplitude and phase solved
 together with the tone's negative-frequency image, and estimate-and-subtract
 across the set for tones that leak into each other. A bin whose offset leaves
-the half-bin returns no estimate.
+the half-bin returns no estimate. The closure removes finite-length offset
+bias; the tone's image and noise can still move a boundary estimate outside
+the accepted interval.
 
 ```rust
 use apollo_stft::estimate_peaks;
@@ -56,8 +58,10 @@ assert!((tone.position() - 100.25).abs() < 1e-4);
 ```
 
 On the ADR's three-tone scene (48 kHz, 48 000 samples, two 1 V tones around a
-1e-6 V tone, 1e-10 V noise) three rounds read the 1 V tones to 8e-10 Hz and
-the 1e-6 V tone to 6e-7 Hz, 1.7 times its Cramér–Rao bound
+1e-6 V tone, 1e-10 V noise), eight seeded scenes with three rounds give mean
+absolute frequency errors of 8.01e-10 and 7.59e-10 Hz for the 1 V tones,
+and 5.96e-7 Hz for the middle tone. Direct DFT sums reproduce these values
+at the displayed precision; deterministic perturbation checks cover every round
 (`src/application/execution/kernel/peak/tests/scene.rs`).
 
 ## Accelerator Execution
