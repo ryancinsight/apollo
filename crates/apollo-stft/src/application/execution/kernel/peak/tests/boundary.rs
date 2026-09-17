@@ -373,21 +373,25 @@ fn adjacent_images_at_the_odd_midpoint_are_unresolved() {
 }
 
 /// Near Nyquist in a long frame the image's argument is about `N`, where f32
-/// holds only a quarter bin at `N = 2^21`. Formed as `(2k mod N) + δ`, it keeps
-/// the offset's precision, so the f32 estimate follows the f64 one: the three
-/// bins, evaluated in f64 and narrowed, differ by `ε₃₂` relative,
-/// which moves the offset by at most `2ε₃₂` (the ratio bound above), the
-/// amplitude by `(2 + π)` times that through the kernel slopes, and the
-/// solve's arithmetic by `16ε₃₂`: under `32ε₃₂` of the amplitude in all.
-#[test]
-fn long_frame_images_keep_the_offset_precision_in_f32() {
-    let len = 1 << 21;
+/// holds only a quarter bin at `N = 2^21`. Formed from the signed residue of
+/// `2k` modulo `N`, it keeps the offset's precision on both sides of Nyquist,
+/// so the f32 estimate follows the f64 one. The three bins, evaluated in f64
+/// and narrowed, differ by `ε₃₂` relative, which moves the ratio by at most
+/// `2ε₃₂` (the ratio bound above); the ratio and inverse-tangent arithmetic
+/// add `8ε₃₂`, so the offset moves by at most `10ε₃₂` bins and the amplitude
+/// by `(2 + π)` times that through the kernel slopes; the solve's arithmetic
+/// adds `16ε₃₂` and the peak bin's own rounding `E / (|R| − |I|)`, under
+/// `2ε₃₂` here: `(2 + π) · 10 + 16 + 2 < 72` times `ε₃₂` of the amplitude.
+fn long_frame_image_keeps_the_offset_precision_in_f32(offset: f64, bin_from_half: isize) {
+    let len: usize = 1 << 21;
     let tone = Tone {
-        position: (len / 2) as f64 + 0.9,
+        position: (len / 2) as f64 + offset,
         amplitude: 1.0,
         phase: 0.4,
     };
-    let bin = len / 2 + 1;
+    let bin = (len / 2)
+        .checked_add_signed(bin_from_half)
+        .expect("invariant: near Nyquist");
     // The two scalars read the same three bins, so they come from the model's
     // closed-form kernel (checked against the defining sum by `tones`) rather
     // than from 2^21-term sums.
@@ -411,11 +415,18 @@ fn long_frame_images_keep_the_offset_precision_in_f32() {
         .expect("invariant: the long frame and its bin are valid")[0]
         .expect("the f32 reading resolves the tone");
     let difference = (f64::from(narrow.amplitude()) - wide.amplitude()).abs();
-    let bound = 32.0 * f64::from(f32::EPSILON) * wide.amplitude();
+    let bound = 72.0 * f64::from(f32::EPSILON) * wide.amplitude();
     assert!(
         difference <= bound,
-        "f32 amplitude {} departs from f64 {} by {difference:e} > {bound:e}",
+        "bin {bin}: f32 amplitude {} departs from f64 {} by {difference:e} > {bound:e}",
         narrow.amplitude(),
         wide.amplitude()
     );
+}
+
+#[test]
+fn long_frame_images_keep_the_offset_precision_in_f32_on_both_sides_of_nyquist() {
+    long_frame_image_keeps_the_offset_precision_in_f32(0.9, 1);
+    long_frame_image_keeps_the_offset_precision_in_f32(-0.7, -1);
+    long_frame_image_keeps_the_offset_precision_in_f32(-2.3, -2);
 }
