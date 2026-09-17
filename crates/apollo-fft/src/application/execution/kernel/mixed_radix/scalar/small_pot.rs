@@ -7,11 +7,6 @@ mod n32;
 mod precise;
 mod reduced;
 
-// Test-gated deliberately: correct against the direct-DFT oracle in both
-// directions, and measured slower than the scalar codelet it would replace
-// (`small_pot_arms`). It stays as the instrument's subject, so the comparison
-// that declined it can be re-run rather than becoming a note nobody can check.
-#[cfg(test)]
 mod n8;
 
 pub(super) use precise::{
@@ -53,9 +48,11 @@ mod tests {
     use eunomia::Complex;
 
     /// The framed entry and the probing entry are one function of the input
-    /// at every size the plan routes through them: the probing entry selects
-    /// exactly the arm the frame runs, so the two agree bitwise. On a host
-    /// without the frame neither the plan nor this check enters it.
+    /// wherever they run the same arm, so the two agree bitwise. `f64` at
+    /// N = 8 is the exception by measurement: the frame runs the register arm
+    /// ([`super::n8`], checked against the direct DFT there) and the probing
+    /// entry the scalar codelet, since each wins in its own call structure.
+    /// On a host without the frame neither the plan nor this check enters it.
     fn framed_matches_probing<
         F: MixedRadixScalar<Complex = Complex<F>>,
         const N: usize,
@@ -100,7 +97,6 @@ mod tests {
         framed_matches_probing_at::<f32, 16>();
         framed_matches_probing_at::<f32, 32>();
         framed_matches_probing_at::<f32, 64>();
-        framed_matches_probing_at::<f64, 8>();
         framed_matches_probing_at::<f64, 16>();
         framed_matches_probing_at::<f64, 32>();
         framed_matches_probing_at::<f64, 64>();

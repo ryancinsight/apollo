@@ -153,8 +153,8 @@ pub(in crate::application::execution::kernel::mixed_radix::scalar) unsafe fn sma
 /// arm below) need AVX and FMA. A caller carrying the same frame — the plan's
 /// small power-of-two executors — inlines every arm, so no capability check
 /// and no call boundary stands between its function pointer and the
-/// butterflies. Sizes without a register form — 8 is scalar by measurement,
-/// see the scalar arm — run their scalar codelet.
+/// butterflies. The 8-point arm here is the register form ([`super::n8`]);
+/// the probing entry keeps the scalar codelet there, see the scalar arm.
 ///
 /// # Safety
 ///
@@ -171,6 +171,12 @@ pub(in crate::application::execution::kernel::mixed_radix::scalar) unsafe fn sma
     data: &mut [Complex64],
 ) {
     match N {
+        #[cfg(target_arch = "x86_64")]
+        8 => {
+            // SAFETY: this frame establishes AVX and FMA, and the caller's
+            // length contract supplies the eight samples.
+            super::n8::vector_arm::<INVERSE, NORMALIZE>(data);
+        }
         #[cfg(target_arch = "x86_64")]
         16 => {
             // SAFETY: this frame establishes AVX and FMA, and the caller's
@@ -420,38 +426,14 @@ unsafe fn small_pot_inplace_sized_precise_scalar<
             }
         }
         8 => {
-            // Scalar by measurement, re-decided 2026-09-06 on the
-            // `small_pot_arms` probe. A four-by-two register four-step was
-            // built here, passed the direct-DFT oracle in both directions and
-            // an impulse at every position, and still lost: 15.08 ns against
-            // this codelet's 11.33 on a performance core and 21.58 against
-            // 15.81 on an efficiency core, forward-plus-inverse round trip,
-            // intervals disjoint over three runs.
-            //
-            // Those are the figures for the *better* of two vector forms. The
-            // first spent a generic `avx_cmul_precise` per twiddle and read
-            // 17.24 and 24.44; folding the twiddles into `(direct, swapped)`
-            // coefficient pairs — three instructions instead of five — bought
-            // 13% and 15% and did not change the verdict.
-            //
-            // The earlier note blamed "call plus probe". It is not that: the
-            // probe's vector-direct arm removes the capability check and reads
-            // the same. The loss is the body, and the reason is that N = 8 is
-            // the length where every twiddle is a trivial rotation — `1`,
-            // `-i`, `(+-1 - i)/sqrt(2)` — which this codelet spends as sign
-            // flips, part swaps and one real multiply, while any register form
-            // still pays four cross-lane `vperm2f128` to make its second stage
-            // lanewise. Eight points is not enough arithmetic to amortise the
-            // shuffle. `backlog.md#apollo-n8-f64-gap` carries the construction.
-            //
-            // That verdict is a *latency* one, and it does not hold in every
-            // regime: measured across 32 independent lanes — the shape a
-            // `dimension_2d` axis pass runs — the same register form is 1.87x
-            // faster than this codelet on a performance core, because the
-            // permute chain it pays for overlaps across lanes. It is not free
-            // to take: efficiency cores do not overlap it and lose 1.11x there,
-            // and there is no per-core dispatch. Sizing that trade is
-            // `backlog.md#apollo-n8-regime-split`.
+            // The probing entry's arm, by measurement (2026-09-17,
+            // `small_pot_arms`): reached through a capability check and a
+            // call into the frame, the register form ([`super::n8`]) reads
+            // 21.8 ns a round trip against this codelet's 18.5 on an
+            // efficiency core, and its per-lane pass 1.30 ms against 1.02,
+            // though it halves the performance core's per-lane pass. Inside
+            // the plan's frame it wins on both cores, so the framed entry
+            // runs it and this codelet serves the unframed callers.
             let data_ref = &mut *data.as_mut_ptr().cast::<[Complex64; 8]>();
             crate::application::execution::kernel::components::winograd::dft8_array_impl::<
                 f64,
