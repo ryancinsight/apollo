@@ -180,17 +180,34 @@ pub(super) fn paired<A, B>(
     // that also reads a wider input.
     let pair_bytes =
         output_lane * core::mem::size_of::<A>() + input_lane * core::mem::size_of::<B>();
+    units(output, output_lane, pair_bytes, |first_lane, outputs| {
+        let input_start = first_lane * input_lane;
+        let input_end = input_start + outputs.len() / output_lane * input_lane;
+        task(outputs, &input[input_start..input_end]);
+    });
+}
+
+/// Runs `task(first_unit, units)` once per scheduled task over the
+/// `unit_len`-element units of `output`, each unit costing `unit_bytes` of
+/// work: its own bytes and whatever it reads elsewhere.
+///
+/// For a pass whose input is not laid out unit by unit beside its output, so
+/// the task finds its input from the index of its first unit.
+pub(super) fn units<A: Send>(
+    output: &mut [A],
+    unit_len: usize,
+    unit_bytes: usize,
+    task: impl Fn(usize, &mut [A]) + Send + Sync,
+) {
     moirai::for_each_unit_task_mut_with::<moirai::WorkBytes<PARALLEL_BYTES>, _, _, _, _>(
         output,
-        output_lane,
-        pair_bytes,
+        unit_len,
+        unit_bytes,
         || (),
-        |(), first_lane, outputs| {
+        |(), first_unit, outputs| {
             #[cfg(all(test, not(miri)))]
             crate::application::execution::kernel::worker_quiescence::record_worker();
-            let input_start = first_lane * input_lane;
-            let input_end = input_start + outputs.len() / output_lane * input_lane;
-            task(outputs, &input[input_start..input_end]);
+            task(first_unit, outputs);
         },
     );
 }

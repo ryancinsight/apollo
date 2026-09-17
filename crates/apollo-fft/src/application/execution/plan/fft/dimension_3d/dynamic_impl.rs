@@ -279,6 +279,25 @@ where
         );
     }
 
+    /// Transforms axes 0 and 1 of a `[nx, ny, depth]` volume stored in
+    /// `(y, z, x)` order and leaves it in C order.
+    ///
+    /// For a producer that writes that order directly; see
+    /// [`passes::xy_axes_from_x_last`]. It saves a move only where both `nx`
+    /// and `ny` exceed one, the extents for which the C-order chain runs.
+    pub(crate) fn xy_axes_from_x_last<const FORWARD: bool>(
+        &self,
+        data: &mut [F::Complex],
+        depth: usize,
+    ) {
+        passes::xy_axes_from_x_last::<F, FORWARD>(
+            data,
+            [self.nx, self.ny, depth],
+            self.lane::<FORWARD>(0),
+            self.lane::<FORWARD>(1),
+        );
+    }
+
     fn axis_pass_complex<const FORWARD: bool>(
         &self,
         mut data: ArrayViewMut3<'_, F::Complex>,
