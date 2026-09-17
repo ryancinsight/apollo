@@ -30,3 +30,37 @@ pub enum StftError {
     #[error("precision profile does not match storage type")]
     PrecisionMismatch,
 }
+
+/// Errors produced by [`estimate_peaks`](crate::estimate_peaks) for inputs it
+/// cannot read.
+#[derive(Debug, Error, Clone, PartialEq, Eq)]
+#[non_exhaustive]
+pub enum PeakEstimationError {
+    /// The spectrum has fewer than the three bins an estimate reads.
+    #[error("a spectrum of {len} bins has fewer than the three an estimate reads")]
+    FrameTooShort {
+        /// The spectrum's length.
+        len: usize,
+    },
+    /// The frame length is not exactly representable in the scalar, so bin
+    /// positions would round.
+    #[error("a frame of {len} bins is not exactly representable in the scalar")]
+    FrameTooLong {
+        /// The spectrum's length.
+        len: usize,
+    },
+    /// A peak bin lies outside the spectrum.
+    #[error("peak bin {bin} is outside a spectrum of {len} bins")]
+    PeakOutOfRange {
+        /// The offending bin.
+        bin: usize,
+        /// The spectrum's length.
+        len: usize,
+    },
+    /// A peak bin is listed more than once.
+    #[error("peak bin {bin} is listed more than once")]
+    DuplicatePeak {
+        /// The repeated bin.
+        bin: usize,
+    },
+}
