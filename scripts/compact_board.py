@@ -5,6 +5,13 @@ Every `## ` heading is an item. Each keeps (or gains) a stable anchor, a
 status from the closed set (todo, in-progress, blocked, review, done), and
 a record within the budget: an open item at most fifteen lines, a done
 item one line (anchor, identity, outcome) in the closing `# Done` section.
+Narrative beyond that is dropped — git is the archive, and the commit that
+lands a compaction names the pre-compaction revision as its parent. A
+stale in-progress claim (last update before `--release-before`) is
+released to todo with a note. Sprint and session sections (the report-file
+genre inside the board) are dropped whole. Anchors never change, so every
+inbound link survives; the run reports the before and after line counts,
+the anchors, and what it released, normalized and dropped.
 
 The done section is ordered by the SHA-256 of each entry's anchor. Every
 record adds one line there, and when records were appended at the end, any
@@ -20,13 +27,6 @@ order, and two branches deleting open blocks that sit next to each other.
 Both keep every line on resolution; the second is what per-item files
 would remove. `scripts/replay_board.py` resolves either during a rebase by
 re-applying the stopped commit's item changes to the upstream board.
-Narrative beyond that is dropped — git is the archive, and the commit that
-lands a compaction names the pre-compaction revision as its parent. A
-stale in-progress claim (last update before `--release-before`) is
-released to todo with a note. Sprint and session sections (the report-file
-genre inside the board) are dropped whole. Anchors never change, so every
-inbound link survives; the run reports the before and after line counts,
-the anchors, and what it released, normalized and dropped.
 
 It also fails the board on what makes a link unsafe: an anchor defined twice,
 and an in-file link (`](#id)`) whose anchor is absent.
