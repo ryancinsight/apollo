@@ -8,7 +8,8 @@
 - Blocker: separate unpublished provider migration; re-open when its corrected Git revision is available. Basis: `src/sync/scoped/partition/executor.rs:149–215` in Melinoe `af052fc`.
 
 <a id="apollo-peak-estimation-surface"></a>
-## APOLLO-PEAK-ESTIMATION-SURFACE — A sub-bin peak parameter estimator on apollo-stft [minor] — todo
+## APOLLO-PEAK-ESTIMATION-SURFACE — A sub-bin peak parameter estimator on apollo-stft [minor] — in-progress
+- **Integrator:** claude-opus-5 (session 5bed7001); **branch:** `feat/apollo-stft-peak-estimation` (lane apollo-route, from main); **lease:** `crates/apollo-stft/`, `docs/adr/0066-sub-bin-peak-estimation.md`, this entry; **last-update:** 2026-09-17.
 - **Outcome:** `apollo-stft` exposes the estimator selected in `docs/adr/0066-sub-bin-peak-estimation.md`: given a spectrum and the peak bins to read, the frequency, amplitude and phase of each tone below bin resolution, generic over `T: Scalar`, with estimate-and-subtract across the set and rejection of a bin whose offset leaves the half-bin.
 - **Scope:** the estimator, the closed-form window kernel it solves against, and the peel loop, in a leaf module under `apollo-stft`'s execution kernel; the one-tone case is the one-element call, not a second entry point. **Non-goals:** peak search over the magnitude spectrum (the caller's), windows beyond the rectangular analysis the ADR selects, and the Prism method the ADR excludes.
 - **Acceptance oracle:** the spike's three-tone scene as an integration test at the ADR's measured errors — 5e-10 Hz / 1e-9 V / 3e-9 rad on the 1 V tones, within a decade of the Cramer-Rao bound on the 1e-6 V tone — plus the derived-bound assertions the spike test already carries (interference bound on the direct pass, image floor and CRB after the peel) at every shipped scalar.
