@@ -18,7 +18,8 @@ order, and 3 in hashed order (`backlog.md#apollo-board-completed-section-union`)
 Two conflicts remain possible: two insertions at adjacent places in that
 order, and two branches deleting open blocks that sit next to each other.
 Both keep every line on resolution; the second is what per-item files
-would remove.
+would remove. `scripts/replay_board.py` resolves either during a rebase by
+re-applying the stopped commit's item changes to the upstream board.
 Narrative beyond that is dropped — git is the archive, and the commit that
 lands a compaction names the pre-compaction revision as its parent. A
 stale in-progress claim (last update before `--release-before`) is
