@@ -1,8 +1,15 @@
 """The board compaction on a handcrafted board: anchors kept, derived and
 read inline, legacy status forms folded into the closed set, stale claims
-released, sections dropped, budgets held, a second pass idempotent."""
+released, sections dropped, budgets held, a second pass idempotent, the done
+section in anchor-hash order so concurrent records merge, and link faults
+reported."""
 
+import hashlib
 import importlib.util
+import re
+import shutil
+import subprocess
+import tempfile
 import unittest
 from pathlib import Path
 
@@ -104,6 +111,115 @@ class Compaction(unittest.TestCase):
         self.assertEqual(again, self.out)
         self.assertEqual(report["anchors"][2], [])
         self.assertEqual(report["normalized"], [])
+
+
+DONE_ENTRY = re.compile(r'(?m)^<a id="([^"]+)"></a>- \*\*.*$')
+TODAY = "2026-09-17"
+
+
+def done_anchors(board: str) -> list[str]:
+    return [match.group(1) for match in DONE_ENTRY.finditer(board)]
+
+
+def open_item(ident: str) -> str:
+    anchor = ident.lower()
+    return f'<a id="{anchor}"></a>\n## {ident} — Item {anchor} [patch] — todo\n- **Scope:** {anchor}.\n\n'
+
+
+def recorded(board: str, ident: str) -> str:
+    """`board` with `ident`'s open item marked done and compacted, as a record commit leaves it."""
+    anchor = ident.lower()
+    heading = f"## {ident} — Item {anchor} [patch] — todo\n- **Scope:** {anchor}."
+    assert heading in board, ident
+    board = board.replace(
+        heading,
+        f"## {ident} — Item {anchor} [patch] — done\n- [#1](https://example.invalid/pull/1): {anchor} landed.",
+    )
+    return compaction.compact(board, TODAY, TODAY)[0]
+
+
+def merge(base: str, ours: str, theirs: str) -> tuple[str, int]:
+    """`git merge-file` over three texts: the merged text and its conflict count."""
+    with tempfile.TemporaryDirectory() as directory:
+        paths = []
+        for name, text in (("ours", ours), ("base", base), ("theirs", theirs)):
+            path = Path(directory) / name
+            path.write_text(text, encoding="utf-8", newline="\n")
+            paths.append(str(path))
+        result = subprocess.run(["git", "merge-file", "-p", *paths], capture_output=True, check=False)
+    return result.stdout.decode("utf-8"), result.returncode
+
+
+class DoneOrder(unittest.TestCase):
+    """Two records made on separate branches merge without a hand resolution."""
+
+    LANDED = [f"LANDED-{n:02d}" for n in range(40)]
+    FIRST, SECOND = "RECORD-A", "RECORD-C"
+    # An item still open between the two records. Two branches deleting
+    # adjacent open blocks conflict whatever the done order is; that form is
+    # outside this ordering's reach and is left to the per-item files the
+    # board item names.
+    BETWEEN = "STILL-OPEN-B"
+
+    def setUp(self):
+        board = "# Backlog — sample\n\n" + "".join(
+            open_item(i) for i in self.LANDED + [self.FIRST, self.BETWEEN, self.SECOND]
+        )
+        for ident in self.LANDED:
+            board = recorded(board, ident)
+        self.base = board
+
+    def test_done_section_is_in_anchor_hash_order(self):
+        anchors = done_anchors(self.base)
+        self.assertEqual(len(anchors), len(self.LANDED))
+        keys = [hashlib.sha256(anchor.encode()).hexdigest() for anchor in anchors]
+        self.assertEqual(keys, sorted(keys))
+
+    def test_the_fixture_pair_lands_apart(self):
+        # The merge test below relies on this: two records inserted at
+        # adjacent places still conflict, and that is the remaining 1%.
+        order = done_anchors(recorded(recorded(self.base, self.FIRST), self.SECOND))
+        gap = abs(order.index(self.FIRST.lower()) - order.index(self.SECOND.lower()))
+        self.assertGreater(gap, 1)
+
+    @unittest.skipIf(shutil.which("git") is None, "git is not installed")
+    def test_concurrent_records_merge_cleanly_where_appending_conflicts(self):
+        ours = recorded(self.base, self.FIRST)
+        theirs = recorded(self.base, self.SECOND)
+        merged, conflicts = merge(self.base, ours, theirs)
+        self.assertEqual(conflicts, 0, merged)
+        self.assertEqual(merged, recorded(recorded(self.base, self.FIRST), self.SECOND))
+
+        # The instrument bites: the same two records written the old way,
+        # appended after the last entry, conflict.
+        def appended(board: str, ident: str) -> str:
+            line = next(e.group(0) for e in DONE_ENTRY.finditer(board) if e.group(1) == ident.lower())
+            rest = [e.group(0) for e in DONE_ENTRY.finditer(board) if e.group(1) != ident.lower()]
+            return board.split("# Done")[0] + "# Done\n" + "\n".join(rest + [line]) + "\n"
+
+        def appended_base() -> str:
+            return self.base.split("# Done")[0] + "# Done\n" + "\n".join(
+                e.group(0) for e in DONE_ENTRY.finditer(self.base)
+            ) + "\n"
+
+        _, old_conflicts = merge(appended_base(), appended(ours, self.FIRST), appended(theirs, self.SECOND))
+        self.assertGreater(old_conflicts, 0)
+
+
+class LinkFaults(unittest.TestCase):
+    def test_reports_a_duplicate_anchor_and_a_dangling_link(self):
+        board = (
+            '# Backlog — sample\n\n<a id="one"></a>\n## ONE-2026-09-01 — One [patch] — todo\n'
+            "- **Scope:** see [two](#two) and [missing](#missing).\n\n"
+            '<a id="two"></a>\n## TWO-2026-09-02 — Two [patch] — todo\n- **Scope:** two <a id="one"></a>.\n'
+        )
+        _, report = compaction.compact(board, TODAY, TODAY)
+        self.assertEqual(report["duplicates"], ["one"])
+        self.assertEqual(report["dangling"], ["missing"])
+
+    def test_a_clean_board_reports_none(self):
+        _, report = compaction.compact(BOARD, "2026-09-15", "2026-09-14")
+        self.assertEqual((report["duplicates"], report["dangling"]), ([], []))
 
 
 if __name__ == "__main__":

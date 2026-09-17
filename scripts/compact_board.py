@@ -5,6 +5,20 @@ Every `## ` heading is an item. Each keeps (or gains) a stable anchor, a
 status from the closed set (todo, in-progress, blocked, review, done), and
 a record within the budget: an open item at most fifteen lines, a done
 item one line (anchor, identity, outcome) in the closing `# Done` section.
+
+The done section is ordered by the SHA-256 of each entry's anchor. Every
+record adds one line there, and when records were appended at the end, any
+two branches recording different items touched the same last line and
+conflicted -- every landing made every other open record `DIRTY`. A
+hashed order gives each entry its own place, and unlike alphabetical order
+it scatters the related IDs a stream of work files together: over the
+board's 276 entries, `git merge-file` conflicted on 275 of 275
+consecutively recorded pairs appended at the end, 34 in alphabetical
+order, and 3 in hashed order (`backlog.md#apollo-board-completed-section-union`).
+Two conflicts remain possible: two insertions at adjacent places in that
+order, and two branches deleting open blocks that sit next to each other.
+Both keep every line on resolution; the second is what per-item files
+would remove.
 Narrative beyond that is dropped — git is the archive, and the commit that
 lands a compaction names the pre-compaction revision as its parent. A
 stale in-progress claim (last update before `--release-before`) is
@@ -12,6 +26,9 @@ released to todo with a note. Sprint and session sections (the report-file
 genre inside the board) are dropped whole. Anchors never change, so every
 inbound link survives; the run reports the before and after line counts,
 the anchors, and what it released, normalized and dropped.
+
+It also fails the board on what makes a link unsafe: an anchor defined twice,
+and an in-file link (`](#id)`) whose anchor is absent.
 
 Legacy heading forms fold into the closed set: `— done 2026-09-09
 (rejected)`, `— done, by deletion`, `— closed 2026-08-25, premise false`,
@@ -27,6 +44,7 @@ Usage: python scripts/compact_board.py backlog.md --today 2026-09-15
 from __future__ import annotations
 
 import argparse
+import hashlib
 import re
 import sys
 from pathlib import Path
@@ -48,13 +66,33 @@ ANCHOR = re.compile(r'^<a id="([^"]+)"></a>\s*$')
 DONE_LINE = re.compile(r'^(?:<a id="[^"]+"></a>)+- \*\*')
 LINE_ANCHORS = re.compile(r'<a id="([^"]+)"></a>')
 DONE_HEADING = "# Done"
-DONE_NOTE = "One line an item: the anchor, the identity, the outcome with its commit or PR; the narrative lives in git."
+DONE_NOTE = (
+    "One line an item: the anchor, the identity, the outcome with its commit or PR; the narrative lives in git."
+    " Ordered by the hash of the anchor so concurrent records land apart; find an item by its ID."
+)
+IN_FILE_LINK = re.compile(r"\]\(#([^)\s]+)\)")
 INLINE_ANCHOR = re.compile(r'\s*<a id="([^"]+)"></a>\s*')
 DATE = re.compile(r"\b\d{4}-\d{2}(-\d{2})?\b")
 LANDED = re.compile(r"PR #\d+|pull/\d+|\b[0-9a-f]{8,40}\b|[Ll]anded|[Mm]erged|\[x\]|Outcome:\*\* built")
 ITEM_ID = re.compile(r"^## [A-Z0-9][A-Z0-9-]{6,} ")
 OPEN_LIMIT = 14
 NL = "\n"
+
+
+def done_order(line: str) -> str:
+    """The sort key of a done entry: the SHA-256 of its first anchor."""
+    return hashlib.sha256(LINE_ANCHORS.search(line).group(1).encode("utf-8")).hexdigest()
+
+
+def link_faults(text: str) -> tuple[list[str], list[str]]:
+    """Anchors defined more than once, and in-file link targets never defined."""
+    defined = re.findall(r'<a id="([^"]+)"></a>', text)
+    counts: dict[str, int] = {}
+    for anchor in defined:
+        counts[anchor] = counts.get(anchor, 0) + 1
+    duplicates = sorted(anchor for anchor, n in counts.items() if n > 1)
+    dangling = sorted({target for target in IN_FILE_LINK.findall(text) if target not in counts})
+    return duplicates, dangling
 
 
 def split_items(text: str) -> tuple[list[str], list[dict], list[str]]:
@@ -233,11 +271,13 @@ def compact(text: str, today: str, release_before: str) -> tuple[str, dict]:
     closing = [DONE_HEADING, "", DONE_NOTE, ""]
     while head and not head[-1].strip():
         head.pop()
-    out = NL.join(head + [""] + open_lines + closing + kept_done + done_lines).rstrip(NL) + NL
+    ordered = sorted(kept_done + done_lines, key=done_order)
+    out = NL.join(head + [""] + open_lines + closing + ordered).rstrip(NL) + NL
     report["lines"] = (text.count(NL), out.count(NL))
     before = set(re.findall(r'<a id="([^"]+)"></a>', text))
     after = set(re.findall(r'<a id="([^"]+)"></a>', out))
     report["anchors"] = (len(before), len(after), sorted(before - after))
+    report["duplicates"], report["dangling"] = link_faults(out)
     return out, report
 
 
@@ -260,7 +300,8 @@ def main() -> int:
     print(f"released claims: {report['released']}")
     print(f"normalized statuses: {len(report['normalized'])}")
     print(f"dropped sections: {len(report['dropped'])}")
-    return 1 if lost else 0
+    print(f"duplicate anchors: {report['duplicates']}; dangling links: {report['dangling']}")
+    return 1 if lost or report["duplicates"] or report["dangling"] else 0
 
 
 if __name__ == "__main__":
