@@ -164,7 +164,9 @@ fn half_pair_sweeps_at_64_cubed() {
         "inv move 3",
         "fwd z serial",
         "inv fused serial",
+        "fwd z, pool awake",
     ];
+    let mut z_again = vec![Complex64::default(); N * N * depth];
     let mut serial_half = vec![Complex64::default(); N * N * depth];
     let mut serial_out = vec![0.0_f64; N * N * N];
     let mut lane_buffer = vec![Complex64::default(); depth];
@@ -265,6 +267,32 @@ fn half_pair_sweeps_at_64_cubed() {
             "the fused z inverse must reproduce the two sweeps bit for bit"
         );
 
+        // The forward z sweep again, now that the inverse arms have just run
+        // on the pool: the first arm of a repeat follows the serial controls,
+        // which leave the workers idle long enough to park.
+        let start = Instant::now();
+        lanes::paired(
+            &mut z_again,
+            depth,
+            &source,
+            N,
+            |bins_group, reals_group| {
+                let half_lane = plan.half_z_lane::<true>();
+                for (bins, reals) in bins_group
+                    .chunks_exact_mut(depth)
+                    .zip(reals_group.chunks_exact(N))
+                {
+                    split::forward(
+                        reals,
+                        bins,
+                        plan.split_twiddles().iter().copied(),
+                        &half_lane,
+                    );
+                }
+            },
+        );
+        let forward_z_awake = start.elapsed();
+
         // Serial controls: the same per-lane bodies on the calling thread
         // alone, so the parallel arms read against the work they spread.
         let half_lane = plan.half_z_lane::<true>();
@@ -319,7 +347,7 @@ fn half_pair_sweeps_at_64_cubed() {
                     .into_iter()
                     .chain(forward_steps)
                     .chain(inverse_steps)
-                    .chain([forward_z_serial, fused_serial]),
+                    .chain([forward_z_serial, fused_serial, forward_z_awake]),
             ) {
                 slot.push(sample);
             }
