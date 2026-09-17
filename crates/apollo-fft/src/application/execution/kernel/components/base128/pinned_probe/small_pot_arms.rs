@@ -41,12 +41,12 @@
 //! - `dispatched` is what `small_pot_inplace_sized` actually routes to, so it
 //!   is the shipped behaviour at each size.
 //! - `scalar-winograd` is the scalar codelet, which is what `dispatched`
-//!   already is at N = 8 — the two agreeing there is the check that the
-//!   declined arm is not wired in.
+//!   is at N = 8 — the probing entry keeps it there, while the plan's
+//!   framed entry runs the register arm.
 //! - `vector-direct` is the register codelet reached without the `OnceLock`
 //!   capability check. At N = 16 and 32 that is the shipped arm's body; at
 //!   N = 8 it is [`super::super::super::super::mixed_radix::scalar`]'s
-//!   declined `n8`, which exists only so this comparison stays runnable.
+//!   `n8`, the plan's framed arm, here reached across a call.
 //!   It does **not** remove the `#[target_feature]` call boundary — the
 //!   unchecked entries do not carry the attribute either — so what the gap
 //!   between it and `dispatched` bounds is the capability check alone.

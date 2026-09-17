@@ -1,12 +1,15 @@
-//! The declined length-8 codelet: a four-by-two four-step in registers.
+//! The length-8 codelet in registers: a four-by-two four-step, the plan's
+//! framed arm at N = 8.
 //!
-//! This module is `cfg(test)` and has no production call site. It is correct —
-//! the oracles below check it against the direct DFT in both directions and at
-//! every impulse position — and it is *slower* than the scalar Winograd
-//! codelet `precise.rs` ships at N = 8. It stays in the tree as the subject of
-//! the `small_pot_arms` probe, so the comparison that declined it can be re-run
-//! rather than believed; the note it replaces asserted a number nobody could
-//! reproduce, which is how it survived unexamined.
+//! Inside the plan's AVX2 frame it inlines whole and runs `f64` N = 8 at
+//! 3.10 to 3.21 ns against the scalar codelet's 4.06 to 4.16 on a
+//! performance core and 5.79 against 6.08 on an efficiency core (2026-09-17,
+//! `small_sizes_against_the_references_by_core_type`; RustFFT 3.50 and
+//! 6.17). Reached through a call into the frame, as the probing entry and the
+//! `small_pot_arms` probe's arms reach it, it loses on the efficiency core,
+//! which is why the probing entry keeps the scalar codelet (see
+//! `precise.rs`). The oracles below check it against the direct DFT in both
+//! directions and at every impulse position.
 //!
 //! # The construction
 //!
@@ -24,19 +27,14 @@
 //! holds `X[2 k1]` and `X[2 k1 + 1]`, which is output register `k1` in place,
 //! so nothing is permuted on the way out.
 //!
-//! # Why it loses anyway
-//!
-//! Measured round trip, forward plus normalized inverse: 15.08 ns against the
-//! scalar codelet's 11.33 on a performance core, 21.58 against 15.81 on an
-//! efficiency core, intervals disjoint over three runs.
+//! # Where it loses
 //!
 //! N = 8 is the length at which every twiddle is a trivial rotation — `1`,
-//! `-i`, `(+-1 - i)/sqrt(2)`. The scalar codelet spends those as sign flips,
-//! part swaps and one real multiply. This form must still pay four cross-lane
-//! permutes to make its second stage lanewise, and eight points is not enough
-//! arithmetic to amortise them. The same construction one size up *wins* — see
-//! [`super::n16`], where the first stage is a radix-4 over four times the work
-//! against only twice the shuffle.
+//! `-i`, `(+-1 - i)/sqrt(2)` — which the scalar codelet spends as sign
+//! flips, part swaps and one real multiply. The 2026-09-06 decision measured
+//! this form across its call boundary (15.08 ns a round trip against 11.33)
+//! and declined it; the same measurement stands for callers outside the
+//! frame, and the frame's inlining is what reverses it.
 //!
 //! The alternative factorisation was checked and is worse, not better: taking
 //! `n = n1 + 2 n2` makes the first stage a lanewise radix-4 and the second a
@@ -129,6 +127,7 @@ unsafe fn twiddle(
 /// Returns `false` on a host without the frame, the shape the probing sized
 /// entry gives its register sizes, so the probe measures the same call
 /// structure this arm would have if it were selected.
+#[cfg(test)]
 pub(super) fn try_inplace<const INVERSE: bool, const NORMALIZE: bool>(
     data: &mut [Complex64],
 ) -> bool {
@@ -149,7 +148,9 @@ pub(super) fn try_inplace<const INVERSE: bool, const NORMALIZE: bool>(
 #[cfg(target_arch = "x86_64")]
 #[target_feature(enable = "avx,fma")]
 #[inline]
-unsafe fn vector_arm<const INVERSE: bool, const NORMALIZE: bool>(data: &mut [Complex64]) {
+pub(super) unsafe fn vector_arm<const INVERSE: bool, const NORMALIZE: bool>(
+    data: &mut [Complex64],
+) {
     use std::arch::x86_64::{
         _mm256_add_pd, _mm256_loadu_pd, _mm256_mul_pd, _mm256_permute2f128_pd, _mm256_set1_pd,
         _mm256_storeu_pd, _mm256_sub_pd,
