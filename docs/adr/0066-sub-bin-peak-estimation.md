@@ -8,10 +8,16 @@
   bias term the test asserts alongside it. The decision is unchanged.
 - Revised 2026-09-17: the decision is implemented as `apollo_stft::estimate_peaks`
   (`backlog.md#apollo-peak-estimation-surface`). The spike's test-only
-  candidates are deleted; the oracle scene and its derived bounds are the
-  surface's test, which reproduces the Candan 2011 row below. The residual of
-  Candan's correction for one complex exponential is stated exactly,
-  `(N/π)(tan(πδ/N) − πδ/N)`, of which `|δ|³(π/N)²/3` is the leading term.
+  candidates are deleted; the oracle scene is the surface's test, which
+  reproduces the Candan 2011 row below within its reporting precision and the
+  transform's rounding. The image-floor expression below is the first-order
+  size of the image's effect, not an upper bound: review found estimates up to
+  15% above it near DC, so the surface's per-scalar tests bound the image and
+  the other tones' residuals by the triangle inequality on their exact terms
+  instead. The residual of Candan's correction for one complex exponential is
+  `(N/π)(tan(πδ/N) − πδ/N)`, of which `|δ|³(π/N)²/3` is the leading term. A
+  real tone also appears at its mirror bin `N − k`, so the surface refuses a
+  peak set holding both.
 - Items: `backlog.md#apollo-spectral-peak-estimation-spike`,
   `backlog.md#apollo-peak-estimation-surface`
 - Evidence: `crates/apollo-stft/tests/peak_estimation.rs` (the oracle scene
@@ -81,8 +87,8 @@ the subtracted tones' kernel terms — no re-transform per round.
 
 The three-bin rectangular family lands within a factor of two of each other
 and one to three decades ahead of every alternative. Their outer tones are
-image-limited rather than noise-limited: the negative-frequency image bounds
-the offset error at `δ(1 − δ²)(π/N)²/sin²(π(2k + δ)/N)` bins, plus Jacobsen
+image-limited rather than noise-limited: to first order the negative-frequency
+image moves the offset by `δ(1 − δ²)(π/N)²/sin²(π(2k + δ)/N)` bins, plus Jacobsen
 (3)'s finite-length bias `δ(π/N)²/3` which Candan's factor removes — 2.1e-9
 and 1.4e-9 Hz for the two outer tones of this scene, against measurements of
 5.7e-10 and 4.8e-10, a factor of three inside. Their own Cramér–Rao bound is

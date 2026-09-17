@@ -83,7 +83,9 @@ Change-class tags: [patch] backward-compatible fix, [minor] additive non-breakin
   generic over `f32` and `f64`, from Candan's corrected three-bin ratio, the
   image-corrected amplitude and phase solve, and estimate-and-subtract across
   the set; a bin whose offset leaves the half-bin returns `None`, and
-  unreadable inputs return `PeakEstimationError`
+  unreadable inputs (fewer than three bins, a frame too long to resolve a
+  sub-bin offset in the scalar, a bin out of range, a repeated bin, or a bin
+  listed with its mirror) return `PeakEstimationError`
   ([ADR 0066](docs/adr/0066-sub-bin-peak-estimation.md)).
 - [minor] `apollo-sft` recovers a sparse support sublinearly:
   `SparseFftPlan::downsampled` aliases the signal onto the plan's bucket

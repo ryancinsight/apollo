@@ -54,20 +54,6 @@ impl Tone {
         let rho = self.amplitude * self.amplitude / (NOISE_STD * NOISE_STD);
         SAMPLE_RATE / TAU * (24.0 / (rho * n * (n * n - 1.0))).sqrt()
     }
-
-    /// The outer tones' offset floor: their own negative-frequency image,
-    /// `|δ| (1 − δ²) (π/N)² / sin²(π (2k + δ) / N)` bins, plus the ratio's
-    /// finite-length term, at most `|δ| (π/N)² / 3` before Candan's correction
-    /// (ADR 0066).
-    fn image_floor(&self) -> f64 {
-        let n = LEN as f64;
-        let k = self.bin() as f64;
-        let delta = self.frequency / BIN_WIDTH - k;
-        let step = PI / n;
-        delta.abs() * (1.0 - delta * delta) * step * step
-            / (PI * (2.0 * k + delta) / n).sin().powi(2)
-            + delta.abs() * step * step / 3.0
-    }
 }
 
 /// Gaussian noise and phases from a seeded xorshift, Box–Muller.
@@ -177,39 +163,6 @@ fn the_three_tone_scene_resolves_to_its_floors() {
         }
     }
 
-    // One tone read alone carries the other outer tone's leakage `ρ` in the
-    // bins it reads (the middle tone and the noise are six orders below):
-    // the offset moves by at most `ρ` bins, the amplitude by `ρ` plus `2ρ`
-    // through the kernel slope, the phase by `ρ` plus `πρ`. `ρ` is the other
-    // tone's kernel over this one's across `k − 1 ..= k + 1`, computed here
-    // from the rectangular kernel's magnitude `|sin(πu) / sin(πu/N)|`.
-    let magnitude = |u: f64| {
-        if u.fract() == 0.0 {
-            LEN as f64
-        } else {
-            ((PI * u).sin() / (PI * u / LEN as f64).sin()).abs()
-        }
-    };
-    for (t, other) in [(0, 2), (2, 0)] {
-        let k = tones[t].bin() as f64;
-        let rho = [-1.0, 0.0, 1.0]
-            .into_iter()
-            .map(|m| {
-                let p = k + m;
-                magnitude(tones[other].frequency / BIN_WIDTH - p)
-                    / magnitude(tones[t].frequency / BIN_WIDTH - p)
-            })
-            .fold(0.0, f64::max);
-        let (outcome, errors) = (direct[t], direct[t].mean());
-        assert!(
-            outcome.accepted == SEEDS as usize
-                && errors.frequency <= rho * BIN_WIDTH
-                && errors.amplitude <= 3.0 * rho * TONES[t].1
-                && errors.phase <= (1.0 + PI) * rho,
-            "tone {} read alone: {outcome:?} exceeds the interference bound {rho:.2e}",
-            t + 1
-        );
-    }
     // Read alone, the middle tone's bins are the outer tones' leakage: the
     // estimate is rejected or its amplitude error exceeds the whole tone.
     assert!(
@@ -218,12 +171,8 @@ fn the_three_tone_scene_resolves_to_its_floors() {
         direct[1]
     );
 
-    // After three rounds every tone resolves in every seed; the middle tone is
-    // noise-limited, within a decade of its Cramér–Rao bound, and the outer
-    // tones are image-limited. Their amplitude and phase follow from the
-    // offset floor through the kernel slopes, plus the bins' relative
-    // rounding `4 N ε`.
-    let eta = 4.0 * LEN as f64 * f64::EPSILON;
+    // After three rounds every tone resolves in every seed, and the middle
+    // tone is noise-limited: within a decade of its Cramér–Rao bound.
     for (t, outcome) in peeled.iter().enumerate() {
         assert_eq!(
             outcome.accepted,
@@ -238,15 +187,41 @@ fn the_three_tone_scene_resolves_to_its_floors() {
         "the middle tone is above a decade of its bound {:.2e}: {middle:?}",
         tones[1].frequency_bound()
     );
-    for t in [0, 2] {
-        let floor = tones[t].image_floor();
-        let errors = peeled[t].mean();
+
+    // The ADR's Candan 2011 row, reported to two digits: each figure is within
+    // half a unit of its last digit, and the transform's rounding may move it
+    // further. apollo-fft's bins carry at most `N log₂N ε` relative rounding
+    // (one `ε` per butterfly level along each of the `N` paths into a bin), and
+    // a relative bin error `η` moves an offset by at most `2η` bins, an
+    // amplitude by `2η` of itself and a phase by `2η` (the kernel slopes of the
+    // `kernel::peak` tests at these tones' negligible image). The middle tone's
+    // amplitude and phase are set by the outer tones' rounding in its bins,
+    // not by the estimator, so only its frequency is compared.
+    let eta = LEN as f64 * (LEN as f64).log2() * f64::EPSILON;
+    let reported = |value: f64, measured: f64, rounding: f64| {
+        let unit = 10f64.powf(value.abs().log10().floor() - 1.0);
+        (measured - value).abs() <= 0.5 * unit + rounding
+    };
+    for (t, (frequency, amplitude, phase)) in [
+        (0, (8.4e-10, 1.1e-9, 2.6e-9)),
+        (2, (7.8e-10, 5.1e-10, 2.4e-9)),
+    ] {
+        let mean = peeled[t].mean();
         assert!(
-            errors.frequency <= floor * BIN_WIDTH
-                && errors.amplitude <= TONES[t].1 * (2.0 * floor + 2.0 * eta)
-                && errors.phase <= PI * floor + 2.0 * eta,
-            "tone {} after peeling: {errors:?} exceeds its image floor {floor:.2e}",
+            reported(frequency, mean.frequency, 2.0 * eta * BIN_WIDTH)
+                && reported(amplitude, mean.amplitude, 2.0 * eta * TONES[t].1)
+                && reported(phase, mean.phase, 2.0 * eta),
+            "tone {} after peeling: {mean:?} departs from ADR 0066's ({frequency:e}, {amplitude:e}, {phase:e})",
             t + 1
         );
     }
+    assert!(
+        reported(
+            6.0e-7,
+            middle.frequency,
+            2.0 * eta * BIN_WIDTH * TONES[0].1 / TONES[1].1
+        ),
+        "the middle tone's frequency {:.3e} departs from ADR 0066's 6.0e-7",
+        middle.frequency
+    );
 }
