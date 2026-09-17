@@ -176,7 +176,7 @@ where
 }
 
 /// The third-turn constants a radix-3 applies: `-1/2` on the sum of its
-/// outer arms and `sin(2π/3)` on their rotated difference, both real scales
+/// outer arms and `±sin(2π/3)` on their rotated difference, real scales
 /// splat from the capability token, so no host probe stands in a kernel.
 pub(super) struct Thirds<T, A>
 where
@@ -185,6 +185,7 @@ where
 {
     half_negative: Vector<T, A>,
     sine: Vector<T, A>,
+    sine_negative: Vector<T, A>,
 }
 
 impl<T, A> Thirds<T, A>
@@ -204,6 +205,7 @@ where
         Self {
             half_negative: simd.splat(T::from_precise(-0.5)),
             sine: simd.splat(T::from_precise(Self::SINE)),
+            sine_negative: simd.splat(T::from_precise(-Self::SINE)),
         }
     }
 }
@@ -211,7 +213,10 @@ where
 /// Computes lane-wise DFT-3s across three registers, natural order.
 ///
 /// `[a0 + s, m0 + m1, m0 - m1]` for `s = a1 + a2`, `m0 = a0 - s/2` and
-/// `m1 = -+ i sin(2π/3) (a1 - a2)`, the sign by direction.
+/// `m1 = -+ i sin(2π/3) (a1 - a2)`, the sign by direction. Each scale fuses
+/// with the add after it (RustFFT's `column_butterfly3` form): `m0` and the
+/// two outputs round once each, the difference's rotation is exact, and
+/// `m0 - m1` multiplies by the negated sine, which negation leaves exact.
 #[expect(
     clippy::inline_always,
     reason = "register kernels must retain their caller's target-feature scope"
@@ -226,12 +231,14 @@ where
     A: SimdArch + SimdKernel<T>,
 {
     let (sum, difference) = values[1].butterfly(values[2]);
-    let m0 =
-        values[0] + ComplexReg::from_interleaved(sum.into_interleaved() * thirds.half_negative);
-    let m1 = ComplexReg::from_interleaved(
-        rot90::<T, A, INVERSE>(difference).into_interleaved() * thirds.sine,
-    );
-    [values[0] + sum, m0 + m1, m0 - m1]
+    let first = values[0].into_interleaved();
+    let m0 = sum.into_interleaved().mul_add(thirds.half_negative, first);
+    let rotated = rot90::<T, A, INVERSE>(difference).into_interleaved();
+    [
+        values[0] + sum,
+        ComplexReg::from_interleaved(rotated.mul_add(thirds.sine, m0)),
+        ComplexReg::from_interleaved(rotated.mul_add(thirds.sine_negative, m0)),
+    ]
 }
 
 /// Computes lane-wise DFT-6s across six registers, natural order, as a
