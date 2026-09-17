@@ -11,6 +11,7 @@
 //! four-block route still gathers.
 
 use super::super::cmul::cmul_chunk;
+use crate::application::execution::kernel::components::register_butterfly::{radix3, Thirds};
 use crate::application::execution::kernel::mixed_radix::MixedRadixScalar;
 use core::mem::size_of;
 use eunomia::Complex;
@@ -501,14 +502,14 @@ pub(crate) struct FinalRadix3Sink<
     pub(crate) first_tw: &'a [T; TW_LANES],
     /// `W_{3 BASE}^{2 j}` per chunk, dup-split ([`SplitSinks::second`]).
     pub(crate) second_tw: &'a [T; TW_LANES],
-    /// `-1 / 2`, the real part of the third root of unity.
-    pub(crate) half_negative: T,
-    /// `sqrt(3) / 2`, the sine of the third root of unity.
-    pub(crate) sine: T,
 }
 
-impl<T: LaneScalar, const LANES: usize, const TW_LANES: usize, const INVERSE: bool> StoreSink<T>
-    for FinalRadix3Sink<'_, T, LANES, TW_LANES, INVERSE>
+impl<
+        T: LaneScalar + MixedRadixScalar,
+        const LANES: usize,
+        const TW_LANES: usize,
+        const INVERSE: bool,
+    > StoreSink<T> for FinalRadix3Sink<'_, T, LANES, TW_LANES, INVERSE>
 {
     const OUT_BLOCKS: usize = 3;
 
@@ -528,21 +529,7 @@ impl<T: LaneScalar, const LANES: usize, const TW_LANES: usize, const INVERSE: bo
         let sub0 = input(simd, self.sub0, chunk);
         let t1 = twiddled(simd, self.first_tw, input(simd, self.sub1, chunk), chunk);
         let t2 = twiddled(simd, self.second_tw, reg, chunk);
-        let (sum, diff) = t1.butterfly(t2);
-        let half_negative = simd.splat(self.half_negative);
-        let sine = simd.splat(self.sine);
-        let (out0, _) = sub0.butterfly(sum);
-        let m0 = ComplexReg::from_interleaved(
-            sum.into_interleaved()
-                .mul_add(half_negative, sub0.into_interleaved()),
-        );
-        let turned = if INVERSE {
-            diff.mul_i()
-        } else {
-            diff.mul_neg_i()
-        };
-        let m1 = ComplexReg::from_interleaved(turned.into_interleaved() * sine);
-        let (out1, out2) = m0.butterfly(m1);
+        let [out0, out1, out2] = radix3::<T, A, INVERSE>([sub0, t1, t2], &Thirds::new(*simd));
         put(simd, out0.into_interleaved(), out, chunk);
         put(simd, out1.into_interleaved(), out, block + chunk);
         put(simd, out2.into_interleaved(), out, 2 * block + chunk);
