@@ -1,5 +1,13 @@
 # Apollo Backlog
 
+<a id="apollo-peak-independent-reference"></a>
+## APOLLO-PEAK-INDEPENDENT-REFERENCE — Check peak estimates against direct sums [patch] — in-progress
+- Integrator: Codex /root; baseline: PR #494, `8066cf25`; branch: `feat/apollo-stft-peak-estimation`.
+- Scope: peak estimator, direct-DFT tests, ADR 0066; unrelated FFT work is excluded.
+- Acceptance: weak middle tone, half-bin boundary, image, amplitude, phase and subtraction checked independently; production defects corrected; focused configured gates pass.
+- Evidence plan: baseline nextest (27 passed), direct-sum regression cases, per-tone measurements, clippy, nextest, doctests and Rustdoc.
+- lease: Codex peak.rs, peak/tests/, ADR 0066, crate README 2026-09-17
+
 <a id="apollo-melinoe-executor-receiver"></a>
 ## APOLLO-MELINOE-EXECUTOR-RECEIVER-2026-09-11 — Track unpublished provider receiver construction [patch] — blocked
 - Scope: upstream Melinoe executor registration at local `af052fc`; independent of the lane-policy change and absent from its standalone dependency pins.
@@ -31,7 +39,6 @@
 - **Evidence:** immutable executable hashes, source/assembly snapshots and raw 100-sample CSVs under `../../output/fft-liveness/`, governed by Atlas output retention. Intel Core Ultra 9 285K, CPU 1 performance core, Rust 1.97.0 MSVC. No Miri/sanitizer or cross-target coverage is claimed.
 - **Dispatch audit:** at `530ea774`, n=32 bypasses tiny dispatch (2/3/4), uses fixed plan executors and selects AVX/FMA through a cached capability predicate. No runtime autotuning, input-dependent route or plan twiddle-cache read occurs. Independent source review agrees; this rules out plan reselection with unchanged capabilities, not host or loader effects.
 - **Instruction analysis:** `../../output/fft-liveness/scheduling-model.json` records all three historical baseline/candidate bodies under LLVM 22.1.8. Forward instructions 284→282, normalized inverse 302→299, inverse 282→283. `arrowlake-s` uses `AlderlakePModel`; changing the alias assumption reverses estimated cycle directions. These are static/model observations, not counters or performance acceptance.
-- **Estimator correction:** [ADR 0036](docs/adr/0036-native-benchmark-regression-oracle.md) owns bound direction, replacement resistance, sampling assumptions and conservative integer coverage. Four deterministic tests added; no estimator, classifier or timing workload changes. On base `3b7311fa`, locked standalone entry run `faf96172-7df0-49e5-bdc2-b6e4683f0bff` passes 44; delivered-diff run `c8c24271-4582-4a14-91e6-33a2c3ffc042` passes 48. Three doctests, format, all-target Clippy and rustdoc pass; independent source review has no remaining blocker. Cargo.lock is unchanged.
 
 <a id="atlas-apollo-strided-gather-upstream"></a>
 ## ATLAS-APOLLO-STRIDED-GATHER-UPSTREAM-2026-09-03 — The split's gather is hand-rolled per block count instead of a substrate primitive [minor] [arch] — todo
