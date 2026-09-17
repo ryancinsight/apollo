@@ -40,7 +40,11 @@
 //! number of rounds: a tone estimated to relative error `ε` leaves interference
 //! of order `ε` for the next round. The DFT is linear, so the residual at a bin
 //! is the input bin minus the estimates' `R` terms; nothing is re-transformed.
-//! A round costs three kernel evaluations per pair of peaks.
+//! A round reads three bins per peak and subtracts every other estimate at
+//! each, two kernel evaluations apiece: `6 P (P − 1)` for `P` peaks.
+//!
+//! A real tone appears at bin `b` and, as its image, at `N − b`; listing both
+//! would subtract the tone from its own image, so the pair is refused.
 
 use core::num::NonZeroUsize;
 
@@ -71,7 +75,7 @@ impl<T: Copy> PeakEstimate<T> {
     }
 
     /// The tone's phase `φ` in radians at the frame's first sample, in
-    /// `(−π, π]`.
+    /// `[−π, π]`.
     #[must_use]
     pub fn phase(&self) -> T {
         self.phase
@@ -83,7 +87,9 @@ impl<T: Copy> PeakEstimate<T> {
 ///
 /// Returns one entry per element of `peaks`, in the same order: the estimate,
 /// or `None` where the bin holds no resolvable peak (its offset leaves the
-/// half-bin, or the tone at DC or Nyquist is its own image). `rounds` is the
+/// half-bin, or the tone at DC or Nyquist is its own image). A bin above
+/// `N/2` reads the image of the tone at `N − b`: its position is `N − f` and
+/// its phase `−φ`. `rounds` is the
 /// number of estimate-and-subtract passes over the whole set; a single peak
 /// needs one. Neighbouring bins wrap around the frame, as the DFT does.
 ///
@@ -91,11 +97,13 @@ impl<T: Copy> PeakEstimate<T> {
 ///
 /// - [`PeakEstimationError::FrameTooShort`] when `spectrum` has fewer than
 ///   three bins;
-/// - [`PeakEstimationError::FrameTooLong`] when `N` is not exactly
-///   representable in `T`, so bin positions would round;
+/// - [`PeakEstimationError::FrameTooLong`] when `N ε ≥ ½` for the scalar's
+///   `ε`, where a position near `N` can no longer hold a sub-bin offset (below
+///   that, positions resolve to `N ε` bins);
 /// - [`PeakEstimationError::PeakOutOfRange`] when a peak bin is `N` or more;
-/// - [`PeakEstimationError::DuplicatePeak`] when a bin is listed twice, which
-///   would subtract its tone from itself.
+/// - [`PeakEstimationError::DuplicatePeak`] when a bin is listed twice, and
+///   [`PeakEstimationError::MirrorPeak`] when both `b` and `N − b` are, either
+///   of which would subtract a tone from itself.
 ///
 /// # Examples
 ///
@@ -124,13 +132,15 @@ pub fn estimate_peaks<T: RealField>(
     if len < 3 {
         return Err(PeakEstimationError::FrameTooShort { len });
     }
-    // An `N` exact in `T` makes every bin index below it exact too.
+    // A position near `N` is resolved to `N ε` bins; from `N ε = ½` the
+    // offset, which lives in `(−½, ½]`, has no representable value left.
+    // Below that `N < ½ / ε ≤ 2^52`, so the index conversions are exact.
     #[expect(
         clippy::cast_precision_loss,
-        reason = "the round trip below rejects every length the conversion rounds"
+        reason = "a length that rounds here is at least 2^53 and fails the check"
     )]
     let len_f64 = len as f64;
-    if T::from_f64(len_f64).to_f64() != len_f64 {
+    if len_f64 * T::EPSILON.to_f64() >= 0.5 {
         return Err(PeakEstimationError::FrameTooLong { len });
     }
     for (index, &bin) in peaks.iter().enumerate() {
@@ -139,6 +149,10 @@ pub fn estimate_peaks<T: RealField>(
         }
         if peaks[..index].contains(&bin) {
             return Err(PeakEstimationError::DuplicatePeak { bin });
+        }
+        let mirror = (len - bin) % len;
+        if mirror != bin && peaks[..index].contains(&mirror) {
+            return Err(PeakEstimationError::MirrorPeak { bin, mirror });
         }
     }
     let frame = Frame::new(len);
@@ -192,7 +206,7 @@ impl<T: RealField> Frame<T> {
     fn index(value: usize) -> T {
         #[expect(
             clippy::cast_precision_loss,
-            reason = "estimate_peaks rejects frames whose length rounds in T"
+            reason = "estimate_peaks rejects lengths from ½ / ε, below 2^53"
         )]
         let value = value as f64;
         T::from_f64(value)
@@ -237,7 +251,10 @@ impl<T: RealField> Frame<T> {
         let direct = self.kernel(delta);
         let image = self.kernel(-(bin * two + delta));
         let determinant = direct.norm_sqr() - image.norm_sqr();
-        let solvable = determinant > T::EPSILON * direct.norm_sqr();
+        // Each squared magnitude carries at most `2ε` of rounding, so a
+        // determinant within `4ε` of `|R(δ)|²` is indistinguishable from zero.
+        let four = two * two;
+        let solvable = determinant > four * T::EPSILON * direct.norm_sqr();
         if !solvable {
             return None;
         }

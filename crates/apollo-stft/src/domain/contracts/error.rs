@@ -42,9 +42,9 @@ pub enum PeakEstimationError {
         /// The spectrum's length.
         len: usize,
     },
-    /// The frame length is not exactly representable in the scalar, so bin
-    /// positions would round.
-    #[error("a frame of {len} bins is not exactly representable in the scalar")]
+    /// The frame is so long that a bin position near its end resolves no
+    /// sub-bin offset in the scalar (`N ε ≥ ½`).
+    #[error("a frame of {len} bins resolves no sub-bin offset in the scalar")]
     FrameTooLong {
         /// The spectrum's length.
         len: usize,
@@ -62,5 +62,14 @@ pub enum PeakEstimationError {
     DuplicatePeak {
         /// The repeated bin.
         bin: usize,
+    },
+    /// A peak bin and its mirror `N − bin` are both listed: for a real tone
+    /// they hold the same tone.
+    #[error("peak bins {mirror} and {bin} hold the same real tone")]
+    MirrorPeak {
+        /// The later of the two bins.
+        bin: usize,
+        /// Its mirror, listed earlier.
+        mirror: usize,
     },
 }
