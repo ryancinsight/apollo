@@ -102,8 +102,13 @@ fn forward_half<T>(
     T: RealFftData,
     Complex<T::PlanScalar>: PlanScratch,
 {
-    let (_, _, nz) = plan.dimensions();
+    let (nx, ny, nz) = plan.dimensions();
     let depth = plan.nz_c();
+    if T::real_split_applies(nz) && nx > 1 && ny > 1 {
+        forward_z_split_x_last(plan, source, spectrum);
+        plan.xy_axes_from_x_last::<true>(spectrum, depth);
+        return;
+    }
     if T::real_split_applies(nz) {
         let half_lane = plan.half_z_lane::<true>();
         lanes::paired(spectrum, depth, source, nz, |bins_group, reals_group| {
@@ -144,6 +149,49 @@ fn forward_half<T>(
         });
     }
     plan.xy_axes_inplace::<true>(spectrum, depth);
+}
+
+/// The z lanes of `source` through the real split into `spectrum` in
+/// `(y, z, x)` order, the order the x lanes need, so the chain after it skips
+/// the move that would make axis 0 contiguous.
+///
+/// A task takes whole `y` slabs, `depth * nx` bins each: every lane of a slab
+/// is transformed in one cached lane buffer and scattered into the slab at
+/// stride `nx`, so the writes stay inside the slab while the reads visit the
+/// slab's `nx` source lanes, lane `x * ny + y` for each `x`. The arithmetic
+/// per lane is the C-order sweep's, and the move it replaces only places
+/// values, so the chain's result is the same bits.
+fn forward_z_split_x_last<T>(
+    plan: &FftPlan3D<T::PlanScalar>,
+    source: &[T],
+    spectrum: &mut [Complex<T::PlanScalar>],
+) where
+    T: RealFftData,
+    Complex<T::PlanScalar>: PlanScratch,
+{
+    let (nx, ny, nz) = plan.dimensions();
+    let depth = plan.nz_c();
+    let slab = depth * nx;
+    let slab_bytes =
+        slab * core::mem::size_of::<Complex<T::PlanScalar>>() + nx * nz * core::mem::size_of::<T>();
+    let half_lane = plan.half_z_lane::<true>();
+    lanes::units(spectrum, slab, slab_bytes, |first_y, slabs| {
+        with_3d_x_scratch::<Complex<T::PlanScalar>, _>(depth, |lane| {
+            for (y, bins) in (first_y..).zip(slabs.chunks_exact_mut(slab)) {
+                for (x, reals) in source.chunks_exact(nz).skip(y).step_by(ny).enumerate() {
+                    split::forward(
+                        reals,
+                        lane,
+                        plan.split_twiddles().iter().copied(),
+                        &half_lane,
+                    );
+                    for (row, &bin) in bins.chunks_exact_mut(nx).zip(lane.iter()) {
+                        row[x] = bin;
+                    }
+                }
+            }
+        });
+    });
 }
 
 /// The inverse of the C-order `(nx, ny, nz/2 + 1)` half volume `bins`,
@@ -451,3 +499,5 @@ where
 
 #[cfg(test)]
 mod phases;
+#[cfg(test)]
+mod tests;

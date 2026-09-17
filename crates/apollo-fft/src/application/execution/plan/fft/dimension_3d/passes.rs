@@ -197,6 +197,32 @@ pub(super) fn all_axes_from_rotated<F, const FORWARD: bool, X, Y, Z>(
     });
 }
 
+/// Axes 0 and 1 of a volume stored in `(y, z, x)` order, left in C order, in
+/// two moves.
+///
+/// The first move of [`chain`] only makes axis 0 contiguous; a producer that
+/// writes the volume in that order already, as the half-spectrum forward's z
+/// sweep does, skips it. The x lanes run where they lie, one `[ny, nz * nx]`
+/// transpose gives `(z, x, y)` in the X scratch, and one `[nz, nx * ny]`
+/// transpose lands `(x, y, z)` back in `data`: the moves alternate between the
+/// two buffers, so only one scratch role is borrowed.
+pub(super) fn xy_axes_from_x_last<F, const FORWARD: bool>(
+    data: &mut [F::Complex],
+    [nx, ny, nz]: [usize; 3],
+    lane_x: impl Fn(&mut [F::Complex]) + Send + Sync,
+    lane_y: impl Fn(&mut [F::Complex]) + Send + Sync,
+) where
+    F: MixedRadixScalar<Complex = Complex<F>>,
+    F::Complex: PlanScratch,
+{
+    with_3d_x_scratch::<F::Complex, _>(nx * ny * nz, |staged| {
+        lanes::execute::<F, FORWARD>(data, staged, nx, lane_x);
+        transpose_matrices(data, staged, 1, ny, nz * nx);
+        lanes::execute::<F, FORWARD>(staged, data, ny, lane_y);
+        transpose_matrices(staged, data, 1, nz, nx * ny);
+    });
+}
+
 /// Axes 0 and 1 of a C-order `[nx, ny, nz]` volume in three moves.
 ///
 /// `(x, y, z)` transposes as one `[nx, ny * nz]` matrix into the X scratch,

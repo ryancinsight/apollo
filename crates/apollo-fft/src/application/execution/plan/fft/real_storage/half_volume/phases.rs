@@ -11,7 +11,10 @@
 //! - `inverse split` and `inverse unpack` — the two z sweeps the inverse made
 //!   before `inverse_z_split` fused them, reconstructed here;
 //! - `inverse fused` — [`super::inverse_z_split`], the one sweep that replaces
-//!   them.
+//!   them;
+//! - `x-last z` and `x-last xy` — [`super::forward_z_split_x_last`], the z
+//!   sweep written in the order the x lanes need, and the two-move chain after
+//!   it, against `forward z` and `forward xy`.
 //!
 //! Every arm runs once per repeat inside one loop, in alternating order, on a
 //! buffer prepared outside the timed region, so host drift reaches every arm
@@ -32,7 +35,7 @@ use std::time::{Duration, Instant};
 use eunomia::Complex64;
 
 use super::super::split;
-use super::{forward_half, inverse_z_split};
+use super::{forward_half, forward_z_split_x_last, inverse_z_split};
 use crate::application::execution::kernel::mixed_radix::scalar::plan_scratch::{
     with_3d_x_scratch, with_3d_y_scratch,
 };
@@ -165,8 +168,11 @@ fn half_pair_sweeps_at_64_cubed() {
         "fwd z serial",
         "inv fused serial",
         "fwd z, pool awake",
+        "x-last z",
+        "x-last xy",
     ];
     let mut z_again = vec![Complex64::default(); N * N * depth];
+    let mut x_last_half = vec![Complex64::default(); N * N * depth];
     let mut serial_half = vec![Complex64::default(); N * N * depth];
     let mut serial_out = vec![0.0_f64; N * N * N];
     let mut lane_buffer = vec![Complex64::default(); depth];
@@ -179,25 +185,48 @@ fn half_pair_sweeps_at_64_cubed() {
 
         // Forward: the z sweep writes the half volume fresh from the field,
         // so the xy chain after it never compounds a previous repeat's growth.
-        let start = Instant::now();
-        lanes::paired(&mut half, depth, &source, N, |bins_group, reals_group| {
-            let half_lane = plan.half_z_lane::<true>();
-            for (bins, reals) in bins_group
-                .chunks_exact_mut(depth)
-                .zip(reals_group.chunks_exact(N))
-            {
-                split::forward(
-                    reals,
-                    bins,
-                    plan.split_twiddles().iter().copied(),
-                    &half_lane,
-                );
-            }
-        });
-        let forward_z = start.elapsed();
-        let start = Instant::now();
-        plan.xy_axes_inplace::<true>(&mut half, depth);
-        let forward_xy = start.elapsed();
+        // The C-order pair of arms and the x-last pair alternate in first
+        // place, so each meets the parked pool on half the repeats.
+        let c_order = |half: &mut [Complex64]| {
+            let start = Instant::now();
+            lanes::paired(half, depth, &source, N, |bins_group, reals_group| {
+                let half_lane = plan.half_z_lane::<true>();
+                for (bins, reals) in bins_group
+                    .chunks_exact_mut(depth)
+                    .zip(reals_group.chunks_exact(N))
+                {
+                    split::forward(
+                        reals,
+                        bins,
+                        plan.split_twiddles().iter().copied(),
+                        &half_lane,
+                    );
+                }
+            });
+            let z = start.elapsed();
+            let start = Instant::now();
+            plan.xy_axes_inplace::<true>(half, depth);
+            (z, start.elapsed())
+        };
+        let x_last = |half: &mut [Complex64]| {
+            let start = Instant::now();
+            forward_z_split_x_last(&plan, &source, half);
+            let z = start.elapsed();
+            let start = Instant::now();
+            plan.xy_axes_from_x_last::<true>(half, depth);
+            (z, start.elapsed())
+        };
+        let ((forward_z, forward_xy), (x_last_z, x_last_xy)) = if repeat % 2 == 0 {
+            let first = c_order(&mut half);
+            (first, x_last(&mut x_last_half))
+        } else {
+            let first = x_last(&mut x_last_half);
+            (c_order(&mut half), first)
+        };
+        assert!(
+            x_last_half == half,
+            "the x-last forward must match the C-order chain"
+        );
 
         // The same chain step by step, on the z sweep's output copied aside,
         // and its inverse on a copy of the forward spectrum; each must land
@@ -347,7 +376,13 @@ fn half_pair_sweeps_at_64_cubed() {
                     .into_iter()
                     .chain(forward_steps)
                     .chain(inverse_steps)
-                    .chain([forward_z_serial, fused_serial, forward_z_awake]),
+                    .chain([
+                        forward_z_serial,
+                        fused_serial,
+                        forward_z_awake,
+                        x_last_z,
+                        x_last_xy,
+                    ]),
             ) {
                 slot.push(sample);
             }
