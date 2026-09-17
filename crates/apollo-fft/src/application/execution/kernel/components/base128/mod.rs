@@ -460,8 +460,6 @@ where
             sub1: base_lanes::<F, BLOCK_LANES>(sub1),
             first_tw: lane_array::<F, SINK_LANES>(sinks.inner()),
             second_tw: lane_array::<F, SINK_LANES>(sinks.second()),
-            half_negative: F::from_precise(-0.5),
-            sine: F::from_precise(0.866_025_403_784_438_6),
         },
     )
 }
