@@ -170,6 +170,8 @@ fn half_pair_sweeps_at_64_cubed() {
         "fwd z, pool awake",
         "x-last z",
         "x-last xy",
+        "read c order",
+        "read x-last",
     ];
     let mut z_again = vec![Complex64::default(); N * N * depth];
     let mut x_last_half = vec![Complex64::default(); N * N * depth];
@@ -227,6 +229,46 @@ fn half_pair_sweeps_at_64_cubed() {
             x_last_half == half,
             "the x-last forward must match the C-order chain"
         );
+
+        // The same lanes with nothing written: in C order and in the x-last
+        // order, so the x-last sweep's excess splits into its reads and its
+        // scatter. Both run on the pool the forwards just woke.
+        let no_write = |x_last_order: bool, slabs: &mut [Complex64]| {
+            let start = Instant::now();
+            let half_lane = plan.half_z_lane::<true>();
+            lanes::units(
+                slabs,
+                depth * N,
+                depth * N * 16 + N * N * 8,
+                |first_y, group| {
+                    with_3d_x_scratch::<Complex64, _>(depth, |lane| {
+                        for y in first_y..first_y + group.len() / (depth * N) {
+                            for x in 0..N {
+                                let at = if x_last_order {
+                                    (x * N + y) * N
+                                } else {
+                                    (y * N + x) * N
+                                };
+                                split::forward(
+                                    &source[at..at + N],
+                                    lane,
+                                    plan.split_twiddles().iter().copied(),
+                                    &half_lane,
+                                );
+                            }
+                        }
+                    });
+                },
+            );
+            start.elapsed()
+        };
+        let (read_c_order, read_x_last) = if repeat % 2 == 0 {
+            let c = no_write(false, &mut z_again);
+            (c, no_write(true, &mut z_again))
+        } else {
+            let x = no_write(true, &mut z_again);
+            (no_write(false, &mut z_again), x)
+        };
 
         // The same chain step by step, on the z sweep's output copied aside,
         // and its inverse on a copy of the forward spectrum; each must land
@@ -382,6 +424,8 @@ fn half_pair_sweeps_at_64_cubed() {
                         forward_z_awake,
                         x_last_z,
                         x_last_xy,
+                        read_c_order,
+                        read_x_last,
                     ]),
             ) {
                 slot.push(sample);
