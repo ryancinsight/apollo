@@ -13,6 +13,11 @@ pub use application::execution::plan::stft::dimension_1d::{is_valid_length, Stft
 pub use domain::contracts::error::{PeakEstimationError, StftError};
 pub use infrastructure::transport::cpu::{istft, istft_leto, stft, stft_leto};
 
+/// The crate README's examples, compiled and run as doctests.
+#[cfg(doctest)]
+#[doc = include_str!("../README.md")]
+struct ReadmeDoctests;
+
 /// GPU-accelerated backend using typed Hephaestus dispatch.
 #[cfg(feature = "wgpu")]
 pub use infrastructure::transport::gpu::*;

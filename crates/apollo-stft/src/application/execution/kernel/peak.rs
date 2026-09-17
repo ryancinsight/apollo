@@ -273,9 +273,16 @@ impl<T: RealField> Frame<T> {
         let bin = Self::index(k);
         let direct = self.kernel(delta);
         // `R` has period `N`, so the image's argument `−(2k + δ)` is formed
-        // from `2k mod N`: an index below `N` keeps `δ`'s precision where
-        // `2k + δ` would round it away in a long frame.
-        let image = self.kernel(-(Self::index((2 * k) % self.len) + delta));
+        // from the signed residue of `2k` modulo `N`, within `±N/2`: for bins
+        // on either side of Nyquist that residue is small and keeps `δ`'s
+        // precision where `2k + δ` would round it away in a long frame.
+        let residue = (2 * k) % self.len;
+        let signed = if 2 * residue > self.len {
+            -Self::index(self.len - residue)
+        } else {
+            Self::index(residue)
+        };
+        let image = self.kernel(-(signed + delta));
         let determinant = direct.norm_sqr() - image.norm_sqr();
         // A non-positive or NaN determinant cannot yield a resolved tone.
         let solvable = determinant > T::ZERO;
