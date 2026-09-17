@@ -6,11 +6,20 @@
   the measurement, not the bound the cited expression gives (2.1e-9 and
   1.4e-9 Hz for the two tones), and the expression omitted the finite-length
   bias term the test asserts alongside it. The decision is unchanged.
-- Item: `backlog.md#apollo-spectral-peak-estimation-spike`
-- Evidence:
+- Revised 2026-09-17: the decision is implemented as `apollo_stft::estimate_peaks`
+  (`backlog.md#apollo-peak-estimation-surface`). The spike's test-only
+  candidates are deleted; the oracle scene and its derived bounds are the
+  surface's test, which reproduces the Candan 2011 row below. The residual of
+  Candan's correction for one complex exponential is stated exactly,
+  `(N/π)(tan(πδ/N) − πδ/N)`, of which `|δ|³(π/N)²/3` is the leading term.
+- Items: `backlog.md#apollo-spectral-peak-estimation-spike`,
+  `backlog.md#apollo-peak-estimation-surface`
+- Evidence: `crates/apollo-stft/tests/peak_estimation.rs` (the oracle scene
+  and its derived bounds, against the surface),
+  `output/apollo-base128/peak_estimation_2026-09-15.md` (the spike's run of
+  every candidate); the candidates themselves are in git history at
   `crates/apollo-stft/src/application/execution/plan/stft/dimension_1d/tests/peak_estimation.rs`
-  (the candidate implementations, the oracle scene, and the derived bounds
-  asserted), `output/apollo-base128/peak_estimation_2026-09-15.md` (the run)
+  before this revision
 
 ## Context
 
@@ -123,9 +132,11 @@ gets the single-pass path as the one-tone case.
 
 ## Consequences
 
-- The estimator is test-only today. The DoR item
-  `backlog.md#apollo-peak-estimation-surface` carries the public surface,
-  generic over `T: Scalar`, with this file's oracle as its acceptance test.
+- `apollo_stft::estimate_peaks` is the surface, generic over
+  `eunomia::RealField` (`f32`, `f64`), with this file's oracle as its
+  acceptance test; the scene runs in `f64` only, since its noise and middle
+  tone lie below `f32`'s rounding of a 1 V spectrum at this length, and the
+  per-scalar bounds are the kernel's unit tests.
 - The rectangular window is the analysis window for peak estimation.
   `apollo-stft`'s Hann window keeps its own role; it is not the path to
   sub-bin accuracy.

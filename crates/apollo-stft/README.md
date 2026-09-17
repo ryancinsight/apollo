@@ -30,6 +30,36 @@ sum_m x[t] w[t - mH]^2 / sum_m w[t - mH]^2 = x[t]
 
 This gives exact reconstruction in exact arithmetic for covered samples.
 
+## Sub-bin Peak Estimation
+
+`estimate_peaks` reads the frequency, amplitude and phase of each tone at a
+set of peak bins of a frame's rectangular-window DFT, below bin resolution
+(ADR 0066, `docs/adr/0066-sub-bin-peak-estimation.md`): Candan's corrected
+three-bin complex ratio for the offset, the amplitude and phase solved
+together with the tone's negative-frequency image, and estimate-and-subtract
+across the set for tones that leak into each other. A bin whose offset leaves
+the half-bin returns no estimate.
+
+```rust
+use apollo_stft::estimate_peaks;
+use core::num::NonZeroUsize;
+
+let n = 1024;
+let signal: Vec<f64> = (0..n)
+    .map(|t| (std::f64::consts::TAU * 100.25 * t as f64 / n as f64).cos())
+    .collect();
+let spectrum = apollo_fft::fft_1d_slice::<f64>(&signal);
+let estimates = estimate_peaks(&spectrum, &[100], NonZeroUsize::MIN)
+    .expect("a 1024-bin spectrum and an in-range bin are readable");
+let tone = estimates[0].expect("bin 100 holds the tone");
+assert!((tone.position() - 100.25).abs() < 1e-4);
+```
+
+On the ADR's three-tone scene (48 kHz, 48 000 samples, two 1 V tones around a
+1e-6 V tone, 1e-10 V noise) three rounds read the 1 V tones to 8e-10 Hz and
+the 1e-6 V tone to 6e-7 Hz, 1.7 times its Cramér–Rao bound
+(`tests/peak_estimation.rs`).
+
 ## Accelerator Execution
 
 With the `wgpu` feature, Apollo owns the frame layout, Hann window, spectrum

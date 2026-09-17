@@ -77,6 +77,14 @@ Change-class tags: [patch] backward-compatible fix, [minor] additive non-breakin
 
 ### Added
 
+- [minor] `apollo-stft` estimates tones below bin resolution:
+  `estimate_peaks` returns a `PeakEstimate` (fractional bin position,
+  amplitude, phase) for each requested peak bin of a rectangular-window DFT,
+  generic over `f32` and `f64`, from Candan's corrected three-bin ratio, the
+  image-corrected amplitude and phase solve, and estimate-and-subtract across
+  the set; a bin whose offset leaves the half-bin returns `None`, and
+  unreadable inputs return `PeakEstimationError`
+  ([ADR 0066](docs/adr/0066-sub-bin-peak-estimation.md)).
 - [minor] `apollo-sft` recovers a sparse support sublinearly:
   `SparseFftPlan::downsampled` aliases the signal onto the plan's bucket
   count by downsampling and decodes each bucket's syndromes (Hsieh, Lu, Pei),
