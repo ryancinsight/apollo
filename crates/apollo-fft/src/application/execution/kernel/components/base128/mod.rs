@@ -282,10 +282,9 @@ where
     debug_assert!(if blocks == 3 || blocks == 4 {
         sinks.inner().len() == SINK_LANES
     } else {
-        sinks
-            .chain()
-            .last()
-            .is_some_and(|level| level.radix() == 8 && level.rows().len() == 7 * BLOCK_LANES)
+        sinks.chain().last().is_some_and(|level| {
+            level.radix() == 8 && level.rows().len() == 7 * level.layout().registers() * BLOCK_LANES
+        })
     });
     // Three blocks read the parent directly at four lanes (a stride-three
     // register from three-sample-apart windows) and take the radix-3 pass

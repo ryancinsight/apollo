@@ -30,9 +30,9 @@
 use super::{at_plan_width, block, instance_major, lanes, lanes_mut, split_boundary};
 
 /// The radix-`radix` pass over `parent` in place, `block_lanes` scalar
-/// lanes a block, from the chunk-major `rows`; false where the width or
-/// the radix is not served.
-fn column_pass<F, const INVERSE: bool>(
+/// lanes a block, from the chunk-major `rows` in the `SPLIT` layout; false
+/// where the width or the radix is not served.
+fn column_pass<F, const INVERSE: bool, const SPLIT: bool>(
     eight_lanes: bool,
     radix: usize,
     parent: &mut [F::Complex],
@@ -54,7 +54,7 @@ where
     match radix {
         3 => at_plan_width::<F, _>(
             eight_lanes,
-            split_boundary::ColumnPass::<F, _, 3, INVERSE> {
+            split_boundary::ColumnPass::<F, _, 3, INVERSE, SPLIT> {
                 source: instance_major::SelfSplit::<1, 0>,
                 dst: lanes_mut::<F>(parent),
                 twiddles: rows,
@@ -65,7 +65,7 @@ where
         ),
         4 => at_plan_width::<F, _>(
             eight_lanes,
-            split_boundary::ColumnPass::<F, _, 4, INVERSE> {
+            split_boundary::ColumnPass::<F, _, 4, INVERSE, SPLIT> {
                 source: instance_major::SelfSplit::<1, 0>,
                 dst: lanes_mut::<F>(parent),
                 twiddles: rows,
@@ -76,7 +76,7 @@ where
         ),
         8 => at_plan_width::<F, _>(
             eight_lanes,
-            split_boundary::ColumnPass::<F, _, 8, INVERSE> {
+            split_boundary::ColumnPass::<F, _, 8, INVERSE, SPLIT> {
                 source: instance_major::SelfSplit::<1, 0>,
                 dst: lanes_mut::<F>(parent),
                 twiddles: rows,
@@ -147,6 +147,7 @@ fn step<F, const INVERSE: bool, const MEASURE: bool>(
     blocks: &mut [F::Complex],
     out: Option<&mut [F::Complex]>,
     rows: &[F],
+    layout: instance_major::TwiddleLayout,
     mut transform: impl FnMut(&mut [F::Complex], &mut [F::Complex]) -> bool,
 ) -> bool
 where
@@ -166,7 +167,15 @@ where
     } else {
         0
     };
-    if !column_pass::<F, INVERSE>(eight_lanes, radix, parent, rows, 2 * block_len) {
+    let passed = match layout {
+        instance_major::TwiddleLayout::Split => {
+            column_pass::<F, INVERSE, true>(eight_lanes, radix, parent, rows, 2 * block_len)
+        }
+        instance_major::TwiddleLayout::Interleaved => {
+            column_pass::<F, INVERSE, false>(eight_lanes, radix, parent, rows, 2 * block_len)
+        }
+    };
+    if !passed {
         return false;
     }
     #[cfg(all(test, windows, target_arch = "x86_64"))]
@@ -269,6 +278,7 @@ where
         blocks,
         out,
         level.rows(),
+        level.layout(),
         |slice, dst| {
             chain_from::<F, INVERSE, MEASURE, ROWS, ROW_LEN, BLOCK_LANES, TABLE_LANES>(
                 eight_lanes,

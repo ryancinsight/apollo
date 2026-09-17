@@ -86,11 +86,12 @@ pub(crate) struct SplitSinks<T> {
 
 /// One level of the column-first chain: the radix of its pass over the
 /// level above and the pass's twiddles `W_n^{j k}` for `j` in `1..R`,
-/// `k < n / R`, interleaved and chunk-major — for each register chunk of
-/// `samples` complexes the `R - 1` twiddle registers `j = 1..R` in turn —
-/// so the pass reads one contiguous twiddle stream (RustFFT's table shape).
+/// `k < n / R`, chunk-major — for each register chunk of `samples`
+/// complexes the `R - 1` twiddles `j = 1..R` in turn, in the level's
+/// [`TwiddleLayout`] — so the pass reads one contiguous twiddle stream.
 pub(crate) struct ChainLevel<T> {
     radix: usize,
+    layout: TwiddleLayout,
     rows: AlignedLanes<T>,
 }
 
@@ -99,12 +100,79 @@ impl<T> ChainLevel<T> {
     pub(crate) fn radix(&self) -> usize {
         self.radix
     }
+
+    /// How the pass's twiddles are laid out.
+    pub(crate) fn layout(&self) -> TwiddleLayout {
+        self.layout
+    }
 }
 
 impl<T: Copy> ChainLevel<T> {
-    /// The pass's twiddle lanes, `(radix - 1)` registers a chunk.
+    /// The pass's twiddle lanes, [`TwiddleLayout::registers`] a twiddle.
     pub(crate) fn rows(&self) -> &[T] {
         self.rows.as_slice()
+    }
+}
+
+/// How a column pass holds each twiddle register.
+///
+/// Split, the pass multiplies an interleaved register by one swap, one
+/// product and one FMA; interleaved, by two duplicates and a swap more, at
+/// half the table. Measured by alternating pinned A/B (2026-09-17,
+/// `APOLLO-COLUMN-SPLIT-TWIDDLES`): split took `f32` 2048 6% and `f64` 4096
+/// 5% faster, and ran the chain passes 16 to 18% slower at `f32` 131072 and
+/// 262144 and 10% slower at `f64` 16384 and 32768, where the doubled table
+/// leaves the cache.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) enum TwiddleLayout {
+    /// `(re, im)` per sample, one register a twiddle.
+    Interleaved,
+    /// The real parts duplicated, then `(-im, im)`: two registers a
+    /// twiddle ([`split_signed`]).
+    Split,
+}
+
+impl TwiddleLayout {
+    /// The largest split table that measured faster: `f32` 16384's top
+    /// level (14336 twiddles, 229 KiB split) won; `f64` 16384's (458 KiB)
+    /// lost and `f32` 32768's held level.
+    const SPLIT_MAX_BYTES: usize = 256 << 10;
+
+    /// The layout for `count` twiddles of `T`.
+    pub(crate) fn for_twiddles<T>(count: usize) -> Self {
+        if 4 * count * core::mem::size_of::<T>() <= Self::SPLIT_MAX_BYTES {
+            Self::Split
+        } else {
+            Self::Interleaved
+        }
+    }
+
+    /// Registers a twiddle occupies.
+    pub(crate) const fn registers(self) -> usize {
+        match self {
+            Self::Interleaved => 1,
+            Self::Split => 2,
+        }
+    }
+}
+
+/// The chain level of radix `radix` over the twiddles `w`, `samples`
+/// complexes a register, in the layout their count selects.
+fn chain_level<T: Copy + core::ops::Neg<Output = T>>(
+    radix: usize,
+    samples: usize,
+    w: &[Complex<T>],
+    zero: T,
+) -> ChainLevel<T> {
+    let layout = TwiddleLayout::for_twiddles::<T>(w.len());
+    let lanes = match layout {
+        TwiddleLayout::Interleaved => interleaved(w),
+        TwiddleLayout::Split => split_signed(samples, w),
+    };
+    ChainLevel {
+        radix,
+        layout,
+        rows: AlignedLanes::new(&lanes, zero),
     }
 }
 
@@ -212,10 +280,7 @@ impl<T: MixedRadixScalar<Complex = Complex<T>>> SplitSinks<T> {
             inner: AlignedLanes::new(&dup_split(samples, &first), zero),
             second: AlignedLanes::new(&dup_split(samples, &second), zero),
             outer: AlignedLanes::empty(zero),
-            chain: Box::new([ChainLevel {
-                radix: 3,
-                rows: AlignedLanes::new(&interleaved(&rows), zero),
-            }]),
+            chain: Box::new([chain_level(3, samples, &rows, zero)]),
         }
     }
 
@@ -237,13 +302,12 @@ impl<T: MixedRadixScalar<Complex = Complex<T>>> SplitSinks<T> {
             .iter()
             .map(|&radix| {
                 block /= radix;
-                ChainLevel {
+                chain_level(
                     radix,
-                    rows: AlignedLanes::new(
-                        &interleaved(&chunk_major_rows(samples, twiddles, radix, block)),
-                        zero,
-                    ),
-                }
+                    samples,
+                    &chunk_major_rows(samples, twiddles, radix, block),
+                    zero,
+                )
             })
             .collect();
         Self {
@@ -325,6 +389,24 @@ fn chunk_major_rows<T: MixedRadixScalar<Complex = Complex<T>>>(
 /// each twiddle in registers.
 fn interleaved<T: Copy>(w: &[Complex<T>]) -> Vec<T> {
     w.iter().flat_map(|c| [c.re, c.im]).collect()
+}
+
+/// `w` relaid per register chunk of `samples` complex samples as two
+/// registers: the real parts duplicated, then the imaginary parts as
+/// `(-im, im)`, so the pass multiplies an interleaved `y` by `w` as
+/// `y * re + swap(y) * signed_im` with one swap and no twiddle shuffle.
+fn split_signed<T: Copy + core::ops::Neg<Output = T>>(samples: usize, w: &[Complex<T>]) -> Vec<T> {
+    debug_assert_eq!(w.len() % samples, 0);
+    let mut lanes = Vec::with_capacity(4 * w.len());
+    for chunk in w.chunks_exact(samples) {
+        for c in chunk {
+            lanes.extend([c.re; 2]);
+        }
+        for c in chunk {
+            lanes.extend([-c.im, c.im]);
+        }
+    }
+    lanes
 }
 
 /// `w` relaid as dup-split chunk pairs of `samples` complex samples.

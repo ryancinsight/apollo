@@ -41,6 +41,7 @@ pub(crate) use plan::{BasePlan, BasePlanState};
 pub(crate) use rows::{BlockSource, ParentSplit, SelfSplit};
 pub(crate) use store::{
     chain_radices, ChainLevel, DirectSink, FinalRadix3Sink, FinalRadix4Sink, SplitSinks, StoreSink,
+    TwiddleLayout,
 };
 
 /// Whether the base kernel runs `T` at eight lanes on this host — four
