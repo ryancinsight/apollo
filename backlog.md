@@ -69,6 +69,12 @@
 - **The f32 non-power-of-two family is the sharpest lead.** At n = 101 apollo's `f32` (674 ns) is *slower than its own `f64`* (579), which cannot be right when `f32` has twice the lanes. The same shape appears at 180 and 384, where `f64` sits at +12 to +20% and `f32` at +52 to +70%. Something in the f32 composite and prime paths is not using its width. Filed as `#atlas-apollo-f32-nonpot-width`.
 - **Hypotheses already falsified**, so nobody re-runs them: (1) the f64 n = 32 arm loading sixteen YMM registers and spilling — forcing the Winograd fallback instead measured 33.4 ns against the vector arm's 31.0, so both paths are ~2x RustFFT and register pressure is not the cause; (2) n = 1024 being on `exec_pot_forward_sized::<10>` rather than the generic executor — the generic executor is worse (f32 1236 ns against 953); (3) the plan's call preamble (`assert_plan_length` plus `runtime_tiny_direct_dispatch`) — it costs 0.12 ns at n = 8 and nothing measurable above; (4) apollo's own composite route beating its small codelets — the codelet wins by 27 to 279% at n = 16 to 64.
 
+<a id="apollo-radix3-fused-scales"></a>
+## APOLLO-RADIX3-FUSED-SCALES — Fuse the radix-3 register kernel's scales into its adds [patch] [perf] — in-progress
+- **Integrator:** claude-opus-5; **branch:** `perf/apollo-f32-384`; parent [the scoreboard](#atlas-apollo-beat-the-references).
+- **Finding.** `f32` 384 reads 1.07 to 1.12 of RustFFT on both cores; its three 128-blocks are level with RustFFT's (0.97), so the residue is the radix-3 step: 384 less three 128s is 63k ps against RustFFT's 42k on the performance core and 151k against 95k on the efficiency core. The chain meter puts the pass at 397 of the step's 521 cycles. RustFFT's `column_butterfly3` folds `-1/2` and `±sin(2π/3)` into FMAs (eight operations); apollo's `radix3` multiplies and adds separately (ten).
+- **Acceptance.** `radix3` fused; the dft oracle and the column-route tests green; `f32` 384 below its pre-change ratio in an alternating pinned A/B on both cores, and 180 and 100 (the other `radix3` callers) not slower.
+
 <a id="atlas-apollo-wider-isa"></a>
 ## ATLAS-APOLLO-WIDER-ISA-2026-08-28 — The AVX-512 path for the base kernel [arch] — blocked
 - **Blocked:** no AVX-512 hardware.

@@ -1,11 +1,14 @@
 //! Per-level attribution of the column-first chain on each core type: the
 //! column pass, the slice transforms below it and the interleave, in
 //! cycles per step, for the lengths whose selection differs by width
-//! (`APOLLO-FOUR-STEP-E-CORE-F32-131072`). The separately instantiated
+//! (`APOLLO-FOUR-STEP-E-CORE-F32-131072`) and for `f32` 384's radix-3 step
+//! over its 128 base (`APOLLO-RADIX3-FUSED-SCALES`). The separately instantiated
 //! `MEASURE` variant stamps the meter; the comparison kernel carries no
 //! stamps.
 
-use super::{instance_major, transform_via_base_256, transform_via_base_512};
+use super::{
+    instance_major, transform_via_base_128, transform_via_base_256, transform_via_base_512,
+};
 use crate::application::execution::kernel::measurement_cores;
 use crate::application::execution::kernel::mixed_radix::MixedRadixScalar;
 use eunomia::Complex;
@@ -110,6 +113,12 @@ fn chain_phases_by_core_type() {
             });
             report(core, "f64", n, &levels);
         }
+        let state = instance_major::State128::<f32>::new_if_supported(384)
+            .expect("the pinned host must provide a native base capability");
+        let levels = chain_attribution::<f32>(384, |work| {
+            transform_via_base_128::<f32, false, true>(work, &state)
+        });
+        report(core, "f32", 384, &levels);
         for n in [262_144usize, 32_768] {
             let state = instance_major::State512::<f32>::new_if_supported(n)
                 .expect("the pinned host must provide a native base capability");
