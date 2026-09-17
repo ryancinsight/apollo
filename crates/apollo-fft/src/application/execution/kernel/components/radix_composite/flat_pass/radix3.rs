@@ -12,18 +12,21 @@
 //! ```
 //!
 //! `∓ i · diff · s` is the swapped difference times the signed sine pair
-//! `(s, -s)` forward, `(-s, s)` inverse.
+//! `(s, -s)` forward, `(-s, s)` inverse. The registers run the shared
+//! radix-3 kernel ([`radix3`]), each scale fused with its add.
 
 use super::{
     apply_pointwise, cmul, duplicated_row, load, load_prefix, prefix_mask, scatter_spill, store,
     store_arm_halves, store_arms, store_prefix, MAX_COMPLEXES_PER_REGISTER,
 };
+use crate::application::execution::kernel::components::register_butterfly::{
+    radix3, Thirds, SINE_THIRD,
+};
 use crate::application::execution::kernel::components::winograd::WinogradScalar;
 use eunomia::Complex;
-use hermes_simd::{LaneKernel, LaneScalar, Simd, SimdArch, SimdKernel, SimdStorage, Vector};
-
-/// `√3 / 2`, the sine of the third root of unity.
-const SIN_THIRD: f64 = 0.866_025_403_784_438_6;
+use hermes_simd::{
+    ComplexReg, LaneKernel, LaneScalar, Simd, SimdArch, SimdKernel, SimdStorage, Vector,
+};
 
 /// One radix-3 pass: `g_count` groups of `prev_len` butterflies over three
 /// source rows `g_count * prev_len` complexes apart, each group's three
@@ -38,27 +41,14 @@ pub(in super::super) struct FlatPassR3<'a, T, const INVERSE: bool> {
     pub(in super::super) pointwise: Option<&'a [Complex<T>]>,
 }
 
-/// The register constants of the butterfly.
-#[derive(Clone, Copy)]
-struct Constants<T, A>
-where
-    T: LaneScalar,
-    A: SimdArch + SimdKernel<T>,
-{
-    half_negative: Vector<T, A>,
-    /// `(s, -s)` forward, `(-s, s)` inverse: the sine with the quarter
-    /// turn's sign pattern.
-    sine_turn: Vector<T, A>,
-}
-
 /// The three-point butterfly on one register of complexes per arm.
 #[expect(
     clippy::inline_always,
     reason = "must fold into the caller's target-feature scope; an out-of-line butterfly reintroduces the ADR 009 penalty"
 )]
 #[inline(always)]
-fn dft3<T, A>(
-    k: Constants<T, A>,
+fn dft3<T, A, const INVERSE: bool>(
+    k: &Thirds<T, A>,
     a0: Vector<T, A>,
     a1: Vector<T, A>,
     a2: Vector<T, A>,
@@ -67,10 +57,19 @@ where
     T: LaneScalar,
     A: SimdArch + SimdKernel<T>,
 {
-    let sum = a1 + a2;
-    let m0 = sum.mul_add(k.half_negative, a0);
-    let m1 = (a1 - a2).swap_adjacent() * k.sine_turn;
-    [a0 + sum, m0 + m1, m0 - m1]
+    let [b0, b1, b2] = radix3::<T, A, INVERSE>(
+        [
+            ComplexReg::from_interleaved(a0),
+            ComplexReg::from_interleaved(a1),
+            ComplexReg::from_interleaved(a2),
+        ],
+        k,
+    );
+    [
+        b0.into_interleaved(),
+        b1.into_interleaved(),
+        b2.into_interleaved(),
+    ]
 }
 
 /// The scalar three-point butterfly on twiddled arms.
@@ -80,7 +79,7 @@ fn dft3_scalar<T: WinogradScalar, const INVERSE: bool>(
     a1: Complex<T>,
     a2: Complex<T>,
 ) -> [Complex<T>; 3] {
-    let s = T::from_f64(SIN_THIRD);
+    let s = T::from_f64(SINE_THIRD);
     let wr = T::from_f64(-0.5);
     let sum = a1 + a2;
     let diff = a1 - a2;
@@ -132,15 +131,12 @@ where
                 && tw.len() >= 2 * prev_len,
             "invariant: a radix-3 pass reads three rows of g_count * prev_len complexes and two twiddle rows, and writes g_count blocks of stage_chunk"
         );
-        let (lo, hi) = if INVERSE {
-            (-SIN_THIRD, SIN_THIRD)
-        } else {
-            (SIN_THIRD, -SIN_THIRD)
-        };
-        let k = Constants {
-            half_negative: simd.splat(T::from_f64(-0.5)),
-            sine_turn: Vector::<T, A>::splat_pair(T::from_f64(lo), T::from_f64(hi)),
-        };
+        let k = Thirds::from_scalars(
+            simd,
+            T::from_f64(-0.5),
+            T::from_f64(SINE_THIRD),
+            T::from_f64(-SINE_THIRD),
+        );
 
         if prev_len == 1 {
             // No twiddle; a register holds `per` groups of one arm and a
@@ -153,8 +149,8 @@ where
                 // SAFETY: `g + per <= g_count = stride`, so each arm's row
                 // stays inside `src`, and `3 (g + per) + spill <= dst.len()`.
                 unsafe {
-                    let b = dft3(
-                        k,
+                    let b = dft3::<T, A, INVERSE>(
+                        &k,
                         load::<T, A>(src, g),
                         load::<T, A>(src, stride + g),
                         load::<T, A>(src, 2 * stride + g),
@@ -187,7 +183,11 @@ where
                     let a0 = load::<T, A>(src, at);
                     let a1 = cmul(load::<T, A>(src, stride + at), w1);
                     let a2 = cmul(load::<T, A>(src, 2 * stride + at), w2);
-                    store_arm_halves::<T, A, 3>(dft3(k, a0, a1, a2), dst, g * stage_chunk);
+                    store_arm_halves::<T, A, 3>(
+                        dft3::<T, A, INVERSE>(&k, a0, a1, a2),
+                        dst,
+                        g * stage_chunk,
+                    );
                 }
                 g += 2;
             }
@@ -209,7 +209,7 @@ where
                         load_prefix::<T, A>(src, 2 * stride + at, prev_len, m),
                         load_prefix::<T, A>(tw, prev_len, prev_len, m),
                     );
-                    let b = dft3(k, a0, a1, a2);
+                    let b = dft3::<T, A, INVERSE>(&k, a0, a1, a2);
                     for arm in 0..3 {
                         store_prefix(b[arm], dst, g * stage_chunk + arm * prev_len, prev_len, m);
                     }
@@ -259,7 +259,7 @@ where
                             let a0 = load::<T, A>(src, at);
                             let a1 = cmul(load::<T, A>(src, stride + at), t1);
                             let a2 = cmul(load::<T, A>(src, 2 * stride + at), t2);
-                            let b = dft3(k, a0, a1, a2);
+                            let b = dft3::<T, A, INVERSE>(&k, a0, a1, a2);
                             for arm in 0..3 {
                                 store(b[arm], dst, dst_base + j + arm * prev_len);
                             }
@@ -280,7 +280,7 @@ where
                                 load_prefix::<T, A>(src, 2 * stride + at, c, m),
                                 load_prefix::<T, A>(tw, prev_len + j, c, m),
                             );
-                            let b = dft3(k, a0, a1, a2);
+                            let b = dft3::<T, A, INVERSE>(&k, a0, a1, a2);
                             for arm in 0..3 {
                                 store_prefix(b[arm], dst, dst_base + j + arm * prev_len, c, m);
                             }
@@ -310,8 +310,8 @@ where
                             load::<T, A>(src, 2 * stride + bt),
                             load::<T, A>(tw, prev_len + j + per),
                         );
-                        let b = dft3(k, a0, a1, a2);
-                        let d = dft3(k, c0, c1, c2);
+                        let b = dft3::<T, A, INVERSE>(&k, a0, a1, a2);
+                        let d = dft3::<T, A, INVERSE>(&k, c0, c1, c2);
                         for arm in 0..3 {
                             store(b[arm], dst, dst_base + j + arm * prev_len);
                             store(d[arm], dst, dst_base + j + per + arm * prev_len);
@@ -329,7 +329,7 @@ where
                             load::<T, A>(src, 2 * stride + at),
                             load::<T, A>(tw, prev_len + j),
                         );
-                        let b = dft3(k, a0, a1, a2);
+                        let b = dft3::<T, A, INVERSE>(&k, a0, a1, a2);
                         for arm in 0..3 {
                             store(b[arm], dst, dst_base + j + arm * prev_len);
                         }
