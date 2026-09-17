@@ -8,7 +8,8 @@
 - **Risk/class:** [patch], CI only. `rust workspace` is a required check, so it must still report on every ready pull request rather than be skipped whole.
 
 <a id="apollo-real-3d-pass-count"></a>
-## APOLLO-REAL-3D-PASS-COUNT — Cut the passes the 64 cubed real pair makes over its volume [patch] [perf] — todo
+## APOLLO-REAL-3D-PASS-COUNT — Cut the passes the 64 cubed real pair makes over its volume [patch] [perf] — in-progress
+- **Integrator:** claude-opus-5 (session 5bed7001); **branch:** `perf/apollo-real-3d-pass-count` (lane apollo-route, from main); **lease:** `crates/apollo-fft/src/application/execution/plan/fft/real_storage/`, `crates/apollo-fft/src/application/execution/plan/fft/dimension_3d/`, this entry; **last-update:** 2026-09-17.
 - **Outcome:** `forward_3d_half_into` and `inverse_3d_half_into` at 64 cubed f64 move measurably less memory per call, with the pass count that changed named and every other shape unregressed.
 - **Why here:** the census in [APOLLO-PSTD-CONSUMER-TRANSFORM-WEIGHT](#apollo-pstd-consumer-transform-weight) puts one forward at 178-183 us against 87 us for a single touch of its 4.26 MB at the host's measured single-threaded streaming rate, so the call moves the equivalent of at least two full touches and the kernels are not what it is spending. The consumer's PSTD step at this size is 75 to 86% these two entries, so a pass removed here is a step shortened there.
 - **Scope:** the 3-D real half-spectrum route's axis passes, transposes and staging under `real_storage/half_volume.rs` and `dimension_3d`. **Non-goals:** the consumer's instrument (its residual is filed on kwavers), the complex 3-D route, and any change to the half-spectrum contract.
