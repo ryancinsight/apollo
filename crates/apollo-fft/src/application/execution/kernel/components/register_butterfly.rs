@@ -175,6 +175,9 @@ where
     [out0, out1, out2, out3, out4, out5, out6, out7]
 }
 
+/// `sin(2π/3)`, exactly rounded.
+pub(super) const SINE_THIRD: f64 = 0.866_025_403_784_438_6;
+
 /// The third-turn constants a radix-3 applies: `-1/2` on the sum of its
 /// outer arms, and `sin(2π/3)` on their swapped difference with the
 /// quarter turn's signs folded in — `(s, -s)` and `(-s, s)` over each
@@ -195,21 +198,43 @@ where
     T: LaneScalar + MixedRadixScalar,
     A: SimdArch + SimdKernel<T>,
 {
-    /// `sin(2π/3)`, exactly rounded.
-    const SINE: f64 = 0.866_025_403_784_438_6;
-
     #[expect(
         clippy::inline_always,
         reason = "register kernels must retain their caller's target-feature scope"
     )]
     #[inline(always)]
     pub(super) fn new(simd: Simd<T, A>) -> Self {
+        Self::from_scalars(
+            simd,
+            T::from_precise(-0.5),
+            T::from_precise(SINE_THIRD),
+            T::from_precise(-SINE_THIRD),
+        )
+    }
+}
+
+impl<T, A> Thirds<T, A>
+where
+    T: LaneScalar,
+    A: SimdArch + SimdKernel<T>,
+{
+    /// The constants from `-1/2` and `±sin(2π/3)` already in `T`, for a
+    /// scalar family without [`MixedRadixScalar`]'s conversion.
+    #[expect(
+        clippy::inline_always,
+        reason = "register kernels must retain their caller's target-feature scope"
+    )]
+    #[inline(always)]
+    pub(super) fn from_scalars(
+        simd: Simd<T, A>,
+        half_negative: T,
+        sine: T,
+        sine_negative: T,
+    ) -> Self {
         Self {
-            half_negative: simd.splat(T::from_precise(-0.5)),
-            sine_plus_minus: simd
-                .splat_pair(T::from_precise(Self::SINE), T::from_precise(-Self::SINE)),
-            sine_minus_plus: simd
-                .splat_pair(T::from_precise(-Self::SINE), T::from_precise(Self::SINE)),
+            half_negative: simd.splat(half_negative),
+            sine_plus_minus: simd.splat_pair(sine, sine_negative),
+            sine_minus_plus: simd.splat_pair(sine_negative, sine),
         }
     }
 }
