@@ -28,7 +28,7 @@
 
 use super::{expand, split, RealFftData};
 use crate::application::execution::kernel::mixed_radix::scalar::plan_scratch::{
-    with_view_staging, PlanScratch,
+    with_3d_x_scratch, with_view_staging, PlanScratch,
 };
 use crate::application::execution::plan::fft::dimension_3d::FftPlan3D;
 use crate::application::execution::plan::fft::lanes;
@@ -160,22 +160,7 @@ fn inverse_half<T>(
     let depth = plan.nz_c();
     plan.xy_axes_inplace::<false>(bins, depth);
     if T::real_split_applies(nz) {
-        // Two passes, because the lanes on the two sides differ in length and
-        // both are written: the retangle and half-length inverse in place on
-        // the spectrum's lanes, then the unpack into the output's.
-        let half_lane = plan.half_z_lane::<false>();
-        lanes::each(bins, depth, |_, lane| {
-            split::inverse_packed::<T>(lane, nz, plan.split_twiddles().iter().copied(), &half_lane);
-        });
-        let packed = nz / 2;
-        lanes::paired(values, nz, &*bins, depth, |reals_group, lanes_group| {
-            for (reals, lane) in reals_group
-                .chunks_exact_mut(nz)
-                .zip(lanes_group.chunks_exact(depth))
-            {
-                split::unpack(&lane[..packed], reals);
-            }
-        });
+        inverse_z_split(plan, bins, values);
     } else {
         let z_lane = plan.z_lane::<false>();
         let mirrored = nz - depth;
@@ -207,6 +192,49 @@ fn inverse_half<T>(
             });
         });
     }
+}
+
+/// The z inverse of the half pair through the real split, in one sweep.
+///
+/// Each lane's `nz/2 + 1` bins are copied into an L1-resident buffer,
+/// retangled, inverted at half length and unpacked straight into the output
+/// lane. The lanes on the two sides differ in length, so no scheduler hands a
+/// task both of them mutably; run as two sweeps instead — the split in place
+/// on the spectrum, then the unpack from it — the second sweep re-reads the
+/// whole spectrum after the first has left it, which at 64³ is 2 MiB read
+/// cold to save a 528-byte copy per lane.
+fn inverse_z_split<T>(
+    plan: &FftPlan3D<T::PlanScalar>,
+    bins: &[Complex<T::PlanScalar>],
+    values: &mut [T],
+) where
+    T: RealFftData,
+    Complex<T::PlanScalar>: PlanScratch,
+{
+    let (_, _, nz) = plan.dimensions();
+    let depth = plan.nz_c();
+    let packed = nz / 2;
+    let half_lane = plan.half_z_lane::<false>();
+    lanes::paired(values, nz, bins, depth, |reals_group, lanes_group| {
+        // The x and y passes have returned, so the 3-D X role is free on every
+        // thread here; the 2-D role is not, since an owned caller holds the
+        // half volume in it.
+        with_3d_x_scratch::<Complex<T::PlanScalar>, _>(depth, |lane| {
+            for (reals, source) in reals_group
+                .chunks_exact_mut(nz)
+                .zip(lanes_group.chunks_exact(depth))
+            {
+                lane.copy_from_slice(source);
+                split::inverse_packed::<T>(
+                    lane,
+                    nz,
+                    plan.split_twiddles().iter().copied(),
+                    &half_lane,
+                );
+                split::unpack(&lane[..packed], reals);
+            }
+        });
+    });
 }
 
 /// The z-lane length from which the caller-owned routes take the pair.
@@ -420,3 +448,6 @@ where
     });
     Some(output)
 }
+
+#[cfg(test)]
+mod phases;
