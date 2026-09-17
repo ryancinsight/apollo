@@ -1,7 +1,8 @@
 # Apollo Backlog
 
 <a id="apollo-real-3d-x-last-scatter"></a>
-## APOLLO-REAL-3D-X-LAST-SCATTER — Bring the x-last z sweeps to the contiguous sweep's cost [patch] [perf] — todo
+## APOLLO-REAL-3D-X-LAST-SCATTER — Bring the x-last z sweeps to the contiguous sweep's cost [patch] [perf] — in-progress
+- **Integrator:** claude-opus-5 (session 5bed7001); **branch:** `perf/apollo-real-3d-x-last-scatter` (lane apollo-route, stacked on `perf/apollo-real-3d-x-last`); **lease:** `crates/apollo-fft/src/application/execution/plan/fft/real_storage/half_volume/`, `half_volume.rs`, this entry; **last-update:** 2026-09-17.
 - **Finding:** writing the forward's z lanes into `(y, z, x)` order costs 36.7-36.9 µs at 64³ f64 against 22.6-24.7 µs for the same lanes written contiguously (`real_storage/half_volume/phases.rs`, `x-last z` against `forward z`); a C-order slab transposed into place cost 175 µs. The inverse's gather is the mirror and is not yet attributed.
 - **Outcome:** the scatter and gather cost measured per slab (cache level, stride, write order) and cut, or the floor recorded with its evidence.
 - **Acceptance oracle:** `half_pair_sweeps_at_64_cubed` shows `x-last z` nearer `forward z` over two runs with the bitwise tests in `half_volume/tests.rs` passing; `real_volume_arms_against_the_consumer` shows no entry regression.
