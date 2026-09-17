@@ -32,7 +32,8 @@ mod split;
 use fill::{fill_real, fill_spectrum};
 
 /// The power-of-two length from which the static forward takes the split;
-/// below it the zero-sized plan's constant-length kernels win (ADR 0063).
+/// below it the zero-sized plan's constant-length kernels win or tie, and at
+/// it the two measure at parity (ADR 0063).
 const STATIC_FORWARD_SPLIT_FLOOR: usize = 128;
 
 /// Real-domain storage type supported by Apollo FFT plans.
@@ -248,9 +249,13 @@ where
         // Where the split admits `N`, the half transform runs through the
         // plan-free runtime kernel (ADR 0063): `N / 2` is not a const-generic
         // argument on the stable toolchain and the bound names no plan cache.
-        // The static plan's constant-length power-of-two kernels up to 64
-        // beat the split's runtime half on the forward (0.44x at 4 and 8,
-        // 0.86x at 32 on the census host), so the forward keeps them there.
+        // On the forward the static plan's constant-length power-of-two
+        // kernels win clearly at 4, 8 and 32 (0.44x, 0.45x, 0.86x of the
+        // split's runtime half on the census host); at 16 and 64 the two sit
+        // inside that host's run-to-run drift (1.04-1.06x, 0.95-1.25x) and at
+        // 128 at parity (1.02x). The forward keeps the static plan on powers
+        // of two below 128 and takes the split from there, where it wins from
+        // 256 (1.35x).
         if Self::real_split_applies(N) && (N >= STATIC_FORWARD_SPLIT_FLOOR || !N.is_power_of_two())
         {
             if let (Some(src), Some(dst)) = (input.as_slice(), output.as_slice_mut()) {
