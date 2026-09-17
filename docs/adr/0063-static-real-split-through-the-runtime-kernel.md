@@ -2,9 +2,15 @@
 
 - Status: Accepted
 - Date: 2026-09-15
+- Revised 2026-09-17, on an independent review of the delivering pull
+  request: the test file is `static_forms.rs`, not `static.rs`; the table's
+  32 and 128 rows come from one run, not two; the floor at 128 is a parity
+  reading rather than a measured win; and the tests now witness which route
+  ran instead of only agreeing with the dynamic forms, which the widening
+  path also does. The decision is unchanged.
 - Item: `backlog.md#apollo-real-static-split-bound`
 - Evidence: `output/apollo-base128/static_split_probe_2026-09-15.txt` (the
-  probe, `output/probe_static`), `crates/apollo-fft/tests/real_half_api/static.rs`
+  probe, `output/probe_static`), `crates/apollo-fft/tests/real_half_api/static_forms.rs`
 
 ## Context
 
@@ -56,7 +62,8 @@ What the route gives up is the const-`N` executor for the half: the plan-free
 dispatch selects its algorithm from the length at run time, where
 `StaticFftPlan1D` monomorphizes the selection. The probe measured that trade
 against the widened static path (minimum per call over 200 samples, widened
-over routed, two runs):
+over routed; two runs, except 32 and 128, which only the second measured, and
+64, which the second measured twice):
 
 | N | forward | inverse |
 |---|---|---|
@@ -72,13 +79,16 @@ over routed, two runs):
 | 4096 | 1.03 | 1.13-1.21 |
 | 65536 | 1.20-1.22 | 1.35-1.48 |
 
-The inverse wins at every length: the widened path copies the whole
-spectrum into scratch where the split copies half. The forward loses only
-where the static plan's constant-length power-of-two kernels run — 4 and 8
-are a handful of nanoseconds the split's untangle alone exceeds, and 32 is
-the strongest of the small kernels — so it keeps them below 128 and takes
-the split above, and at every non-power-of-two length, where the static
-plan has no such kernel. The dynamic split, on the cached plan's executor,
+The inverse wins or ties at every length (1.01 at 16 is inside this host's
+run-to-run drift): the widened path copies the whole spectrum into scratch
+where the split copies half. The forward loses clearly only where the static
+plan's constant-length power-of-two kernels run — 4 and 8 are a handful of
+nanoseconds the split's untangle alone exceeds, and 32 is the strongest of
+the small kernels — and at 16 and 64 the two readings sit inside the drift.
+So the forward keeps the static plan on powers of two below 128 and takes the
+split from there, and at every non-power-of-two length, where the static plan
+has no such kernel. The floor itself is a parity reading (1.02 in one run);
+256 is the first power of two the split measurably wins (1.35-1.36). The dynamic split, on the cached plan's executor,
 stays ahead of the static route at the larger lengths (65536: 116 against
 130 µs), the cost the toolchain constraint imposes.
 
@@ -87,7 +97,18 @@ stays ahead of the static route at the larger lengths (65536: 116 against
 - The static entries agree with the dynamic split forms within the derived
   bound at every admitted `N` (they take different half-length executors, so
   bitwise identity is not the contract), and with the widening path within
-  the same bound at the lengths the split refuses.
+  the same bound at the lengths the split refuses. Agreement cannot show
+  which route ran, since the widening path agrees too, so the tests also
+  check each route's mark for `f64`, `f32` and `F16`: where the forward takes
+  the split its upper half is the lower half's conjugate bit for bit, and the
+  split inverse leaves `scratch` above `N/2 + 1` untouched where the widening
+  inverse overwrites all of it. Disabling either route fails its check.
+- The static inverse now reads only the lower `N/2 + 1` bins. For the
+  spectrum of a real signal nothing changes; for a spectrum that is not
+  conjugate-symmetric the result is the real part of the inverse of its
+  Hermitian completion, as for the dynamic and multi-dimensional half forms,
+  where the widening path returned the real part of the inverse of the bins
+  as given.
 - Neither form allocates on a warm process: the runtime kernel's caches are
   the same the dynamic plans warm.
 - Revisit when `generic_const_exprs` stabilizes: option 2's half transform

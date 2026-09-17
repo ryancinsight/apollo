@@ -125,7 +125,10 @@ Change-class tags: [patch] backward-compatible fix, [minor] additive non-breakin
   repay the half's staging round trip.
 - [minor] `fft_1d_array_static_into` and `ifft_1d_array_static_into` take the
   real split where it admits `N`, the half-length transform through the
-  plan-free runtime kernel (ADR 0063); no bound or signature changes.
+  plan-free runtime kernel (ADR 0063); no bound or signature changes. The
+  static inverse now reads only the lower `N/2 + 1` bins: unchanged for the
+  spectrum of a real signal, and for any other spectrum the real part of the
+  inverse of its Hermitian completion rather than of the bins as given.
 
 - [minor] `apollo-fft` 3-D plans gain a transform pair that keeps the
   spectrum in `(z, x, y)` order: `FftPlan3D::forward_complex_rotated` returns a
