@@ -118,6 +118,59 @@ pub(super) fn execute<F, const FORWARD: bool>(
     }
 }
 
+/// Runs the lanes of `source` into `target`: each lane is copied into place
+/// and transformed there while it is cache-resident, so a pass that must also
+/// move the volume between buffers pays no separate copy.
+///
+/// `source` is consumed. Once a task has copied its group, that group of
+/// `source` is dead and serves as the group's four-step workspace; the final
+/// incomplete group copies first and then borrows the front of `source`,
+/// dead by then. The retained-memory bound is `execute`'s, with no companion.
+pub(super) fn execute_from<F, const FORWARD: bool>(
+    source: &mut [F::Complex],
+    target: &mut [F::Complex],
+    lane_len: usize,
+    direct: impl Fn(&mut [F::Complex]) + Send + Sync,
+) where
+    F: MixedRadixScalar<Complex = Complex<F>>,
+{
+    assert!(lane_len > 0 && source.len() == target.len() && target.len().is_multiple_of(lane_len));
+    crate::application::execution::kernel::scratch_hook::ensure_registered();
+    let Some(required) = workspace(lane_len).filter(|&required| required <= source.len()) else {
+        paired(target, lane_len, source, lane_len, |outputs, inputs| {
+            for (output, input) in outputs
+                .chunks_exact_mut(lane_len)
+                .zip(inputs.chunks_exact(lane_len))
+            {
+                output.copy_from_slice(input);
+                direct(output);
+            }
+        });
+        return;
+    };
+    let group_len = required.div_ceil(lane_len) * lane_len;
+    let prefix_len = target.len() / group_len * group_len;
+    let (prefix, remainder) = target.split_at_mut(prefix_len);
+    let (source_prefix, source_remainder) = source.split_at_mut(prefix_len);
+    moirai::for_each_chunk_pair_mut_enumerated_with::<
+        moirai::AdaptiveWithThreshold<PARALLEL_THRESHOLD>,
+        _,
+        _,
+        _,
+    >(prefix, source_prefix, group_len, |_, group, staged| {
+        #[cfg(all(test, not(miri)))]
+        crate::application::execution::kernel::worker_quiescence::record_worker();
+        group.copy_from_slice(staged);
+        for lane in group.chunks_exact_mut(lane_len) {
+            transform::<F, FORWARD>(lane, staged);
+        }
+    });
+    remainder.copy_from_slice(source_remainder);
+    for lane in remainder.chunks_exact_mut(lane_len) {
+        transform::<F, FORWARD>(lane, &mut source[..required]);
+    }
+}
+
 /// Runs `lane(index, lane)` over every `lane_len`-element lane of `data`,
 /// several lanes to a scheduled task.
 ///

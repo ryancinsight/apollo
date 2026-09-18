@@ -324,3 +324,74 @@ fn dynamic_fft_3d_preserves_logical_view_order() {
         |view| plan.inverse_complex_leto_inplace(view),
     );
 }
+
+/// The whole-volume transform runs the same lanes in the same axis order as
+/// the per-axis entry points (z, x, y forward; x, y, z inverse), and every
+/// move between them is an exact transpose or copy, so the two agree bit
+/// for bit, including where the z pass runs out of place through the
+/// four-step workspace (lanes of 2048 and 4096) and where z is degenerate.
+#[test]
+fn full_transform_matches_the_per_axis_sequence_bit_for_bit() {
+    use crate::application::execution::plan::fft::dimension_3d::FftPlan3D;
+    use crate::domain::metadata::shape::Shape3D;
+
+    for (nx, ny, nz) in [(6, 4, 8), (5, 3, 1), (4, 5, 7), (3, 2, 2048), (2, 2, 4096)] {
+        let plan = FftPlan3D::<f64>::new(
+            Shape3D::new(nx, ny, nz).expect("invariant: shape lengths are non-zero"),
+        );
+        let original = Array3::from_shape_fn([nx, ny, nz], |[i, j, k]| {
+            let x = ((i * ny + j) * nz + k) as f64;
+            Complex64::new((0.17 * x).sin() + 0.3, 0.23 * (0.31 * x).cos())
+        });
+        let mut full = original.clone();
+        plan.forward_complex_inplace(&mut full);
+        let mut composed = original.clone();
+        for axis in [2, 0, 1] {
+            plan.forward_axis_complex_inplace(&mut composed, axis);
+        }
+        assert!(
+            full.iter().zip(composed.iter()).all(|(a, b)| a == b),
+            "{nx}x{ny}x{nz}: forward differs from z, x, y per axis"
+        );
+        let mut full_inverse = full.clone();
+        plan.inverse_complex_inplace(&mut full_inverse);
+        for axis in [0, 1, 2] {
+            plan.inverse_axis_complex_inplace(&mut full, axis);
+        }
+        assert!(
+            full_inverse.iter().zip(full.iter()).all(|(a, b)| a == b),
+            "{nx}x{ny}x{nz}: inverse differs from x, y, z per axis"
+        );
+    }
+}
+
+/// A whole-volume transform on the calling thread holds one volume of plan
+/// scratch, not two: the chain alternates between the caller's storage and
+/// one role. Capacity is counted in elements across both scalar banks.
+#[test]
+fn full_transform_holds_one_volume_of_caller_scratch() {
+    use crate::application::execution::kernel::mixed_radix::scalar::plan_scratch::{
+        release_thread_local_scratch, thread_local_scratch_capacity,
+    };
+    use crate::application::execution::plan::fft::dimension_3d::FftPlan3D;
+    use crate::domain::metadata::shape::Shape3D;
+
+    release_thread_local_scratch();
+    let plan = FftPlan3D::<f64>::new(Shape3D::new(32, 32, 32).expect("non-zero"));
+    let mut data = Array3::from_shape_fn([32, 32, 32], |[i, j, k]| {
+        Complex64::new((i + 2 * j) as f64, k as f64)
+    });
+    plan.forward_complex_inplace(&mut data);
+    plan.inverse_complex_inplace(&mut data);
+    assert_eq!(thread_local_scratch_capacity(), 32 * 32 * 32, "f64 32^3");
+
+    release_thread_local_scratch();
+    let plan = FftPlan3D::<f32>::new(Shape3D::new(16, 16, 16).expect("non-zero"));
+    let mut data = Array3::from_shape_fn([16, 16, 16], |[i, j, k]| {
+        eunomia::Complex32::new((i + 2 * j) as f32, k as f32)
+    });
+    plan.forward_complex_inplace(&mut data);
+    plan.inverse_complex_inplace(&mut data);
+    assert_eq!(thread_local_scratch_capacity(), 16 * 16 * 16, "f32 16^3");
+    release_thread_local_scratch();
+}

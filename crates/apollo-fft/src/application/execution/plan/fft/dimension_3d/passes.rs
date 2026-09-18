@@ -105,13 +105,45 @@ pub(super) fn all_axes<F, const FORWARD: bool, X, Y, Z>(
     Y: Fn(&mut [F::Complex]) + Send + Sync,
     Z: Fn(&mut [F::Complex]) + Send + Sync,
 {
-    if FORWARD {
-        axis2::<F, FORWARD>(data, nz, &lanes.z);
+    let [nx, ny, _] = shape;
+    if nx <= 1 || ny <= 1 {
+        if FORWARD {
+            axis2::<F, FORWARD>(data, nz, &lanes.z);
+        }
+        xy_axes::<F, FORWARD>(data, shape, &lanes.x, &lanes.y);
+        if !FORWARD {
+            axis2::<F, FORWARD>(data, nz, &lanes.z);
+        }
+        return;
     }
-    xy_axes::<F, FORWARD>(data, shape, &lanes.x, &lanes.y);
-    if !FORWARD {
-        axis2::<F, FORWARD>(data, nz, &lanes.z);
-    }
+    // One volume-sized role (the audit's F1: two roles held `2 V` on the
+    // calling thread for its life). The three chain transposes alternate
+    // between `data` and the role, so the z pass, run out of place through
+    // `lanes::execute_from`, supplies the fourth move that lands the volume
+    // back in `data`. The axis order and each lane's arithmetic are the
+    // two-role chain's, so the output is unchanged.
+    with_3d_x_scratch::<F::Complex, _>(nx * ny * nz, |staged| {
+        if nz <= 1 {
+            transpose_matrices(data, staged, 1, nx, ny);
+            lanes::execute::<F, FORWARD>(staged, data, nx, &lanes.x);
+            transpose_matrices(staged, data, 1, ny, nx);
+            lanes::execute::<F, FORWARD>(data, staged, ny, &lanes.y);
+        } else if FORWARD {
+            lanes::execute_from::<F, FORWARD>(data, staged, nz, &lanes.z);
+            transpose_matrices(staged, data, 1, nx, ny * nz);
+            lanes::execute::<F, FORWARD>(data, staged, nx, &lanes.x);
+            transpose_matrices(data, staged, 1, ny, nz * nx);
+            lanes::execute::<F, FORWARD>(staged, data, ny, &lanes.y);
+            transpose_matrices(staged, data, 1, nz, nx * ny);
+        } else {
+            transpose_matrices(data, staged, 1, nx, ny * nz);
+            lanes::execute::<F, FORWARD>(staged, data, nx, &lanes.x);
+            transpose_matrices(staged, data, 1, ny, nz * nx);
+            lanes::execute::<F, FORWARD>(data, staged, ny, &lanes.y);
+            transpose_matrices(data, staged, 1, nz, nx * ny);
+            lanes::execute_from::<F, FORWARD>(staged, data, nz, &lanes.z);
+        }
+    });
 }
 
 /// Transforms axes 0 and 1 of a C-order `[nx, ny, depth]` volume in place.
