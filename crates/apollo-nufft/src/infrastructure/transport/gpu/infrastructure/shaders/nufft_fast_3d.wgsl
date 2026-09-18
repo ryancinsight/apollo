@@ -10,9 +10,10 @@
 //!   The forward FFT is unnormalized (no 1/N factor).
 //! - Type-2 path: load/deconvolve onto grid, then inverse FFT. The inverse
 //!   FFT encoded from the prepared Hephaestus plan divides by the oversampled
-//!   length per axis (mx, my, mz), producing a normalized IDFT. The 3D path
-//!   uses the normalized IFFT output directly (no pre-scaling needed) because
-//!   the CPU 3D type-2 path also works with normalized IDFT values.
+//!   length per axis (mx, my, mz), producing a normalized IDFT, so the load
+//!   stage scales by `mx * my * mz`: the Type-2 sum is unnormalized, as the
+//!   CPU path and the direct sum compute it. Every axis length is a power of
+//!   two, so the scale is exact in `f32`.
 //!
 //! Grid layout: row-major (x-major) flat index = ix*(my*mz) + iy*mz + iz.
 //! Mode layout: row-major flat index = kx*(ny*nz) + ky*nz + kz.
@@ -252,7 +253,8 @@ fn fast_type2_load_3d(@builtin(global_invocation_id) gid: vec3<u32>) {
 
     if active_x && active_y && active_z {
         let flat_mode = kx * params.ny * params.nz + ky * params.nz + kz;
-        let scale = deconv_xyz[kx] * deconv_xyz[params.nx + ky] * deconv_xyz[params.nx + params.ny + kz];
+        let volume = f32(params.mx) * f32(params.my) * f32(params.mz);
+        let scale = deconv_xyz[kx] * deconv_xyz[params.nx + ky] * deconv_xyz[params.nx + params.ny + kz] * volume;
         grid_re[flat] = coefficients[flat_mode].re * scale;
         grid_im[flat] = coefficients[flat_mode].im * scale;
     } else {

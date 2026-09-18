@@ -535,7 +535,7 @@ impl NufftPlan3D {
                         for iz in 0..self.mz {
                             lane[iz] = view3_mut_value(grid, [ix, iy, iz]);
                         }
-                        self.fft_z.inverse_complex_slice_inplace(lane);
+                        self.fft_z.inverse_complex_slice_unnorm_inplace(lane);
                         for iz in 0..self.mz {
                             view3_write(grid, [ix, iy, iz], lane[iz]);
                         }
@@ -553,7 +553,7 @@ impl NufftPlan3D {
                         for iy in 0..self.my {
                             lane[iy] = view3_mut_value(grid, [ix, iy, iz]);
                         }
-                        self.fft_y.inverse_complex_slice_inplace(lane);
+                        self.fft_y.inverse_complex_slice_unnorm_inplace(lane);
                         for iy in 0..self.my {
                             view3_write(grid, [ix, iy, iz], lane[iy]);
                         }
@@ -571,7 +571,7 @@ impl NufftPlan3D {
                         for ix in 0..self.mx {
                             lane[ix] = view3_mut_value(grid, [ix, iy, iz]);
                         }
-                        self.fft_x.inverse_complex_slice_inplace(lane);
+                        self.fft_x.inverse_complex_slice_unnorm_inplace(lane);
                         for ix in 0..self.mx {
                             view3_write(grid, [ix, iy, iz], lane[ix]);
                         }
@@ -695,7 +695,9 @@ impl NufftPlan3D {
             }
         }
 
-        // 2. Separable inverse FFT on oversampled grid
+        // 2. Separable unnormalized inverse FFT on the oversampled grid: the
+        //    Type-2 sum carries no `1/M` factor, so the grid values are the
+        //    sums themselves, as in the direct `nufft_type2_3d`.
         self.ifft_x_pass(scratch_grid);
         self.ifft_y_pass(scratch_grid);
         self.ifft_z_pass(scratch_grid);
@@ -1182,6 +1184,41 @@ mod tests {
             assert!(
                 (actual - expected).norm() < 1e-14,
                 "type2_into mismatch: got {actual:?}, expected {expected:?}"
+            );
+        }
+    }
+    /// The fast Type-2 approximates the direct sum, with no dependence on the
+    /// oversampled grid. The kernel's documented relative spreading error at
+    /// the default width and oversampling is `ε = 10⁻⁶` per axis
+    /// (`kaiser_bessel::kb_kernel`); each output is `Σ f_k φ(k)` with
+    /// `φ` the product of three one-axis factors, each within `ε` of its
+    /// exact phase, so the output is within `((1 + ε)³ - 1) Σ |f_k| < 3.1 ε
+    /// Σ |f_k|` of the direct sum. The oversampled volume would put a wrong
+    /// scale at a ratio of 4096 here.
+    #[test]
+    fn fast_type2_3d_tracks_the_direct_sum() {
+        let grid = UniformGrid3D::new(4, 4, 4, 0.1, 0.1, 0.1).unwrap();
+        let modes = Array3::from_shape_fn([4, 4, 4], |[kx, ky, kz]| {
+            Complex64::new(
+                0.25 + 0.1 * kx as f64 - 0.05 * ky as f64 + 0.03 * kz as f64,
+                -0.4 + 0.07 * kx as f64 + 0.11 * ky as f64 - 0.02 * kz as f64,
+            )
+        });
+        let positions = vec![
+            (0.01, 0.02, 0.03),
+            (0.05, 0.06, 0.07),
+            (0.025, 0.015, 0.005),
+            (0.37, 0.11, 0.29),
+        ];
+        let direct = nufft_type2_3d(&positions, &modes, grid);
+        let fast = nufft_type2_3d_fast(&positions, &modes, grid, DEFAULT_NUFFT_KERNEL_WIDTH);
+        let mass: f64 = modes.iter().map(|value| value.norm()).sum();
+        let bound = 3.1e-6 * mass;
+        for (index, (fast, direct)) in fast.iter().zip(direct.iter()).enumerate() {
+            let error = (fast - direct).norm();
+            assert!(
+                error <= bound,
+                "point {index}: fast {fast:?} against direct {direct:?}, error {error:e} > {bound:e}"
             );
         }
     }
