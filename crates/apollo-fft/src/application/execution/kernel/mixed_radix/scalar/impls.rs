@@ -56,6 +56,10 @@ impl MixedRadixScalar for f32 {
         cached_twiddle_inv(n)
     }
     #[inline]
+    fn transient_twiddle_fwd(n: usize) -> Vec<Complex32> {
+        <Complex32 as crate::application::execution::kernel::mixed_radix::caches::twiddle::TwiddleStore>::build_twiddle_fwd(n)
+    }
+    #[inline]
     fn with_twiddle_fwd<R>(n: usize, f: impl FnOnce(&[Complex32]) -> R) -> R {
         crate::application::execution::kernel::mixed_radix::caches::twiddle::with_twiddle_fwd(n, f)
     }
@@ -362,6 +366,10 @@ impl MixedRadixScalar for f64 {
     #[inline]
     fn cached_twiddle_inv(n: usize) -> Arc<[Complex64]> {
         cached_twiddle_inv(n)
+    }
+    #[inline]
+    fn transient_twiddle_fwd(n: usize) -> Vec<Complex64> {
+        <Complex64 as crate::application::execution::kernel::mixed_radix::caches::twiddle::TwiddleStore>::build_twiddle_fwd(n)
     }
     #[inline]
     fn with_twiddle_fwd<R>(n: usize, f: impl FnOnce(&[Complex64]) -> R) -> R {

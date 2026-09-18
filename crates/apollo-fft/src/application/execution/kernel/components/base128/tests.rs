@@ -1200,3 +1200,51 @@ fn gather_matches_the_strided_reference_at_both_widths() {
     assert_gather_matches_reference::<f64>();
     assert_gather_matches_reference::<f32>();
 }
+
+/// A base-route plan keeps its sink and chain tables and nothing of the
+/// stage-major table it relays them from: building and running the plan in
+/// both directions leaves no table for `n` in the process-wide twiddle cache
+/// (the memory audit's F2). nextest runs each test in its own process, so an
+/// entry here could only come from this test.
+#[test]
+fn base_route_plans_leave_no_stage_major_table_cached() {
+    use crate::application::execution::kernel::mixed_radix::caches::twiddle::{
+        TwiddleFwdStore, TwiddleInvStore,
+    };
+    fn check<T>(n: usize)
+    where
+        T: crate::application::execution::kernel::mixed_radix::MixedRadixScalar<
+                Complex = Complex<T>,
+            > + eunomia::RealField,
+        Complex<T>: TwiddleFwdStore + TwiddleInvStore,
+        crate::FftPlan1D<T>: Sized,
+    {
+        let plan = crate::FftPlan1D::<T>::new(crate::Shape1D::new(n).expect("non-zero"));
+        let mut data: Vec<Complex<T>> = (0..n)
+            .map(|i| {
+                Complex::new(
+                    T::from_precise((0.017 * i as f64).sin()),
+                    T::from_precise(0.3),
+                )
+            })
+            .collect();
+        plan.forward_complex_slice_inplace(&mut data);
+        plan.inverse_complex_slice_inplace(&mut data);
+        assert!(
+            !<Complex<T> as TwiddleFwdStore>::twiddle_global_fwd()
+                .read()
+                .contains_key(&n),
+            "forward stage-major table cached at {n}"
+        );
+        assert!(
+            !<Complex<T> as TwiddleInvStore>::twiddle_global_inv()
+                .read()
+                .contains_key(&n),
+            "inverse stage-major table cached at {n}"
+        );
+    }
+    check::<f64>(1024);
+    check::<f64>(16_384);
+    check::<f64>(262_144);
+    check::<f32>(4096);
+}

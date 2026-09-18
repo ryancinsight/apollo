@@ -201,10 +201,11 @@ where
 
     /// The sink tables for `n` at the plan's register width: empty when
     /// the route is one block, computed for the radix-3 step over three
-    /// blocks, and relaid from the stage-major table for the radix-4 and
-    /// radix-8 steps and the chain — so a single-block plan never touches
-    /// the twiddle cache, and a three-block one never asks it for a length
-    /// it does not serve.
+    /// blocks, and relaid from a transient forward stage-major table for the
+    /// radix-4 and radix-8 steps and the chain. No executor on these routes
+    /// reads the stage-major table, so it is built outside the twiddle cache
+    /// and dropped once relaid: the cache would keep `n` dead entries for
+    /// the life of the process (the memory audit's F2).
     fn sinks_for(plan: &BasePlan<T, ROWS, ROW_LEN, TABLE_LANES>, n: usize) -> SplitSinks<T> {
         let base = ROWS * ROW_LEN;
         let samples = match plan.lane_width {
@@ -214,7 +215,7 @@ where
         if n == 3 * base {
             SplitSinks::build_radix3(samples, base)
         } else if n > base {
-            let twiddles = T::cached_twiddle_fwd(n);
+            let twiddles = T::transient_twiddle_fwd(n);
             // Eights over the base with at most one four outside them take
             // the column-first chain; two and four blocks the sink route.
             match super::chain_radices(n / base) {
