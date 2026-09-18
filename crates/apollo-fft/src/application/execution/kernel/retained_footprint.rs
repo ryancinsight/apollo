@@ -520,6 +520,55 @@ fn wide_planar_transpose_warm_execution_is_allocation_free() {
     }
 }
 
+/// A Bluestein plan owns its chirps and kernel spectrum and borrows its
+/// padded work buffer from the thread's scratch role, so a warm call in
+/// either direction allocates nothing (the memory audit's F7: four
+/// allocations of `32(n + p)` bytes per call before).
+#[test]
+#[ignore = "allocation probe must run as the only selected test in its process"]
+fn bluestein_warm_execution_is_allocation_free() {
+    let _mnemosyne_hooks = MnemosyneHooks::install();
+    fn warm<T>(n: usize, value: impl Fn(f64) -> T)
+    where
+        T: crate::application::execution::kernel::mixed_radix::MixedRadixScalar<
+            Complex = eunomia::Complex<T>,
+        >,
+    {
+        let plan = crate::FftPlan1D::<T>::new(
+            crate::Shape1D::new(n).expect("invariant: shape lengths are non-zero"),
+        );
+        let mut signal = (0..n)
+            .map(|index| {
+                let x = index as f64;
+                eunomia::Complex::new(value((0.017 * x).sin()), value(0.25 * (0.031 * x).cos()))
+            })
+            .collect::<Vec<_>>();
+        plan.forward_complex_slice_inplace(&mut signal);
+        plan.inverse_complex_slice_inplace(&mut signal);
+        let label = format!("warm bluestein n={n}");
+        window(&label, || {
+            plan.forward_complex_slice_inplace(std::hint::black_box(&mut signal));
+            plan.inverse_complex_slice_inplace(std::hint::black_box(&mut signal));
+        });
+        assert_eq!(
+            GLOBAL_ALLOCATIONS.allocations.load(Ordering::Relaxed),
+            0,
+            "warmed Bluestein n={n} allocated through the global allocator"
+        );
+        assert_eq!(
+            MNEMOSYNE_ALLOCATIONS.allocations.load(Ordering::Relaxed),
+            0,
+            "warmed Bluestein n={n} allocated directly through Mnemosyne"
+        );
+    }
+    // Squares of primes outside the radix set: no shaped route serves them.
+    for n in [361usize, 961, 1681, 2209] {
+        warm::<f64>(n, |x| x);
+        #[expect(clippy::cast_possible_truncation, reason = "the f32 probe signal")]
+        warm::<f32>(n, |x| x as f32);
+    }
+}
+
 #[test]
 #[ignore = "allocation probe must run as the only selected test in its process"]
 fn small_nonsmooth_rader_warm_execution_is_allocation_free() {
