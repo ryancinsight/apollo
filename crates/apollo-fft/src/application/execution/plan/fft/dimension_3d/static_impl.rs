@@ -110,8 +110,10 @@ where
         move |lane: &mut [F::Complex]| {
             if D::FORWARD {
                 lane_plan.forward_complex_slice_inplace(lane);
-            } else {
+            } else if D::NORMALIZE {
                 lane_plan.inverse_complex_slice_inplace(lane);
+            } else {
+                lane_plan.inverse_complex_slice_unnorm_inplace(lane);
             }
         }
     }

@@ -94,8 +94,10 @@ where
         let lane_fn = |lane: &mut [F::Complex]| {
             if D::FORWARD {
                 lane_plan.forward_complex_slice_inplace(lane);
-            } else {
+            } else if D::NORMALIZE {
                 lane_plan.inverse_complex_slice_inplace(lane);
+            } else {
+                lane_plan.inverse_complex_slice_unnorm_inplace(lane);
             }
         };
         lanes::contiguous::<F, D, 2>(data_slice, NY, lane_fn);
@@ -112,8 +114,10 @@ where
             let lane_fn = |lane: &mut [F::Complex]| {
                 if D::FORWARD {
                     lane_plan.forward_complex_slice_inplace(lane);
-                } else {
+                } else if D::NORMALIZE {
                     lane_plan.inverse_complex_slice_inplace(lane);
+                } else {
+                    lane_plan.inverse_complex_slice_unnorm_inplace(lane);
                 }
             };
             lanes::execute::<F, D>(scratch, data_slice, NX, lane_fn);

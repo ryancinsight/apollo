@@ -3,8 +3,8 @@
 //   The forward FFT is unnormalized (no 1/N factor).
 // - Type-2 path: load/deconvolve onto grid, then inverse FFT.
 //   The prepared inverse FFT encoded by Hephaestus WgpuFftOps divides by m
-//   (the oversampled length) per axis. The CPU path compensates by multiplying
-//   by m after the IFFT. On the GPU, the host pre-scales deconv values by m
+//   (the oversampled length) per axis; the CPU path runs an unnormalized
+//   inverse and needs no correction. On the GPU, the host pre-scales deconv values by m
 //   so the normalized IFFT output equals the unnormalized IDFT expected by
 //   the KB interpolation kernel. See execute_fast_type2_1d in kernel.rs.
 

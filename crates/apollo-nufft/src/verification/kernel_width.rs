@@ -47,14 +47,14 @@ fn fast_1d_tracks_exact_at_varying_kernel_widths() {
     }
 }
 
-/// Theorem: Type-2 fast path preserves the inverse FFT normalization.
+/// Theorem: the Type-2 fast path evaluates the unnormalized inverse sum.
 ///
-/// Apollo's `FftPlan1D::inverse_complex_slice_inplace` applies `1/M` for
-/// an oversampled grid of length `M`. The type-2 NUFFT adjoint requires the
-/// unnormalized inverse exponential sum before interpolation, so the fast
-/// path must restore the factor `M` after the inverse FFT.
+/// The type-2 NUFFT requires the unnormalized inverse exponential sum on the
+/// oversampled grid of length `M` before interpolation; the fast path takes
+/// it from `FftPlan1D::inverse_complex_slice_unnorm_inplace` (ADR 0067), so
+/// no `1/M` is applied and none is undone.
 #[test]
-fn fast_type2_1d_tracks_exact_after_inverse_fft_rescaling() {
+fn fast_type2_1d_tracks_exact_through_the_unnormalized_inverse() {
     let domain = UniformDomain1D::new(32, 0.05).expect("domain");
     let positions: Vec<f64> = (0..20)
         .map(|i| (i as f64 * 0.137).rem_euclid(domain.length()))
