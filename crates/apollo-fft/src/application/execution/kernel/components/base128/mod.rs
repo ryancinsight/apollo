@@ -107,7 +107,7 @@ where
     eunomia::Complex<F>: eunomia::layout::Pod,
 {
     let (plan, sinks) = if INVERSE {
-        (state.inverse(), state.inverse_sinks())
+        (state.inverse(), state.sinks())
     } else {
         (state.forward(), state.sinks())
     };
@@ -140,7 +140,7 @@ where
     match state {
         instance_major::State128::EightRows(state) => {
             let (plan, sinks) = if INVERSE {
-                (state.inverse(), state.inverse_sinks())
+                (state.inverse(), state.sinks())
             } else {
                 (state.forward(), state.sinks())
             };
@@ -158,7 +158,7 @@ where
         }
         instance_major::State128::FourRows(state) => {
             let (plan, sinks) = if INVERSE {
-                (state.inverse(), state.inverse_sinks())
+                (state.inverse(), state.sinks())
             } else {
                 (state.forward(), state.sinks())
             };
@@ -190,7 +190,7 @@ where
     eunomia::Complex<F>: eunomia::layout::Pod,
 {
     let (plan, sinks) = if INVERSE {
-        (state.inverse(), state.inverse_sinks())
+        (state.inverse(), state.sinks())
     } else {
         (state.forward(), state.sinks())
     };

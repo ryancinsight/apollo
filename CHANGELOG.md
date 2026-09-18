@@ -212,6 +212,16 @@ Change-class tags: [patch] backward-compatible fix, [minor] additive non-breakin
   allocates a mirrored full spectrum per call; only odd lengths keep the full
   transform. 1-D, 2-D (`ny`), 3-D (`nz`) and static forms follow the same
   rule.
+- [patch] `apollo-fft` base routes (the 128, 256 and 512 bases and their
+  radix-3, -4 and -8 steps and column-first chains) keep one set of sink
+  twiddles and serve the inverse from it. The inverse kernels form the
+  conjugate products in register: `fmsubadd` for the dup-split registers,
+  a fused subtract for the split rows, and `fmsubadd` with the odd lanes'
+  sign flipped for interleaved ones. All are sign flips of the forward
+  product's terms, so inverse outputs are bitwise unchanged. The first
+  inverse of an f64 plan now adds 8,064 bytes at 16384 (was 295,688) and
+  16,256 at 262144 (was 4,260,080), the base plan's own inverse register
+  table.
 - [patch] `apollo-fft` 3-D transforms (`FftPlan3D`, `StaticFftPlan3D`) run
   their three axis passes as a layout chain: axis 2 in place, one transpose
   so axis 0 is contiguous, one more so axis 1 is, and one back to C order —

@@ -159,18 +159,18 @@ impl<T: MixedRadixScalar, const ROWS: usize, const ROW_LEN: usize, const TABLE_L
 
 /// Plan-owned directional state for a selected base route of `n` samples:
 /// the forward plan and, initialized on first use, the inverse; and the
-/// split's sink twiddles ([`SplitSinks`]) for `n`, likewise per direction.
+/// split's sink twiddles ([`SplitSinks`]) for `n`, forward only: the
+/// inverse kernels conjugate them in register, exactly, rather than keep a
+/// conjugated copy.
 pub(crate) struct BasePlanState<
     T,
     const ROWS: usize,
     const ROW_LEN: usize,
     const TABLE_LANES: usize,
 > {
-    n: usize,
     forward: BasePlan<T, ROWS, ROW_LEN, TABLE_LANES>,
     inverse: OnceLock<BasePlan<T, ROWS, ROW_LEN, TABLE_LANES>>,
     sinks: SplitSinks<T>,
-    inverse_sinks: OnceLock<SplitSinks<T>>,
 }
 
 impl<T, const ROWS: usize, const ROW_LEN: usize, const TABLE_LANES: usize>
@@ -191,13 +191,11 @@ where
     /// flipped.
     pub(crate) fn new_if_supported(n: usize) -> Option<Self> {
         let forward = BasePlan::new_if_supported::<false>()?;
-        let sinks = Self::sinks_for::<false>(&forward, n);
+        let sinks = Self::sinks_for(&forward, n);
         Some(Self {
-            n,
             forward,
             inverse: OnceLock::new(),
             sinks,
-            inverse_sinks: OnceLock::new(),
         })
     }
 
@@ -207,23 +205,16 @@ where
     /// radix-8 steps and the chain — so a single-block plan never touches
     /// the twiddle cache, and a three-block one never asks it for a length
     /// it does not serve.
-    fn sinks_for<const INVERSE: bool>(
-        plan: &BasePlan<T, ROWS, ROW_LEN, TABLE_LANES>,
-        n: usize,
-    ) -> SplitSinks<T> {
+    fn sinks_for(plan: &BasePlan<T, ROWS, ROW_LEN, TABLE_LANES>, n: usize) -> SplitSinks<T> {
         let base = ROWS * ROW_LEN;
         let samples = match plan.lane_width {
             BaseLaneWidth::Four => 2,
             BaseLaneWidth::Eight => 4,
         };
         if n == 3 * base {
-            SplitSinks::build_radix3::<INVERSE>(samples, base)
+            SplitSinks::build_radix3(samples, base)
         } else if n > base {
-            let twiddles = if INVERSE {
-                T::cached_twiddle_inv(n)
-            } else {
-                T::cached_twiddle_fwd(n)
-            };
+            let twiddles = T::cached_twiddle_fwd(n);
             // Eights over the base with at most one four outside them take
             // the column-first chain; two and four blocks the sink route.
             match super::chain_radices(n / base) {
@@ -246,25 +237,14 @@ where
             .get_or_init(|| BasePlan::new::<true>(self.forward.lane_width))
     }
 
-    /// The forward route's sink tables.
+    /// The route's sink tables, forward twiddles for both directions.
     pub(crate) fn sinks(&self) -> &SplitSinks<T> {
         &self.sinks
-    }
-
-    /// The inverse route's sink tables, initialized once across clones.
-    pub(crate) fn inverse_sinks(&self) -> &SplitSinks<T> {
-        self.inverse_sinks
-            .get_or_init(|| Self::sinks_for::<true>(&self.forward, self.n))
     }
 
     #[cfg(test)]
     pub(crate) fn inverse_is_initialized(&self) -> bool {
         self.inverse.get().is_some()
-    }
-
-    #[cfg(test)]
-    pub(crate) fn inverse_sinks_initialized(&self) -> bool {
-        self.inverse_sinks.get().is_some()
     }
 }
 

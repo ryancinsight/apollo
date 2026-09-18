@@ -281,7 +281,7 @@ where
     )]
     #[inline(always)]
     fn mul(&self, v: ComplexReg<T, A>, k: usize) -> ComplexReg<T, A> {
-        cmul_chunk(self.table, v, self.layer + 2 * k)
+        cmul_chunk::<_, _, _, _, _, false>(self.table, v, self.layer + 2 * k)
     }
 
     #[expect(
