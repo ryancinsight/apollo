@@ -10,6 +10,14 @@ Change-class tags: [patch] backward-compatible fix, [minor] additive non-breakin
 
 ### Breaking
 
+- [major] `apollo-nufft`'s fast 3-D Type-2 (`nufft_type2_3d_fast`,
+  `NufftPlan3D::type2` and its `_into`/typed forms, and the WGPU
+  `execute_fast_type2_3d`) now computes the direct Type-2 sum, as
+  `nufft_type2_3d` and the 1-D fast path do. It used to return that sum
+  divided by the oversampled grid volume `mx * my * mz`, a factor that
+  depends on the kernel width (4096 at 4-point grids with width 6). Callers
+  that multiplied the result by the grid volume must remove that
+  correction.
 - [major] `apollo-sdft` tracks bins in the modulated sliding-DFT form with a
   round-robin refresh from the window, so a tracked bin stays within
   `SdftPlan::drift_bound` of the direct DFT at every update count instead of
