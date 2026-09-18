@@ -80,9 +80,9 @@ impl ResiduePlan {
                 message: format!("invalid plan len={len}, modulus={modulus}, primitive_root={primitive_root}: length must be a power of two"),
             });
         }
-        if modulus > u64::from(u32::MAX) || primitive_root > u64::from(u32::MAX) {
+        if modulus >= GPU_MODULUS_LIMIT || primitive_root > u64::from(u32::MAX) {
             return Err(WgpuError::InvalidPlan {
-                message: format!("invalid plan len={len}, modulus={modulus}, primitive_root={primitive_root}: accelerator storage requires u32 field values"),
+                message: format!("invalid plan len={len}, modulus={modulus}, primitive_root={primitive_root}: the shader's u32 modular add needs a modulus below 2^30"),
             });
         }
         crate::domain::contracts::math::transform_root(len, modulus, primitive_root).map_err(
@@ -94,6 +94,11 @@ impl ResiduePlan {
         )
     }
 }
+
+/// The shader's modular add and subtract keep `a + b < 2m` in `u32`
+/// (`ntt.wgsl`, `mod_add`), which holds for `m < 2^30`; a larger modulus
+/// wraps and computes a wrong transform.
+const GPU_MODULUS_LIMIT: u64 = 1 << 30;
 
 /// Metadata-preserving WGPU plan descriptor.
 pub type NttWgpuPlan = apollo_fft::WgpuTransformPlan<NttGpuKernel>;

@@ -467,6 +467,11 @@ mod tests {
             CircleNttPlan::with_modulus(8, 998_244_353).unwrap_err(),
             NttError::InvalidModulus
         );
+        // 15 ≡ 3 (mod 4) with 2-adicity 4 passes every other check.
+        assert_eq!(
+            CircleNttPlan::with_modulus(2, 15).unwrap_err(),
+            NttError::CompositeModulus { modulus: 15 }
+        );
         let plan = CircleNttPlan::new(8).expect("plan");
         assert_eq!(
             plan.forward(&Array1::from(vec![0u64; 4])).unwrap_err(),

@@ -39,4 +39,13 @@ pub enum NttError {
         /// The rejected root.
         primitive_root: u64,
     },
+    /// A deserialized plan's stored roots or tables disagree with the ones
+    /// its field derives.
+    #[error("stored tables of a length-{n} plan disagree with the field modulo {modulus}")]
+    InconsistentTables {
+        /// The transform length.
+        n: usize,
+        /// The modulus.
+        modulus: u64,
+    },
 }
