@@ -41,10 +41,9 @@ pub(crate) fn stft_rectangular_window_impulse_frame_fixture() -> SuiteResult<Pub
     // Full output: [1,-1,1,-1, 0,0,0,0].
     // Reference: Cooley-Tukey (1965) DFT shift theorem X[k]=exp(-2πikn₀/N) for δ[n-n₀];
     //            Allen & Rabiner (1977) STFT centered-frame analysis.
-    let plan = StftPlan::new(4, 4)?;
+    let plan = StftPlan::with_window_values(4, 4, [1.0_f64, 1.0, 1.0, 1.0])?;
     let signal = Array1::from(vec![1.0_f64, 0.0, 0.0, 0.0]);
-    let window = [1.0_f64, 1.0, 1.0, 1.0];
-    let output = plan.forward_with_window(&signal, &window)?;
+    let output = plan.forward(&signal)?;
     let actual: Vec<Complex64> = output.iter().copied().collect();
     let expected = [
         Complex64::new(1.0, 0.0),

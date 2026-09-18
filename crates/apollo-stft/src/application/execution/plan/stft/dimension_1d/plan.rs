@@ -4,7 +4,7 @@ use super::windowing::{
     window_complex_real_frame_into, window_signal_frame_into, with_forward_typed_workspaces,
     with_inverse_typed_workspaces, with_inverse_wola_workspaces,
 };
-use crate::application::execution::kernel::hann::hann_window;
+use crate::application::execution::kernel::window::{overlap_adds, Window};
 use crate::domain::contracts::error::{StftError, StftResult};
 use apollo_fft::{CpuStorage, FftPlan1D, PrecisionProfile, Shape1D};
 use eunomia::Complex64;
@@ -12,40 +12,84 @@ use leto::Array1;
 
 /// Reusable short-time Fourier transform plan.
 ///
-/// Stores a validated frame length, hop size, Hann analysis window, and FFT plan.
-/// Construct with `StftPlan::new`; the FFT plan is allocated once and reused.
+/// Stores a validated frame length, hop size, window, and FFT plan. The one
+/// window serves analysis and synthesis, so the inverse reconstructs what the
+/// forward analyzed with any window that overlap-adds at the hop. Construct
+/// with [`StftPlan::new`] (Hann), [`StftPlan::with_window`] or
+/// [`StftPlan::with_window_values`]; the FFT plan is allocated once and reused.
 pub struct StftPlan {
     frame_len: usize,
     hop_len: usize,
     window: Array1<f64>,
+    /// Whether `window` overlap-adds at `hop_len`, so the inverse is defined.
+    overlap_adds: bool,
     fft_plan: FftPlan1D<f64>,
 }
 
 impl StftPlan {
-    /// Create a validated STFT plan with a Hann analysis window.
+    /// Create a validated STFT plan with a Hann window.
     ///
     /// # Errors
     /// Returns `Err` if `frame_len == 0`, `hop_len == 0`, or `hop_len > frame_len`.
     pub fn new(frame_len: usize, hop_len: usize) -> StftResult<Self> {
-        if frame_len == 0 {
-            return Err(StftError::EmptyFrameLength);
+        Self::with_window(frame_len, hop_len, Window::Hann)
+    }
+
+    /// Create a validated STFT plan with a named window family.
+    ///
+    /// # Errors
+    /// Returns `Err` if `frame_len == 0`, `hop_len == 0`, `hop_len > frame_len`,
+    /// or [`StftError::InvalidWindowParameter`] for an out-of-range window
+    /// parameter.
+    pub fn with_window(frame_len: usize, hop_len: usize, window: Window) -> StftResult<Self> {
+        check_lengths(frame_len, hop_len)?;
+        Ok(Self::build(
+            frame_len,
+            hop_len,
+            window.coefficients(frame_len)?,
+        ))
+    }
+
+    /// Create a validated STFT plan with caller-supplied window values.
+    ///
+    /// # Errors
+    /// Returns `Err` if `frame_len == 0`, `hop_len == 0`, `hop_len > frame_len`,
+    /// [`StftError::WindowLengthMismatch`] when `values` does not hold
+    /// `frame_len` samples, or [`StftError::InvalidWindowParameter`] when a
+    /// value is not finite.
+    pub fn with_window_values(
+        frame_len: usize,
+        hop_len: usize,
+        values: impl Into<Vec<f64>>,
+    ) -> StftResult<Self> {
+        check_lengths(frame_len, hop_len)?;
+        let values = values.into();
+        if values.len() != frame_len {
+            return Err(StftError::WindowLengthMismatch);
         }
-        if hop_len == 0 {
-            return Err(StftError::EmptyHopSize);
+        if !values.iter().all(|value| value.is_finite()) {
+            return Err(StftError::InvalidWindowParameter);
         }
-        if hop_len > frame_len {
-            return Err(StftError::HopExceedsFrame);
-        }
-        let window = hann_window(frame_len);
+        Ok(Self::build(frame_len, hop_len, Array1::from(values)))
+    }
+
+    fn build(frame_len: usize, hop_len: usize, window: Array1<f64>) -> Self {
+        let overlap_adds = overlap_adds(
+            window
+                .as_slice()
+                .expect("invariant: a built window is contiguous"),
+            hop_len,
+        );
         let fft_plan = FftPlan1D::<f64>::new(
             Shape1D::new(frame_len).expect("STFT frame length must be valid"),
         );
-        Ok(Self {
+        Self {
             frame_len,
             hop_len,
             window,
+            overlap_adds,
             fft_plan,
-        })
+        }
     }
 
     /// Return the frame length.
@@ -60,7 +104,7 @@ impl StftPlan {
         self.hop_len
     }
 
-    /// Return the analysis window.
+    /// Return the window, used for analysis and synthesis.
     #[must_use]
     pub fn window(&self) -> &Array1<f64> {
         &self.window
@@ -86,9 +130,9 @@ impl StftPlan {
         }
     }
 
-    /// Forward STFT of a real-valued signal using the internal Hann window.
+    /// Forward STFT of a real-valued signal using the plan's window.
     ///
-    /// Applies the Hann analysis window to each frame and computes the DFT.
+    /// Applies the window to each frame and computes the DFT.
     /// Returns a flat array of shape `[frames * spectrum_len]`.
     ///
     /// # Errors
@@ -119,32 +163,6 @@ impl StftPlan {
         let mut output = vec![Complex64::new(0.0, 0.0); frames * self.spectrum_len()];
         self.forward_f64_slice_into(signal.as_ref(), &mut output)?;
         apollo_leto_interop::try_array1_from_slice(&output).ok_or(StftError::LengthMismatch)
-    }
-
-    /// Forward STFT with a user-supplied analysis window.
-    ///
-    /// # Errors
-    /// Returns `Err(StftError::WindowLengthMismatch)` when `window.len() != frame_len`.
-    /// Returns `Err(StftError::InputTooShort)` when `signal.size() < frame_len`.
-    pub fn forward_with_window(
-        &self,
-        signal: &Array1<f64>,
-        window: &[f64],
-    ) -> StftResult<Array1<Complex64>> {
-        if window.len() != self.frame_len {
-            return Err(StftError::WindowLengthMismatch);
-        }
-        if signal.size() < self.frame_len {
-            return Err(StftError::InputTooShort);
-        }
-        let frames = self.frame_count(signal.size());
-        let mut output = Array1::<Complex64>::zeros([frames * self.spectrum_len()]);
-        let signal_slice = signal.as_slice().expect("signal buffer must be contiguous");
-        let output_slice = output
-            .as_slice_mut()
-            .expect("output buffer must be contiguous");
-        self.forward_with_window_slice_inner(signal_slice, window, output_slice)?;
-        Ok(output)
     }
 
     /// Forward STFT into a pre-allocated output buffer.
@@ -234,21 +252,6 @@ impl StftPlan {
             return Err(StftError::InputTooShort);
         }
         let window = self.window.as_slice().expect("window must be contiguous");
-        self.forward_with_window_slice_inner(signal, window, output)
-    }
-
-    pub(crate) fn forward_with_window_slice_inner(
-        &self,
-        signal: &[f64],
-        window: &[f64],
-        output: &mut [Complex64],
-    ) -> StftResult<()> {
-        if window.len() != self.frame_len {
-            return Err(StftError::WindowLengthMismatch);
-        }
-        if signal.len() < self.frame_len {
-            return Err(StftError::InputTooShort);
-        }
         let frames = self.frame_count(signal.len());
         if output.len() != frames * self.spectrum_len() {
             return Err(StftError::LengthMismatch);
@@ -268,10 +271,12 @@ impl StftPlan {
     /// Inverse STFT via weighted overlap-add (WOLA).
     ///
     /// Normalization: each sample is divided by the sum of squared window values
-    /// across all contributing frames. Returns zeros at positions with zero total weight.
+    /// across all contributing frames; the plan's window serves both passes.
     ///
     /// # Errors
-    /// Returns `Err(StftError::LengthMismatch)` when spectrum length is inconsistent.
+    /// Returns `Err(StftError::LengthMismatch)` when spectrum length is inconsistent,
+    /// and [`StftError::WindowNotOverlapAdd`] when the window leaves some sample
+    /// residue without energy at the hop.
     pub fn inverse(
         &self,
         spectrum: &Array1<Complex64>,
@@ -342,6 +347,9 @@ impl StftPlan {
         }
         if signal_len < self.frame_len {
             return Err(StftError::InputTooShort);
+        }
+        if !self.overlap_adds {
+            return Err(StftError::WindowNotOverlapAdd);
         }
         let window = self.window.as_slice().expect("window must be contiguous");
         with_inverse_wola_workspaces(
@@ -449,4 +457,18 @@ fn validate_profile(actual: PrecisionProfile, expected: PrecisionProfile) -> Stf
     } else {
         Err(StftError::PrecisionMismatch)
     }
+}
+
+/// The frame and hop contract every constructor shares.
+fn check_lengths(frame_len: usize, hop_len: usize) -> StftResult<()> {
+    if frame_len == 0 {
+        return Err(StftError::EmptyFrameLength);
+    }
+    if hop_len == 0 {
+        return Err(StftError::EmptyHopSize);
+    }
+    if hop_len > frame_len {
+        return Err(StftError::HopExceedsFrame);
+    }
+    Ok(())
 }
