@@ -21,6 +21,12 @@ pub(crate) trait Lane:
     fn fma(self, b: Self, c: Self) -> Self;
     /// `self * b - c`.
     fn fms(self, b: Self, c: Self) -> Self;
+    /// `-self`, an exact sign-bit flip.
+    ///
+    /// The conjugate fold seam uses this to negate a loaded twiddle's
+    /// imaginary part in place of caching a second, pre-conjugated table
+    /// (`APOLLO-MEM-INVERSE-CONJUGATE`).
+    fn neg(self) -> Self;
 }
 
 impl<T, A> Lane for Vector<T, A>
@@ -45,6 +51,15 @@ where
     fn fms(self, b: Self, c: Self) -> Self {
         self.mul_add(b, -c)
     }
+
+    #[expect(
+        clippy::inline_always,
+        reason = "must fold into the caller's target-feature scope; an out-of-line butterfly reintroduces the ADR 009 penalty"
+    )]
+    #[inline(always)]
+    fn neg(self) -> Self {
+        -self
+    }
 }
 
 impl Lane for f64 {
@@ -65,6 +80,15 @@ impl Lane for f64 {
     fn fms(self, b: Self, c: Self) -> Self {
         self * b - c
     }
+
+    #[expect(
+        clippy::inline_always,
+        reason = "must fold into the caller's target-feature scope; an out-of-line butterfly reintroduces the ADR 009 penalty"
+    )]
+    #[inline(always)]
+    fn neg(self) -> Self {
+        -self
+    }
 }
 
 impl Lane for f32 {
@@ -84,5 +108,14 @@ impl Lane for f32 {
     #[inline(always)]
     fn fms(self, b: Self, c: Self) -> Self {
         self * b - c
+    }
+
+    #[expect(
+        clippy::inline_always,
+        reason = "must fold into the caller's target-feature scope; an out-of-line butterfly reintroduces the ADR 009 penalty"
+    )]
+    #[inline(always)]
+    fn neg(self) -> Self {
+        -self
     }
 }

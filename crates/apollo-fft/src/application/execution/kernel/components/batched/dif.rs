@@ -35,7 +35,7 @@ use super::lane::Lane;
 use super::pass::butterfly_rows;
 use super::plan::BatchedPlan;
 use super::radix::{Dif2, Dif4, Pair};
-use super::seams::{Columns, Rows, Seams, SinkRows};
+use super::seams::{Columns, FoldDirection, Rows, Seams, SinkRows};
 use super::sink::{stage_out, DIRECT_SINK_MAX_PLANE_BYTES, STAGED_SINK_MAX_LEN};
 use super::sweep::{block_columns, spread, sweep_lengths_descending};
 use crate::application::execution::kernel::mixed_radix::MixedRadixScalar;
@@ -54,10 +54,14 @@ pub(super) struct BatchedStagesDif<'a, T> {
     pub(super) re: &'a mut [T],
     pub(super) im: &'a mut [T],
     pub(super) tw: &'a [(T, T)],
-    /// The four-step twiddle tables multiplied into the first stage's loads,
-    /// or `None`; rows in the same natural order the data rows carry, the
+    /// The four-step twiddle table multiplied into the first stage's loads,
+    /// paired with the direction to serve it in ([`FoldDirection`]), or
+    /// `None`; rows in the same natural order the data rows carry, the
     /// mirror of the bit-reversed planes the decimation-in-time set required.
-    pub(super) fold: Option<&'a FourStepFold<T>>,
+    /// The table itself is always forward -- the inverse direction
+    /// conjugates it in the pass rather than caching a second one
+    /// (`APOLLO-MEM-INVERSE-CONJUGATE`).
+    pub(super) fold: Option<(&'a FourStepFold<T>, FoldDirection)>,
     /// Interleaved output written by the last pass in place of the planes,
     /// or `None` to leave the result in the planes. Rows of `batch`
     /// complexes as `2 * batch` reals; plane row `p` lands in output row
@@ -134,7 +138,7 @@ pub(super) fn run_batched_dif<T>(
     re: &mut [T],
     im: &mut [T],
     plan: &BatchedPlan<T>,
-    fold: Option<&FourStepFold<T>>,
+    fold: Option<(&FourStepFold<T>, FoldDirection)>,
     sink: Option<&mut [T]>,
     staging: &mut [T],
     batch: usize,
@@ -173,7 +177,7 @@ pub(super) fn sweep_frequency<T, A>(
     re: &mut [T],
     im: &mut [T],
     tw: &[Pair<T>],
-    fold: Option<&FourStepFold<T>>,
+    fold: Option<(&FourStepFold<T>, FoldDirection)>,
     sink: Option<&mut [T]>,
     staging: &mut [T],
     batch: usize,

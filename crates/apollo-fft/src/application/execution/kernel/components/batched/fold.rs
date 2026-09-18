@@ -1,5 +1,14 @@
 //! The four-step twiddle as the fold tables the second stage set
 //! multiplies into its first loads.
+//!
+//! The table built here is always the forward direction (`sign = -1`). An
+//! inverse transform serves it through [`super::seams::FoldDirection`],
+//! which negates each loaded twiddle's imaginary part in the pass instead of
+//! caching a second table built at `sign = +1`: the negation is an exact
+//! sign-bit flip, and the pass's own fused-multiply-add complex product is
+//! exactly a term-wise sign flip under it (`APOLLO-MEM-INVERSE-CONJUGATE`),
+//! so the inverse output stays bitwise what the separate table produced --
+//! one table per length in place of two.
 
 use super::lane_order::LaneOrder;
 use crate::application::execution::kernel::mixed_radix::MixedRadixScalar;
@@ -46,14 +55,12 @@ pub(crate) struct FourStepFold<T> {
 }
 
 impl<T: MixedRadixScalar> FourStepFold<T> {
-    pub(super) fn new<const INVERSE: bool>(
-        n: usize,
-        rows: usize,
-        cols: usize,
-        order: LaneOrder,
-    ) -> Self {
+    /// Builds the forward table (`sign = -1`); the caller conjugates it in
+    /// the pass for the inverse direction rather than requesting a second
+    /// table (see the module doc).
+    pub(super) fn new(n: usize, rows: usize, cols: usize, order: LaneOrder) -> Self {
         use crate::application::execution::kernel::twiddle_table::twiddle_components;
-        let sign = if INVERSE { 1.0_f64 } else { -1.0_f64 };
+        const SIGN: f64 = -1.0;
         // The two levels pay a second complex multiply per element, which
         // wins only once the full matrix would stream from beyond L2; below
         // that the fine table is the full row and the coarse table is one.
@@ -66,7 +73,7 @@ impl<T: MixedRadixScalar> FourStepFold<T> {
         // Direct evaluation per entry through the shared authority, as the
         // full matrix was built: mod-`n` reduction and one `sin_cos` each.
         let entry = |exponent: usize| {
-            let (sin, cos) = twiddle_components(sign, exponent, n);
+            let (sin, cos) = twiddle_components(SIGN, exponent, n);
             (T::from_precise(cos), T::from_precise(sin))
         };
         let (fine_re, fine_im): (Vec<T>, Vec<T>) = (0..rows)

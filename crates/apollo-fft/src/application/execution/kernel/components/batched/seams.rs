@@ -3,6 +3,23 @@
 
 use super::fold::FourStepFold;
 
+/// Which direction a fold seam serves.
+///
+/// [`super::fold::FourStepFold`] always holds the forward table; an inverse
+/// pass takes this instead of a second cached table and negates each loaded
+/// twiddle's imaginary part, which is exactly the conjugate the old
+/// per-direction table held (`APOLLO-MEM-INVERSE-CONJUGATE`). Paired with
+/// the table reference rather than folded into a bare bool so a fold seam
+/// can never carry a direction without a table to apply it to.
+#[derive(Clone, Copy)]
+pub(super) enum FoldDirection {
+    /// Use the table as built.
+    Forward,
+    /// Use the table's conjugate: each loaded twiddle's imaginary part
+    /// negated.
+    Conjugate,
+}
+
 /// The rows of one row set: `first + i * step` for `i < N`.
 ///
 /// Every pass in both stage sets addresses equally spaced rows, and stating
@@ -67,23 +84,26 @@ pub(super) enum Seams<'a, 'b, T> {
     Planes,
     /// Interleaved rows in, `rows` bits wide; plane row `p` reads row `rev(p)`.
     Source(&'a [T], u32),
-    /// Planes in with the four-step twiddle tables multiplied into the loads.
-    Fold(&'a FourStepFold<T>),
+    /// Planes in with the four-step twiddle tables multiplied into the
+    /// loads, served forward or conjugated per [`FoldDirection`].
+    Fold(&'a FourStepFold<T>, FoldDirection),
     /// Planes in, interleaved rows out, staged or direct.
     Sink(&'b mut [T], SinkRows),
     /// Folded loads and sink stores in one pass.
-    FoldSink(&'a FourStepFold<T>, &'b mut [T], SinkRows),
+    FoldSink(&'a FourStepFold<T>, FoldDirection, &'b mut [T], SinkRows),
 }
 
 impl<'a, 'b, T> Seams<'a, 'b, T> {
     /// The frequency-decimated set's seams for one pass.
     pub(super) fn frequency(
-        fold: Option<&'a FourStepFold<T>>,
+        fold: Option<(&'a FourStepFold<T>, FoldDirection)>,
         sink: Option<(&'b mut [T], SinkRows)>,
     ) -> Self {
         match (fold, sink) {
-            (Some(fold), Some((sink, staging))) => Self::FoldSink(fold, sink, staging),
-            (Some(fold), None) => Self::Fold(fold),
+            (Some((fold, direction)), Some((sink, staging))) => {
+                Self::FoldSink(fold, direction, sink, staging)
+            }
+            (Some((fold, direction)), None) => Self::Fold(fold, direction),
             (None, Some((sink, staging))) => Self::Sink(sink, staging),
             (None, None) => Self::Planes,
         }

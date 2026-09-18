@@ -1,5 +1,6 @@
-//! The plan and fold caches: one table per length and direction, shared
-//! across threads.
+//! The plan and fold caches, shared across threads: the plan cache keyed on
+//! length and direction, the fold cache on length alone (the inverse
+//! conjugates the shared forward table rather than caching a second one).
 
 use super::super::BatchedPlanCache;
 
@@ -47,9 +48,7 @@ fn batched_plans_and_planes_are_shared_across_threads() {
 
     let planes_handles: Vec<_> = (0..2)
         .map(|_| {
-            std::thread::spawn(|| {
-                <f64 as BatchedPlanCache>::cached_four_step_fold::<false>(LEN, HALF, HALF)
-            })
+            std::thread::spawn(|| <f64 as BatchedPlanCache>::cached_four_step_fold(LEN, HALF, HALF))
         })
         .collect();
     let planes: Vec<_> = planes_handles

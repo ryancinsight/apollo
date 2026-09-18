@@ -43,16 +43,54 @@ impl<T> TableCache<T> {
     }
 }
 
+/// A worker's one active fold table.
+///
+/// The fold no longer varies by direction -- the inverse pass conjugates
+/// the shared forward table in place ([`super::seams::FoldDirection`])
+/// instead of a second cached copy (`APOLLO-MEM-INVERSE-CONJUGATE`) -- so
+/// this holds a single slot rather than [`TableCache`]'s per-direction
+/// pair.
+struct FoldTableCache<T> {
+    entry: RefCell<Option<TableEntry<T>>>,
+}
+
+impl<T> FoldTableCache<T> {
+    const fn new() -> Self {
+        Self {
+            entry: RefCell::new(None),
+        }
+    }
+
+    fn get(&self, length: usize) -> Option<Arc<T>> {
+        self.entry
+            .borrow()
+            .as_ref()
+            .filter(|entry| entry.length == length)
+            .map(|entry| Arc::clone(&entry.table))
+    }
+
+    fn insert(&self, length: usize, table: &Arc<T>) {
+        *self.entry.borrow_mut() = Some(TableEntry {
+            length,
+            table: Arc::clone(table),
+        });
+    }
+}
+
 /// Process-wide plan storage behind the bounded per-thread handles.
 ///
 /// A `BatchedPlan` owns `len - 1` twiddle pairs, O(16 sqrt(n)) bytes, and a
-/// `FourStepFold` its two-level tables, O(16 sqrt(n) (F + sqrt(n) / F)). The thread-local handles below are the lock-free fast path, but a
-/// miss used to *build* a private table, so retention multiplied by the worker
-/// count of whatever executor drives the transform. A miss now takes the shared
-/// table and replaces one directional handle, so every thread converges on
-/// one allocation without growing its own table index.
+/// `FourStepFold` its two-level tables, O(16 sqrt(n) (F + sqrt(n) / F)),
+/// one table per length rather than one per (length, direction): the fold
+/// no longer varies by direction, so its map is keyed on length alone
+/// (`APOLLO-MEM-INVERSE-CONJUGATE`). The thread-local handles below are the
+/// lock-free fast path, but a miss used to *build* a private table, so
+/// retention multiplied by the worker count of whatever executor drives the
+/// transform. A miss now takes the shared table and replaces one handle, so
+/// every thread converges on one allocation without growing its own table
+/// index.
 type GlobalPlanCache<T> = LazyLock<RwLock<HashMap<(usize, bool), Arc<BatchedPlan<T>>>>>;
-type GlobalFoldCache<T> = LazyLock<RwLock<HashMap<(usize, bool), Arc<FourStepFold<T>>>>>;
+type GlobalFoldCache<T> = LazyLock<RwLock<HashMap<usize, Arc<FourStepFold<T>>>>>;
 
 static PLAN_GLOBAL_F64: GlobalPlanCache<f64> = LazyLock::new(|| RwLock::new(HashMap::new()));
 static PLAN_GLOBAL_F32: GlobalPlanCache<f32> = LazyLock::new(|| RwLock::new(HashMap::new()));
@@ -62,8 +100,8 @@ static FOLD_GLOBAL_F32: GlobalFoldCache<f32> = LazyLock::new(|| RwLock::new(Hash
 thread_local! {
     static PLAN_CACHE_F64: TableCache<BatchedPlan<f64>> = const { TableCache::new() };
     static PLAN_CACHE_F32: TableCache<BatchedPlan<f32>> = const { TableCache::new() };
-    static FOLD_CACHE_F64: TableCache<FourStepFold<f64>> = const { TableCache::new() };
-    static FOLD_CACHE_F32: TableCache<FourStepFold<f32>> = const { TableCache::new() };
+    static FOLD_CACHE_F64: FoldTableCache<FourStepFold<f64>> = const { FoldTableCache::new() };
+    static FOLD_CACHE_F32: FoldTableCache<FourStepFold<f32>> = const { FoldTableCache::new() };
 }
 
 /// Scalars whose batched plans are cached per thread.
@@ -71,11 +109,10 @@ pub(crate) trait BatchedPlanCache:
     MixedRadixScalar + LaneScalar + super::lane::Lane + eunomia::layout::Pod + Sized
 {
     fn cached_plan<const INVERSE: bool>(len: usize) -> Arc<BatchedPlan<Self>>;
-    fn cached_four_step_fold<const INVERSE: bool>(
-        n: usize,
-        rows: usize,
-        cols: usize,
-    ) -> Arc<FourStepFold<Self>>;
+    /// The forward four-step fold table for `n` (`rows x cols` planes); the
+    /// inverse direction conjugates it in the pass rather than requesting a
+    /// second table (`super::seams::FoldDirection`).
+    fn cached_four_step_fold(n: usize, rows: usize, cols: usize) -> Arc<FourStepFold<Self>>;
 }
 
 macro_rules! impl_plan_cache {
@@ -122,26 +159,21 @@ macro_rules! impl_plan_cache {
                 })
             }
 
-            fn cached_four_step_fold<const INVERSE: bool>(
+            fn cached_four_step_fold(
                 n: usize,
                 rows: usize,
                 cols: usize,
             ) -> Arc<FourStepFold<Self>> {
                 #[cold]
                 #[inline(never)]
-                fn miss<const INVERSE: bool>(
-                    key: (usize, bool),
-                    n: usize,
-                    rows: usize,
-                    cols: usize,
-                ) -> Arc<FourStepFold<$t>> {
-                    let shared = $planes_global.read().get(&key).cloned();
+                fn miss(n: usize, rows: usize, cols: usize) -> Arc<FourStepFold<$t>> {
+                    let shared = $planes_global.read().get(&n).cloned();
                     if let Some(planes) = shared {
                         return planes;
                     }
                     let mut guard = $planes_global.write();
-                    Arc::clone(guard.entry(key).or_insert_with(|| {
-                        Arc::new(FourStepFold::<$t>::new::<INVERSE>(
+                    Arc::clone(guard.entry(n).or_insert_with(|| {
+                        Arc::new(FourStepFold::<$t>::new(
                             n,
                             rows,
                             cols,
@@ -151,12 +183,11 @@ macro_rules! impl_plan_cache {
                 }
 
                 $planes.with(|c| {
-                    let key = (n, INVERSE);
-                    if let Some(planes) = c.get::<INVERSE>(n) {
+                    if let Some(planes) = c.get(n) {
                         return planes;
                     }
-                    let planes = miss::<INVERSE>(key, n, rows, cols);
-                    c.insert::<INVERSE>(n, &planes);
+                    let planes = miss(n, rows, cols);
+                    c.insert(n, &planes);
                     planes
                 })
             }
