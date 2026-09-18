@@ -338,16 +338,21 @@ fn hann_plan_is_the_default_plan() {
 }
 
 /// Every window family, and a caller-supplied window, reconstructs what the
-/// same plan analyzed, at half and quarter hops. The capability audit
-/// measured 4.1e-2 for a Hamming analysis inverted with Hann synthesis.
+/// same plan analyzed, at half and quarter hops and at every sample, ends
+/// included. The capability audit measured 4.1e-2 for a Hamming analysis
+/// inverted with Hann synthesis.
 ///
-/// Bound: each frame passes a forward and an inverse FFT of length `N`,
-/// within `γ ‖frame‖₂` per sample with `γ = 8 ⌈log₂ N⌉ ε` (Higham, Accuracy
-/// and Stability of Numerical Algorithms, 2nd ed., §24.1, for both
-/// transforms); a sample sums at most `N / hop` frames weighted by `|w| ≤ 1`
-/// with `‖frame‖₂ ≤ √N max|x|`, and the overlap-add divides by at least the
-/// smallest per-residue `Σ w²`, `W`. So the error is below
-/// `(N / hop) γ √N max|x| / W`, with one more `ε` for the division.
+/// Bound, per sample: the inverse divides `Σ_m w_m y_m` by `W = Σ_m w_m²`,
+/// where `y_m` is frame `m` after a forward and an inverse FFT, within
+/// `γ ‖w x‖₂ ≤ γ √N |w|_max |x|_max` per sample with `γ = 16 ⌈log₂ N⌉ ε`
+/// (twice the `≈ 5.7 log₂N ε` of Higham, Accuracy and Stability of
+/// Numerical Algorithms, 2nd ed., Theorem 24.2, per transform, with margin).
+/// At most `K = ⌈N / hop⌉` frames contribute, so the numerator is within
+/// `K |w|_max² γ √N |x|_max` of `W x`; its `K` products and sums and `W`'s
+/// own add `(2K + 2) ε W |x|_max`, and the division one more `ε`. Dividing
+/// by `W` gives `K |w|_max² γ √N |x|_max / W + (2K + 3) ε |x|_max`, which
+/// scales with the window only through `|w|_max² / W`, so a scaled window
+/// keeps its bound.
 #[test]
 fn every_window_reconstructs_what_it_analyzed() {
     let frame_len = 64usize;
@@ -359,6 +364,12 @@ fn every_window_reconstructs_what_it_analyzed() {
     );
     let peak = signal.iter().fold(0.0f64, |m, x| m.max(x.abs()));
     let ramp: Vec<f64> = (0..frame_len).map(|i| 0.2 + (i as f64 / 63.0)).collect();
+    let scaled_hann: Vec<f64> = Window::Hann
+        .coefficients(frame_len)
+        .expect("valid")
+        .iter()
+        .map(|w| 1.0e6 * w)
+        .collect();
     for hop_len in [frame_len / 2, frame_len / 4] {
         let plans = [
             StftPlan::with_window(frame_len, hop_len, Window::Hann),
@@ -366,38 +377,54 @@ fn every_window_reconstructs_what_it_analyzed() {
             StftPlan::with_window(frame_len, hop_len, Window::Blackman),
             StftPlan::with_window(frame_len, hop_len, Window::Tukey { alpha: 0.5 }),
             StftPlan::with_window_values(frame_len, hop_len, ramp.clone()),
+            StftPlan::with_window_values(frame_len, hop_len, scaled_hann.clone()),
         ];
         for plan in plans {
             let plan = plan.expect("valid plan");
             let window = plan.window().as_slice().expect("contiguous").to_vec();
-            let least_weight = (0..hop_len)
-                .map(|r| {
-                    window
-                        .iter()
-                        .skip(r)
-                        .step_by(hop_len)
-                        .map(|w| w * w)
-                        .sum::<f64>()
-                })
-                .fold(f64::INFINITY, f64::min);
             let largest = window.iter().fold(0.0f64, |m, w| m.max(w.abs()));
-            let gamma = 8.0 * (frame_len as f64).log2().ceil() * f64::EPSILON;
-            let bound =
-                (frame_len / hop_len) as f64 * largest * gamma * (frame_len as f64).sqrt() * peak
-                    / least_weight
-                    + peak * f64::EPSILON;
+            let frames = frame_len.div_ceil(hop_len) as f64;
+            let gamma = 16.0 * (frame_len as f64).log2().ceil() * f64::EPSILON;
             let spectrum = plan.forward(&signal).expect("forward");
             let recovered = plan.inverse(&spectrum, signal_len).expect("inverse");
-            // The interior: every sample covered by frames at every residue.
-            for i in frame_len..signal_len - frame_len {
+            let half = frame_len / 2;
+            let last_frame = signal_len.div_ceil(hop_len);
+            for i in 0..signal_len {
+                let lowest = (i + half + 1).saturating_sub(frame_len).div_ceil(hop_len);
+                let highest = ((i + half) / hop_len).min(last_frame);
+                let weight: f64 = (lowest..=highest)
+                    .map(|m| window[i + half - m * hop_len].powi(2))
+                    .sum();
+                let bound = frames * largest * largest * gamma * (frame_len as f64).sqrt() * peak
+                    / weight
+                    + (2.0 * frames + 3.0) * f64::EPSILON * peak;
                 let error = (recovered[i] - signal[i]).abs();
                 assert!(
                     error <= bound,
-                    "hop {hop_len} window {window:?}: sample {i} error {error:e} > {bound:e}"
+                    "hop {hop_len} window[0..2] {:?}: sample {i} error {error:e} > {bound:e}",
+                    &window[..2]
                 );
             }
         }
     }
+}
+
+/// The review's end-of-signal reproduction: every residue has energy, but
+/// the first samples are covered only by the window's zero half.
+#[test]
+fn uncovered_signal_ends_refuse_the_inverse() {
+    let plan = StftPlan::with_window_values(8, 2, [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 1.0, 1.0])
+        .expect("valid plan");
+    let signal = Array1::from(
+        (0..16)
+            .map(|i| (i as f64 * 0.3).sin() + 0.6)
+            .collect::<Vec<_>>(),
+    );
+    let spectrum = plan.forward(&signal).expect("the forward is defined");
+    assert_eq!(
+        plan.inverse(&spectrum, 16).err(),
+        Some(StftError::WindowNotOverlapAdd)
+    );
 }
 
 #[test]

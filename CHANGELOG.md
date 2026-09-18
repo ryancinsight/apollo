@@ -20,8 +20,10 @@ Change-class tags: [patch] backward-compatible fix, [minor] additive non-breakin
     the plan with its window. Migrate `plan.forward_with_window(&x, &w)` to
     `StftPlan::with_window_values(frame, hop, w)?.forward(&x)`.
   - **Inverse precondition:** the inverse returns the new
-    `StftError::WindowNotOverlapAdd` where the window gives some sample
-    residue no energy at the hop, instead of writing zeros there.
+    `StftError::WindowNotOverlapAdd` where some sample, in the interior or at
+    an end covered only by a window's zero part, gets squared-window weight at
+    most `ε` of the largest, instead of writing zeros there. The WGPU inverse
+    refuses such plans with `WgpuError::InvalidPlan`.
   - **Errors:** `StftError` gains `InvalidWindowParameter` and becomes
     `#[non_exhaustive]`.
   - **Window values:** windows are now evaluated at the nearer end, so they are

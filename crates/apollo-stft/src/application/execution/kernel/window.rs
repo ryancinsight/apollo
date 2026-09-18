@@ -62,34 +62,53 @@ impl Window {
 
 /// The Tukey window at phase `x`, symmetric about `x = 1/2`.
 fn tukey(alpha: f64, x: f64) -> f64 {
+    // `2 edge >= alpha` rather than `edge >= alpha / 2`: a subnormal
+    // `alpha` halves to zero and would read the taper as flat.
     let edge = x.min(1.0 - x);
-    if alpha == 0.0 || edge >= alpha / 2.0 {
+    if alpha == 0.0 || 2.0 * edge >= alpha {
         1.0
     } else {
         0.5 * (1.0 + (PI * (2.0 * edge / alpha - 1.0)).cos())
     }
 }
 
-/// Whether `window` overlap-adds at `hop`: every residue of the sample
-/// index modulo `hop` receives a non-zero `Σ w²` from the frames that cover
-/// it, which is what the weighted overlap-add inverse divides by in the
-/// interior of the signal (the nonzero overlap-add condition).
+/// Whether the weighted overlap-add inverse of a `signal_len`-sample signal
+/// has a defined weight at every sample: the `Σ w²` it divides by must
+/// exceed `ε` times the largest such weight, or the division amplifies
+/// rounding past the sample's own magnitude.
+///
+/// Frame `m` starts at `m hop - N / 2` for `m ≤ ⌈L / hop⌉`, the framing the
+/// forward and inverse share. From `N / 2` to `L - N / 2` every covering
+/// frame exists, so the weight is periodic in `hop` there; the samples within
+/// `N / 2 + hop` of either end hold one full period and every partially
+/// covered sample, and the interior's largest weight is the global one. The
+/// check therefore reads only those samples.
 #[must_use]
-pub(crate) fn overlap_adds(window: &[f64], hop: usize) -> bool {
-    (0..hop).all(|residue| {
-        window
-            .iter()
-            .skip(residue)
-            .step_by(hop)
+pub(crate) fn wola_weights_defined(window: &[f64], hop: usize, signal_len: usize) -> bool {
+    let n = window.len();
+    let half = n / 2;
+    let last_frame = signal_len.div_ceil(hop);
+    let weight = |i: usize| -> f64 {
+        // Frames covering `i`: `m hop - half ≤ i < m hop - half + n`.
+        let highest = ((i + half) / hop).min(last_frame);
+        let lowest = (i + half + 1).saturating_sub(n).div_ceil(hop);
+        (lowest..=highest)
+            .map(|m| window[i + half - m * hop])
             .map(|w| w * w)
-            .sum::<f64>()
-            > 0.0
-    })
+            .sum()
+    };
+    let reach = (half + hop + 1).min(signal_len);
+    let edges: Vec<f64> = (0..reach)
+        .chain(signal_len - reach..signal_len)
+        .map(weight)
+        .collect();
+    let largest = edges.iter().fold(0.0f64, |m, &w| m.max(w));
+    largest > 0.0 && edges.iter().all(|&w| w > f64::EPSILON * largest)
 }
 
 #[cfg(test)]
 mod tests {
-    use super::{overlap_adds, Window};
+    use super::{wola_weights_defined, Window};
     use crate::domain::contracts::error::StftError;
 
     /// The closed forms at the ends and the middle of an odd frame, where
@@ -141,13 +160,38 @@ mod tests {
     }
 
     /// A symmetric Hann is zero at both ends, so a hop of the whole frame
-    /// leaves residue 0 with no energy; half and quarter hops cover it.
+    /// leaves some samples with no energy; half and quarter hops cover them.
     #[test]
-    fn overlap_add_condition_follows_the_hop() {
+    fn weights_follow_the_hop() {
         let hann = Window::Hann.coefficients(16).expect("valid");
         let hann = hann.as_slice().expect("contiguous");
-        assert!(!overlap_adds(hann, 16));
-        assert!(overlap_adds(hann, 8));
-        assert!(overlap_adds(hann, 4));
+        assert!(!wola_weights_defined(hann, 16, 64));
+        assert!(wola_weights_defined(hann, 8, 64));
+        assert!(wola_weights_defined(hann, 4, 64));
+    }
+
+    /// Windows whose residues all carry energy in the interior yet leave the
+    /// signal's first or last samples uncovered (the review's reproductions),
+    /// and a residue with energy far below `ε` of the rest.
+    #[test]
+    fn edges_and_negligible_energy_are_refused() {
+        let late = [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 1.0, 1.0];
+        let early = [1.0, 1.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0];
+        assert!(!wola_weights_defined(&late, 2, 16));
+        assert!(!wola_weights_defined(&early, 2, 16));
+        let mut faint = [1.0; 8];
+        faint[3] = 1e-160;
+        faint[7] = 1e-160;
+        assert!(!wola_weights_defined(&faint, 4, 32));
+        assert!(wola_weights_defined(&[1.0; 8], 4, 32));
+    }
+
+    /// The Tukey taper at a subnormal `alpha` still starts at zero.
+    #[test]
+    fn tukey_at_subnormal_alpha_tapers() {
+        let w = Window::Tukey { alpha: 5e-324 }
+            .coefficients(9)
+            .expect("valid");
+        assert_eq!((w[0], w[4], w[8]), (0.0, 1.0, 0.0));
     }
 }
