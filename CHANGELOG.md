@@ -11,8 +11,10 @@ Change-class tags: [patch] backward-compatible fix, [minor] additive non-breakin
 ### Breaking
 
 - [major] `apollo-nufft`'s fast 3-D Type-2 (`nufft_type2_3d_fast`,
-  `NufftPlan3D::type2` and its `_into`/typed forms, and the WGPU
-  `execute_fast_type2_3d`) now computes the direct Type-2 sum, as
+  `NufftPlan3D::type2` and its `_into`/typed forms, and every WGPU fast 3-D
+  Type-2 entry: `execute_fast_type2_3d` with its `_with_buffers`,
+  `_typed_into`, `_leto`, `_leto_typed` and `_with_diagnostics` forms) now
+  computes the direct Type-2 sum, as
   `nufft_type2_3d` and the 1-D fast path do. It used to return that sum
   divided by the oversampled grid volume `mx * my * mz`, a factor that
   depends on the kernel width (4096 at 4-point grids with width 6). Callers
