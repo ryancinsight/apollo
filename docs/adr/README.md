@@ -72,3 +72,4 @@
 | [0064](0064-sparse-recovery-by-downsampling.md) | Sparse recovery by downsampling and syndrome decoding | Accepted |
 | [0065](0065-circle-group-ntt-lengths.md) | Power-of-two transform lengths over the circle group | Accepted |
 | [0066](0066-sub-bin-peak-estimation.md) | Sub-bin peak parameters from three bins and estimate-and-subtract | Accepted |
+| [0067](0067-normalization-modes.md) | Normalization modes through a direction strategy | Proposed |
