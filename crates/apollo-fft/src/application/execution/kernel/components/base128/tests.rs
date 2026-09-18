@@ -535,7 +535,7 @@ fn single_block_512_plans_keep_no_split_table() {
     plan.forward_complex_slice_inplace(&mut data);
     assert!(!state.inverse_is_initialized());
     plan.inverse_complex_slice_inplace(&mut data);
-    assert!(state.inverse_is_initialized() && state.inverse_sinks().inner().is_empty());
+    assert!(state.inverse_is_initialized());
     let clone = plan.clone();
     assert!(std::sync::Arc::ptr_eq(
         state,
@@ -569,7 +569,7 @@ fn eight_block_2048_plans_route_through_the_256_state_at_four_lanes() {
     assert_eq!(state.sinks().chain()[0].rows().len(), 14 * 2 * 256);
     assert_eq!(state.sinks().inner().len(), 0);
     assert_eq!(state.sinks().outer().len(), 0);
-    assert!(!state.inverse_is_initialized() && !state.inverse_sinks_initialized());
+    assert!(!state.inverse_is_initialized());
     let source = signal(2048);
     let mut data = source.clone();
     plan.forward_complex_slice_inplace(&mut data);
@@ -581,7 +581,7 @@ fn eight_block_2048_plans_route_through_the_256_state_at_four_lanes() {
         "N=2048 eight-block forward at four lanes differs by {error:.3e} > {bound:.3e}"
     );
     plan.inverse_complex_slice_inplace(&mut data);
-    assert!(state.inverse_is_initialized() && state.inverse_sinks_initialized());
+    assert!(state.inverse_is_initialized());
     let error = worst(&data, &source);
     let bound = 2.0 * tolerance(&source);
     assert!(
@@ -702,7 +702,7 @@ fn eight_block_2048_plans_keep_their_twiddle_rows_in_the_256_state() {
     assert_eq!(state.sinks().chain()[0].rows().len(), 14 * 2 * 256);
     assert_eq!(state.sinks().inner().len(), 0);
     assert_eq!(state.sinks().outer().len(), 0);
-    assert!(!state.inverse_is_initialized() && !state.inverse_sinks_initialized());
+    assert!(!state.inverse_is_initialized());
     // Chunk-major twiddle `j - 1` at sample `k` is `W_2048^{j k}`, the cache value for `j k`
     // reduced modulo 2048 and negated past the half circle, held as its duplicated real
     // register and its `(-im, im)` register.
@@ -747,7 +747,7 @@ fn eight_block_2048_plans_keep_their_twiddle_rows_in_the_256_state() {
         "N=2048 eight-block forward differs by {error:.3e} > {bound:.3e}"
     );
     plan.inverse_complex_slice_inplace(&mut actual);
-    assert!(state.inverse_is_initialized() && state.inverse_sinks_initialized());
+    assert!(state.inverse_is_initialized());
     let error = actual
         .iter()
         .zip(&source)
@@ -872,7 +872,7 @@ fn dynamic_split_plans_keep_their_sink_tables_in_the_base_state() {
         assert!(plan.twiddle_inv.get().is_none());
         assert_eq!(state.sinks().inner().len(), 2 * 512);
         assert_eq!(state.sinks().outer().len(), 512);
-        assert!(!state.inverse_is_initialized() && !state.inverse_sinks_initialized());
+        assert!(!state.inverse_is_initialized());
         let clone = plan.clone();
         assert!(std::sync::Arc::ptr_eq(
             state,
@@ -890,7 +890,7 @@ fn dynamic_split_plans_keep_their_sink_tables_in_the_base_state() {
             "forward execution must not initialize inverse state"
         );
         plan.inverse_complex_slice_inplace(&mut data);
-        assert!(state.inverse_is_initialized() && state.inverse_sinks_initialized());
+        assert!(state.inverse_is_initialized());
         assert!(
             plan.twiddle_inv.get().is_none(),
             "the inverse split reads its sink tables, not the interleaved cache"

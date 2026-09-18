@@ -156,7 +156,7 @@ where
     reason = "must fold into the caller's target-feature scope"
 )]
 #[inline(always)]
-fn twiddled<T, A, const SPLIT: bool>(
+fn twiddled<T, A, const SPLIT: bool, const INVERSE: bool>(
     v: ComplexReg<T, A>,
     twiddles: &[T],
     per_chunk: usize,
@@ -170,13 +170,17 @@ where
     if SPLIT {
         let at = 2 * (per_chunk * c + j);
         let v = v.into_interleaved();
-        v.mul_add(
-            chunk(twiddles, at),
-            v.swap_adjacent() * chunk(twiddles, at + 1),
-        )
+        let cross = v.swap_adjacent() * chunk(twiddles, at + 1);
+        // The conjugate negates `(-im, im)` and with it the rounded cross
+        // term: exact, so the forward table serves the inverse bitwise.
+        if INVERSE {
+            v.mul_sub(chunk(twiddles, at), cross)
+        } else {
+            v.mul_add(chunk(twiddles, at), cross)
+        }
     } else {
         let w = ComplexReg::<T, A>::from_interleaved(chunk(twiddles, per_chunk * c + j));
-        (v * w).into_interleaved()
+        super::cmul::cmul::<T, A, INVERSE>(v, w).into_interleaved()
     }
 }
 
@@ -255,12 +259,12 @@ impl<
                 );
                 put_chunk(y[0].into_interleaved(), out, c);
                 put_chunk(
-                    twiddled::<T, A, SPLIT>(y[1], self.twiddles, RADIX - 1, c, 0),
+                    twiddled::<T, A, SPLIT, INVERSE>(y[1], self.twiddles, RADIX - 1, c, 0),
                     out,
                     cpb + c,
                 );
                 put_chunk(
-                    twiddled::<T, A, SPLIT>(y[2], self.twiddles, RADIX - 1, c, 1),
+                    twiddled::<T, A, SPLIT, INVERSE>(y[2], self.twiddles, RADIX - 1, c, 1),
                     out,
                     2 * cpb + c,
                 );
@@ -277,17 +281,17 @@ impl<
                 ]);
                 put_chunk(y[0].into_interleaved(), out, c);
                 put_chunk(
-                    twiddled::<T, A, SPLIT>(y[1], self.twiddles, RADIX - 1, c, 0),
+                    twiddled::<T, A, SPLIT, INVERSE>(y[1], self.twiddles, RADIX - 1, c, 0),
                     out,
                     cpb + c,
                 );
                 put_chunk(
-                    twiddled::<T, A, SPLIT>(y[2], self.twiddles, RADIX - 1, c, 1),
+                    twiddled::<T, A, SPLIT, INVERSE>(y[2], self.twiddles, RADIX - 1, c, 1),
                     out,
                     2 * cpb + c,
                 );
                 put_chunk(
-                    twiddled::<T, A, SPLIT>(y[3], self.twiddles, RADIX - 1, c, 2),
+                    twiddled::<T, A, SPLIT, INVERSE>(y[3], self.twiddles, RADIX - 1, c, 2),
                     out,
                     3 * cpb + c,
                 );
@@ -321,37 +325,37 @@ impl<
             // The seven twiddles of chunk `c`, two registers each.
             put_chunk(y[0].into_interleaved(), out, c);
             put_chunk(
-                twiddled::<T, A, SPLIT>(y[1], self.twiddles, RADIX - 1, c, 0),
+                twiddled::<T, A, SPLIT, INVERSE>(y[1], self.twiddles, RADIX - 1, c, 0),
                 out,
                 cpb + c,
             );
             put_chunk(
-                twiddled::<T, A, SPLIT>(y[2], self.twiddles, RADIX - 1, c, 1),
+                twiddled::<T, A, SPLIT, INVERSE>(y[2], self.twiddles, RADIX - 1, c, 1),
                 out,
                 2 * cpb + c,
             );
             put_chunk(
-                twiddled::<T, A, SPLIT>(y[3], self.twiddles, RADIX - 1, c, 2),
+                twiddled::<T, A, SPLIT, INVERSE>(y[3], self.twiddles, RADIX - 1, c, 2),
                 out,
                 3 * cpb + c,
             );
             put_chunk(
-                twiddled::<T, A, SPLIT>(y[4], self.twiddles, RADIX - 1, c, 3),
+                twiddled::<T, A, SPLIT, INVERSE>(y[4], self.twiddles, RADIX - 1, c, 3),
                 out,
                 4 * cpb + c,
             );
             put_chunk(
-                twiddled::<T, A, SPLIT>(y[5], self.twiddles, RADIX - 1, c, 4),
+                twiddled::<T, A, SPLIT, INVERSE>(y[5], self.twiddles, RADIX - 1, c, 4),
                 out,
                 5 * cpb + c,
             );
             put_chunk(
-                twiddled::<T, A, SPLIT>(y[6], self.twiddles, RADIX - 1, c, 5),
+                twiddled::<T, A, SPLIT, INVERSE>(y[6], self.twiddles, RADIX - 1, c, 5),
                 out,
                 6 * cpb + c,
             );
             put_chunk(
-                twiddled::<T, A, SPLIT>(y[7], self.twiddles, RADIX - 1, c, 6),
+                twiddled::<T, A, SPLIT, INVERSE>(y[7], self.twiddles, RADIX - 1, c, 6),
                 out,
                 7 * cpb + c,
             );

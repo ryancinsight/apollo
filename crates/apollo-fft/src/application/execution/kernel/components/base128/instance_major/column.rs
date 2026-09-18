@@ -150,7 +150,7 @@ where
     Mode: ExecutionMode,
     Ref: core::ops::Deref<Target = [T]>,
 {
-    super::super::cmul::cmul_chunk(
+    super::super::cmul::cmul_chunk::<_, _, _, _, _, false>(
         tab,
         column(stg, groups, g, a),
         MIX_CH + 2 * ((a - 1) * groups + g),

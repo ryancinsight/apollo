@@ -10,7 +10,7 @@
 //! four-lane combining blocks load the parent directly; the eight-lane
 //! four-block route still gathers.
 
-use super::super::cmul::cmul_chunk;
+use super::super::cmul::{cmul, cmul_chunk};
 use crate::application::execution::kernel::components::register_butterfly::{radix3, Thirds};
 use crate::application::execution::kernel::mixed_radix::MixedRadixScalar;
 use core::mem::size_of;
@@ -260,9 +260,9 @@ impl<T: MixedRadixScalar<Complex = Complex<T>>> SplitSinks<T> {
     /// `samples` complex samples a register: `W_{3 base}^j` and
     /// `W_{3 base}^{2 j}` for `j < base`, computed here since the
     /// stage-major cache serves powers of two only.
-    pub(crate) fn build_radix3<const INVERSE: bool>(samples: usize, base: usize) -> Self {
+    pub(crate) fn build_radix3(samples: usize, base: usize) -> Self {
         let zero = T::from_precise(0.0);
-        let dir = if INVERSE { 1.0_f64 } else { -1.0_f64 };
+        let dir = -1.0_f64;
         let n = 3 * base;
         let w = |j: usize| -> Complex<T> {
             let (s, c) = (dir * core::f64::consts::TAU * j as f64 / n as f64).sin_cos();
@@ -425,13 +425,14 @@ fn dup_split<T: Copy>(samples: usize, w: &[Complex<T>]) -> Vec<T> {
     lanes
 }
 
-/// `v` times dup-split twiddle chunk `chunk` of `tw`.
+/// `v` times dup-split twiddle chunk `chunk` of `tw`, a forward twiddle,
+/// conjugated on the inverse: the sinks keep the forward tables only.
 #[expect(
     clippy::inline_always,
     reason = "the base kernel invokes this once per SIMD chunk"
 )]
 #[inline(always)]
-fn twiddled<T, A, const TW_LANES: usize>(
+fn twiddled<T, A, const TW_LANES: usize, const INVERSE: bool>(
     simd: &Simd<T, A>,
     tw: &[T; TW_LANES],
     v: ComplexReg<T, A>,
@@ -441,7 +442,7 @@ where
     T: LaneScalar,
     A: SimdArch + SimdKernel<T>,
 {
-    cmul_chunk(&simd.view(tw), v, 2 * chunk)
+    cmul_chunk::<_, _, _, _, _, INVERSE>(&simd.view(tw), v, 2 * chunk)
 }
 
 /// Output strategy of the column pass.
@@ -527,8 +528,13 @@ impl<
     ) {
         let block = LANES / <A as SimdStorage<T>>::LANE_COUNT;
         let sub0 = input(simd, self.sub0, chunk);
-        let t1 = twiddled(simd, self.first_tw, input(simd, self.sub1, chunk), chunk);
-        let t2 = twiddled(simd, self.second_tw, reg, chunk);
+        let t1 = twiddled::<T, A, TW_LANES, INVERSE>(
+            simd,
+            self.first_tw,
+            input(simd, self.sub1, chunk),
+            chunk,
+        );
+        let t2 = twiddled::<T, A, TW_LANES, INVERSE>(simd, self.second_tw, reg, chunk);
         let [out0, out1, out2] = radix3::<T, A, INVERSE>([sub0, t1, t2], &Thirds::new(*simd));
         put(simd, out0.into_interleaved(), out, chunk);
         put(simd, out1.into_interleaved(), out, block + chunk);
@@ -585,17 +591,27 @@ impl<T: LaneScalar, const LANES: usize, const TW_LANES: usize, const INVERSE: bo
         let block = LANES / <A as SimdStorage<T>>::LANE_COUNT;
         let sub0 = input(simd, self.sub0, chunk);
         let sub2 = input(simd, self.sub2, chunk);
-        let (even_low, even_high) = sub0.butterfly(twiddled(simd, self.inner_tw, sub2, chunk));
+        let (even_low, even_high) = sub0.butterfly(twiddled::<T, A, TW_LANES, INVERSE>(
+            simd,
+            self.inner_tw,
+            sub2,
+            chunk,
+        ));
         let sub1 = input(simd, self.sub1, chunk);
-        let (odd_low, odd_high) = sub1.butterfly(twiddled(simd, self.inner_tw, reg, chunk));
+        let (odd_low, odd_high) = sub1.butterfly(twiddled::<T, A, TW_LANES, INVERSE>(
+            simd,
+            self.inner_tw,
+            reg,
+            chunk,
+        ));
         let outer = input(simd, self.outer_tw, chunk);
         let odd_high = if INVERSE {
             odd_high.mul_i()
         } else {
             odd_high.mul_neg_i()
         };
-        let (out0, out2) = even_low.butterfly(odd_low * outer);
-        let (out1, out3) = even_high.butterfly(odd_high * outer);
+        let (out0, out2) = even_low.butterfly(cmul::<T, A, INVERSE>(odd_low, outer));
+        let (out1, out3) = even_high.butterfly(cmul::<T, A, INVERSE>(odd_high, outer));
         put(simd, out0.into_interleaved(), out, chunk);
         put(simd, out1.into_interleaved(), out, block + chunk);
         put(simd, out2.into_interleaved(), out, 2 * block + chunk);
