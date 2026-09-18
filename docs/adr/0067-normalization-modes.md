@@ -18,7 +18,8 @@ and 3-D plans, and the free-function `api`, normalize unconditionally. Three
 in-tree consumers work around the gap:
 - QFT takes the unnormalized 1-D inverse and scales by `1/√N` itself.
 - SHT reaches the 1-D unnormalized inverse.
-- The 1-D NUFFT normalizes and then multiplies back by `M`.
+- The 1-D NUFFT normalized and then multiplied back by `M`; slice 1 moves
+  it to the unnormalized inverse.
 
 NumPy and SciPy callers expect `norm ∈ {backward, ortho, forward}`.
 

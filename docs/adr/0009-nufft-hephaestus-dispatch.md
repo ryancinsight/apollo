@@ -106,9 +106,15 @@ conjugating the Type-1 exponential gives the Type-2 term, hence
 
 in exact arithmetic. This is the direct-pair adjoint theorem. Kaiser--Bessel
 spreading/interpolation approximates that pair on an oversampled grid. The
-1D inverse FFT normalizes by grid length `M`, so Type-2 multiplies its loaded
-deconvolution values by `M` before the inverse to preserve its unnormalized
-convention. The 3D implementation retains its already normalized convention.
+CPU Type-2 paths run the unnormalized inverse (ADR 0067). The GPU paths
+encode a normalized inverse, dividing by each oversampled axis length, so
+they multiply their loaded deconvolution values by `M` in 1D and by
+`mx * my * mz` in 3D to preserve the unnormalized convention.
+
+Revision 2026-09-18: this paragraph said the 1D inverse normalizes by `M`
+and the 3D path keeps a normalized convention. The CPU 1D path now runs the
+unnormalized inverse, and the 3D fast Type-2 was corrected to the direct
+sum (apollo#507), so both CPU and GPU compute the unnormalized sum.
 
 The theorem is a proof sketch of the mathematical contract, not a
 machine-checked proof. CPU differential, adjoint, normalization, and
