@@ -20,6 +20,17 @@ Change-class tags: [patch] backward-compatible fix, [minor] additive non-breakin
   depends on the kernel width (4096 at 4-point grids with width 6). Callers
   that multiplied the result by the grid volume must remove that
   correction.
+- [major] `apollo-ntt` refuses fields its transforms cannot invert.
+  `NttPlan::with_modulus` and the WGPU `ResiduePlan` validation now reject:
+  - a composite modulus, with the new `NttError::CompositeModulus`;
+  - a root whose derived `n`-th root has an order below `n`, with the new
+    `NttError::NotPrimitiveRoot`.
+
+  Both used to return plans that computed wrong transforms. For example,
+  `with_modulus(4, 17, 2)` broke the transform's own definition, and
+  modulus 9 round-tripped `[1, 2, 3, 4]` to `[7, 8, 3, 7]`.
+  `CircleNttPlan::with_modulus` rejects composite moduli the same way.
+  `NttError` is now `#[non_exhaustive]`.
 - [major] `apollo-sdft` tracks bins in the modulated sliding-DFT form with a
   round-robin refresh from the window, so a tracked bin stays within
   `SdftPlan::drift_bound` of the direct DFT at every update count instead of
