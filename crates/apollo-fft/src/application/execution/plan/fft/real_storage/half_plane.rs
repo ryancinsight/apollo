@@ -28,6 +28,7 @@ use crate::application::execution::kernel::mixed_radix::scalar::plan_scratch::{
 };
 use crate::application::execution::plan::fft::dimension_2d::FftPlan2D;
 use crate::application::execution::plan::fft::lanes;
+use crate::application::execution::plan::fft::lanes::{Forward, Inverse};
 use apollo_leto_interop::view_cow;
 use eunomia::Complex;
 use leto::Array2;
@@ -101,7 +102,7 @@ fn forward_half<T>(
     let (_, ny) = plan.dimensions();
     let depth = plan.ny_c();
     if T::real_split_applies(ny) {
-        let half_lane = plan.half_y_lane::<true>();
+        let half_lane = plan.half_y_lane::<Forward>();
         lanes::paired(spectrum, depth, source, ny, |bins_group, reals_group| {
             for (bins, reals) in bins_group
                 .chunks_exact_mut(depth)
@@ -116,7 +117,7 @@ fn forward_half<T>(
             }
         });
     } else {
-        let y_lane = plan.y_lane::<true>();
+        let y_lane = plan.y_lane::<Forward>();
         lanes::paired(spectrum, depth, source, ny, |bins_group, reals_group| {
             // The rank-two staging role is one no pass of this plan borrows
             // (the x pass below uses the 2-D role), and every task in this
@@ -138,7 +139,7 @@ fn forward_half<T>(
             });
         });
     }
-    plan.x_axis_inplace::<true>(spectrum, depth);
+    plan.x_axis_inplace::<Forward>(spectrum, depth);
 }
 
 /// The inverse of the C-order `(nx, ny/2 + 1)` half plane `bins`, consumed as
@@ -153,12 +154,12 @@ fn inverse_half<T>(
 {
     let (_, ny) = plan.dimensions();
     let depth = plan.ny_c();
-    plan.x_axis_inplace::<false>(bins, depth);
+    plan.x_axis_inplace::<Inverse>(bins, depth);
     if T::real_split_applies(ny) {
         // Two passes, because the rows on the two sides differ in length and
         // both are written: the retangle and half-length inverse in place on
         // the spectrum's rows, then the unpack into the output's.
-        let half_lane = plan.half_y_lane::<false>();
+        let half_lane = plan.half_y_lane::<Inverse>();
         lanes::each(bins, depth, |_, lane| {
             split::inverse_packed::<T>(lane, ny, plan.split_twiddles().iter().copied(), &half_lane);
         });
@@ -172,7 +173,7 @@ fn inverse_half<T>(
             }
         });
     } else {
-        let y_lane = plan.y_lane::<false>();
+        let y_lane = plan.y_lane::<Inverse>();
         let mirrored = ny - depth;
         lanes::paired(values, ny, &*bins, depth, |reals_group, halves_group| {
             // Runs after the x pass above has returned, and each task's own

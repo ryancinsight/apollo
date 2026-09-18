@@ -1,4 +1,5 @@
 use super::super::lanes;
+use super::super::lanes::{Direction, Forward, Inverse};
 use crate::application::execution::kernel::mixed_radix::scalar::plan_scratch::{
     with_2d_scratch, PlanScratch,
 };
@@ -67,8 +68,8 @@ where
     pub fn forward_complex_leto_inplace(&self, data: ArrayViewMut2<'_, F::Complex>) {
         assert_eq!(data.shape(), [NX, NY], "static 2D forward shape mismatch");
         with_c_order_view(data, |mut contiguous| {
-            Self::axis1_pass_complex::<true>(contiguous.reborrow());
-            Self::axis0_pass_complex::<true>(contiguous);
+            Self::axis1_pass_complex::<Forward>(contiguous.reborrow());
+            Self::axis0_pass_complex::<Forward>(contiguous);
         });
     }
 
@@ -80,27 +81,27 @@ where
     pub fn inverse_complex_leto_inplace(&self, data: ArrayViewMut2<'_, F::Complex>) {
         assert_eq!(data.shape(), [NX, NY], "static 2D inverse shape mismatch");
         with_c_order_view(data, |mut contiguous| {
-            Self::axis0_pass_complex::<false>(contiguous.reborrow());
-            Self::axis1_pass_complex::<false>(contiguous);
+            Self::axis0_pass_complex::<Inverse>(contiguous.reborrow());
+            Self::axis1_pass_complex::<Inverse>(contiguous);
         });
     }
 
-    fn axis1_pass_complex<const FORWARD: bool>(mut data: ArrayViewMut2<'_, F::Complex>) {
+    fn axis1_pass_complex<D: Direction>(mut data: ArrayViewMut2<'_, F::Complex>) {
         let data_slice = data
             .as_mut_slice()
             .expect("invariant: 2D axis execution receives C-order data");
         let lane_plan = StaticFftPlan1D::<F, NY>::new();
         let lane_fn = |lane: &mut [F::Complex]| {
-            if FORWARD {
+            if D::FORWARD {
                 lane_plan.forward_complex_slice_inplace(lane);
             } else {
                 lane_plan.inverse_complex_slice_inplace(lane);
             }
         };
-        lanes::contiguous::<F, FORWARD, 2>(data_slice, NY, lane_fn);
+        lanes::contiguous::<F, D, 2>(data_slice, NY, lane_fn);
     }
 
-    fn axis0_pass_complex<const FORWARD: bool>(mut data: ArrayViewMut2<'_, F::Complex>) {
+    fn axis0_pass_complex<D: Direction>(mut data: ArrayViewMut2<'_, F::Complex>) {
         let data_slice = data
             .as_mut_slice()
             .expect("invariant: 2D axis execution receives C-order data");
@@ -109,13 +110,13 @@ where
 
             let lane_plan = StaticFftPlan1D::<F, NX>::new();
             let lane_fn = |lane: &mut [F::Complex]| {
-                if FORWARD {
+                if D::FORWARD {
                     lane_plan.forward_complex_slice_inplace(lane);
                 } else {
                     lane_plan.inverse_complex_slice_inplace(lane);
                 }
             };
-            lanes::execute::<F, FORWARD>(scratch, data_slice, NX, lane_fn);
+            lanes::execute::<F, D>(scratch, data_slice, NX, lane_fn);
 
             transpose_matrices(scratch, data_slice, 1, NY, NX);
         });

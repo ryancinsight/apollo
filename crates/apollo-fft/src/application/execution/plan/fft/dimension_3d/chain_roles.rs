@@ -4,7 +4,7 @@
 //! passes run on the moirai pool across the machine.
 
 use super::passes::{self, AxisLanes};
-use crate::application::execution::plan::fft::lanes::lane_over;
+use crate::application::execution::plan::fft::lanes::{lane_over, Forward, Inverse};
 use apollo_bench::{BenchmarkCase, BenchmarkConfig, BenchmarkSuite};
 use core::time::Duration;
 use eunomia::Complex64;
@@ -33,23 +33,23 @@ fn chain_one_role_against_two() {
                     || {
                         data.copy_from_slice(&src);
                         if forward {
-                            passes::all_axes::<f64, true, _, _, _>(
+                            passes::all_axes::<f64, Forward, _, _, _>(
                                 &mut data,
                                 shape,
                                 AxisLanes {
-                                    x: lane_over::<f64, true>(None),
-                                    y: lane_over::<f64, true>(None),
-                                    z: lane_over::<f64, true>(None),
+                                    x: lane_over::<f64, Forward>(None),
+                                    y: lane_over::<f64, Forward>(None),
+                                    z: lane_over::<f64, Forward>(None),
                                 },
                             );
                         } else {
-                            passes::all_axes::<f64, false, _, _, _>(
+                            passes::all_axes::<f64, Inverse, _, _, _>(
                                 &mut data,
                                 shape,
                                 AxisLanes {
-                                    x: lane_over::<f64, false>(None),
-                                    y: lane_over::<f64, false>(None),
-                                    z: lane_over::<f64, false>(None),
+                                    x: lane_over::<f64, Inverse>(None),
+                                    y: lane_over::<f64, Inverse>(None),
+                                    z: lane_over::<f64, Inverse>(None),
                                 },
                             );
                         }
@@ -60,24 +60,28 @@ fn chain_one_role_against_two() {
                     || {
                         data.copy_from_slice(&src);
                         if forward {
-                            passes::axis2::<f64, true>(&mut data, n, lane_over::<f64, true>(None));
-                            passes::xy_axes::<f64, true>(
-                                &mut data,
-                                shape,
-                                lane_over::<f64, true>(None),
-                                lane_over::<f64, true>(None),
-                            );
-                        } else {
-                            passes::xy_axes::<f64, false>(
-                                &mut data,
-                                shape,
-                                lane_over::<f64, false>(None),
-                                lane_over::<f64, false>(None),
-                            );
-                            passes::axis2::<f64, false>(
+                            passes::axis2::<f64, Forward>(
                                 &mut data,
                                 n,
-                                lane_over::<f64, false>(None),
+                                lane_over::<f64, Forward>(None),
+                            );
+                            passes::xy_axes::<f64, Forward>(
+                                &mut data,
+                                shape,
+                                lane_over::<f64, Forward>(None),
+                                lane_over::<f64, Forward>(None),
+                            );
+                        } else {
+                            passes::xy_axes::<f64, Inverse>(
+                                &mut data,
+                                shape,
+                                lane_over::<f64, Inverse>(None),
+                                lane_over::<f64, Inverse>(None),
+                            );
+                            passes::axis2::<f64, Inverse>(
+                                &mut data,
+                                n,
+                                lane_over::<f64, Inverse>(None),
                             );
                         }
                     },

@@ -3,6 +3,7 @@ use std::sync::atomic::Ordering;
 use apollo_bench::{BenchmarkConfig, BenchmarkSuite};
 
 use crate::application::execution::kernel::measurement_cores;
+use crate::application::execution::plan::fft::lanes::Forward;
 use crate::{FftPlan3D, Shape3D};
 
 use super::{
@@ -17,7 +18,7 @@ fn processor_histogram(n: usize) {
     let shape = Shape3D::new(n, n, n).expect("invariant: extents are non-zero");
     let plan = FftPlan3D::<f64>::new(shape);
     let mut data = volume(n);
-    lane_pass::<true>(&plan, &mut data, true);
+    lane_pass::<Forward>(&plan, &mut data, true);
 
     let total: u32 = LANES_PER_PROCESSOR
         .iter()

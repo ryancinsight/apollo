@@ -330,11 +330,9 @@ impl NufftPlan1D {
             scratch_spread[m_idx] = fourier_coeffs[k] * array1_value(&self.deconv, k);
         }
 
-        self.fft_plan.inverse_complex_slice_inplace(scratch_spread);
-        let inverse_scale = self.m as f64;
-        scratch_spread
-            .iter_mut()
-            .for_each(|value| *value *= inverse_scale);
+        // The Type-2 sum is unnormalized, so the inverse is too.
+        self.fft_plan
+            .inverse_complex_slice_unnorm_inplace(scratch_spread);
         let spread = &*scratch_spread;
 
         let w = self.w as i64;

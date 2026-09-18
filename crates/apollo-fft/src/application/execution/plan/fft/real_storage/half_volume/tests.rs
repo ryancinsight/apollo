@@ -6,6 +6,7 @@ use super::super::split;
 use super::{forward_half, inverse_half, inverse_z_split};
 use crate::application::execution::kernel::mixed_radix::scalar::plan_scratch::PlanScratch;
 use crate::application::execution::plan::fft::lanes;
+use crate::application::execution::plan::fft::lanes::Forward;
 use crate::{PlanCacheProvider, Shape3D};
 use leto::Array3;
 
@@ -18,7 +19,7 @@ where
 {
     let plan = T::get_3d_plan(Shape3D::new(nx, ny, nz).expect("invariant: non-zero extents"));
     let depth = plan.nz_c();
-    let half_lane = plan.half_z_lane::<true>();
+    let half_lane = plan.half_z_lane::<Forward>();
     let mut want = vec![Complex::default(); nx * ny * depth];
     lanes::paired(&mut want, depth, source, nz, |bins_group, reals_group| {
         for (bins, reals) in bins_group
@@ -33,7 +34,7 @@ where
             );
         }
     });
-    plan.xy_axes_inplace::<true>(&mut want, depth);
+    plan.xy_axes_inplace::<Forward>(&mut want, depth);
     want
 }
 

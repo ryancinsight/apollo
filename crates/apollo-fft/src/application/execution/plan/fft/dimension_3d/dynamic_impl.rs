@@ -1,4 +1,5 @@
 use super::super::lanes;
+use super::super::lanes::{Direction, Forward, Inverse, InverseUnnormalized};
 use super::super::twiddles::cached_power_of_two_twiddle;
 use super::passes::{self, AxisLanes};
 use super::rotated::RotatedSpectrum;
@@ -133,7 +134,7 @@ where
             "axis FFT shape mismatch"
         );
         assert!(axis < 3, "axis must be 0, 1, or 2");
-        self.axis_pass_complex::<true>(ArrayViewMut3::from(data.view_mut()), axis);
+        self.axis_pass_complex::<Forward>(ArrayViewMut3::from(data.view_mut()), axis);
     }
 
     /// [`Self::forward_axis_complex_inplace`] on a Leto view of any valid
@@ -153,7 +154,7 @@ where
         );
         assert!(axis < 3, "axis must be 0, 1, or 2");
         with_c_order_view(data, |contiguous| {
-            self.axis_pass_complex::<true>(contiguous, axis);
+            self.axis_pass_complex::<Forward>(contiguous, axis);
         });
     }
 
@@ -174,7 +175,7 @@ where
         );
         assert!(axis < 3, "axis must be 0, 1, or 2");
         with_c_order_view(data, |contiguous| {
-            self.axis_pass_complex::<false>(contiguous, axis);
+            self.axis_pass_complex::<Inverse>(contiguous, axis);
         });
     }
 
@@ -191,7 +192,7 @@ where
             "axis FFT shape mismatch"
         );
         assert!(axis < 3, "axis must be 0, 1, or 2");
-        self.axis_pass_complex::<false>(ArrayViewMut3::from(data.view_mut()), axis);
+        self.axis_pass_complex::<Inverse>(ArrayViewMut3::from(data.view_mut()), axis);
     }
 
     /// Forward transform of a complex Leto view in-place.
@@ -204,7 +205,7 @@ where
             [self.nx, self.ny, self.nz],
             "complex forward shape mismatch"
         );
-        with_c_order_view(data, |contiguous| self.all_axes::<true>(contiguous));
+        with_c_order_view(data, |contiguous| self.all_axes::<Forward>(contiguous));
     }
 
     /// Inverse transform of a complex Leto view in-place with FFTW-compatible normalization.
@@ -217,7 +218,37 @@ where
             [self.nx, self.ny, self.nz],
             "complex inverse shape mismatch"
         );
-        with_c_order_view(data, |contiguous| self.all_axes::<false>(contiguous));
+        with_c_order_view(data, |contiguous| self.all_axes::<Inverse>(contiguous));
+    }
+
+    /// Inverse transform of a complex field in-place, left unnormalized: the
+    /// unscaled sum, equal to [`Self::inverse_complex_inplace`]'s result
+    /// times `nx * ny * nz`, the volume's element count.
+    pub fn inverse_complex_unnorm_inplace(&self, data: &mut Array3<F::Complex>) {
+        assert_eq!(
+            data.shape(),
+            [self.nx, self.ny, self.nz],
+            "complex inverse shape mismatch"
+        );
+        let view = ArrayViewMut3::from(data.view_mut());
+        self.inverse_complex_unnorm_leto_inplace(view);
+    }
+
+    /// Inverse transform of a complex Leto view in-place, left unnormalized:
+    /// the unscaled sum, equal to [`Self::inverse_complex_leto_inplace`]'s
+    /// result times `nx * ny * nz`, the volume's element count.
+    ///
+    /// C-dense views execute directly. Other valid layouts use reusable
+    /// thread-local staging and preserve the view's logical row-major order.
+    pub fn inverse_complex_unnorm_leto_inplace(&self, data: ArrayViewMut3<'_, F::Complex>) {
+        assert_eq!(
+            data.shape(),
+            [self.nx, self.ny, self.nz],
+            "complex inverse shape mismatch"
+        );
+        with_c_order_view(data, |contiguous| {
+            self.all_axes::<InverseUnnormalized>(contiguous);
+        });
     }
 
     /// Forward transform leaving the spectrum in `(z, x, y)` order.
@@ -243,13 +274,13 @@ where
         let slice = data
             .as_slice_mut()
             .expect("invariant: 3D rotated execution receives C-order data");
-        passes::all_axes_leaving_rotated::<F, true, _, _, _>(
+        passes::all_axes_leaving_rotated::<F, Forward, _, _, _>(
             slice,
             shape,
             AxisLanes {
-                x: self.lane::<true>(0),
-                y: self.lane::<true>(1),
-                z: self.lane::<true>(2),
+                x: self.lane::<Forward>(0),
+                y: self.lane::<Forward>(1),
+                z: self.lane::<Forward>(2),
             },
         );
         RotatedSpectrum::new(slice, shape)
@@ -267,28 +298,28 @@ where
             [self.nx, self.ny, self.nz],
             "rotated inverse shape mismatch"
         );
-        passes::all_axes_from_rotated::<F, false, _, _, _>(
+        passes::all_axes_from_rotated::<F, Inverse, _, _, _>(
             slice,
             shape,
             AxisLanes {
-                x: self.lane::<false>(0),
-                y: self.lane::<false>(1),
-                z: self.lane::<false>(2),
+                x: self.lane::<Inverse>(0),
+                y: self.lane::<Inverse>(1),
+                z: self.lane::<Inverse>(2),
             },
         );
     }
 
     /// One direction's transform of a packed z lane: the `nz/2` complex
     /// samples that carry a real lane's `nz` values in the real split.
-    pub(crate) fn half_z_lane<const FORWARD: bool>(
+    pub(crate) fn half_z_lane<D: Direction>(
         &self,
     ) -> impl Fn(&mut [F::Complex]) + Send + Sync + '_ {
-        let twiddles = if FORWARD {
+        let twiddles = if D::FORWARD {
             &self.twiddle_half_z_fwd
         } else {
             &self.twiddle_half_z_inv
         };
-        lanes::lane_over::<F, FORWARD>(twiddles.as_deref())
+        lanes::lane_over::<F, D>(twiddles.as_deref())
     }
 
     /// The real split's twiddles for the z lanes, `W_nz^k` for `k = 1..⌈nz/4⌉`.
@@ -298,26 +329,20 @@ where
 
     /// One direction's transform of a full z lane, for real lanes the split
     /// does not admit.
-    pub(crate) fn z_lane<const FORWARD: bool>(
-        &self,
-    ) -> impl Fn(&mut [F::Complex]) + Send + Sync + '_ {
-        self.lane::<FORWARD>(2)
+    pub(crate) fn z_lane<D: Direction>(&self) -> impl Fn(&mut [F::Complex]) + Send + Sync + '_ {
+        self.lane::<D>(2)
     }
 
     /// Transforms axes 0 and 1 of a C-order `[nx, ny, depth]` volume in place.
     ///
     /// The half-spectrum pair runs x and y on the `(nx, ny, nz/2 + 1)` volume
     /// its z lanes leave, so `depth` is the volume's, not the plan's.
-    pub(crate) fn xy_axes_inplace<const FORWARD: bool>(
-        &self,
-        data: &mut [F::Complex],
-        depth: usize,
-    ) {
-        passes::xy_axes::<F, FORWARD>(
+    pub(crate) fn xy_axes_inplace<D: Direction>(&self, data: &mut [F::Complex], depth: usize) {
+        passes::xy_axes::<F, D>(
             data,
             [self.nx, self.ny, depth],
-            self.lane::<FORWARD>(0),
-            self.lane::<FORWARD>(1),
+            self.lane::<D>(0),
+            self.lane::<D>(1),
         );
     }
 
@@ -327,16 +352,12 @@ where
     /// For a producer that writes that order directly; see
     /// [`passes::xy_axes_from_x_last`]. It saves a move only where both `nx`
     /// and `ny` exceed one, the extents for which the C-order chain runs.
-    pub(crate) fn xy_axes_from_x_last<const FORWARD: bool>(
-        &self,
-        data: &mut [F::Complex],
-        depth: usize,
-    ) {
-        passes::xy_axes_from_x_last::<F, FORWARD>(
+    pub(crate) fn xy_axes_from_x_last<D: Direction>(&self, data: &mut [F::Complex], depth: usize) {
+        passes::xy_axes_from_x_last::<F, D>(
             data,
             [self.nx, self.ny, depth],
-            self.lane::<FORWARD>(0),
-            self.lane::<FORWARD>(1),
+            self.lane::<D>(0),
+            self.lane::<D>(1),
         );
     }
 
@@ -345,20 +366,20 @@ where
     ///
     /// For a consumer that reads that order directly; see
     /// [`passes::xy_axes_leaving_x_last`].
-    pub(crate) fn xy_axes_leaving_x_last<const FORWARD: bool>(
+    pub(crate) fn xy_axes_leaving_x_last<D: Direction>(
         &self,
         data: &mut [F::Complex],
         depth: usize,
     ) {
-        passes::xy_axes_leaving_x_last::<F, FORWARD>(
+        passes::xy_axes_leaving_x_last::<F, D>(
             data,
             [self.nx, self.ny, depth],
-            self.lane::<FORWARD>(0),
-            self.lane::<FORWARD>(1),
+            self.lane::<D>(0),
+            self.lane::<D>(1),
         );
     }
 
-    fn axis_pass_complex<const FORWARD: bool>(
+    fn axis_pass_complex<D: Direction>(
         &self,
         mut data: ArrayViewMut3<'_, F::Complex>,
         axis: usize,
@@ -368,35 +389,32 @@ where
             .as_mut_slice()
             .expect("invariant: 3D axis execution receives C-order data");
         match axis {
-            0 => passes::axis0::<F, FORWARD>(data_slice, shape, self.lane::<FORWARD>(0)),
-            1 => passes::axis1::<F, FORWARD>(data_slice, shape, self.lane::<FORWARD>(1)),
-            2 => passes::axis2::<F, FORWARD>(data_slice, self.nz, self.lane::<FORWARD>(2)),
+            0 => passes::axis0::<F, D>(data_slice, shape, self.lane::<D>(0)),
+            1 => passes::axis1::<F, D>(data_slice, shape, self.lane::<D>(1)),
+            2 => passes::axis2::<F, D>(data_slice, self.nz, self.lane::<D>(2)),
             _ => unreachable!("invariant: the entry points validate the axis"),
         }
     }
 
-    fn all_axes<const FORWARD: bool>(&self, mut data: ArrayViewMut3<'_, F::Complex>) {
+    fn all_axes<D: Direction>(&self, mut data: ArrayViewMut3<'_, F::Complex>) {
         let data_slice = data
             .as_mut_slice()
             .expect("invariant: 3D axis execution receives C-order data");
-        passes::all_axes::<F, FORWARD, _, _, _>(
+        passes::all_axes::<F, D, _, _, _>(
             data_slice,
             [self.nx, self.ny, self.nz],
             AxisLanes {
-                x: self.lane::<FORWARD>(0),
-                y: self.lane::<FORWARD>(1),
-                z: self.lane::<FORWARD>(2),
+                x: self.lane::<D>(0),
+                y: self.lane::<D>(1),
+                z: self.lane::<D>(2),
             },
         );
     }
 
     /// One direction's lane transform along `axis`: the cached power-of-two
     /// twiddles where the length has them, the generic mixed radix otherwise.
-    fn lane<const FORWARD: bool>(
-        &self,
-        axis: usize,
-    ) -> impl Fn(&mut [F::Complex]) + Send + Sync + '_ {
-        let twiddles = match (axis, FORWARD) {
+    fn lane<D: Direction>(&self, axis: usize) -> impl Fn(&mut [F::Complex]) + Send + Sync + '_ {
+        let twiddles = match (axis, D::FORWARD) {
             (0, true) => &self.twiddle_x_fwd,
             (0, false) => &self.twiddle_x_inv,
             (1, true) => &self.twiddle_y_fwd,
@@ -406,6 +424,6 @@ where
             _ => unreachable!("invariant: the entry points validate the axis"),
         }
         .as_deref();
-        lanes::lane_over::<F, FORWARD>(twiddles)
+        lanes::lane_over::<F, D>(twiddles)
     }
 }

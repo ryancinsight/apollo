@@ -1,7 +1,10 @@
 # 0067 — Normalization modes through a direction strategy
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-09-18
+- Revised 2026-09-18: slice 1 delivered. QFT and SHT already used the 1-D
+  plans' unnormalized inverse, so the only workaround that moved is the 1-D
+  NUFFT's normalize-then-multiply.
 - Items: `backlog.md#apollo-cap-normalization-modes`
 - Evidence: `output/apollo-capability-audit-2026-09-18.md` item 3
 
@@ -39,8 +42,8 @@ direction and whether the inverse normalizes.
 On top of that channel:
 1. **Slice 1.** The 2-D and 3-D plans gain unnormalized inverses
    (`inverse_complex_unnorm_inplace` and the Leto form), matching the 1-D
-   plans. The in-tree workarounds (QFT, SHT, NUFFT 1-D) move to the
-   unnormalized inverses.
+   plans. The 1-D NUFFT's normalize-then-multiply moves to the 1-D
+   unnormalized inverse.
 2. **Slice 2.**
    - `Normalization` gains `Backward` (today's behavior; `FftwCompatible`
      is renamed to it), `Orthonormal` and `Forward`, and becomes
