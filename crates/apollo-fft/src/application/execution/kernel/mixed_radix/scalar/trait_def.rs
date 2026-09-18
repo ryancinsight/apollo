@@ -76,6 +76,12 @@ pub trait MixedRadixScalar:
     fn cached_twiddle_fwd(n: usize) -> Arc<[Self::Complex]>;
     fn cached_twiddle_inv(n: usize) -> Arc<[Self::Complex]>;
 
+    /// The stage-major table [`Self::cached_twiddle_fwd`] serves, built
+    /// without entering the twiddle cache: for a plan that relays the table
+    /// into its own layout and keeps none of it, so the process does not
+    /// hold `n` dead entries for its life. The same values bit for bit.
+    fn transient_twiddle_fwd(n: usize) -> Vec<Self::Complex>;
+
     fn with_twiddle_fwd<R>(n: usize, f: impl FnOnce(&[Self::Complex]) -> R) -> R;
     fn with_twiddle_inv<R>(n: usize, f: impl FnOnce(&[Self::Complex]) -> R) -> R;
 
