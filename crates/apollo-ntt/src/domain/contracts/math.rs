@@ -11,8 +11,10 @@ pub fn is_valid_length(n: usize) -> bool {
 /// Deterministic primality of a `u64`.
 ///
 /// Miller–Rabin with the first twelve primes as witnesses decides every
-/// `n < 3.3 · 10^24`, which covers `u64` (Sorenson and Webster, "Strong
-/// pseudoprimes to twelve prime bases", Math. Comp. 86 (2017), 985–1003).
+/// `n` below `318665857834031151167461 ≈ 3.18 · 10^23`, the least strong
+/// pseudoprime to all twelve, which covers `u64` (Sorenson and Webster,
+/// "Strong pseudoprimes to twelve prime bases", Math. Comp. 86 (2017),
+/// 985–1003).
 #[must_use]
 pub fn is_prime(n: u64) -> bool {
     const WITNESSES: [u64; 12] = [2, 3, 5, 7, 11, 13, 17, 19, 23, 29, 31, 37];
@@ -44,14 +46,18 @@ pub fn is_prime(n: u64) -> bool {
 ///
 /// # Errors
 ///
+/// [`NttError::EmptyLength`] for `n = 0`, [`NttError::NonPowerOfTwo`] for
+/// another length that is not a power of two,
 /// [`NttError::InvalidModulus`] for `q < 2`, [`NttError::CompositeModulus`]
 /// for a composite `q`, [`NttError::UnsupportedLength`] when `n ∤ q - 1`,
 /// [`NttError::NotPrimitiveRoot`] when `ω` has a smaller order.
 pub fn transform_root(n: usize, modulus: u64, primitive_root: u64) -> Result<u64, NttError> {
-    debug_assert!(
-        is_valid_length(n),
-        "invariant: callers check the length first"
-    );
+    if n == 0 {
+        return Err(NttError::EmptyLength);
+    }
+    if !n.is_power_of_two() {
+        return Err(NttError::NonPowerOfTwo);
+    }
     if modulus < 2 {
         return Err(NttError::InvalidModulus);
     }
@@ -191,6 +197,10 @@ mod tests {
         );
         assert_eq!(transform_root(32, 17, 3), Err(NttError::UnsupportedLength));
         assert_eq!(transform_root(4, 1, 3), Err(NttError::InvalidModulus));
+        // The length contract holds in every build, not only under debug
+        // assertions: 6 is not a power of two, and 0 would divide by zero.
+        assert_eq!(transform_root(6, 7, 6), Err(NttError::NonPowerOfTwo));
+        assert_eq!(transform_root(0, 17, 3), Err(NttError::EmptyLength));
     }
 
     #[test]

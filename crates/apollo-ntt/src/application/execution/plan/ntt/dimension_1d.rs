@@ -22,6 +22,7 @@ use serde::{Deserialize, Serialize};
 /// Orthogonality gives `sum_k omega^((j-m)k) = n` when `j = m` and `0`
 /// otherwise, so the inverse recovers every input residue exactly modulo `q`.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(try_from = "NttPlanFields")]
 pub struct NttPlan {
     n: usize,
     modulus: u64,
@@ -31,6 +32,55 @@ pub struct NttPlan {
     n_inv: u64,
     forward_twiddles: Vec<u64>,
     inverse_twiddles: Vec<u64>,
+}
+
+/// The serialized fields of an [`NttPlan`], validated on the way in: a
+/// deserialized plan is rebuilt through [`NttPlan::with_modulus`] and must
+/// match every stored derived field, so no field the constructor refuses,
+/// and no edited table, becomes a plan.
+#[derive(Deserialize)]
+struct NttPlanFields {
+    n: usize,
+    modulus: u64,
+    primitive_root: u64,
+    root: u64,
+    root_inv: u64,
+    n_inv: u64,
+    forward_twiddles: Vec<u64>,
+    inverse_twiddles: Vec<u64>,
+}
+
+impl TryFrom<NttPlanFields> for NttPlan {
+    type Error = NttError;
+
+    fn try_from(fields: NttPlanFields) -> Result<Self, NttError> {
+        let NttPlanFields {
+            n,
+            modulus,
+            primitive_root,
+            root,
+            root_inv,
+            n_inv,
+            forward_twiddles,
+            inverse_twiddles,
+        } = fields;
+        let plan = Self::with_modulus(n, modulus, primitive_root)?;
+        let stored = Self {
+            n,
+            modulus,
+            primitive_root,
+            root,
+            root_inv,
+            n_inv,
+            forward_twiddles,
+            inverse_twiddles,
+        };
+        if stored == plan {
+            Ok(plan)
+        } else {
+            Err(NttError::InconsistentTables { n, modulus })
+        }
+    }
 }
 
 impl NttPlan {
@@ -347,6 +397,28 @@ mod tests {
             .collect();
         assert_eq!(spectrum, leto::Array1::from(expected));
         assert_eq!(plan.inverse(&spectrum).unwrap(), input);
+    }
+
+    /// Deserialization rebuilds through `with_modulus`: a valid plan round
+    /// trips, a composite modulus is refused as the constructor refuses it,
+    /// and an edited table is refused as inconsistent.
+    #[test]
+    fn deserialization_validates_the_field_and_tables() {
+        let plan = NttPlan::with_modulus(4, 17, 3).unwrap();
+        let json = serde_json::to_string(&plan).unwrap();
+        assert_eq!(serde_json::from_str::<NttPlan>(&json).unwrap(), plan);
+
+        let composite = json.replace("\"modulus\":17", "\"modulus\":9");
+        let error = serde_json::from_str::<NttPlan>(&composite).unwrap_err();
+        assert!(
+            error.to_string().contains("modulus 9 is not prime"),
+            "{error}"
+        );
+
+        let mut value: serde_json::Value = serde_json::from_str(&json).unwrap();
+        value["forward_twiddles"][1] = serde_json::Value::from(5_u64);
+        let error = serde_json::from_value::<NttPlan>(value).unwrap_err();
+        assert!(error.to_string().contains("disagree"), "{error}");
     }
 
     #[test]

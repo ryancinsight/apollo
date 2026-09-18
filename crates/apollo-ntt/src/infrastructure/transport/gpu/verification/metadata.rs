@@ -73,3 +73,21 @@ fn available_backend_reports_execution_capabilities() {
     assert!(capabilities.supports_forward);
     assert!(capabilities.supports_inverse);
 }
+
+/// The shader's u32 modular add wraps for a modulus at or above 2^30, so
+/// validation refuses those primes; 998244353 (below 2^30) is accepted.
+#[test]
+fn validation_refuses_moduli_the_shader_cannot_add() {
+    assert!(ResiduePlan::with_modulus(2, 3_221_225_473, 5)
+        .validate_field()
+        .is_err_and(|error| error.to_string().contains("below 2^30")));
+    assert!(ResiduePlan::with_modulus(2, 4_294_967_291, 2)
+        .validate_field()
+        .is_err());
+    assert_eq!(
+        ResiduePlan::with_modulus(2, DEFAULT_MODULUS, DEFAULT_PRIMITIVE_ROOT)
+            .validate_field()
+            .expect("the default field is valid on the accelerator"),
+        DEFAULT_MODULUS - 1
+    );
+}
