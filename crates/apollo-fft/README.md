@@ -30,7 +30,9 @@ normalization. The CPU strategy selects radix, mixed-radix, Rader, or
 Bluestein construction from the validated shape. Direct DFT kernels remain
 reference surfaces for verification rather than production fallbacks.
 
-Two- and three-dimensional plans execute separable axis passes. C-dense Leto
+Two- and three-dimensional plans execute separable axis passes, each also
+public as a single-axis transform (`forward_axis_complex_inplace` and its
+inverse and Leto forms). C-dense Leto
 views, including offset views, operate on their backing block. Fortran-dense
 and general strided views assign once into reusable logical C-order staging,
 transform, and assign back; warmed staging allocates nothing. Row and

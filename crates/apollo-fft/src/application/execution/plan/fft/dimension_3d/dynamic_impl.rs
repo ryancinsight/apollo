@@ -136,6 +136,48 @@ where
         self.axis_pass_complex::<true>(ArrayViewMut3::from(data.view_mut()), axis);
     }
 
+    /// [`Self::forward_axis_complex_inplace`] on a Leto view of any valid
+    /// layout, staged through C order as the whole-volume transform is.
+    ///
+    /// # Panics
+    /// - Shape mismatch with the plan, or `axis >= 3`.
+    pub fn forward_axis_complex_leto_inplace(
+        &self,
+        data: ArrayViewMut3<'_, F::Complex>,
+        axis: usize,
+    ) {
+        assert_eq!(
+            data.shape(),
+            [self.nx, self.ny, self.nz],
+            "axis FFT shape mismatch"
+        );
+        assert!(axis < 3, "axis must be 0, 1, or 2");
+        with_c_order_view(data, |contiguous| {
+            self.axis_pass_complex::<true>(contiguous, axis);
+        });
+    }
+
+    /// [`Self::inverse_axis_complex_inplace`] on a Leto view of any valid
+    /// layout.
+    ///
+    /// # Panics
+    /// - Shape mismatch with the plan, or `axis >= 3`.
+    pub fn inverse_axis_complex_leto_inplace(
+        &self,
+        data: ArrayViewMut3<'_, F::Complex>,
+        axis: usize,
+    ) {
+        assert_eq!(
+            data.shape(),
+            [self.nx, self.ny, self.nz],
+            "axis FFT shape mismatch"
+        );
+        assert!(axis < 3, "axis must be 0, 1, or 2");
+        with_c_order_view(data, |contiguous| {
+            self.axis_pass_complex::<false>(contiguous, axis);
+        });
+    }
+
     /// Inverse complex FFT along a single `axis` in-place, normalized by that
     /// axis's length, so `forward_axis` followed by `inverse_axis` along the same
     /// axis is the identity. See [`Self::forward_axis_complex_inplace`].

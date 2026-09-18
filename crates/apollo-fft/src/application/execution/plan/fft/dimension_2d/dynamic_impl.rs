@@ -105,6 +105,62 @@ where
         self.inverse_complex_leto_inplace(view);
     }
 
+    /// Forward complex FFT along a single `axis` in place: the transform of
+    /// every row (`axis = 1`) or every column (`axis = 0`), the half of
+    /// [`Self::forward_complex_inplace`] a caller needing one axis wants
+    /// (a spectral derivative along one direction). Unnormalized, matching
+    /// the 1-D forward convention; an `axis` whose extent is 1 is a no-op.
+    ///
+    /// # Panics
+    /// - Shape mismatch with the plan, or `axis >= 2`.
+    pub fn forward_axis_complex_inplace(&self, data: &mut Array2<F::Complex>, axis: usize) {
+        self.forward_axis_complex_leto_inplace(ArrayViewMut2::from(data.view_mut()), axis);
+    }
+
+    /// Inverse complex FFT along a single `axis` in place, normalized by that
+    /// axis's length, so a forward then an inverse along the same axis is
+    /// the identity. See [`Self::forward_axis_complex_inplace`].
+    ///
+    /// # Panics
+    /// - Shape mismatch with the plan, or `axis >= 2`.
+    pub fn inverse_axis_complex_inplace(&self, data: &mut Array2<F::Complex>, axis: usize) {
+        self.inverse_axis_complex_leto_inplace(ArrayViewMut2::from(data.view_mut()), axis);
+    }
+
+    /// [`Self::forward_axis_complex_inplace`] on a Leto view of any valid
+    /// layout, staged through C order as the whole-plane transform is.
+    ///
+    /// # Panics
+    /// - Shape mismatch with the plan, or `axis >= 2`.
+    pub fn forward_axis_complex_leto_inplace(
+        &self,
+        data: ArrayViewMut2<'_, F::Complex>,
+        axis: usize,
+    ) {
+        assert_eq!(data.shape(), [self.nx, self.ny], "axis FFT shape mismatch");
+        assert!(axis < 2, "axis must be 0 or 1");
+        with_c_order_view(data, |contiguous| {
+            self.axis_pass_complex::<true>(contiguous, axis);
+        });
+    }
+
+    /// [`Self::inverse_axis_complex_inplace`] on a Leto view of any valid
+    /// layout.
+    ///
+    /// # Panics
+    /// - Shape mismatch with the plan, or `axis >= 2`.
+    pub fn inverse_axis_complex_leto_inplace(
+        &self,
+        data: ArrayViewMut2<'_, F::Complex>,
+        axis: usize,
+    ) {
+        assert_eq!(data.shape(), [self.nx, self.ny], "axis FFT shape mismatch");
+        assert!(axis < 2, "axis must be 0 or 1");
+        with_c_order_view(data, |contiguous| {
+            self.axis_pass_complex::<false>(contiguous, axis);
+        });
+    }
+
     /// Forward transform of a complex Leto view in-place.
     ///
     /// C-dense views execute directly. Other valid layouts use reusable
