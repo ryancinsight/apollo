@@ -5,8 +5,8 @@ use apollo_fft::{PlanCacheProvider, PlanScratch, F16};
 use eunomia::{Complex, Complex64};
 use leto::Array3;
 
-/// Shapes exercising the split (`nz` a multiple of four), each refusal (an odd
-/// `nz`, an even one that is not a multiple of four, one below four), an
+/// Shapes exercising the split (an even `nz`, with one `≡ 2 (mod 4)`), each
+/// refusal (an odd `nz`, one below four), an
 /// extent of one on each axis in turn, one volume of lanes under the
 /// caller-owned routes' lane floor, and one at the owned forward's byte floor.
 const SHAPES: [[usize; 3]; 13] = [
@@ -160,15 +160,15 @@ fn the_pair_allocates_nothing_once_warm() {
     );
 }
 
-/// Refused-length shapes (`nz` not a positive multiple of four): one under
+/// Refused-length shapes (an odd `nz`): one under
 /// every shipped scalar's parallel byte threshold for the widened fallback
 /// pairing, and one that clears it even for the narrowest scalar (`F16`'s
 /// `Complex<f32>` bins beside `F16` reals) — `lanes::PARALLEL_BYTES` is sized
 /// off `f64`-width lane data, so a narrower scalar needs more lanes to reach
 /// it.
-const FALLBACK_VOLUME_SHAPES: [[usize; 3]; 2] = [[8, 8, 6], [64, 64, 30]];
+const FALLBACK_VOLUME_SHAPES: [[usize; 3]; 2] = [[8, 8, 7], [64, 64, 31]];
 
-/// The widened z-lane fallback (`nz` not a positive multiple of four) reuses
+/// The widened z-lane fallback (an odd `nz`) reuses
 /// thread-local scratch, sharing the retained-memory bound the x and y passes
 /// already keep, instead of allocating one `nz`-length buffer per scheduled
 /// task. Regression coverage for `half_volume::forward`/`half_volume::inverse`.

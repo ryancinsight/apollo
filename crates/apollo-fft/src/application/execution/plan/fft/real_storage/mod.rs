@@ -123,12 +123,14 @@ where
 
     /// Whether [`RealFftData::forward_1d_half_into`] applies to this length.
     ///
-    /// The split needs an even packed length, so `n` must be a positive
-    /// multiple of four; shorter or odd lengths keep the widening path, where
-    /// the redundant half costs nothing worth routing around.
+    /// The split packs `n` reals as `n/2` complex samples, so `n` must be
+    /// even and positive; the untangle pairs bins `k` and `n/2 - k` and
+    /// handles a self-paired midpoint only when `n/2` is even, so any half
+    /// length serves, one included. Odd lengths have no pairing and keep the
+    /// widening path.
     #[must_use]
     fn real_split_applies(n: usize) -> bool {
-        n >= 4 && n % 4 == 0
+        n >= 2 && n % 2 == 0
     }
 
     /// Packs a real slice as `n/2` complex samples directly into `out`.

@@ -39,12 +39,13 @@ use std::cell::Cell;
 /// their differing twiddle generation.
 const TOLERANCE_FACTOR: f64 = 16.0;
 
-/// Lengths the split admits: `n >= 4` and a multiple of four.
-const SPLIT_SIZES: [usize; 7] = [4, 8, 16, 64, 256, 1024, 4096];
+/// Lengths the split admits: every even `n`, including `n ≡ 2 (mod 4)`,
+/// whose half length is odd, and 2, whose half length is one.
+const SPLIT_SIZES: [usize; 12] = [2, 4, 6, 8, 10, 14, 16, 64, 90, 256, 1024, 4096];
 
 /// Lengths it does not, which must still honour the same contract through the
 /// full-transform fallback.
-const FALLBACK_SIZES: [usize; 6] = [2, 6, 7, 9, 10, 14];
+const FALLBACK_SIZES: [usize; 5] = [3, 7, 9, 15, 25];
 
 thread_local! {
     /// `None` while this thread is not measuring, otherwise the running count.
