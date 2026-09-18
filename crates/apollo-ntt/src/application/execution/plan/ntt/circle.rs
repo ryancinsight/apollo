@@ -47,7 +47,8 @@ impl CircleNttPlan {
     /// [`NttError::EmptyLength`] for `n < 2` (no twin-coset of size one),
     /// [`NttError::NonPowerOfTwo`] for a length that is not a power of two,
     /// [`NttError::InvalidModulus`] for a modulus below three or not
-    /// `≡ 3 (mod 4)`, [`NttError::UnsupportedLength`] when `2n ∤ modulus + 1`.
+    /// `≡ 3 (mod 4)`, [`NttError::CompositeModulus`] for a composite
+    /// modulus, [`NttError::UnsupportedLength`] when `2n ∤ modulus + 1`.
     pub fn with_modulus(n: usize, modulus: u64) -> Result<Self, NttError> {
         if n == 0 {
             return Err(NttError::EmptyLength);

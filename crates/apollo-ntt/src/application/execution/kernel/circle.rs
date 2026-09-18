@@ -71,7 +71,8 @@ impl CircleDomain {
     ///
     /// [`NttError::EmptyLength`] for `log_size = 0` (no twin-coset of size
     /// one exists), [`NttError::InvalidModulus`] when `modulus < 3` or
-    /// `modulus ≢ 3 (mod 4)`, [`NttError::UnsupportedLength`] when the prime
+    /// `modulus ≢ 3 (mod 4)`, [`NttError::CompositeModulus`] for a composite
+    /// modulus, [`NttError::UnsupportedLength`] when the prime
     /// does not support the order (`2^{log_size + 1} ∤ modulus + 1`).
     pub fn new(log_size: u32, modulus: u64) -> Result<Self, NttError> {
         if log_size == 0 {
@@ -79,6 +80,9 @@ impl CircleDomain {
         }
         if modulus < 3 || modulus % 4 != 3 {
             return Err(NttError::InvalidModulus);
+        }
+        if !crate::domain::contracts::math::is_prime(modulus) {
+            return Err(NttError::CompositeModulus { modulus });
         }
         if log_size + 1 > two_adicity(modulus) {
             return Err(NttError::UnsupportedLength);

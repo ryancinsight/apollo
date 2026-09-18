@@ -3,7 +3,7 @@
 use crate::application::execution::kernel::direct::ntt_kernel;
 use crate::domain::contracts::config::{DEFAULT_MODULUS, DEFAULT_PRIMITIVE_ROOT};
 use crate::domain::contracts::error::NttError;
-use crate::domain::contracts::math::{mod_inv, mod_mul, mod_pow};
+use crate::domain::contracts::math::{mod_inv, mod_mul, mod_pow, transform_root};
 use leto::Array1;
 use serde::{Deserialize, Serialize};
 /// Reusable radix-2 NTT plan.
@@ -40,6 +40,15 @@ impl NttPlan {
     }
 
     /// Build a plan with an explicit modulus and primitive root.
+    ///
+    /// # Errors
+    ///
+    /// [`NttError::EmptyLength`] and [`NttError::NonPowerOfTwo`] for the
+    /// length, then the field contract of
+    /// [`transform_root`](crate::domain::contracts::math::transform_root):
+    /// a modulus below two, a composite modulus, a length not dividing
+    /// `modulus - 1`, or a root whose derived `n`-th root has a smaller
+    /// order.
     pub fn with_modulus(n: usize, modulus: u64, primitive_root: u64) -> Result<Self, NttError> {
         if n == 0 {
             return Err(NttError::EmptyLength);
@@ -47,14 +56,7 @@ impl NttPlan {
         if !n.is_power_of_two() {
             return Err(NttError::NonPowerOfTwo);
         }
-        if modulus < 2 {
-            return Err(NttError::InvalidModulus);
-        }
-        if (modulus - 1) % n as u64 != 0 {
-            return Err(NttError::UnsupportedLength);
-        }
-
-        let root = mod_pow(primitive_root, (modulus - 1) / n as u64, modulus);
+        let root = transform_root(n, modulus, primitive_root)?;
         let root_inv = mod_inv(root, modulus);
         let n_inv = mod_inv(n as u64, modulus);
         let forward_twiddles = Self::calculate_twiddles(n, root, modulus);
@@ -313,6 +315,38 @@ mod tests {
         assert_eq!(spectrum, leto::Array1::from(vec![7]));
         let recovered = plan.inverse(&spectrum).unwrap();
         assert_eq!(recovered, leto::Array1::from(vec![7]));
+    }
+
+    /// The two plans the capability audit built wrong answers from are now
+    /// refused, and a valid explicit field round-trips.
+    #[test]
+    fn explicit_fields_are_validated_and_round_trip() {
+        assert_eq!(
+            NttPlan::with_modulus(4, 17, 2),
+            Err(NttError::NotPrimitiveRoot {
+                n: 4,
+                modulus: 17,
+                primitive_root: 2
+            })
+        );
+        assert_eq!(
+            NttPlan::with_modulus(2, 9, 2),
+            Err(NttError::CompositeModulus { modulus: 9 })
+        );
+        let plan = NttPlan::with_modulus(4, 17, 3).unwrap();
+        let input = leto::Array1::from(vec![1, 2, 3, 4]);
+        let spectrum = plan.forward(&input).unwrap();
+        // X[k] = sum_j x[j] 13^(jk) mod 17, with 13 = 3^4 the fourth root.
+        let expected: Vec<u64> = (0..4_u64)
+            .map(|k| {
+                (0..4_u64)
+                    .map(|j| (j + 1) * mod_pow(13, j * k, 17))
+                    .sum::<u64>()
+                    % 17
+            })
+            .collect();
+        assert_eq!(spectrum, leto::Array1::from(expected));
+        assert_eq!(plan.inverse(&spectrum).unwrap(), input);
     }
 
     #[test]

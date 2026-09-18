@@ -149,7 +149,7 @@ impl NttGpuKernel {
         }
 
         let omega_inverse = if len > 1 {
-            mod_pow_u64(omega, len as u64 - 1, modulus)
+            crate::domain::contracts::math::mod_pow(omega, len as u64 - 1, modulus)
         } else {
             1
         };
@@ -160,7 +160,8 @@ impl NttGpuKernel {
             modulus: u32::try_from(modulus).map_err(|_| WgpuError::InvalidPlan {
                 message: format!("modulus {modulus} exceeds u32 accelerator storage"),
             })?,
-            inverse_len: mod_pow_u64(len as u64, modulus - 2, modulus) as u32,
+            inverse_len: crate::domain::contracts::math::mod_pow(len as u64, modulus - 2, modulus)
+                as u32,
             data_residues: vec![0; len],
             output_residues: vec![0; len],
             forward_twiddles: flat_twiddle_array(twiddle_len, omega, modulus),
@@ -337,17 +338,4 @@ fn reverse_bits_n(mut value: usize, bits: u32) -> usize {
         value >>= 1;
     }
     reversed
-}
-
-pub(crate) fn mod_pow_u64(mut base: u64, mut exponent: u64, modulus: u64) -> u64 {
-    let mut result = 1_u64;
-    base %= modulus;
-    while exponent > 0 {
-        if exponent & 1 == 1 {
-            result = ((result as u128 * base as u128) % modulus as u128) as u64;
-        }
-        base = ((base as u128 * base as u128) % modulus as u128) as u64;
-        exponent >>= 1;
-    }
-    result
 }

@@ -1,6 +1,6 @@
 //! NTT residue number theory plan.
 
-use super::infrastructure::kernel::{mod_pow_u64, NttGpuBuffers, NttGpuKernel};
+use super::infrastructure::kernel::{NttGpuBuffers, NttGpuKernel};
 use super::{WgpuError, WgpuResult};
 use crate::{DEFAULT_MODULUS, DEFAULT_PRIMITIVE_ROOT};
 
@@ -80,26 +80,18 @@ impl ResiduePlan {
                 message: format!("invalid plan len={len}, modulus={modulus}, primitive_root={primitive_root}: length must be a power of two"),
             });
         }
-        if modulus < 2 {
-            return Err(WgpuError::InvalidPlan {
-                message: format!("invalid plan len={len}, modulus={modulus}, primitive_root={primitive_root}: modulus must be at least 2"),
-            });
-        }
         if modulus > u64::from(u32::MAX) || primitive_root > u64::from(u32::MAX) {
             return Err(WgpuError::InvalidPlan {
                 message: format!("invalid plan len={len}, modulus={modulus}, primitive_root={primitive_root}: accelerator storage requires u32 field values"),
             });
         }
-        if (modulus - 1) % len as u64 != 0 {
-            return Err(WgpuError::InvalidPlan {
-                message: format!("invalid plan len={len}, modulus={modulus}, primitive_root={primitive_root}: transform length is not supported by the modulus"),
-            });
-        }
-        Ok(mod_pow_u64(
-            primitive_root,
-            (modulus - 1) / len as u64,
-            modulus,
-        ))
+        crate::domain::contracts::math::transform_root(len, modulus, primitive_root).map_err(
+            |error| WgpuError::InvalidPlan {
+                message: format!(
+                    "invalid plan len={len}, modulus={modulus}, primitive_root={primitive_root}: {error}"
+                ),
+            },
+        )
     }
 }
 
