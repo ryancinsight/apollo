@@ -51,6 +51,15 @@ The typed CPU plan surface supports f64 storage/compute, f32 storage/compute,
 and mixed f16 storage with f32 compute. Caller-owned output and scratch paths
 avoid repeated result and workspace allocation.
 
+## Plan caches
+
+The free functions (`fft_1d_slice`, `fft_2d_array`, and the rest) reuse plans
+from per-scalar, per-dimension caches: a process-wide table of at most 64
+shapes that evicts the least recently used, and a four-shape ring per thread
+that keeps a repeated or alternating shape lock-free and allocation-free.
+`clear_plan_caches()` releases every cached plan no caller holds; another
+thread's ring releases on that thread's next lookup (ADR 0068).
+
 ## Accelerator boundary
 
 Use `hephaestus_wgpu::WgpuFftOps` for dense WGPU FFT execution. Consumers pair
