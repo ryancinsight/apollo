@@ -3,7 +3,7 @@ use eunomia::{Complex32, Complex64};
 use leto::Array3;
 
 use crate::infrastructure::transport::gpu::NufftWgpuPlan3D;
-use crate::nufft_type2_3d_fast;
+use crate::{nufft_type2_3d_fast, UniformGrid3D};
 
 use super::support::{
     assert_complex64_close, backend, grid3d, mode_components3d, modes3d, positions3d,
@@ -33,6 +33,36 @@ fn fast_type2_3d_matches_cpu_gridded_reference() {
     assert_eq!(actual.len(), expected.len());
     for (actual, expected) in actual.iter().zip(expected.iter()) {
         assert_complex64_close(*actual, *expected, 2.0e-3);
+    }
+}
+
+/// On a grid whose axes oversample to different lengths (16x32x16), the
+/// load stage's volume scale is the product of all three; a scale built
+/// from one axis, or none, is off by a factor of two or more here. The
+/// tolerance is the existing reference's `f32` bound.
+#[test]
+fn fast_type2_3d_matches_cpu_on_unequal_axes() {
+    let Some(backend) = backend() else {
+        return;
+    };
+    let grid = UniformGrid3D::new(4, 16, 2, 0.5, 0.75, 1.0).expect("grid");
+    let positions = positions3d();
+    let modes = modes3d(grid);
+    let expected_positions: Vec<(f64, f64, f64)> = positions
+        .iter()
+        .map(|(x, y, z)| (f64::from(*x), f64::from(*y), f64::from(*z)))
+        .collect();
+    let expected_modes = modes.mapv(|value| Complex64::new(value.re.into(), value.im.into()));
+    for width in [6, 10] {
+        let plan = NufftWgpuPlan3D::new(grid, 2, width);
+        let expected = nufft_type2_3d_fast(&expected_positions, &expected_modes, grid, width);
+        let actual = backend
+            .execute_fast_type2_3d(&plan, &modes, &positions)
+            .expect("GPU fast type2 3D");
+        assert_eq!(actual.len(), expected.len());
+        for (actual, expected) in actual.iter().zip(expected.iter()) {
+            assert_complex64_close(*actual, *expected, 2.0e-3);
+        }
     }
 }
 

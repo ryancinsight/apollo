@@ -583,11 +583,12 @@ impl NufftPlan3D {
 
     /// Type-2 3D NUFFT: interpolate from uniform Fourier coefficients to non-uniform points.
     ///
-    /// Given mode array  of shape , computes spatial values
-    ///
-    ///
-    ///
-    /// at each non-uniform point  in .
+    /// Given modes `f` of shape `[nx, ny, nz]`, computes at each position
+    /// `(x, y, z)` the unnormalized sum
+    /// `g = Σ_{kx,ky,kz} f[kx,ky,kz] exp(2πi (kx x / Lx + ky y / Ly + kz z / Lz))`
+    /// over signed mode indices, the same sum as [`nufft_type2_3d`], within
+    /// the Kaiser–Bessel gridding error and independent of the oversampling
+    /// factor and kernel width.
     ///
     /// # Complexity
     ///
@@ -1187,39 +1188,51 @@ mod tests {
             );
         }
     }
-    /// The fast Type-2 approximates the direct sum, with no dependence on the
-    /// oversampled grid. The kernel's documented relative spreading error at
-    /// the default width and oversampling is `ε = 10⁻⁶` per axis
-    /// (`kaiser_bessel::kb_kernel`); each output is `Σ f_k φ(k)` with
-    /// `φ` the product of three one-axis factors, each within `ε` of its
-    /// exact phase, so the output is within `((1 + ε)³ - 1) Σ |f_k| < 3.1 ε
-    /// Σ |f_k|` of the direct sum. The oversampled volume would put a wrong
-    /// scale at a ratio of 4096 here.
+    /// The fast Type-2 approximates the direct sum, whatever the grid shape,
+    /// oversampling factor and kernel width. The oracle is the crate's
+    /// documented gridding accuracy (`kaiser_bessel::kb_kernel`): relative
+    /// error `‖g_fast − g‖ / ‖g‖ < 10⁻⁶` at width 6 with `σ = 2`, `< 10⁻⁸`
+    /// with `σ = 4`, and smaller for wider kernels — so `10⁻⁶` covers every
+    /// case below, which spans unequal oversampled axes (4x16x2 oversamples
+    /// to 16x32x16 at `σ = 2`) so that a scale built from the wrong axis, or
+    /// the old one of `1 / (mx my mz)`, cannot pass on any of them.
     #[test]
     fn fast_type2_3d_tracks_the_direct_sum() {
-        let grid = UniformGrid3D::new(4, 4, 4, 0.1, 0.1, 0.1).unwrap();
-        let modes = Array3::from_shape_fn([4, 4, 4], |[kx, ky, kz]| {
-            Complex64::new(
-                0.25 + 0.1 * kx as f64 - 0.05 * ky as f64 + 0.03 * kz as f64,
-                -0.4 + 0.07 * kx as f64 + 0.11 * ky as f64 - 0.02 * kz as f64,
-            )
-        });
         let positions = vec![
             (0.01, 0.02, 0.03),
             (0.05, 0.06, 0.07),
             (0.025, 0.015, 0.005),
             (0.37, 0.11, 0.29),
+            (0.19, 0.83, 0.07),
         ];
-        let direct = nufft_type2_3d(&positions, &modes, grid);
-        let fast = nufft_type2_3d_fast(&positions, &modes, grid, DEFAULT_NUFFT_KERNEL_WIDTH);
-        let mass: f64 = modes.iter().map(|value| value.norm()).sum();
-        let bound = 3.1e-6 * mass;
-        for (index, (fast, direct)) in fast.iter().zip(direct.iter()).enumerate() {
-            let error = (fast - direct).norm();
-            assert!(
-                error <= bound,
-                "point {index}: fast {fast:?} against direct {direct:?}, error {error:e} > {bound:e}"
-            );
+        for (nx, ny, nz) in [(4, 4, 4), (4, 16, 2), (8, 4, 2)] {
+            let grid = UniformGrid3D::new(nx, ny, nz, 0.1, 0.1, 0.1).unwrap();
+            let modes = Array3::from_shape_fn([nx, ny, nz], |[kx, ky, kz]| {
+                Complex64::new(
+                    0.25 + 0.1 * kx as f64 - 0.05 * ky as f64 + 0.03 * kz as f64,
+                    -0.4 + 0.07 * kx as f64 + 0.11 * ky as f64 - 0.02 * kz as f64,
+                )
+            });
+            let direct = nufft_type2_3d(&positions, &modes, grid);
+            let norm: f64 = direct
+                .iter()
+                .map(|value| value.norm_sqr())
+                .sum::<f64>()
+                .sqrt();
+            for (sigma, width) in [(2, 6), (2, 10), (4, 6)] {
+                let fast = NufftPlan3D::new(grid, sigma, width).type2(&positions, &modes);
+                let error: f64 = fast
+                    .iter()
+                    .zip(direct.iter())
+                    .map(|(fast, direct)| (fast - direct).norm_sqr())
+                    .sum::<f64>()
+                    .sqrt();
+                assert!(
+                    error <= 1.0e-6 * norm,
+                    "{nx}x{ny}x{nz} sigma={sigma} w={width}: relative error {:e}",
+                    error / norm
+                );
+            }
         }
     }
 }
