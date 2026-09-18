@@ -10,21 +10,13 @@ use super::{
     typed_workspace_capacities, window_complex_real_frame_into, window_signal_frame_into, StftPlan,
     HERMES_WINDOW_FRAME_THRESHOLD,
 };
-use crate::application::execution::kernel::hann::hann_window;
+use crate::application::execution::kernel::window::Window;
 use crate::domain::contracts::error::StftError;
 use apollo_fft::{PrecisionProfile, F16};
 use eunomia::assert_relative_eq;
 use eunomia::{Complex32, Complex64};
 use leto::Array1;
 use proptest::prelude::*;
-
-#[test]
-fn hann_window_is_symmetric() {
-    let window = hann_window(8);
-    for i in 0..8 {
-        assert_relative_eq!(window[i], window[7 - i], epsilon = 1.0e-12);
-    }
-}
 
 #[test]
 fn forward_and_inverse_roundtrip_for_cola_case() {
@@ -325,29 +317,127 @@ fn input_too_short_is_rejected() {
 }
 
 #[test]
-fn forward_with_window_rejects_wrong_length() {
-    let plan = StftPlan::new(8, 4).expect("valid plan");
-    let signal = Array1::from(vec![1.0f64; 12]);
-    let bad_window = vec![1.0f64; 6];
-    assert!(matches!(
-        plan.forward_with_window(&signal, &bad_window),
-        Err(StftError::WindowLengthMismatch)
-    ));
+fn window_values_are_validated() {
+    assert_eq!(
+        StftPlan::with_window_values(8, 4, vec![1.0f64; 6]).err(),
+        Some(StftError::WindowLengthMismatch)
+    );
+    let mut values = vec![1.0f64; 8];
+    values[3] = f64::NAN;
+    assert_eq!(
+        StftPlan::with_window_values(8, 4, values).err(),
+        Some(StftError::InvalidWindowParameter)
+    );
 }
 
 #[test]
-fn forward_with_custom_window_matches_internal_hann() {
-    let plan = StftPlan::new(8, 4).expect("valid plan");
-    let signal = Array1::from((0..12).map(|i| (i as f64 * 0.3).sin()).collect::<Vec<_>>());
-    let expected = plan.forward(&signal).expect("forward");
-    let window: Vec<f64> = hann_window(8).into_vec();
-    let actual = plan
-        .forward_with_window(&signal, &window)
-        .expect("forward_with_window");
-    for (lhs, rhs) in actual.iter().zip(expected.iter()) {
-        assert_relative_eq!(lhs.re, rhs.re, epsilon = 1.0e-12);
-        assert_relative_eq!(lhs.im, rhs.im, epsilon = 1.0e-12);
+fn hann_plan_is_the_default_plan() {
+    let default = StftPlan::new(8, 4).expect("valid plan");
+    let hann = StftPlan::with_window(8, 4, Window::Hann).expect("valid plan");
+    assert_eq!(default.window(), hann.window());
+}
+
+/// Every window family, and a caller-supplied window, reconstructs what the
+/// same plan analyzed, at half and quarter hops and at every sample, ends
+/// included. The capability audit measured 4.1e-2 for a Hamming analysis
+/// inverted with Hann synthesis.
+///
+/// Bound, per sample: the inverse divides `Σ_m w_m y_m` by `W = Σ_m w_m²`,
+/// where `y_m` is frame `m` after a forward and an inverse FFT, within
+/// `γ ‖w x‖₂ ≤ γ √N |w|_max |x|_max` per sample with `γ = 16 ⌈log₂ N⌉ ε`
+/// (twice the `≈ 5.7 log₂N ε` of Higham, Accuracy and Stability of
+/// Numerical Algorithms, 2nd ed., Theorem 24.2, per transform, with margin).
+/// At most `K = ⌈N / hop⌉` frames contribute, so the numerator is within
+/// `K |w|_max² γ √N |x|_max` of `W x`; its `K` products and sums and `W`'s
+/// own add `(2K + 2) ε W |x|_max`, and the division one more `ε`. Dividing
+/// by `W` gives `K |w|_max² γ √N |x|_max / W + (2K + 3) ε |x|_max`, which
+/// scales with the window only through `|w|_max² / W`, so a scaled window
+/// keeps its bound.
+#[test]
+fn every_window_reconstructs_what_it_analyzed() {
+    let frame_len = 64usize;
+    let signal_len = 512usize;
+    let signal = Array1::from(
+        (0..signal_len)
+            .map(|i| (i as f64 * 0.37).sin() + 0.5 * (i as f64 * 0.113).cos())
+            .collect::<Vec<_>>(),
+    );
+    let peak = signal.iter().fold(0.0f64, |m, x| m.max(x.abs()));
+    let ramp: Vec<f64> = (0..frame_len).map(|i| 0.2 + (i as f64 / 63.0)).collect();
+    let scaled_hann: Vec<f64> = Window::Hann
+        .coefficients(frame_len)
+        .expect("valid")
+        .iter()
+        .map(|w| 1.0e6 * w)
+        .collect();
+    for hop_len in [frame_len / 2, frame_len / 4] {
+        let plans = [
+            StftPlan::with_window(frame_len, hop_len, Window::Hann),
+            StftPlan::with_window(frame_len, hop_len, Window::Hamming),
+            StftPlan::with_window(frame_len, hop_len, Window::Blackman),
+            StftPlan::with_window(frame_len, hop_len, Window::Tukey { alpha: 0.5 }),
+            StftPlan::with_window_values(frame_len, hop_len, ramp.clone()),
+            StftPlan::with_window_values(frame_len, hop_len, scaled_hann.clone()),
+        ];
+        for plan in plans {
+            let plan = plan.expect("valid plan");
+            let window = plan.window().as_slice().expect("contiguous").to_vec();
+            let largest = window.iter().fold(0.0f64, |m, w| m.max(w.abs()));
+            let frames = frame_len.div_ceil(hop_len) as f64;
+            let gamma = 16.0 * (frame_len as f64).log2().ceil() * f64::EPSILON;
+            let spectrum = plan.forward(&signal).expect("forward");
+            let recovered = plan.inverse(&spectrum, signal_len).expect("inverse");
+            let half = frame_len / 2;
+            let last_frame = signal_len.div_ceil(hop_len);
+            for i in 0..signal_len {
+                let lowest = (i + half + 1).saturating_sub(frame_len).div_ceil(hop_len);
+                let highest = ((i + half) / hop_len).min(last_frame);
+                let weight: f64 = (lowest..=highest)
+                    .map(|m| window[i + half - m * hop_len].powi(2))
+                    .sum();
+                let bound = frames * largest * largest * gamma * (frame_len as f64).sqrt() * peak
+                    / weight
+                    + (2.0 * frames + 3.0) * f64::EPSILON * peak;
+                let error = (recovered[i] - signal[i]).abs();
+                assert!(
+                    error <= bound,
+                    "hop {hop_len} window[0..2] {:?}: sample {i} error {error:e} > {bound:e}",
+                    &window[..2]
+                );
+            }
+        }
     }
+}
+
+/// The review's end-of-signal reproduction: every residue has energy, but
+/// the first samples are covered only by the window's zero half.
+#[test]
+fn uncovered_signal_ends_refuse_the_inverse() {
+    let plan = StftPlan::with_window_values(8, 2, [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 1.0, 1.0])
+        .expect("valid plan");
+    let signal = Array1::from(
+        (0..16)
+            .map(|i| (i as f64 * 0.3).sin() + 0.6)
+            .collect::<Vec<_>>(),
+    );
+    let spectrum = plan.forward(&signal).expect("the forward is defined");
+    assert_eq!(
+        plan.inverse(&spectrum, 16).err(),
+        Some(StftError::WindowNotOverlapAdd)
+    );
+}
+
+#[test]
+fn a_window_that_does_not_overlap_add_refuses_the_inverse() {
+    // Symmetric Hann is zero at both ends: a hop of the whole frame gives
+    // residue 0 no energy.
+    let plan = StftPlan::new(8, 8).expect("valid plan");
+    let signal = Array1::from((0..32).map(|i| (i as f64 * 0.3).sin()).collect::<Vec<_>>());
+    let spectrum = plan.forward(&signal).expect("the forward is defined");
+    assert_eq!(
+        plan.inverse(&spectrum, 32).err(),
+        Some(StftError::WindowNotOverlapAdd)
+    );
 }
 
 proptest::proptest! {

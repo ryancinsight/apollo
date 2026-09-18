@@ -10,6 +10,25 @@ Change-class tags: [patch] backward-compatible fix, [minor] additive non-breakin
 
 ### Breaking
 
+- [major] `apollo-stft`: an `StftPlan` owns one window for both analysis and
+  synthesis.
+  - **Removed:** `forward_with_window`. It analyzed with a caller's window
+    while `inverse` always synthesized with Hann, so a Hamming round trip
+    reconstructed with 4.1e-2 error.
+  - **New constructors:** `StftPlan::with_window` with the new `Window` enum
+    (Hann, Hamming, Blackman, Tukey) and `StftPlan::with_window_values` build
+    the plan with its window. Migrate `plan.forward_with_window(&x, &w)` to
+    `StftPlan::with_window_values(frame, hop, w)?.forward(&x)`.
+  - **Inverse precondition:** the inverse returns the new
+    `StftError::WindowNotOverlapAdd` where some sample, in the interior or at
+    an end covered only by a window's zero part, gets squared-window weight at
+    most `ε` of the largest, instead of writing zeros there. The WGPU inverse
+    refuses such plans with `WgpuError::InvalidPlan`.
+  - **Errors:** `StftError` gains `InvalidWindowParameter` and becomes
+    `#[non_exhaustive]`.
+  - **Window values:** windows are now evaluated at the nearer end, so they are
+    exactly symmetric. Hann values past the midpoint can differ from before in
+    the last bit.
 - [major] `apollo-nufft`'s fast 3-D Type-2 (`nufft_type2_3d_fast`,
   `NufftPlan3D::type2` and its `_into`/typed forms, and every WGPU fast 3-D
   Type-2 entry: `execute_fast_type2_3d` with its `_with_buffers`,

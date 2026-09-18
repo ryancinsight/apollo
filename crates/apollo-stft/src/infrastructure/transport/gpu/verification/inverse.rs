@@ -298,3 +298,20 @@ fn stft_wgpu_inverse_non_power_of_two_400() {
         );
     }
 }
+
+/// The shader synthesizes with a symmetric Hann, zero at both ends: at a hop
+/// of the whole frame some samples get no weight, and the inverse is refused
+/// as the CPU plan refuses it, not written as zeros.
+#[test]
+fn stft_wgpu_inverse_refuses_a_hop_without_overlap() {
+    let Some(backend) = backend() else {
+        return;
+    };
+    let plan = StftWgpuPlan::new(FramePlan::new(8, 8));
+    let frames = 1 + 16usize.div_ceil(8);
+    let spectrum = vec![Complex32::new(1.0, 0.0); frames * 8];
+    let error = backend
+        .execute_inverse(&plan, &spectrum, 16)
+        .expect_err("a hop without overlap has no defined inverse");
+    assert!(error.to_string().contains("overlap-add"), "{error}");
+}

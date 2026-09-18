@@ -272,6 +272,27 @@ impl FramedExecution for StftWgpuBackend {
                     .to_owned(),
             });
         }
+        // The shader synthesizes with Hann and writes zero where the weight
+        // vanishes; refuse those plans as the CPU inverse does.
+        let (frame_len, hop_len) = (plan.payload().frame_len(), plan.payload().hop_len());
+        let hann = crate::Window::Hann
+            .coefficients(frame_len)
+            .map_err(|error| WgpuError::InvalidPlan {
+                message: error.to_string(),
+            })?;
+        if !crate::application::execution::kernel::window::wola_weights_defined(
+            hann.as_slice()
+                .expect("invariant: a built window is contiguous"),
+            hop_len,
+            signal_len,
+        ) {
+            return Err(WgpuError::InvalidPlan {
+                message: format!(
+                    "invalid plan frame_len={frame_len}, hop_len={hop_len}: {}",
+                    crate::StftError::WindowNotOverlapAdd
+                ),
+            });
+        }
         Kernel::execute_inverse_with_buffers(self.device(), spectrum, signal_len, buffers)
     }
 }

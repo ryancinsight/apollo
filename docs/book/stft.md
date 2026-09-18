@@ -24,9 +24,15 @@ let spectrum = plan.forward(&signal)?;
 let reconstructed = plan.inverse(&spectrum, signal.len())?;
 ```
 
-The inverse uses the overlap-add method for reconstruction. Perfect
-reconstruction holds when the window satisfies the COLA constraint
-(constant overlap-add).
+The inverse uses weighted overlap-add: each sample is the overlap of the
+windowed inverse frames divided by the sum of the squared window over the
+frames that cover it. The plan's one window serves both passes, so
+reconstruction is exact in exact arithmetic wherever that sum is non-zero (the
+nonzero overlap-add condition, weaker than constant overlap-add); the inverse
+refuses a plan and length where some sample's sum is at most `ε` of the
+largest. The window is Hann by default, a `Window` family (Hann, Hamming,
+Blackman, Tukey) through `StftPlan::with_window`, or caller values through
+`StftPlan::with_window_values`.
 
 ## GPU execution
 
