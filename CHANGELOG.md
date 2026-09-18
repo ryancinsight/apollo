@@ -204,6 +204,11 @@ Change-class tags: [patch] backward-compatible fix, [minor] additive non-breakin
 
 ### Changed
 
+- [patch] `apollo-fft` odd powers of two past the planar range (2^23 and
+  up) combine their radix-2 halves from the forward stage-major table,
+  conjugated at the multiply on the inverse, instead of caching an inverse
+  table of `n - 1` entries: 134 MB less for the first inverse at 2^23 f64,
+  outputs bitwise unchanged.
 - [patch] `apollo-fft` caches one four-step `W_N^{jk}` matrix per shape
   instead of one per direction. The generic four-step, the batched
   interleaved route and the two-by-prime combine conjugate each entry at
