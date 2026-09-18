@@ -106,6 +106,13 @@ Change-class tags: [patch] backward-compatible fix, [minor] additive non-breakin
 
 ### Added
 
+- [minor] `apollo-fft` bounds its plan caches and adds
+  `clear_plan_caches()` (ADR 0068). Each scalar and dimension keeps at most
+  64 shapes process-wide, evicting the least recently used, and four per
+  thread in a most-recently-used ring; they used to grow by one plan per
+  distinct shape for the life of the process, and each thread's map pinned
+  every plan it had used. Alternating two shapes through the free functions
+  is about 10% faster on the ring than on the previous slot and map.
 - [minor] `apollo-fft`: `FftPlan2D::{forward,inverse}_axis_complex_inplace`
   and their `_leto` forms transform a plane along one axis, and
   `FftPlan3D` gains `{forward,inverse}_axis_complex_leto_inplace` beside its
