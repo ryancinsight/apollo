@@ -5,8 +5,8 @@ use apollo_fft::{PlanCacheProvider, PlanScratch, F16};
 use eunomia::{Complex, Complex64};
 use leto::{Array2, Array3};
 
-/// Shapes exercising the split (`ny` a multiple of four), each refusal (an odd
-/// `ny`, an even one that is not a multiple of four, one below four), an extent
+/// Shapes exercising the split (an even `ny`, with one `≡ 2 (mod 4)`), each
+/// refusal (an odd `ny`, one below four), an extent
 /// of one on each axis in turn, one plane whose rows and columns both cross
 /// the lane helpers' parallel thresholds, and one at the owned forward's
 /// route floor.
@@ -216,14 +216,14 @@ fn the_pair_allocates_nothing_once_warm() {
     );
 }
 
-/// Refused-length shapes (`ny` not a positive multiple of four): one under
+/// Refused-length shapes (an odd `ny`): one under
 /// every shipped scalar's parallel byte threshold for the widened fallback
 /// pairing, and one that clears it even for the narrowest scalar (`F16`'s
 /// `Complex<f32>` bins beside `F16` reals) — `lanes::PARALLEL_BYTES` is sized
 /// off `f64`-width lane data, so a narrower scalar needs more rows to reach it.
-const FALLBACK_PLANE_SHAPES: [[usize; 2]; 2] = [[8, 6], [4096, 30]];
+const FALLBACK_PLANE_SHAPES: [[usize; 2]; 2] = [[8, 7], [4096, 31]];
 
-/// The widened row fallback (`ny` not a positive multiple of four) reuses
+/// The widened row fallback (an odd `ny`) reuses
 /// thread-local scratch, sharing the retained-memory bound the x pass already
 /// keeps, instead of allocating one `ny`-length buffer per scheduled task.
 /// Regression coverage for `half_plane::forward`/`half_plane::inverse`.

@@ -29,7 +29,7 @@ const SENTINEL: (f64, f64) = (7.25, -3.5);
 
 /// The split's admission rule, stated here rather than read from the crate.
 fn admitted(n: usize) -> bool {
-    n >= 4 && n % 4 == 0
+    n >= 2 && n % 2 == 0
 }
 
 fn forward_takes_split(n: usize) -> bool {
@@ -141,16 +141,19 @@ where
 }
 
 /// Every admitted length class the static forms route differently: powers of
-/// two on each side of the forward floor, the floor itself, and lengths that
-/// are multiples of four but not powers of two.
+/// two on each side of the forward floor, the floor itself, and even lengths
+/// that are not powers of two, with odd and even half lengths.
 fn admitted_lengths<T>()
 where
     T: Sample,
     T::PlanScalar: PlanCacheProvider + Into<f64> + From<f32>,
     Complex<T::PlanScalar>: PlanScratch,
 {
+    static_pair::<T, 2>();
     static_pair::<T, 4>();
+    static_pair::<T, 6>();
     static_pair::<T, 8>();
+    static_pair::<T, 10>();
     static_pair::<T, 12>();
     static_pair::<T, 16>();
     static_pair::<T, 20>();
@@ -163,18 +166,16 @@ where
     static_pair::<T, 4096>();
 }
 
-/// Lengths the split refuses: below four, even but not a multiple of four,
-/// and odd.
+/// Lengths the split refuses: the odd ones.
 fn refused_lengths<T>()
 where
     T: Sample,
     T::PlanScalar: PlanCacheProvider + Into<f64> + From<f32>,
     Complex<T::PlanScalar>: PlanScratch,
 {
-    static_pair::<T, 2>();
-    static_pair::<T, 6>();
+    static_pair::<T, 3>();
     static_pair::<T, 7>();
-    static_pair::<T, 10>();
+    static_pair::<T, 9>();
 }
 
 #[test]

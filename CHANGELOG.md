@@ -204,6 +204,14 @@ Change-class tags: [patch] backward-compatible fix, [minor] additive non-breakin
 
 ### Changed
 
+- [patch] `apollo-fft` real transforms take the half-length split at every
+  even length, 2 and `n ≡ 2 (mod 4)` included, where they used to require a
+  multiple of four and run a full-length complex transform otherwise. At
+  lengths such as 90, 250 and 1002 the forward and inverse now run one
+  transform of length `n/2`, and `ifft_1d_slice_half_into` no longer
+  allocates a mirrored full spectrum per call; only odd lengths keep the full
+  transform. 1-D, 2-D (`ny`), 3-D (`nz`) and static forms follow the same
+  rule.
 - [patch] `apollo-fft` 3-D transforms (`FftPlan3D`, `StaticFftPlan3D`) run
   their three axis passes as a layout chain: axis 2 in place, one transpose
   so axis 0 is contiguous, one more so axis 1 is, and one back to C order —

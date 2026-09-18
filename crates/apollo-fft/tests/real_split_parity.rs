@@ -324,3 +324,119 @@ fn attributes_real_half_spectrum_phases() {
         );
     }
 }
+
+/// The split at `n ≡ 2 (mod 4)`, whose half length `m = n/2` is odd, so the
+/// untangle has no self-paired midpoint and the half transform runs a
+/// composite, Rader or Bluestein route rather than a power of two.
+///
+/// Bound: the half transform is at worst Bluestein's three transforms at the
+/// padded `p < 4n`, each within the `O(log p · u)` forward-error bound
+/// (Higham §24.1, the file's `TOLERANCE_FACTOR` per transform), plus the
+/// untangle's restarted recurrence; the direct-sum oracle adds `n` rounded
+/// products and sums, `2n u`. All against `|X_k| ≤ ‖x‖₁`.
+#[test]
+fn split_serves_lengths_two_mod_four() {
+    let lengths = (6..=602).step_by(4).chain([1002, 2050]);
+    for n in lengths {
+        assert!(
+            <f64 as apollo_fft::RealFftData>::real_split_applies(n),
+            "N={n} must take the split"
+        );
+        let src = signal(n);
+        let l1: f64 = src.iter().map(|value| value.abs()).sum();
+        let log_p = f64::from((4 * n).next_power_of_two().trailing_zeros());
+        let bound = (3.0 * TOLERANCE_FACTOR * log_p + RESTARTED_RECURRENCE_FACTOR + 4.0 * n as f64)
+            * (f64::EPSILON / 2.0)
+            * l1;
+
+        let half_plan = <f64 as apollo_fft::PlanCacheProvider>::get_1d_plan(
+            apollo_fft::Shape1D::new(n / 2).expect("non-zero"),
+        );
+        let mut half = vec![Complex64::default(); n / 2 + 1];
+        <f64 as apollo_fft::RealFftData>::forward_1d_half_into(half_plan.as_ref(), &src, &mut half);
+        for (k, value) in half.iter().enumerate() {
+            let exact = (0..n).fold(Complex64::new(0.0, 0.0), |acc, j| {
+                let angle = -TAU * ((j * k) % n) as f64 / n as f64;
+                acc + Complex64::from_polar(src[j], angle)
+            });
+            let error = (value.re - exact.re).hypot(value.im - exact.im);
+            assert!(error <= bound, "N={n} bin {k}: {error:.3e} > {bound:.3e}");
+        }
+
+        let mut spectrum = half.clone();
+        let mut back = vec![0.0f64; n];
+        <f64 as apollo_fft::RealFftData>::inverse_1d_half_into(
+            half_plan.as_ref(),
+            &mut spectrum,
+            &mut back,
+        );
+        // The inverse runs the same routes on bins of size at most `‖x‖₁`,
+        // scaled by `1/n`.
+        let worst = src
+            .iter()
+            .zip(&back)
+            .map(|(expected, actual)| (expected - actual).abs())
+            .fold(0.0_f64, f64::max);
+        assert!(
+            worst <= 2.0 * bound,
+            "N={n}: round trip {worst:.3e} > {:.3e}",
+            2.0 * bound
+        );
+    }
+}
+
+/// Every even length the split admits, 2 through 2048, against the widened
+/// size-`n` complex transform of the same signal: a route with no split,
+/// whose own accuracy the direct-sum sweep of `tests/dft_oracle_sweep.rs`
+/// establishes. The direct sum itself is the oracle of
+/// [`split_serves_lengths_two_mod_four`]; here it would cost `O(n²)` per
+/// length.
+///
+/// Bound: each side carries the half-length or full-length route's error
+/// under the bound of [`split_serves_lengths_two_mod_four`] less its
+/// direct-sum term, so their difference is within twice that.
+#[test]
+fn split_serves_every_even_length() {
+    for n in (2..=2048).step_by(2) {
+        assert!(
+            <f64 as apollo_fft::RealFftData>::real_split_applies(n),
+            "N={n} must take the split"
+        );
+        let src = signal(n);
+        let l1: f64 = src.iter().map(|value| value.abs()).sum();
+        let log_p = f64::from((4 * n).next_power_of_two().trailing_zeros());
+        let bound = 2.0
+            * (3.0 * TOLERANCE_FACTOR * log_p + RESTARTED_RECURRENCE_FACTOR)
+            * (f64::EPSILON / 2.0)
+            * l1;
+
+        let half = apollo_fft::fft_1d_slice_half::<f64>(&src);
+        let full_plan = <f64 as apollo_fft::PlanCacheProvider>::get_1d_plan(
+            apollo_fft::Shape1D::new(n).expect("non-zero"),
+        );
+        let mut widened: Vec<Complex64> = src
+            .iter()
+            .map(|&value| Complex64::new(value, 0.0))
+            .collect();
+        full_plan.forward_complex_slice_inplace(&mut widened);
+        for (k, (value, reference)) in half.iter().zip(&widened).enumerate() {
+            let error = (value.re - reference.re).hypot(value.im - reference.im);
+            assert!(error <= bound, "N={n} bin {k}: {error:.3e} > {bound:.3e}");
+        }
+
+        // The inverse runs the half-length route on bins of size at most
+        // `‖x‖₁`, scaled by `1/n`, after bins carrying half this bound.
+        let mut spectrum = half;
+        let mut back = vec![0.0f64; n];
+        apollo_fft::ifft_1d_slice_half_into::<f64>(&mut spectrum, &mut back);
+        let worst = src
+            .iter()
+            .zip(&back)
+            .map(|(expected, actual)| (expected - actual).abs())
+            .fold(0.0_f64, f64::max);
+        assert!(
+            worst <= bound,
+            "N={n}: round trip {worst:.3e} > {bound:.3e}"
+        );
+    }
+}
