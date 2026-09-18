@@ -7,6 +7,7 @@ use super::plane::{
     planar_applies, plane_geometry, scratch_len, split_plane, transpose_planes,
     transpose_planes_into, PlaneView, ROW_PAD,
 };
+use super::seams::FoldDirection;
 use super::{boundary, sweep, BatchedPlanCache};
 use eunomia::Complex;
 
@@ -123,13 +124,21 @@ pub(crate) fn four_step_batched<T, const INVERSE: bool>(
     } else {
         T::cached_plan::<INVERSE>(n2)
     };
-    let fold = T::cached_four_step_fold::<INVERSE>(n, n2, n1);
+    // The fold table is always the forward twiddle; the inverse direction
+    // conjugates it in the pass instead of taking a second, separately
+    // cached table (`APOLLO-MEM-INVERSE-CONJUGATE`).
+    let fold = T::cached_four_step_fold(n, n2, n1);
+    let direction = if INVERSE {
+        FoldDirection::Conjugate
+    } else {
+        FoldDirection::Forward
+    };
     sect!("stages2", {
         run_batched_dif(
             re,
             im,
             plan.as_ref(),
-            Some(fold.as_ref()),
+            Some((fold.as_ref(), direction)),
             Some(data),
             staging,
             n1,

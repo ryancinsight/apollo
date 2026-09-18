@@ -204,6 +204,18 @@ Change-class tags: [patch] backward-compatible fix, [minor] additive non-breakin
 
 ### Changed
 
+- [patch] `apollo-fft` batched four-step planar transforms (65536 to 2^20
+  even powers, and the odd powers below 2^21) now build only the forward
+  fold table and serve the inverse by conjugating it in the pass: the
+  compact form negates the fine/coarse product's imaginary part and the
+  full-row form negates the loaded twiddle's, both an exact sign-bit flip
+  under the pass's own fused-multiply-add complex product, so inverse
+  outputs are bitwise unchanged at every batched length in f64 and f32
+  (normalized and unnormalized). The fold cache is keyed on length alone in
+  place of (length, direction). The first inverse of an f64 plan at 65536
+  now adds 4,128 bytes (was 282,744); pinned inverse timings at 16384,
+  65536, 131072, 262144 and 1048576 on both core classes sit within the
+  host's identical-code drift band.
 - [patch] `apollo-fft` real transforms take the half-length split at every
   even length, 2 and `n ≡ 2 (mod 4)` included, where they used to require a
   multiple of four and run a full-length complex transform otherwise. At

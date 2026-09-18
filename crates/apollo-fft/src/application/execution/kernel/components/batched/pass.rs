@@ -8,7 +8,87 @@ use super::fold::FourStepFold;
 use super::lane::Lane;
 use super::radix::{cmul, Pair, Radix};
 use super::register::{load, load_interleaved, reverse_row, store, store_interleaved};
-use super::seams::{Columns, Rows, Seams, SinkRows};
+use super::seams::{Columns, FoldDirection, Rows, Seams, SinkRows};
+
+/// The operands every pass takes: the planes, the row set and column block,
+/// and the radix's twiddles in scalar and register form.
+struct PassOperands<'p, T, A, const NT: usize>
+where
+    T: LaneScalar,
+    A: SimdArch + SimdKernel<T>,
+{
+    re: &'p mut [T],
+    im: &'p mut [T],
+    rows: Rows,
+    stride: usize,
+    batch: usize,
+    cols: Columns,
+    tw: &'p [Pair<T>; NT],
+    twv: &'p [Pair<Vector<T, A>>; NT],
+    simd: Simd<T, A>,
+}
+
+/// The seam operands of one pass, empty where its monomorphization carries
+/// no such seam.
+struct SeamData<'a, 'b, T> {
+    fold: Option<&'a FourStepFold<T>>,
+    source: &'a [T],
+    source_bits: u32,
+    sink: &'b mut [T],
+    sink_rows: SinkRows,
+}
+
+impl<'a, 'b, T> SeamData<'a, 'b, T> {
+    fn planes() -> Self {
+        Self {
+            fold: None,
+            source: &[],
+            source_bits: 0,
+            sink: &mut [],
+            sink_rows: SinkRows::NONE,
+        }
+    }
+
+    fn source(source: &'a [T], source_bits: u32) -> Self {
+        Self {
+            fold: None,
+            source,
+            source_bits,
+            sink: &mut [],
+            sink_rows: SinkRows::NONE,
+        }
+    }
+
+    fn fold(fold: &'a FourStepFold<T>) -> Self {
+        Self {
+            fold: Some(fold),
+            source: &[],
+            source_bits: 0,
+            sink: &mut [],
+            sink_rows: SinkRows::NONE,
+        }
+    }
+
+    fn sink(sink: &'b mut [T], sink_rows: SinkRows) -> Self {
+        Self {
+            fold: None,
+            source: &[],
+            source_bits: 0,
+            sink,
+            sink_rows,
+        }
+    }
+
+    fn fold_sink(fold: &'a FourStepFold<T>, sink: &'b mut [T], sink_rows: SinkRows) -> Self {
+        Self {
+            fold: Some(fold),
+            source: &[],
+            source_bits: 0,
+            sink,
+            sink_rows,
+        }
+    }
+}
 
 /// Runs radix `R` over one row set across `cols`: the vector loop over
 /// `LANE_COUNT` columns at a time and the scalar remainder.
@@ -43,145 +123,81 @@ pub(super) fn butterfly_rows<T, A, R, const N: usize, const NT: usize>(
     A: SimdArch + SimdKernel<T>,
     R: Radix<N, NT>,
 {
+    let ops = PassOperands {
+        re,
+        im,
+        rows,
+        stride,
+        batch,
+        cols,
+        tw,
+        twv,
+        simd,
+    };
     match seams {
-        Seams::Planes => pass::<T, A, R, N, NT, false, false, false, false>(
-            re,
-            im,
-            rows,
-            stride,
-            batch,
-            cols,
-            tw,
-            twv,
-            simd,
-            None,
-            &[],
-            0,
-            &mut [],
-            SinkRows::NONE,
-        ),
-        Seams::Source(source, row_bits) => pass::<T, A, R, N, NT, true, false, false, false>(
-            re,
-            im,
-            rows,
-            stride,
-            batch,
-            cols,
-            tw,
-            twv,
-            simd,
-            None,
-            source,
-            row_bits,
-            &mut [],
-            SinkRows::NONE,
-        ),
-        Seams::Fold(fold) => {
-            // The table's form is fixed per length (`COMPACT_FOLD_MIN_LEN`),
-            // so each form is its own pass rather than a test in the row loop.
-            if fold.lanes == batch {
-                pass::<T, A, R, N, NT, false, true, false, false>(
-                    re,
-                    im,
-                    rows,
-                    stride,
-                    batch,
-                    cols,
-                    tw,
-                    twv,
-                    simd,
-                    Some(fold),
-                    &[],
-                    0,
-                    &mut [],
-                    SinkRows::NONE,
-                )
-            } else {
-                pass::<T, A, R, N, NT, false, true, true, false>(
-                    re,
-                    im,
-                    rows,
-                    stride,
-                    batch,
-                    cols,
-                    tw,
-                    twv,
-                    simd,
-                    Some(fold),
-                    &[],
-                    0,
-                    &mut [],
-                    SinkRows::NONE,
-                )
-            }
+        Seams::Planes => {
+            pass::<T, A, R, N, NT, false, false, false, false, false>(ops, SeamData::planes())
         }
-        Seams::Sink(sink, staging) => pass::<T, A, R, N, NT, false, false, false, true>(
-            re,
-            im,
-            rows,
-            stride,
-            batch,
-            cols,
-            tw,
-            twv,
-            simd,
-            None,
-            &[],
-            0,
-            sink,
-            staging,
+        Seams::Source(source, row_bits) => {
+            pass::<T, A, R, N, NT, true, false, false, false, false>(
+                ops,
+                SeamData::source(source, row_bits),
+            )
+        }
+        // The table's form is fixed per length (`COMPACT_FOLD_MIN_LEN`) and
+        // the direction per transform, so each combination is its own pass
+        // rather than a test in the row loop.
+        Seams::Fold(fold, FoldDirection::Forward) if fold.lanes == batch => {
+            pass::<T, A, R, N, NT, false, true, false, false, false>(ops, SeamData::fold(fold))
+        }
+        Seams::Fold(fold, FoldDirection::Conjugate) if fold.lanes == batch => {
+            pass::<T, A, R, N, NT, false, true, false, false, true>(ops, SeamData::fold(fold))
+        }
+        Seams::Fold(fold, FoldDirection::Forward) => {
+            pass::<T, A, R, N, NT, false, true, true, false, false>(ops, SeamData::fold(fold))
+        }
+        Seams::Fold(fold, FoldDirection::Conjugate) => {
+            pass::<T, A, R, N, NT, false, true, true, false, true>(ops, SeamData::fold(fold))
+        }
+        Seams::Sink(sink, staging) => pass::<T, A, R, N, NT, false, false, false, true, false>(
+            ops,
+            SeamData::sink(sink, staging),
         ),
-        Seams::FoldSink(fold, sink, staging) => {
-            // The table's form is fixed per length (`COMPACT_FOLD_MIN_LEN`),
-            // so each form is its own pass rather than a test in the row loop.
-            if fold.lanes == batch {
-                pass::<T, A, R, N, NT, false, true, false, true>(
-                    re,
-                    im,
-                    rows,
-                    stride,
-                    batch,
-                    cols,
-                    tw,
-                    twv,
-                    simd,
-                    Some(fold),
-                    &[],
-                    0,
-                    sink,
-                    staging,
-                )
-            } else {
-                pass::<T, A, R, N, NT, false, true, true, true>(
-                    re,
-                    im,
-                    rows,
-                    stride,
-                    batch,
-                    cols,
-                    tw,
-                    twv,
-                    simd,
-                    Some(fold),
-                    &[],
-                    0,
-                    sink,
-                    staging,
-                )
-            }
+        Seams::FoldSink(fold, FoldDirection::Forward, sink, staging) if fold.lanes == batch => {
+            pass::<T, A, R, N, NT, false, true, false, true, false>(
+                ops,
+                SeamData::fold_sink(fold, sink, staging),
+            )
+        }
+        Seams::FoldSink(fold, FoldDirection::Conjugate, sink, staging) if fold.lanes == batch => {
+            pass::<T, A, R, N, NT, false, true, false, true, true>(
+                ops,
+                SeamData::fold_sink(fold, sink, staging),
+            )
+        }
+        Seams::FoldSink(fold, FoldDirection::Forward, sink, staging) => {
+            pass::<T, A, R, N, NT, false, true, true, true, false>(
+                ops,
+                SeamData::fold_sink(fold, sink, staging),
+            )
+        }
+        Seams::FoldSink(fold, FoldDirection::Conjugate, sink, staging) => {
+            pass::<T, A, R, N, NT, false, true, true, true, true>(
+                ops,
+                SeamData::fold_sink(fold, sink, staging),
+            )
         }
     }
 }
 
 /// One monomorphized pass: the seams it carries are compile-time, so its
-/// row loop tests nothing and computes only the offsets it uses.
+/// row loop tests nothing and computes only the offsets it uses. `CONJ`
+/// (meaningful only with `FOLD`) selects the fold table's direction: the
+/// dispatcher in [`butterfly_rows`] resolves it once per pass from the
+/// seam's [`FoldDirection`], never per element.
 #[expect(
     clippy::inline_always,
     reason = "must fold into the caller's target-feature scope, as the driver"
-)]
-#[expect(
-    clippy::too_many_arguments,
-    reason = "the pass is the inner function of one driver; its arguments are the driver's, unbundled so each monomorphization keeps only the seams it carries in registers"
 )]
 #[inline(always)]
 fn pass<
@@ -194,26 +210,33 @@ fn pass<
     const FOLD: bool,
     const COMPACT: bool,
     const SINK: bool,
+    const CONJ: bool,
 >(
-    re: &mut [T],
-    im: &mut [T],
-    rows: Rows,
-    stride: usize,
-    batch: usize,
-    cols: Columns,
-    tw: &[Pair<T>; NT],
-    twv: &[Pair<Vector<T, A>>; NT],
-    simd: Simd<T, A>,
-    fold: Option<&FourStepFold<T>>,
-    source: &[T],
-    source_bits: u32,
-    sink: &mut [T],
-    sink_rows: SinkRows,
+    ops: PassOperands<'_, T, A, NT>,
+    seam: SeamData<'_, '_, T>,
 ) where
     T: LaneScalar + Lane,
     A: SimdArch + SimdKernel<T>,
     R: Radix<N, NT>,
 {
+    let PassOperands {
+        re,
+        im,
+        rows,
+        stride,
+        batch,
+        cols,
+        tw,
+        twv,
+        simd,
+    } = ops;
+    let SeamData {
+        fold,
+        source,
+        source_bits,
+        sink,
+        sink_rows,
+    } = seam;
     let lanes = <A as SimdStorage<T>>::LANE_COUNT;
     let plane_first = rows.first * stride;
     let plane_step = rows.step * stride;
@@ -274,13 +297,22 @@ fn pass<
                         simd.splat(fold.coarse_re[group]),
                         simd.splat(fold.coarse_im[group]),
                     );
-                    *value = cmul(*value, cmul(fine, coarse));
+                    let w = cmul(fine, coarse);
+                    // `CONJ` negates the product's imaginary part: an exact
+                    // sign-bit flip, bitwise identical to conjugating the
+                    // two factors before the multiply (the product's real
+                    // part is a difference of same-sign products, unchanged
+                    // under negating both; its imaginary part is a sum of
+                    // same-sign products, negated under negating both).
+                    let w = if CONJ { (w.0, w.1.neg()) } else { w };
+                    *value = cmul(*value, w);
                 } else {
                     let at = fine + k;
                     let w = (
                         load::<T, A>(&fold.fine_re, at),
                         load::<T, A>(&fold.fine_im, at),
                     );
+                    let w = if CONJ { (w.0, w.1.neg()) } else { w };
                     *value = cmul(*value, w);
                 }
             }
@@ -325,6 +357,9 @@ fn pass<
                     (fold.fine_re[fine], fold.fine_im[fine]),
                     (fold.coarse_re[group], fold.coarse_im[group]),
                 );
+                // See the vector loop above: negating the product's
+                // imaginary part is bitwise the conjugated-factors product.
+                let w = if CONJ { (w.0, w.1.neg()) } else { w };
                 *value = cmul(*value, w);
             }
         }

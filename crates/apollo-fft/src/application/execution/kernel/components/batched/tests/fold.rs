@@ -18,7 +18,7 @@ use std::f64::consts::TAU;
 fn fold_tables_reproduce_the_twiddle_matrix_within_their_roundings() {
     use crate::application::execution::kernel::mixed_radix::MixedRadixScalar;
     let (n, m) = (256usize, 16usize);
-    let fold = <f64 as BatchedPlanCache>::cached_four_step_fold::<false>(n, m, m);
+    let fold = <f64 as BatchedPlanCache>::cached_four_step_fold(n, m, m);
     let interleaved = <f64 as MixedRadixScalar>::cached_four_step_twiddles::<false>(n, m, m);
     let order = LaneOrder::for_batch::<f64>(m);
     let lanes = fold.lanes;
@@ -39,7 +39,7 @@ fn fold_tables_reproduce_the_twiddle_matrix_within_their_roundings() {
             assert!(err <= bound, "({row},{col}): {err:.3e} > {bound:.3e}");
         }
     }
-    let again = <f64 as BatchedPlanCache>::cached_four_step_fold::<false>(n, m, m);
+    let again = <f64 as BatchedPlanCache>::cached_four_step_fold(n, m, m);
     assert!(
         std::sync::Arc::ptr_eq(&fold, &again),
         "the fold tables must cache"
@@ -54,7 +54,7 @@ fn compact_fold_tables_reproduce_the_twiddle_matrix_within_their_roundings() {
     use crate::application::execution::kernel::mixed_radix::MixedRadixScalar;
     let (n, m) = (1usize << 18, 512usize);
     let order = LaneOrder::for_batch::<f64>(m);
-    let fold = FourStepFold::<f64>::new::<false>(n, m, m, order);
+    let fold = FourStepFold::<f64>::new(n, m, m, order);
     let interleaved = <f64 as MixedRadixScalar>::cached_four_step_twiddles::<false>(n, m, m);
     let lanes = fold.lanes;
     assert_eq!(lanes, order.lanes());
@@ -79,7 +79,7 @@ fn rectangular_fold_table_reproduces_the_twiddle_matrix() {
     // below the compact bound, so the fine table is the whole row.
     let (n, rows, cols) = (2048usize, 64usize, 32usize);
     let order = LaneOrder::for_batch::<f64>(cols);
-    let fold = FourStepFold::<f64>::new::<false>(n, rows, cols, order);
+    let fold = FourStepFold::<f64>::new(n, rows, cols, order);
     assert_eq!(fold.lanes, cols);
     for p in 0..rows {
         for k in 0..cols {
