@@ -395,3 +395,20 @@ fn full_transform_holds_one_volume_of_caller_scratch() {
     assert_eq!(thread_local_scratch_capacity(), 16 * 16 * 16, "f32 16^3");
     release_thread_local_scratch();
 }
+
+#[test]
+fn axis_passes_preserve_logical_view_order() {
+    use crate::application::execution::plan::fft::dimension_3d::FftPlan3D;
+    use crate::domain::metadata::shape::Shape3D;
+
+    let plan = FftPlan3D::<f64>::new(
+        Shape3D::new(2, 3, 4).expect("invariant: shape lengths are non-zero"),
+    );
+    for axis in 0..3 {
+        exercise_nonstandard_layouts(
+            "axis",
+            |view| plan.forward_axis_complex_leto_inplace(view, axis),
+            |view| plan.inverse_axis_complex_leto_inplace(view, axis),
+        );
+    }
+}

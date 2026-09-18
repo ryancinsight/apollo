@@ -106,6 +106,12 @@ Change-class tags: [patch] backward-compatible fix, [minor] additive non-breakin
 
 ### Added
 
+- [minor] `apollo-fft`: `FftPlan2D::{forward,inverse}_axis_complex_inplace`
+  and their `_leto` forms transform a plane along one axis, and
+  `FftPlan3D` gains `{forward,inverse}_axis_complex_leto_inplace` beside its
+  array forms. Each axis pass is the corresponding half of the whole
+  transform, bit for bit, with the inverse normalized by the axis length.
+
 - [minor] `apollo-stft` estimates tones below bin resolution:
   `estimate_peaks` returns a `PeakEstimate` (fractional bin position,
   amplitude, phase) for each requested peak bin of a rectangular-window DFT,

@@ -159,3 +159,105 @@ fn dynamic_fft_2d_preserves_logical_view_order() {
         |view| plan.inverse_complex_leto_inplace(view),
     );
 }
+
+/// The axis passes are the halves of the whole-plane transform, in its
+/// order (rows then columns forward, columns then rows inverse), so they
+/// compose to it bit for bit; a forward then an inverse along one axis is
+/// the identity within the 1-D round trip's rounding.
+#[test]
+fn axis_passes_compose_to_the_plane_and_invert_per_axis() {
+    for (nx, ny) in [(6usize, 10usize), (8, 16), (5, 1), (1, 7)] {
+        let plan = FftPlan2D::<f64>::new(Shape2D::new(nx, ny).expect("non-zero"));
+        let original = Array2::from_shape_fn([nx, ny], |[i, j]| {
+            let x = (i * ny + j) as f64;
+            Complex64::new((0.17 * x).sin() + 0.3, 0.23 * (0.31 * x).cos())
+        });
+        let mut full = original.clone();
+        plan.forward_complex_inplace(&mut full);
+        let mut composed = original.clone();
+        plan.forward_axis_complex_inplace(&mut composed, 1);
+        plan.forward_axis_complex_inplace(&mut composed, 0);
+        assert!(
+            full.iter().zip(composed.iter()).all(|(a, b)| a == b),
+            "{nx}x{ny}: forward differs from rows then columns"
+        );
+        let mut full_inverse = full.clone();
+        plan.inverse_complex_inplace(&mut full_inverse);
+        plan.inverse_axis_complex_inplace(&mut composed, 0);
+        plan.inverse_axis_complex_inplace(&mut composed, 1);
+        assert!(
+            full_inverse
+                .iter()
+                .zip(composed.iter())
+                .all(|(a, b)| a == b),
+            "{nx}x{ny}: inverse differs from columns then rows"
+        );
+        for axis in 0..2 {
+            let mut data = original.clone();
+            plan.forward_axis_complex_inplace(&mut data, axis);
+            plan.inverse_axis_complex_inplace(&mut data, axis);
+            // A forward and a normalized inverse FFT of length `n` stay
+            // within `γ √n max|x|` per sample, `γ = 8 ⌈log₂ n⌉ ε` (Higham,
+            // Accuracy and Stability of Numerical Algorithms, §24.1, both
+            // transforms), plus one `ε` for the normalization.
+            let n = if axis == 0 { nx } else { ny } as f64;
+            let peak = original.iter().fold(0.0f64, |m, v| m.max(v.norm()));
+            let bound = (8.0 * n.log2().ceil() * n.sqrt() + 1.0) * f64::EPSILON * peak;
+            assert!(
+                max_err(&data, &original) <= bound,
+                "{nx}x{ny} axis {axis}: round trip beyond {bound:e}"
+            );
+        }
+    }
+}
+
+/// The column pass computes each column's DFT: checked against the direct
+/// sum along axis 0 only.
+#[test]
+fn column_pass_matches_the_direct_column_sum() {
+    const NX: usize = 6;
+    const NY: usize = 4;
+    let plan = FftPlan2D::<f64>::new(Shape2D::new(NX, NY).expect("non-zero"));
+    let input = signal::<NX, NY>();
+    let mut actual = input.clone();
+    plan.forward_axis_complex_inplace(&mut actual, 0);
+    let mut expected = Array2::from_elem([NX, NY], Complex64::new(0.0, 0.0));
+    for k in 0..NX {
+        for y in 0..NY {
+            let mut acc = Complex64::new(0.0, 0.0);
+            for x in 0..NX {
+                let phase = -2.0 * PI * (k * x) as f64 / NX as f64;
+                acc += input[[x, y]] * Complex64::from_polar(1.0, phase);
+            }
+            expected[[k, y]] = acc;
+        }
+    }
+    // The FFT is within `8 ⌈log₂ N⌉ ε √N max|x|` of the exact column DFT
+    // (Higham §24.1), and the direct sum within `N (1 + 2 ε) ε max|x|` for
+    // its `N` products and additions with unit-modulus phases rounded once.
+    let peak = input.iter().fold(0.0f64, |m, v| m.max(v.norm()));
+    let n = NX as f64;
+    let bound = (8.0 * n.log2().ceil() * n.sqrt() + 2.0 * n) * f64::EPSILON * peak;
+    assert!(max_err(&actual, &expected) <= bound, "beyond {bound:e}");
+}
+
+#[test]
+fn axis_passes_preserve_logical_view_order() {
+    let plan =
+        FftPlan2D::<f64>::new(Shape2D::new(3, 4).expect("invariant: shape lengths are non-zero"));
+    for axis in 0..2 {
+        exercise_nonstandard_layouts(
+            "axis",
+            |view| plan.forward_axis_complex_leto_inplace(view, axis),
+            |view| plan.inverse_axis_complex_leto_inplace(view, axis),
+        );
+    }
+}
+
+#[test]
+#[should_panic(expected = "axis must be 0 or 1")]
+fn axis_beyond_the_plane_is_refused() {
+    let plan = FftPlan2D::<f64>::new(Shape2D::new(3, 4).expect("non-zero"));
+    let mut data = Array2::from_elem([3, 4], Complex64::new(0.0, 0.0));
+    plan.forward_axis_complex_inplace(&mut data, 2);
+}
