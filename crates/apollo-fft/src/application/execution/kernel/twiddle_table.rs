@@ -263,15 +263,35 @@ mod tests {
     }
 
     #[test]
+    /// Bitwise, not within a tolerance: kernels that keep only the forward
+    /// table serve the inverse by negating each entry's imaginary part and
+    /// promise unchanged inverse output, which holds only if the inverse
+    /// entry is exactly that negation (`sin` odd and `cos` even at the
+    /// reduced angles `twiddle_components` passes).
     fn inverse_table_is_conjugate_of_forward() {
-        let n = 32usize;
-        let fwd = build_twiddle_table::<Complex64>(n, -1.0);
-        let inv = build_twiddle_table::<Complex64>(n, 1.0);
-        for (f, i) in fwd.iter().zip(inv.iter()) {
-            assert!(
-                (f.re - i.re).abs() < 1e-15 && (f.im + i.im).abs() < 1e-15,
-                "inverse entry must be conjugate of forward entry"
-            );
+        fn check<C>(n: usize, parts: impl Fn(&C) -> (u64, u64, u64))
+        where
+            C: TwiddleOutput,
+        {
+            let fwd = build_twiddle_table::<C>(n, -1.0);
+            let inv = build_twiddle_table::<C>(n, 1.0);
+            for (index, (f, i)) in fwd.iter().zip(inv.iter()).enumerate() {
+                let (f_re, f_im, _) = parts(f);
+                let (i_re, i_im, sign) = parts(i);
+                assert_eq!(f_re, i_re, "n={n} entry {index}: real parts differ");
+                assert_eq!(f_im ^ sign, i_im, "n={n} entry {index}: not the conjugate");
+            }
+        }
+        for exp in 1..=16u32 {
+            let n = 1usize << exp;
+            check::<Complex64>(n, |c| (c.re.to_bits(), c.im.to_bits(), 1 << 63));
+            check::<Complex32>(n, |c| {
+                (
+                    u64::from(c.re.to_bits()),
+                    u64::from(c.im.to_bits()),
+                    1 << 31,
+                )
+            });
         }
     }
 
