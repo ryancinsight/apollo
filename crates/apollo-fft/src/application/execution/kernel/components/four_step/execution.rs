@@ -16,13 +16,12 @@ fn radix2_split<F: MixedRadixScalar<Complex = eunomia::Complex<F>>, const INVERS
 ) {
     let n = data.len();
     let half = n / 2;
-    let twiddles = if INVERSE {
-        F::cached_twiddle_inv(n)
-    } else {
-        F::cached_twiddle_fwd(n)
-    };
-    // The stage-major table ends with the length-`n` stage, whose `n / 2`
-    // entries are `W_N^j` in order; earlier stages occupy `n / 2 - 1` slots.
+    // The forward stage-major table ends with the length-`n` stage, whose
+    // `n / 2` entries are `W_N^j` in order; earlier stages occupy `n / 2 - 1`
+    // slots. The inverse conjugates each entry at the multiply rather than
+    // caching a second table of `n - 1` entries: the inverse table's entries
+    // are exactly these conjugated (`inverse_table_is_conjugate_of_forward`).
+    let twiddles = F::cached_twiddle_fwd(n);
     let combine = &twiddles[half - 1..n - 1];
 
     let (gathered, child_scratch) = scratch.split_at_mut(n);
@@ -36,7 +35,12 @@ fn radix2_split<F: MixedRadixScalar<Complex = eunomia::Complex<F>>, const INVERS
 
     let (low, high) = data.split_at_mut(half);
     for j in 0..half {
-        let rotated = odd[j] * combine[j];
+        let w = if INVERSE {
+            combine[j].conj()
+        } else {
+            combine[j]
+        };
+        let rotated = odd[j] * w;
         low[j] = even[j] + rotated;
         high[j] = even[j] - rotated;
     }
