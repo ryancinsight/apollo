@@ -95,7 +95,7 @@ impl NttPlan {
     ///
     /// [`NttError::EmptyLength`] and [`NttError::NonPowerOfTwo`] for the
     /// length, then the field contract of
-    /// [`transform_root`](crate::domain::contracts::math::transform_root):
+    /// [`transform_root`]:
     /// a modulus below two, a composite modulus, a length not dividing
     /// `modulus - 1`, or a root whose derived `n`-th root has a smaller
     /// order.
