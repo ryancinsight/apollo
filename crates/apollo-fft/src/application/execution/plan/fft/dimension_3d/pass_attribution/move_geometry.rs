@@ -9,6 +9,7 @@ use leto::Array3;
 
 use super::{assert_returns_to_input, transpose_matrices, volume};
 use crate::application::execution::kernel::mixed_radix::scalar::plan_scratch::with_3d_x_scratch;
+use crate::application::execution::plan::fft::lanes::Inverse;
 use crate::{FftPlan3D, Shape3D};
 
 const N: usize = 64;
@@ -55,12 +56,12 @@ fn round_trip(plan: &FftPlan3D<f64>, array: &mut Array3<Complex64>, case: usize)
     // Only the two inverse moves change task width; the same lane primitive
     // runs around them, and the same thread-local scratch role is borrowed.
     let data = rotated.as_mut_slice();
-    super::lane_pass::<false>(plan, data, false);
+    super::lane_pass::<Inverse>(plan, data, false);
     with_3d_x_scratch::<Complex64, _>(data.len(), |staged| {
         scheduled_move(data, staged, N * N, N, 256 * 1024);
-        super::lane_pass::<false>(plan, staged, false);
+        super::lane_pass::<Inverse>(plan, staged, false);
         scheduled_move(staged, data, N * N, N, 256 * 1024);
-        super::lane_pass::<false>(plan, data, false);
+        super::lane_pass::<Inverse>(plan, data, false);
     });
 }
 

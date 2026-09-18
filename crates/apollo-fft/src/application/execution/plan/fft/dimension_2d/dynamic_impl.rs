@@ -1,4 +1,5 @@
 use super::super::lanes;
+use super::super::lanes::{Direction, Forward, Inverse, InverseUnnormalized};
 use super::super::twiddles::cached_power_of_two_twiddle;
 use crate::application::execution::kernel::mixed_radix::scalar::plan_scratch::{
     with_2d_scratch, PlanScratch,
@@ -140,7 +141,7 @@ where
         assert_eq!(data.shape(), [self.nx, self.ny], "axis FFT shape mismatch");
         assert!(axis < 2, "axis must be 0 or 1");
         with_c_order_view(data, |contiguous| {
-            self.axis_pass_complex::<true>(contiguous, axis);
+            self.axis_pass_complex::<Forward>(contiguous, axis);
         });
     }
 
@@ -157,7 +158,7 @@ where
         assert_eq!(data.shape(), [self.nx, self.ny], "axis FFT shape mismatch");
         assert!(axis < 2, "axis must be 0 or 1");
         with_c_order_view(data, |contiguous| {
-            self.axis_pass_complex::<false>(contiguous, axis);
+            self.axis_pass_complex::<Inverse>(contiguous, axis);
         });
     }
 
@@ -172,8 +173,8 @@ where
             "complex forward shape mismatch"
         );
         with_c_order_view(data, |mut contiguous| {
-            self.axis_pass_complex::<true>(contiguous.reborrow(), 1);
-            self.axis_pass_complex::<true>(contiguous, 0);
+            self.axis_pass_complex::<Forward>(contiguous.reborrow(), 1);
+            self.axis_pass_complex::<Forward>(contiguous, 0);
         });
     }
 
@@ -188,22 +189,53 @@ where
             "complex inverse shape mismatch"
         );
         with_c_order_view(data, |mut contiguous| {
-            self.axis_pass_complex::<false>(contiguous.reborrow(), 0);
-            self.axis_pass_complex::<false>(contiguous, 1);
+            self.axis_pass_complex::<Inverse>(contiguous.reborrow(), 0);
+            self.axis_pass_complex::<Inverse>(contiguous, 1);
+        });
+    }
+
+    /// Inverse transform of a complex array in-place, left unnormalized: the
+    /// unscaled sum, equal to [`Self::inverse_complex_inplace`]'s result
+    /// times `nx * ny`, the plane's element count.
+    pub fn inverse_complex_unnorm_inplace(&self, data: &mut Array2<F::Complex>) {
+        assert_eq!(
+            data.shape(),
+            [self.nx, self.ny],
+            "complex inverse shape mismatch"
+        );
+        let view = ArrayViewMut2::from(data.view_mut());
+        self.inverse_complex_unnorm_leto_inplace(view);
+    }
+
+    /// Inverse transform of a complex Leto view in-place, left unnormalized:
+    /// the unscaled sum, equal to [`Self::inverse_complex_leto_inplace`]'s
+    /// result times `nx * ny`, the plane's element count.
+    ///
+    /// C-dense views execute directly. Other valid layouts use reusable
+    /// thread-local staging and preserve the view's logical row-major order.
+    pub fn inverse_complex_unnorm_leto_inplace(&self, data: ArrayViewMut2<'_, F::Complex>) {
+        assert_eq!(
+            data.shape(),
+            [self.nx, self.ny],
+            "complex inverse shape mismatch"
+        );
+        with_c_order_view(data, |mut contiguous| {
+            self.axis_pass_complex::<InverseUnnormalized>(contiguous.reborrow(), 0);
+            self.axis_pass_complex::<InverseUnnormalized>(contiguous, 1);
         });
     }
 
     /// One direction's transform of a packed row: the `ny/2` complex samples
     /// that carry a real row's `ny` values in the real split.
-    pub(crate) fn half_y_lane<const FORWARD: bool>(
+    pub(crate) fn half_y_lane<D: Direction>(
         &self,
     ) -> impl Fn(&mut [F::Complex]) + Send + Sync + '_ {
-        let twiddles = if FORWARD {
+        let twiddles = if D::FORWARD {
             &self.twiddle_half_row_fwd
         } else {
             &self.twiddle_half_row_inv
         };
-        lanes::lane_over::<F, FORWARD>(twiddles.as_deref())
+        lanes::lane_over::<F, D>(twiddles.as_deref())
     }
 
     /// The real split's twiddles for the rows, `W_ny^k` for `k = 1..⌈ny/4⌉`.
@@ -213,10 +245,8 @@ where
 
     /// One direction's transform of a full row, for real rows the split does
     /// not admit.
-    pub(crate) fn y_lane<const FORWARD: bool>(
-        &self,
-    ) -> impl Fn(&mut [F::Complex]) + Send + Sync + '_ {
-        self.lane::<FORWARD>(1)
+    pub(crate) fn y_lane<D: Direction>(&self) -> impl Fn(&mut [F::Complex]) + Send + Sync + '_ {
+        self.lane::<D>(1)
     }
 
     /// Transforms axis 0 of a C-order `[nx, row_len]` plane in place.
@@ -225,19 +255,15 @@ where
     /// leave, so `row_len` is the plane's, not the plan's. The columns are
     /// transposed into the plan's full-plane scratch, transformed there as
     /// contiguous lanes, and transposed back.
-    pub(crate) fn x_axis_inplace<const FORWARD: bool>(
-        &self,
-        data: &mut [F::Complex],
-        row_len: usize,
-    ) {
+    pub(crate) fn x_axis_inplace<D: Direction>(&self, data: &mut [F::Complex], row_len: usize) {
         with_2d_scratch::<F::Complex, _>(self.nx * row_len, |scratch| {
             transpose_matrices(data, scratch, 1, self.nx, row_len);
-            lanes::execute::<F, FORWARD>(scratch, data, self.nx, self.lane::<FORWARD>(0));
+            lanes::execute::<F, D>(scratch, data, self.nx, self.lane::<D>(0));
             transpose_matrices(scratch, data, 1, row_len, self.nx);
         });
     }
 
-    fn axis_pass_complex<const FORWARD: bool>(
+    fn axis_pass_complex<D: Direction>(
         &self,
         mut data: ArrayViewMut2<'_, F::Complex>,
         axis: usize,
@@ -246,19 +272,16 @@ where
             .as_mut_slice()
             .expect("invariant: 2D axis execution receives C-order data");
         match axis {
-            0 => self.x_axis_inplace::<FORWARD>(data_slice, self.ny),
-            1 => lanes::contiguous::<F, FORWARD, 2>(data_slice, self.ny, self.lane::<FORWARD>(1)),
+            0 => self.x_axis_inplace::<D>(data_slice, self.ny),
+            1 => lanes::contiguous::<F, D, 2>(data_slice, self.ny, self.lane::<D>(1)),
             _ => unreachable!("invariant: the entry points validate the axis"),
         }
     }
 
     /// One direction's lane transform along `axis`: the cached power-of-two
     /// twiddles where the length has them, the generic mixed radix otherwise.
-    fn lane<const FORWARD: bool>(
-        &self,
-        axis: usize,
-    ) -> impl Fn(&mut [F::Complex]) + Send + Sync + '_ {
-        let twiddles = match (axis, FORWARD) {
+    fn lane<D: Direction>(&self, axis: usize) -> impl Fn(&mut [F::Complex]) + Send + Sync + '_ {
+        let twiddles = match (axis, D::FORWARD) {
             (0, true) => &self.twiddle_col_fwd,
             (0, false) => &self.twiddle_col_inv,
             (1, true) => &self.twiddle_row_fwd,
@@ -266,6 +289,6 @@ where
             _ => unreachable!("invariant: the entry points validate the axis"),
         }
         .as_deref();
-        lanes::lane_over::<F, FORWARD>(twiddles)
+        lanes::lane_over::<F, D>(twiddles)
     }
 }

@@ -55,6 +55,7 @@ use hermes_simd::ProcessorIndex;
 use leto::Array3;
 
 use super::super::lanes;
+use super::super::lanes::{Direction, Forward, Inverse};
 use super::super::layout::transpose_matrices;
 use crate::application::execution::kernel::mixed_radix::dispatch_inplace;
 use crate::application::execution::kernel::mixed_radix::scalar::plan_scratch::with_3d_y_scratch;
@@ -82,11 +83,7 @@ static LANES_PER_PROCESSOR: [AtomicU32; PROCESSOR_SLOTS] =
     [const { AtomicU32::new(0) }; PROCESSOR_SLOTS];
 
 /// One lane pass in the given direction, exactly as an axis pass issues it.
-fn lane_pass<const FORWARD: bool>(
-    plan: &FftPlan3D<f64>,
-    data: &mut [Complex64],
-    count_processors: bool,
-) {
+fn lane_pass<D: Direction>(plan: &FftPlan3D<f64>, data: &mut [Complex64], count_processors: bool) {
     let lane_len = plan.nz;
     let (forward, inverse) = (plan.twiddle_z_fwd.as_deref(), plan.twiddle_z_inv.as_deref());
     let lane_fn = |lane: &mut [Complex64]| {
@@ -97,11 +94,11 @@ fn lane_pass<const FORWARD: bool>(
             let slot = usize::try_from(processor).expect("invariant: processor index fits usize");
             LANES_PER_PROCESSOR[slot].fetch_add(1, Ordering::Relaxed);
         }
-        match (FORWARD, forward, inverse) {
+        match (D::FORWARD, forward, inverse) {
             (true, Some(tw), _) => dispatch_inplace::<f64, false, false>(lane, Some(tw)),
             (false, _, Some(tw)) => dispatch_inplace::<f64, true, true>(lane, Some(tw)),
             _ => {
-                if FORWARD {
+                if D::FORWARD {
                     crate::application::execution::kernel::mixed_radix::forward_inplace::<f64>(
                         lane,
                     );
@@ -113,7 +110,7 @@ fn lane_pass<const FORWARD: bool>(
             }
         }
     };
-    lanes::contiguous::<f64, FORWARD, 3>(data, lane_len, lane_fn);
+    lanes::contiguous::<f64, D, 3>(data, lane_len, lane_fn);
 }
 
 /// The same lane pass with the scheduling chosen here rather than by
@@ -123,14 +120,14 @@ fn lane_pass<const FORWARD: bool>(
 /// `lanes_per_task == 0` runs every lane on the calling thread with no
 /// scheduler at all; otherwise moirai receives `lanes_per_task` lanes per task
 /// and the closure walks them. The codelet call is identical in every case.
-fn lane_pass_scheduled<const FORWARD: bool>(
+fn lane_pass_scheduled<D: Direction>(
     plan: &FftPlan3D<f64>,
     data: &mut [Complex64],
     lanes_per_task: usize,
 ) {
     let lane_len = plan.nz;
     let (forward, inverse) = (plan.twiddle_z_fwd.as_deref(), plan.twiddle_z_inv.as_deref());
-    let one_lane = |lane: &mut [Complex64]| match (FORWARD, forward, inverse) {
+    let one_lane = |lane: &mut [Complex64]| match (D::FORWARD, forward, inverse) {
         (true, Some(tw), _) => dispatch_inplace::<f64, false, false>(lane, Some(tw)),
         (false, _, Some(tw)) => dispatch_inplace::<f64, true, true>(lane, Some(tw)),
         _ => unreachable!("invariant: the extents this probe runs carry cached twiddles"),
@@ -184,10 +181,10 @@ fn transpose_pair_by_matrix(source: &[Complex64], destination: &mut [Complex64],
 /// scratch that the transpose just wrote from other cores, and the pass pays
 /// the scratch acquisition and moirai's join. The gap between this and
 /// `2 x transpose-y + lanes` is that interaction, which no isolated arm shows.
-fn axis1_pass<const FORWARD: bool>(plan: &FftPlan3D<f64>, data: &mut [Complex64], n: usize) {
+fn axis1_pass<D: Direction>(plan: &FftPlan3D<f64>, data: &mut [Complex64], n: usize) {
     with_3d_y_scratch::<Complex64, _>(n * n * n, |scratch| {
         transpose_matrices(data, scratch, n, n, n);
-        lane_pass::<FORWARD>(plan, scratch, false);
+        lane_pass::<D>(plan, scratch, false);
         transpose_matrices(scratch, data, n, n, n);
     });
 }
@@ -287,41 +284,41 @@ fn arms_for_extent(suite: &mut BenchmarkSuite, n: usize) {
     });
 
     let mut data = input.clone();
-    lane_pass::<true>(&plan, &mut data, false);
-    lane_pass::<false>(&plan, &mut data, false);
+    lane_pass::<Forward>(&plan, &mut data, false);
+    lane_pass::<Inverse>(&plan, &mut data, false);
     assert_returns_to_input("lanes-z", n, &data, &input);
     suite.run(BenchmarkCase::new("unpinned", "lanes-z", n), || {
-        lane_pass::<true>(&plan, std::hint::black_box(&mut data), false);
-        lane_pass::<false>(&plan, std::hint::black_box(&mut data), false);
+        lane_pass::<Forward>(&plan, std::hint::black_box(&mut data), false);
+        lane_pass::<Inverse>(&plan, std::hint::black_box(&mut data), false);
     });
 
     let mut data = input.clone();
-    lane_pass_scheduled::<true>(&plan, &mut data, 0);
-    lane_pass_scheduled::<false>(&plan, &mut data, 0);
+    lane_pass_scheduled::<Forward>(&plan, &mut data, 0);
+    lane_pass_scheduled::<Inverse>(&plan, &mut data, 0);
     assert_returns_to_input("lanes-serial", n, &data, &input);
     suite.run(BenchmarkCase::new("unpinned", "lanes-serial", n), || {
-        lane_pass_scheduled::<true>(&plan, std::hint::black_box(&mut data), 0);
-        lane_pass_scheduled::<false>(&plan, std::hint::black_box(&mut data), 0);
+        lane_pass_scheduled::<Forward>(&plan, std::hint::black_box(&mut data), 0);
+        lane_pass_scheduled::<Inverse>(&plan, std::hint::black_box(&mut data), 0);
     });
     for width in TASK_WIDTHS {
         let mut data = input.clone();
-        lane_pass_scheduled::<true>(&plan, &mut data, width);
-        lane_pass_scheduled::<false>(&plan, &mut data, width);
+        lane_pass_scheduled::<Forward>(&plan, &mut data, width);
+        lane_pass_scheduled::<Inverse>(&plan, &mut data, width);
         let label = format!("lanes-task{width}");
         assert_returns_to_input(&label, n, &data, &input);
         suite.run(BenchmarkCase::new("unpinned", label, n), || {
-            lane_pass_scheduled::<true>(&plan, std::hint::black_box(&mut data), width);
-            lane_pass_scheduled::<false>(&plan, std::hint::black_box(&mut data), width);
+            lane_pass_scheduled::<Forward>(&plan, std::hint::black_box(&mut data), width);
+            lane_pass_scheduled::<Inverse>(&plan, std::hint::black_box(&mut data), width);
         });
     }
 
     let mut data = input.clone();
-    axis1_pass::<true>(&plan, &mut data, n);
-    axis1_pass::<false>(&plan, &mut data, n);
+    axis1_pass::<Forward>(&plan, &mut data, n);
+    axis1_pass::<Inverse>(&plan, &mut data, n);
     assert_returns_to_input("axis1-pass", n, &data, &input);
     suite.run(BenchmarkCase::new("unpinned", "axis1-pass", n), || {
-        axis1_pass::<true>(&plan, std::hint::black_box(&mut data), n);
-        axis1_pass::<false>(&plan, std::hint::black_box(&mut data), n);
+        axis1_pass::<Forward>(&plan, std::hint::black_box(&mut data), n);
+        axis1_pass::<Inverse>(&plan, std::hint::black_box(&mut data), n);
     });
 
     // Axis 1's pair: `nx` matrices of `[ny, nz]` there, `[nz, ny]` back.

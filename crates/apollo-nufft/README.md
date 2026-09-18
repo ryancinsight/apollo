@@ -70,11 +70,9 @@ Type-1:
 
 because conjugating the Type-1 negative exponential yields the Type-2 positive
 exponential term pointwise. This is an exact-arithmetic theorem. The fast
-paths approximate that pair through Kaiser-Bessel gridding. In 1D the inverse
-FFT normalizes by the oversampled length `M`; the load stage compensates by
-`M` before interpolation to retain the unnormalized Type-2 convention; the 3D
-path runs unnormalized inverse passes, so both ranks compute the direct Type-2
-sum.
+paths approximate that pair through Kaiser-Bessel gridding. Both ranks run
+unnormalized inverse FFTs on the oversampled grid, so both compute the direct
+Type-2 sum.
 
 ## Verification
 

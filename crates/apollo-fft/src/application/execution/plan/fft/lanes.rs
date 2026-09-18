@@ -22,6 +22,47 @@ const PARALLEL_BYTES: usize = PARALLEL_THRESHOLD * core::mem::size_of::<[f64; 2]
 /// single-precision 32³ control. See `benches/lane_threshold.rs`.
 const PARALLEL_TASKS: usize = 5;
 
+/// Zero-sized direction strategy selecting a lane's kernel direction and
+/// whether its inverse normalizes, resolved entirely at compile time so every
+/// pass monomorphizes per strategy with no runtime branch (ADR 0067).
+pub(crate) trait Direction: Copy + Send + Sync + 'static {
+    /// `true` runs the forward (unnormalized) kernel; `false` runs the
+    /// inverse kernel.
+    const FORWARD: bool;
+    /// `true` scales the inverse by `1/N`; meaningless when `FORWARD` is
+    /// `true`, where it is always `false`.
+    const NORMALIZE: bool;
+}
+
+/// The unnormalized forward transform.
+#[derive(Clone, Copy, Debug)]
+pub(crate) struct Forward;
+
+impl Direction for Forward {
+    const FORWARD: bool = true;
+    const NORMALIZE: bool = false;
+}
+
+/// The inverse transform, normalized by `1/N`: today's `FftwCompatible`
+/// inverse.
+#[derive(Clone, Copy, Debug)]
+pub(crate) struct Inverse;
+
+impl Direction for Inverse {
+    const FORWARD: bool = false;
+    const NORMALIZE: bool = true;
+}
+
+/// The inverse transform, left unnormalized: the unscaled sum, equal to the
+/// normalized inverse times the transformed volume's element count.
+#[derive(Clone, Copy, Debug)]
+pub(crate) struct InverseUnnormalized;
+
+impl Direction for InverseUnnormalized {
+    const FORWARD: bool = false;
+    const NORMALIZE: bool = false;
+}
+
 struct LaneTasks<T>(core::marker::PhantomData<fn() -> T>);
 
 impl<T: 'static> moirai::ExecutionPolicy for LaneTasks<T> {
@@ -42,7 +83,7 @@ impl<T: 'static> moirai::ExecutionPolicy for LaneTasks<T> {
 /// Runs contiguous lanes using the same scratch role as a later transpose.
 /// Rank-two staging owns the 3D X role and rank-three staging the 2D role,
 /// so these borrows remain disjoint even for non-contiguous input views.
-pub(super) fn contiguous<F, const FORWARD: bool, const RANK: usize>(
+pub(super) fn contiguous<F, D: Direction, const RANK: usize>(
     active: &mut [F::Complex],
     lane_len: usize,
     direct: impl Fn(&mut [F::Complex]) + Send + Sync,
@@ -53,7 +94,7 @@ pub(super) fn contiguous<F, const FORWARD: bool, const RANK: usize>(
     if workspace(lane_len).is_some_and(|required| required <= active.len()) {
         let total_len = active.len();
         let run = |companion: &mut [F::Complex]| {
-            execute::<F, FORWARD>(active, companion, lane_len, direct);
+            execute::<F, D>(active, companion, lane_len, direct);
         };
         match RANK {
             2 => F::Complex::with_2d_scratch_impl(total_len, run),
@@ -61,7 +102,7 @@ pub(super) fn contiguous<F, const FORWARD: bool, const RANK: usize>(
             _ => unreachable!("invariant: multidimensional FFT rank is two or three"),
         }
     } else {
-        execute::<F, FORWARD>(active, &mut [], lane_len, direct);
+        execute::<F, D>(active, &mut [], lane_len, direct);
     }
 }
 
@@ -76,7 +117,7 @@ fn workspace(lane_len: usize) -> Option<usize> {
 /// complete FFT workspace. It reuses that workspace across its lanes. A final
 /// incomplete group runs after the join, borrowing the full companion again.
 /// This preserves a full-volume retained-memory bound without worker storage.
-pub(super) fn execute<F, const FORWARD: bool>(
+pub(super) fn execute<F, D: Direction>(
     active: &mut [F::Complex],
     companion: &mut [F::Complex],
     lane_len: usize,
@@ -109,12 +150,12 @@ pub(super) fn execute<F, const FORWARD: bool>(
             #[cfg(all(test, not(miri)))]
             crate::application::execution::kernel::worker_quiescence::record_worker();
             for lane in group.chunks_exact_mut(lane_len) {
-                transform::<F, FORWARD>(lane, scratch);
+                transform::<F, D>(lane, scratch);
             }
         },
     );
     for lane in remainder.chunks_exact_mut(lane_len) {
-        transform::<F, FORWARD>(lane, &mut companion[..required]);
+        transform::<F, D>(lane, &mut companion[..required]);
     }
 }
 
@@ -126,7 +167,7 @@ pub(super) fn execute<F, const FORWARD: bool>(
 /// `source` is dead and serves as the group's four-step workspace; the final
 /// incomplete group copies first and then borrows the front of `source`,
 /// dead by then. The retained-memory bound is `execute`'s, with no companion.
-pub(super) fn execute_from<F, const FORWARD: bool>(
+pub(super) fn execute_from<F, D: Direction>(
     source: &mut [F::Complex],
     target: &mut [F::Complex],
     lane_len: usize,
@@ -162,12 +203,12 @@ pub(super) fn execute_from<F, const FORWARD: bool>(
         crate::application::execution::kernel::worker_quiescence::record_worker();
         group.copy_from_slice(staged);
         for lane in group.chunks_exact_mut(lane_len) {
-            transform::<F, FORWARD>(lane, staged);
+            transform::<F, D>(lane, staged);
         }
     });
     remainder.copy_from_slice(source_remainder);
     for lane in remainder.chunks_exact_mut(lane_len) {
-        transform::<F, FORWARD>(lane, &mut source[..required]);
+        transform::<F, D>(lane, &mut source[..required]);
     }
 }
 
@@ -265,32 +306,51 @@ pub(super) fn units<A: Send>(
     );
 }
 
-fn transform<F, const FORWARD: bool>(lane: &mut [F::Complex], scratch: &mut [F::Complex])
+fn transform<F, D: Direction>(lane: &mut [F::Complex], scratch: &mut [F::Complex])
 where
     F: MixedRadixScalar<Complex = Complex<F>>,
 {
-    if FORWARD {
+    // `{ !D::FORWARD }`/`{ D::NORMALIZE }` as inline const-generic arguments
+    // would need `generic_const_exprs`, unstable on the pinned toolchain; the
+    // three reachable `(FORWARD, NORMALIZE)` combinations are spelled out
+    // instead. Every branch is a compile-time fact of the concrete `D`, so
+    // this still monomorphizes to one straight-line call per strategy.
+    if D::FORWARD {
         four_step::four_step_fft::<F, false, false>(lane, scratch);
-    } else {
+    } else if D::NORMALIZE {
         four_step::four_step_fft::<F, true, true>(lane, scratch);
+    } else {
+        four_step::four_step_fft::<F, true, false>(lane, scratch);
     }
 }
 
 /// One direction's transform of a lane of the table's length: the cached
 /// power-of-two twiddles where the length has them, the generic mixed radix
 /// otherwise.
-pub(super) fn lane_over<F, const FORWARD: bool>(
+pub(super) fn lane_over<F, D: Direction>(
     twiddles: Option<&[F::Complex]>,
 ) -> impl Fn(&mut [F::Complex]) + Send + Sync + '_
 where
     F: MixedRadixScalar<Complex = Complex<F>>,
     F::Complex: PlanScratch,
 {
-    move |lane: &mut [F::Complex]| match (FORWARD, twiddles) {
-        (true, Some(twiddles)) => dispatch_inplace::<F, false, false>(lane, Some(twiddles)),
-        (false, Some(twiddles)) => dispatch_inplace::<F, true, true>(lane, Some(twiddles)),
-        (true, None) => forward_inplace::<F>(lane),
-        (false, None) => inverse_inplace::<F>(lane),
+    move |lane: &mut [F::Complex]| {
+        if D::FORWARD {
+            match twiddles {
+                Some(twiddles) => dispatch_inplace::<F, false, false>(lane, Some(twiddles)),
+                None => forward_inplace::<F>(lane),
+            }
+        } else if D::NORMALIZE {
+            match twiddles {
+                Some(twiddles) => dispatch_inplace::<F, true, true>(lane, Some(twiddles)),
+                None => inverse_inplace::<F>(lane),
+            }
+        } else {
+            // `InverseUnnormalized`: `dispatch_inplace` routes `None` through
+            // the same cached-twiddle lookup `inverse_inplace_unnorm` uses, so
+            // this covers both the `Some` and `None` cases correctly.
+            dispatch_inplace::<F, true, false>(lane, twiddles)
+        }
     }
 }
 

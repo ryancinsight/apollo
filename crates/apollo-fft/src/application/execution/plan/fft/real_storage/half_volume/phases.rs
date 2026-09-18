@@ -41,24 +41,25 @@ use crate::application::execution::kernel::mixed_radix::scalar::plan_scratch::{
 };
 use crate::application::execution::plan::fft::dimension_3d::FftPlan3D;
 use crate::application::execution::plan::fft::lanes;
+use crate::application::execution::plan::fft::lanes::{Direction, Forward, Inverse};
 use crate::application::execution::plan::fft::layout::transpose_matrices;
 use crate::{PlanCacheProvider, Shape3D};
 
 /// The x and y chain on a `[N, N, depth]` volume, step by step: move to
 /// `(y, z, x)`, x lanes, move to `(z, x, y)`, y lanes, move back.
-fn chain_steps<const FORWARD: bool>(
+fn chain_steps<D: Direction>(
     plan: &FftPlan3D<f64>,
     data: &mut [Complex64],
     depth: usize,
 ) -> [Duration; 5] {
     let (nx, ny) = (N, N);
-    let (x_table, y_table) = if FORWARD {
+    let (x_table, y_table) = if D::FORWARD {
         (plan.twiddle_x_fwd.as_deref(), plan.twiddle_y_fwd.as_deref())
     } else {
         (plan.twiddle_x_inv.as_deref(), plan.twiddle_y_inv.as_deref())
     };
-    let lane_x = lanes::lane_over::<f64, FORWARD>(x_table);
-    let lane_y = lanes::lane_over::<f64, FORWARD>(y_table);
+    let lane_x = lanes::lane_over::<f64, D>(x_table);
+    let lane_y = lanes::lane_over::<f64, D>(y_table);
     let volume = nx * ny * depth;
     with_3d_x_scratch::<Complex64, _>(volume, |staged_x| {
         with_3d_y_scratch::<Complex64, _>(volume, |staged_y| {
@@ -67,13 +68,13 @@ fn chain_steps<const FORWARD: bool>(
             transpose_matrices(data, staged_x, 1, nx, ny * depth);
             steps[0] = start.elapsed();
             let start = Instant::now();
-            lanes::execute::<f64, FORWARD>(staged_x, data, nx, &lane_x);
+            lanes::execute::<f64, D>(staged_x, data, nx, &lane_x);
             steps[1] = start.elapsed();
             let start = Instant::now();
             transpose_matrices(staged_x, staged_y, 1, ny, depth * nx);
             steps[2] = start.elapsed();
             let start = Instant::now();
-            lanes::execute::<f64, FORWARD>(staged_y, data, ny, &lane_y);
+            lanes::execute::<f64, D>(staged_y, data, ny, &lane_y);
             steps[3] = start.elapsed();
             let start = Instant::now();
             transpose_matrices(staged_y, data, 1, depth, nx * ny);
@@ -95,7 +96,7 @@ fn split_then_unpack(
     values: &mut [f64],
 ) -> (Duration, Duration) {
     let depth = plan.nz_c();
-    let half_lane = plan.half_z_lane::<false>();
+    let half_lane = plan.half_z_lane::<Inverse>();
     let start = Instant::now();
     lanes::each(bins, depth, |_, lane| {
         split::inverse_packed::<f64>(lane, N, plan.split_twiddles().iter().copied(), &half_lane);
@@ -192,7 +193,7 @@ fn half_pair_sweeps_at_64_cubed() {
         let c_order = |half: &mut [Complex64]| {
             let start = Instant::now();
             lanes::paired(half, depth, &source, N, |bins_group, reals_group| {
-                let half_lane = plan.half_z_lane::<true>();
+                let half_lane = plan.half_z_lane::<Forward>();
                 for (bins, reals) in bins_group
                     .chunks_exact_mut(depth)
                     .zip(reals_group.chunks_exact(N))
@@ -207,7 +208,7 @@ fn half_pair_sweeps_at_64_cubed() {
             });
             let z = start.elapsed();
             let start = Instant::now();
-            plan.xy_axes_inplace::<true>(half, depth);
+            plan.xy_axes_inplace::<Forward>(half, depth);
             (z, start.elapsed())
         };
         let x_last = |half: &mut [Complex64]| {
@@ -215,7 +216,7 @@ fn half_pair_sweeps_at_64_cubed() {
             forward_z_split_x_last(&plan, &source, half);
             let z = start.elapsed();
             let start = Instant::now();
-            plan.xy_axes_from_x_last::<true>(half, depth);
+            plan.xy_axes_from_x_last::<Forward>(half, depth);
             (z, start.elapsed())
         };
         let ((forward_z, forward_xy), (x_last_z, x_last_xy)) = if repeat % 2 == 0 {
@@ -235,7 +236,7 @@ fn half_pair_sweeps_at_64_cubed() {
         // scatter. Both run on the pool the forwards just woke.
         let no_write = |x_last_order: bool, slabs: &mut [Complex64]| {
             let start = Instant::now();
-            let half_lane = plan.half_z_lane::<true>();
+            let half_lane = plan.half_z_lane::<Forward>();
             lanes::units(
                 slabs,
                 depth * N,
@@ -279,7 +280,7 @@ fn half_pair_sweeps_at_64_cubed() {
             &source,
             N,
             |bins_group, reals_group| {
-                let half_lane = plan.half_z_lane::<true>();
+                let half_lane = plan.half_z_lane::<Forward>();
                 for (bins, reals) in bins_group
                     .chunks_exact_mut(depth)
                     .zip(reals_group.chunks_exact(N))
@@ -293,19 +294,19 @@ fn half_pair_sweeps_at_64_cubed() {
                 }
             },
         );
-        let forward_steps = chain_steps::<true>(&plan, &mut stepped, depth);
+        let forward_steps = chain_steps::<Forward>(&plan, &mut stepped, depth);
         assert!(
             stepped == half,
             "the stepped forward chain must match the chain"
         );
         stepped_inverse.copy_from_slice(&spectrum);
-        let inverse_steps = chain_steps::<false>(&plan, &mut stepped_inverse, depth);
+        let inverse_steps = chain_steps::<Inverse>(&plan, &mut stepped_inverse, depth);
 
         // Inverse: the chain on a copy of the forward's spectrum, then both z
         // forms on copies of what it leaves, in an order that alternates.
         staged.copy_from_slice(&spectrum);
         let start = Instant::now();
-        plan.xy_axes_inplace::<false>(&mut staged, depth);
+        plan.xy_axes_inplace::<Inverse>(&mut staged, depth);
         let inverse_xy = start.elapsed();
         assert!(
             stepped_inverse == staged,
@@ -337,7 +338,7 @@ fn half_pair_sweeps_at_64_cubed() {
             &source,
             N,
             |bins_group, reals_group| {
-                let half_lane = plan.half_z_lane::<true>();
+                let half_lane = plan.half_z_lane::<Forward>();
                 for (bins, reals) in bins_group
                     .chunks_exact_mut(depth)
                     .zip(reals_group.chunks_exact(N))
@@ -366,7 +367,7 @@ fn half_pair_sweeps_at_64_cubed() {
 
         // Serial controls: the same per-lane bodies on the calling thread
         // alone, so the parallel arms read against the work they spread.
-        let half_lane = plan.half_z_lane::<true>();
+        let half_lane = plan.half_z_lane::<Forward>();
         let start = Instant::now();
         for (bins, reals) in serial_half
             .chunks_exact_mut(depth)
@@ -380,7 +381,7 @@ fn half_pair_sweeps_at_64_cubed() {
             );
         }
         let forward_z_serial = start.elapsed();
-        let inverse_lane = plan.half_z_lane::<false>();
+        let inverse_lane = plan.half_z_lane::<Inverse>();
         let start = Instant::now();
         for (reals, bins) in serial_out
             .chunks_exact_mut(N)

@@ -1,3 +1,4 @@
+use super::super::lanes::{Direction, Forward, Inverse};
 use super::passes::{self, AxisLanes};
 use crate::application::execution::kernel::mixed_radix::scalar::plan_scratch::PlanScratch;
 use crate::application::execution::kernel::mixed_radix::MixedRadixScalar;
@@ -86,7 +87,7 @@ where
             [NX, NY, NZ],
             "static 3D forward shape mismatch"
         );
-        with_c_order_view(data, |contiguous| Self::all_axes::<true>(contiguous));
+        with_c_order_view(data, |contiguous| Self::all_axes::<Forward>(contiguous));
     }
 
     /// Inverse transform of a complex Leto view in-place with normalization.
@@ -100,14 +101,14 @@ where
             [NX, NY, NZ],
             "static 3D inverse shape mismatch"
         );
-        with_c_order_view(data, |contiguous| Self::all_axes::<false>(contiguous));
+        with_c_order_view(data, |contiguous| Self::all_axes::<Inverse>(contiguous));
     }
 
     /// One direction's lane transform for a compile-time axis length.
-    fn lane<const FORWARD: bool, const N: usize>() -> impl Fn(&mut [F::Complex]) + Send + Sync {
+    fn lane<D: Direction, const N: usize>() -> impl Fn(&mut [F::Complex]) + Send + Sync {
         let lane_plan = StaticFftPlan1D::<F, N>::new();
         move |lane: &mut [F::Complex]| {
-            if FORWARD {
+            if D::FORWARD {
                 lane_plan.forward_complex_slice_inplace(lane);
             } else {
                 lane_plan.inverse_complex_slice_inplace(lane);
@@ -115,17 +116,17 @@ where
         }
     }
 
-    fn all_axes<const FORWARD: bool>(mut data: ArrayViewMut3<'_, F::Complex>) {
+    fn all_axes<D: Direction>(mut data: ArrayViewMut3<'_, F::Complex>) {
         let data_slice = data
             .as_mut_slice()
             .expect("invariant: 3D axis execution receives C-order data");
-        passes::all_axes::<F, FORWARD, _, _, _>(
+        passes::all_axes::<F, D, _, _, _>(
             data_slice,
             [NX, NY, NZ],
             AxisLanes {
-                x: Self::lane::<FORWARD, NX>(),
-                y: Self::lane::<FORWARD, NY>(),
-                z: Self::lane::<FORWARD, NZ>(),
+                x: Self::lane::<D, NX>(),
+                y: Self::lane::<D, NY>(),
+                z: Self::lane::<D, NZ>(),
             },
         );
     }

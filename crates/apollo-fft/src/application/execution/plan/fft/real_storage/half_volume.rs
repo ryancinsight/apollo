@@ -34,6 +34,7 @@ use crate::application::execution::kernel::mixed_radix::scalar::plan_scratch::{
 };
 use crate::application::execution::plan::fft::dimension_3d::FftPlan3D;
 use crate::application::execution::plan::fft::lanes;
+use crate::application::execution::plan::fft::lanes::{Forward, Inverse};
 use apollo_leto_interop::view_cow;
 use eunomia::Complex;
 use leto::Array3;
@@ -108,11 +109,11 @@ fn forward_half<T>(
     let depth = plan.nz_c();
     if T::real_split_applies(nz) && nx > 1 && ny > 1 {
         forward_z_split_x_last(plan, source, spectrum);
-        plan.xy_axes_from_x_last::<true>(spectrum, depth);
+        plan.xy_axes_from_x_last::<Forward>(spectrum, depth);
         return;
     }
     if T::real_split_applies(nz) {
-        let half_lane = plan.half_z_lane::<true>();
+        let half_lane = plan.half_z_lane::<Forward>();
         lanes::paired(spectrum, depth, source, nz, |bins_group, reals_group| {
             for (bins, reals) in bins_group
                 .chunks_exact_mut(depth)
@@ -127,7 +128,7 @@ fn forward_half<T>(
             }
         });
     } else {
-        let z_lane = plan.z_lane::<true>();
+        let z_lane = plan.z_lane::<Forward>();
         lanes::paired(spectrum, depth, source, nz, |bins_group, reals_group| {
             // Every task in this group is disjoint and each runs on its own
             // thread at most once at a time, so the thread-local widened-lane
@@ -150,7 +151,7 @@ fn forward_half<T>(
             });
         });
     }
-    plan.xy_axes_inplace::<true>(spectrum, depth);
+    plan.xy_axes_inplace::<Forward>(spectrum, depth);
 }
 
 /// The z lanes of `source` through the real split into `spectrum` in
@@ -176,7 +177,7 @@ fn forward_z_split_x_last<T>(
     let slab = depth * nx;
     let slab_bytes =
         slab * core::mem::size_of::<Complex<T::PlanScalar>>() + nx * nz * core::mem::size_of::<T>();
-    let half_lane = plan.half_z_lane::<true>();
+    let half_lane = plan.half_z_lane::<Forward>();
     lanes::units(spectrum, slab, slab_bytes, |first_y, slabs| {
         with_3d_x_scratch::<Complex<T::PlanScalar>, _>(depth, |lane| {
             for (y, bins) in (first_y..).zip(slabs.chunks_exact_mut(slab)) {
@@ -209,15 +210,15 @@ fn inverse_half<T>(
     let (nx, ny, nz) = plan.dimensions();
     let depth = plan.nz_c();
     if T::real_split_applies(nz) && nx > 1 && ny > 1 {
-        plan.xy_axes_leaving_x_last::<false>(bins, depth);
+        plan.xy_axes_leaving_x_last::<Inverse>(bins, depth);
         inverse_z_split_x_last(plan, bins, values);
         return;
     }
-    plan.xy_axes_inplace::<false>(bins, depth);
+    plan.xy_axes_inplace::<Inverse>(bins, depth);
     if T::real_split_applies(nz) {
         inverse_z_split(plan, bins, values);
     } else {
-        let z_lane = plan.z_lane::<false>();
+        let z_lane = plan.z_lane::<Inverse>();
         let mirrored = nz - depth;
         lanes::paired(values, nz, &*bins, depth, |reals_group, halves_group| {
             // Runs after `Self::xy_axes_inplace` above has already returned,
@@ -272,7 +273,7 @@ fn inverse_z_split_x_last<T>(
     let x_slab = ny * nz;
     let x_slab_bytes = x_slab * core::mem::size_of::<T>()
         + ny * depth * core::mem::size_of::<Complex<T::PlanScalar>>();
-    let half_lane = plan.half_z_lane::<false>();
+    let half_lane = plan.half_z_lane::<Inverse>();
     lanes::units(values, x_slab, x_slab_bytes, |first_x, slabs| {
         // The x and y passes have returned, so the 3-D X role is free on
         // every thread; the 2-D role may be an owned caller's half volume.
@@ -315,7 +316,7 @@ fn inverse_z_split<T>(
     let (_, _, nz) = plan.dimensions();
     let depth = plan.nz_c();
     let packed = nz / 2;
-    let half_lane = plan.half_z_lane::<false>();
+    let half_lane = plan.half_z_lane::<Inverse>();
     lanes::paired(values, nz, bins, depth, |reals_group, lanes_group| {
         // The x and y passes have returned, so the 3-D X role is free on every
         // thread here; the 2-D role is not, since an owned caller holds the

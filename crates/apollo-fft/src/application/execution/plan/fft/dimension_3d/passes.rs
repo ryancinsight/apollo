@@ -21,6 +21,7 @@
 //! of the forward so each axis's pair composes as its own round trip.
 
 use super::super::lanes;
+use super::super::lanes::Direction;
 use crate::application::execution::kernel::mixed_radix::scalar::plan_scratch::{
     with_3d_x_scratch, with_3d_y_scratch, PlanScratch,
 };
@@ -36,7 +37,7 @@ pub(super) struct AxisLanes<X, Y, Z> {
 }
 
 /// Transforms every axis-2 lane of a C-order `[_, _, nz]` volume in place.
-pub(super) fn axis2<F, const FORWARD: bool>(
+pub(super) fn axis2<F, D: Direction>(
     data: &mut [F::Complex],
     nz: usize,
     lane: impl Fn(&mut [F::Complex]) + Send + Sync,
@@ -47,12 +48,12 @@ pub(super) fn axis2<F, const FORWARD: bool>(
     if nz <= 1 {
         return;
     }
-    lanes::contiguous::<F, FORWARD, 3>(data, nz, lane);
+    lanes::contiguous::<F, D, 3>(data, nz, lane);
 }
 
 /// Transforms every axis-1 lane of a C-order `[nx, ny, nz]` volume in place:
 /// `nx` matrices of `[ny, nz]` into the Y scratch, lanes there, and back.
-pub(super) fn axis1<F, const FORWARD: bool>(
+pub(super) fn axis1<F, D: Direction>(
     data: &mut [F::Complex],
     [nx, ny, nz]: [usize; 3],
     lane: impl Fn(&mut [F::Complex]) + Send + Sync,
@@ -65,14 +66,14 @@ pub(super) fn axis1<F, const FORWARD: bool>(
     }
     with_3d_y_scratch::<F::Complex, _>(nx * ny * nz, |scratch| {
         transpose_matrices(data, scratch, nx, ny, nz);
-        lanes::execute::<F, FORWARD>(scratch, data, ny, lane);
+        lanes::execute::<F, D>(scratch, data, ny, lane);
         transpose_matrices(scratch, data, nx, nz, ny);
     });
 }
 
 /// Transforms every axis-0 lane of a C-order `[nx, ny, nz]` volume in place:
 /// one `[nx, ny * nz]` matrix into the X scratch, lanes there, and back.
-pub(super) fn axis0<F, const FORWARD: bool>(
+pub(super) fn axis0<F, D: Direction>(
     data: &mut [F::Complex],
     [nx, ny, nz]: [usize; 3],
     lane: impl Fn(&mut [F::Complex]) + Send + Sync,
@@ -85,7 +86,7 @@ pub(super) fn axis0<F, const FORWARD: bool>(
     }
     with_3d_x_scratch::<F::Complex, _>(nx * ny * nz, |scratch| {
         transpose_matrices(data, scratch, 1, nx, ny * nz);
-        lanes::execute::<F, FORWARD>(scratch, data, nx, lane);
+        lanes::execute::<F, D>(scratch, data, nx, lane);
         transpose_matrices(scratch, data, 1, ny * nz, nx);
     });
 }
@@ -94,7 +95,7 @@ pub(super) fn axis0<F, const FORWARD: bool>(
 ///
 /// Axes 0 and 1 run through [`xy_axes`]; axis 2 runs in place first for a
 /// forward and last for an inverse.
-pub(super) fn all_axes<F, const FORWARD: bool, X, Y, Z>(
+pub(super) fn all_axes<F, D: Direction, X, Y, Z>(
     data: &mut [F::Complex],
     shape @ [_, _, nz]: [usize; 3],
     lanes: AxisLanes<X, Y, Z>,
@@ -107,12 +108,12 @@ pub(super) fn all_axes<F, const FORWARD: bool, X, Y, Z>(
 {
     let [nx, ny, _] = shape;
     if nx <= 1 || ny <= 1 {
-        if FORWARD {
-            axis2::<F, FORWARD>(data, nz, &lanes.z);
+        if D::FORWARD {
+            axis2::<F, D>(data, nz, &lanes.z);
         }
-        xy_axes::<F, FORWARD>(data, shape, &lanes.x, &lanes.y);
-        if !FORWARD {
-            axis2::<F, FORWARD>(data, nz, &lanes.z);
+        xy_axes::<F, D>(data, shape, &lanes.x, &lanes.y);
+        if !D::FORWARD {
+            axis2::<F, D>(data, nz, &lanes.z);
         }
         return;
     }
@@ -125,23 +126,23 @@ pub(super) fn all_axes<F, const FORWARD: bool, X, Y, Z>(
     with_3d_x_scratch::<F::Complex, _>(nx * ny * nz, |staged| {
         if nz <= 1 {
             transpose_matrices(data, staged, 1, nx, ny);
-            lanes::execute::<F, FORWARD>(staged, data, nx, &lanes.x);
+            lanes::execute::<F, D>(staged, data, nx, &lanes.x);
             transpose_matrices(staged, data, 1, ny, nx);
-            lanes::execute::<F, FORWARD>(data, staged, ny, &lanes.y);
-        } else if FORWARD {
-            lanes::execute_from::<F, FORWARD>(data, staged, nz, &lanes.z);
+            lanes::execute::<F, D>(data, staged, ny, &lanes.y);
+        } else if D::FORWARD {
+            lanes::execute_from::<F, D>(data, staged, nz, &lanes.z);
             transpose_matrices(staged, data, 1, nx, ny * nz);
-            lanes::execute::<F, FORWARD>(data, staged, nx, &lanes.x);
+            lanes::execute::<F, D>(data, staged, nx, &lanes.x);
             transpose_matrices(data, staged, 1, ny, nz * nx);
-            lanes::execute::<F, FORWARD>(staged, data, ny, &lanes.y);
+            lanes::execute::<F, D>(staged, data, ny, &lanes.y);
             transpose_matrices(staged, data, 1, nz, nx * ny);
         } else {
             transpose_matrices(data, staged, 1, nx, ny * nz);
-            lanes::execute::<F, FORWARD>(staged, data, nx, &lanes.x);
+            lanes::execute::<F, D>(staged, data, nx, &lanes.x);
             transpose_matrices(staged, data, 1, ny, nz * nx);
-            lanes::execute::<F, FORWARD>(data, staged, ny, &lanes.y);
+            lanes::execute::<F, D>(data, staged, ny, &lanes.y);
             transpose_matrices(data, staged, 1, nz, nx * ny);
-            lanes::execute_from::<F, FORWARD>(staged, data, nz, &lanes.z);
+            lanes::execute_from::<F, D>(staged, data, nz, &lanes.z);
         }
     });
 }
@@ -152,7 +153,7 @@ pub(super) fn all_axes<F, const FORWARD: bool, X, Y, Z>(
 /// in three moves; with one, that axis takes its own pass. `depth` need not be
 /// the plan's `nz`: the half-spectrum pair runs x and y on the
 /// `(nx, ny, nz/2 + 1)` volume its z lanes leave.
-pub(super) fn xy_axes<F, const FORWARD: bool>(
+pub(super) fn xy_axes<F, D: Direction>(
     data: &mut [F::Complex],
     shape @ [nx, ny, _]: [usize; 3],
     lane_x: impl Fn(&mut [F::Complex]) + Send + Sync,
@@ -163,9 +164,9 @@ pub(super) fn xy_axes<F, const FORWARD: bool>(
 {
     match (nx > 1, ny > 1) {
         (false, false) => {}
-        (true, false) => axis0::<F, FORWARD>(data, shape, lane_x),
-        (false, true) => axis1::<F, FORWARD>(data, shape, lane_y),
-        (true, true) => chain::<F, FORWARD>(data, shape, lane_x, lane_y),
+        (true, false) => axis0::<F, D>(data, shape, lane_x),
+        (false, true) => axis1::<F, D>(data, shape, lane_y),
+        (true, true) => chain::<F, D>(data, shape, lane_x, lane_y),
     }
 }
 
@@ -179,7 +180,7 @@ pub(super) fn xy_axes<F, const FORWARD: bool>(
 /// schedule for a caller that does not need it. The moves land alternately in
 /// the scratch and in the caller's storage, so the result is where the caller
 /// can reach it and only one scratch role is borrowed.
-pub(super) fn all_axes_leaving_rotated<F, const FORWARD: bool, X, Y, Z>(
+pub(super) fn all_axes_leaving_rotated<F, D: Direction, X, Y, Z>(
     data: &mut [F::Complex],
     [nx, ny, nz]: [usize; 3],
     lanes: AxisLanes<X, Y, Z>,
@@ -190,12 +191,12 @@ pub(super) fn all_axes_leaving_rotated<F, const FORWARD: bool, X, Y, Z>(
     Y: Fn(&mut [F::Complex]) + Send + Sync,
     Z: Fn(&mut [F::Complex]) + Send + Sync,
 {
-    axis2::<F, FORWARD>(data, nz, &lanes.z);
+    axis2::<F, D>(data, nz, &lanes.z);
     with_3d_x_scratch::<F::Complex, _>(nx * ny * nz, |staged| {
         transpose_matrices(data, staged, 1, nx, ny * nz);
-        lanes::execute::<F, FORWARD>(staged, data, nx, &lanes.x);
+        lanes::execute::<F, D>(staged, data, nx, &lanes.x);
         transpose_matrices(staged, data, 1, ny, nz * nx);
-        lanes::execute::<F, FORWARD>(data, staged, ny, &lanes.y);
+        lanes::execute::<F, D>(data, staged, ny, &lanes.y);
     });
 }
 
@@ -209,7 +210,7 @@ pub(super) fn all_axes_leaving_rotated<F, const FORWARD: bool, X, Y, Z>(
 /// moves make `x` then `z` contiguous and land the volume back in `(x, y, z)`,
 /// which is why a round trip through this pair costs four moves where the
 /// C-order pair costs six.
-pub(super) fn all_axes_from_rotated<F, const FORWARD: bool, X, Y, Z>(
+pub(super) fn all_axes_from_rotated<F, D: Direction, X, Y, Z>(
     data: &mut [F::Complex],
     [nx, ny, nz]: [usize; 3],
     lanes: AxisLanes<X, Y, Z>,
@@ -220,12 +221,12 @@ pub(super) fn all_axes_from_rotated<F, const FORWARD: bool, X, Y, Z>(
     Y: Fn(&mut [F::Complex]) + Send + Sync,
     Z: Fn(&mut [F::Complex]) + Send + Sync,
 {
-    axis2::<F, FORWARD>(data, ny, &lanes.y);
+    axis2::<F, D>(data, ny, &lanes.y);
     with_3d_x_scratch::<F::Complex, _>(nx * ny * nz, |staged| {
         transpose_matrices(data, staged, 1, nz * nx, ny);
-        lanes::execute::<F, FORWARD>(staged, data, nx, &lanes.x);
+        lanes::execute::<F, D>(staged, data, nx, &lanes.x);
         transpose_matrices(staged, data, 1, ny * nz, nx);
-        lanes::execute::<F, FORWARD>(data, staged, nz, &lanes.z);
+        lanes::execute::<F, D>(data, staged, nz, &lanes.z);
     });
 }
 
@@ -238,7 +239,7 @@ pub(super) fn all_axes_from_rotated<F, const FORWARD: bool, X, Y, Z>(
 /// transpose gives `(z, x, y)` in the X scratch, and one `[nz, nx * ny]`
 /// transpose lands `(x, y, z)` back in `data`: the moves alternate between the
 /// two buffers, so only one scratch role is borrowed.
-pub(super) fn xy_axes_from_x_last<F, const FORWARD: bool>(
+pub(super) fn xy_axes_from_x_last<F, D: Direction>(
     data: &mut [F::Complex],
     [nx, ny, nz]: [usize; 3],
     lane_x: impl Fn(&mut [F::Complex]) + Send + Sync,
@@ -248,9 +249,9 @@ pub(super) fn xy_axes_from_x_last<F, const FORWARD: bool>(
     F::Complex: PlanScratch,
 {
     with_3d_x_scratch::<F::Complex, _>(nx * ny * nz, |staged| {
-        lanes::execute::<F, FORWARD>(data, staged, nx, lane_x);
+        lanes::execute::<F, D>(data, staged, nx, lane_x);
         transpose_matrices(data, staged, 1, ny, nz * nx);
-        lanes::execute::<F, FORWARD>(staged, data, ny, lane_y);
+        lanes::execute::<F, D>(staged, data, ny, lane_y);
         transpose_matrices(staged, data, 1, nz, nx * ny);
     });
 }
@@ -264,7 +265,7 @@ pub(super) fn xy_axes_from_x_last<F, const FORWARD: bool>(
 /// `[nx * ny, nz]` transpose gives `(z, x, y)` in the X scratch with axis 1
 /// contiguous, and one `[nz * nx, ny]` transpose gives `(y, z, x)` back in
 /// `data` with axis 0 contiguous. Axis 1 is therefore visited before axis 0.
-pub(super) fn xy_axes_leaving_x_last<F, const FORWARD: bool>(
+pub(super) fn xy_axes_leaving_x_last<F, D: Direction>(
     data: &mut [F::Complex],
     [nx, ny, nz]: [usize; 3],
     lane_x: impl Fn(&mut [F::Complex]) + Send + Sync,
@@ -275,9 +276,9 @@ pub(super) fn xy_axes_leaving_x_last<F, const FORWARD: bool>(
 {
     with_3d_x_scratch::<F::Complex, _>(nx * ny * nz, |staged| {
         transpose_matrices(data, staged, 1, nx * ny, nz);
-        lanes::execute::<F, FORWARD>(staged, data, ny, lane_y);
+        lanes::execute::<F, D>(staged, data, ny, lane_y);
         transpose_matrices(staged, data, 1, nz * nx, ny);
-        lanes::execute::<F, FORWARD>(data, staged, nx, lane_x);
+        lanes::execute::<F, D>(data, staged, nx, lane_x);
     });
 }
 
@@ -290,7 +291,7 @@ pub(super) fn xy_axes_leaving_x_last<F, const FORWARD: bool>(
 /// `data`, restoring `(x, y, z)`. The caller's storage is dead between the
 /// first and the last move, which is what lets it serve as the lane passes'
 /// four-step companion.
-fn chain<F, const FORWARD: bool>(
+fn chain<F, D: Direction>(
     data: &mut [F::Complex],
     [nx, ny, nz]: [usize; 3],
     lane_x: impl Fn(&mut [F::Complex]) + Send + Sync,
@@ -303,9 +304,9 @@ fn chain<F, const FORWARD: bool>(
     with_3d_x_scratch::<F::Complex, _>(volume, |staged_x| {
         with_3d_y_scratch::<F::Complex, _>(volume, |staged_y| {
             transpose_matrices(data, staged_x, 1, nx, ny * nz);
-            lanes::execute::<F, FORWARD>(staged_x, data, nx, lane_x);
+            lanes::execute::<F, D>(staged_x, data, nx, lane_x);
             transpose_matrices(staged_x, staged_y, 1, ny, nz * nx);
-            lanes::execute::<F, FORWARD>(staged_y, data, ny, lane_y);
+            lanes::execute::<F, D>(staged_y, data, ny, lane_y);
             transpose_matrices(staged_y, data, 1, nz, nx * ny);
         });
     });

@@ -106,6 +106,12 @@ Change-class tags: [patch] backward-compatible fix, [minor] additive non-breakin
 
 ### Added
 
+- [minor] `apollo-fft`: `FftPlan2D` and `FftPlan3D` gain
+  `inverse_complex_unnorm_inplace` and `inverse_complex_unnorm_leto_inplace`,
+  the unnormalized inverse the 1-D plans already had (ADR 0067, slice 1). The
+  2-D and 3-D passes carry a zero-sized direction strategy in place of a
+  boolean, and every existing output is unchanged bit for bit.
+
 - [minor] `apollo-fft`: `FftPlan2D::{forward,inverse}_axis_complex_inplace`
   and their `_leto` forms transform a plane along one axis, and
   `FftPlan3D` gains `{forward,inverse}_axis_complex_leto_inplace` beside its
