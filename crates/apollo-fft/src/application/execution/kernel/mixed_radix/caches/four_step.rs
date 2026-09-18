@@ -33,13 +33,20 @@ declare_cache_store! {
     global_reduced: FOUR_STEP_TW_REDUCED_CACHE,
 }
 
+/// The forward four-step matrix `W_N^{j k}`, `N = n1 n2`, row-major
+/// `n2 x n1`, cached per shape.
+///
+/// Only the forward matrix is kept. An inverse reads each entry conjugated
+/// at the multiply: `twiddle_components` negates the angle, and sine is odd
+/// and cosine even, so the inverse entry is the forward one with its
+/// imaginary part negated, and a negation is exact, so the product is
+/// bitwise what a stored inverse matrix gave.
 #[inline]
-pub(crate) fn cached_four_step_twiddles<C: FourStepStore, const INVERSE: bool>(
-    n: usize,
-    n1: usize,
-    n2: usize,
-) -> Arc<[C]> {
-    let key = (n, INVERSE as usize);
+pub(crate) fn cached_four_step_twiddles<C: FourStepStore>(n1: usize, n2: usize) -> Arc<[C]> {
+    let n = n1
+        .checked_mul(n2)
+        .expect("invariant: twiddle matrix size fits usize");
+    let key = (n1, n2);
     if let Some(v) = C::four_step_tl_get(key) {
         return v;
     }
@@ -48,11 +55,9 @@ pub(crate) fn cached_four_step_twiddles<C: FourStepStore, const INVERSE: bool>(
         if let Some(v) = maybe {
             v
         } else {
-            let sign = if INVERSE { 1.0_f64 } else { -1.0_f64 };
-            let entries = n1
-                .checked_mul(n2)
-                .expect("invariant: twiddle matrix size fits usize");
-            // Entry (j, k) is W_n^{j*k} = exp(sign * 2πi * j * k / n), through
+            let sign = -1.0_f64;
+            let entries = n;
+            // Entry (j, k) is W_n^{j*k} = exp(-2πi * j * k / n), through
             // the shared evaluation authority: mod-`n` reduction first and one
             // direct `sin_cos` per entry, so no entry carries a recurrence's
             // O(n1 + n2) roundings, which the `O(log N * u)` forward-error
