@@ -126,8 +126,9 @@ fn decompose<F: MixedRadixScalar<Complex = eunomia::Complex<F>>, const INVERSE: 
         F::cached_twiddle_fwd(n2)
     };
 
-    // Cached W_N^{j·k} twiddle matrix, row-major N2 × N1.
-    let tw_matrix = F::cached_four_step_twiddles::<INVERSE>(n, n1, n2);
+    // Cached forward W_N^{j·k} twiddle matrix, row-major N2 × N1; the
+    // inverse conjugates each entry at the multiply.
+    let tw_matrix = F::cached_four_step_twiddles(n1, n2);
 
     let parallel = n >= PARALLEL_ROW_THRESHOLD;
 
@@ -185,6 +186,7 @@ fn decompose<F: MixedRadixScalar<Complex = eunomia::Complex<F>>, const INVERSE: 
                     // SAFETY: the cached matrix has n entries in the same
                     // n2-by-n1 layout as scratch.
                     let tw = unsafe { *tw_matrix.get_unchecked(src_row + c) };
+                    let tw = if INVERSE { tw.conj() } else { tw };
                     // SAFETY: c < n1 and r < n2 bound c*n2 + r by n;
                     // the exclusive data borrow is disjoint from scratch.
                     unsafe { *data.get_unchecked_mut(c * n2 + r) = val * tw };

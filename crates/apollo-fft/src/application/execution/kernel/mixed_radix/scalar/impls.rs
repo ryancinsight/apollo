@@ -112,12 +112,8 @@ impl MixedRadixScalar for f32 {
     }
 
     #[inline]
-    fn cached_four_step_twiddles<const INVERSE: bool>(
-        n: usize,
-        n1: usize,
-        n2: usize,
-    ) -> Arc<[Complex32]> {
-        cached_four_step_twiddles::<Complex32, INVERSE>(n, n1, n2)
+    fn cached_four_step_twiddles(n1: usize, n2: usize) -> Arc<[Complex32]> {
+        cached_four_step_twiddles::<Complex32>(n1, n2)
     }
     #[inline]
     fn pointwise_mul(a: &mut [Complex32], b: &[Complex32]) {
@@ -424,12 +420,8 @@ impl MixedRadixScalar for f64 {
     }
 
     #[inline]
-    fn cached_four_step_twiddles<const INVERSE: bool>(
-        n: usize,
-        n1: usize,
-        n2: usize,
-    ) -> Arc<[Complex64]> {
-        cached_four_step_twiddles::<Complex64, INVERSE>(n, n1, n2)
+    fn cached_four_step_twiddles(n1: usize, n2: usize) -> Arc<[Complex64]> {
+        cached_four_step_twiddles::<Complex64>(n1, n2)
     }
     #[inline]
     fn pointwise_mul(a: &mut [Complex64], b: &[Complex64]) {

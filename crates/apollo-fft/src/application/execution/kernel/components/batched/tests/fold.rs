@@ -19,7 +19,7 @@ fn fold_tables_reproduce_the_twiddle_matrix_within_their_roundings() {
     use crate::application::execution::kernel::mixed_radix::MixedRadixScalar;
     let (n, m) = (256usize, 16usize);
     let fold = <f64 as BatchedPlanCache>::cached_four_step_fold(n, m, m);
-    let interleaved = <f64 as MixedRadixScalar>::cached_four_step_twiddles::<false>(n, m, m);
+    let interleaved = <f64 as MixedRadixScalar>::cached_four_step_twiddles(m, m);
     let order = LaneOrder::for_batch::<f64>(m);
     let lanes = fold.lanes;
     assert_eq!(
@@ -55,7 +55,7 @@ fn compact_fold_tables_reproduce_the_twiddle_matrix_within_their_roundings() {
     let (n, m) = (1usize << 18, 512usize);
     let order = LaneOrder::for_batch::<f64>(m);
     let fold = FourStepFold::<f64>::new(n, m, m, order);
-    let interleaved = <f64 as MixedRadixScalar>::cached_four_step_twiddles::<false>(n, m, m);
+    let interleaved = <f64 as MixedRadixScalar>::cached_four_step_twiddles(m, m);
     let lanes = fold.lanes;
     assert_eq!(lanes, order.lanes());
     assert!(lanes < m, "the compact table has more than one lane group");

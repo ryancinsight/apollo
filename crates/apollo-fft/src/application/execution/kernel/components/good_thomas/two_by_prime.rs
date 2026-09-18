@@ -96,7 +96,7 @@ fn two_by_prime_ordered_rader<
         data.len()
     );
 
-    let twiddles = F::cached_four_step_twiddles::<INVERSE>(n, prime, 2);
+    let twiddles = F::cached_four_step_twiddles(prime, 2);
     let input_order =
         crate::application::execution::kernel::components::rader::cached_generator_order(
             prime, generator,
@@ -115,7 +115,7 @@ fn two_by_prime_ordered_rader<
             INVERSE,
         >(odd, prime, generator_inverse);
 
-        combine_two_prime_ordered::<F>(
+        combine_two_prime_ordered::<F, INVERSE>(
             data,
             even,
             odd,
@@ -146,7 +146,7 @@ fn two_by_prime_natural_prime<
         return;
     }
 
-    let twiddles = F::cached_four_step_twiddles::<INVERSE>(n, prime, 2);
+    let twiddles = F::cached_four_step_twiddles(prime, 2);
     F::with_pfa_scratch(prime, |scratch| {
         let even = &mut scratch[..prime];
         load_even_compact_odd_natural(data, even, prime);
@@ -154,7 +154,7 @@ fn two_by_prime_natural_prime<
         transform_natural_prime_half::<F, INVERSE>(even, prime);
         transform_natural_prime_half::<F, INVERSE>(&mut data[..prime], prime);
 
-        combine_two_prime_natural_compacted::<F>(
+        combine_two_prime_natural_compacted::<F, INVERSE>(
             data,
             even,
             &twiddles[prime..prime + prime],
@@ -231,7 +231,10 @@ fn transform_natural_prime_half<
 }
 
 #[inline]
-fn combine_two_prime_ordered<F: MixedRadixScalar<Complex = eunomia::Complex<F>>>(
+fn combine_two_prime_ordered<
+    F: MixedRadixScalar<Complex = eunomia::Complex<F>>,
+    const INVERSE: bool,
+>(
     dst: &mut [F::Complex],
     even: &[F::Complex],
     odd: &[F::Complex],
@@ -269,7 +272,9 @@ fn combine_two_prime_ordered<F: MixedRadixScalar<Complex = eunomia::Complex<F>>>
         // SAFETY: `k` is a generator power below `prime == twiddles.len()`; `q < prime - 1`,
         // so `1 + q < prime == even.len() == odd.len()`; and `k + prime < 2 prime <= dst.len()`.
         unsafe {
-            let wb = *twiddles.get_unchecked(k) * *odd.get_unchecked(1 + q);
+            let w = *twiddles.get_unchecked(k);
+            let w = if INVERSE { w.conj() } else { w };
+            let wb = w * *odd.get_unchecked(1 + q);
             let a = *even.get_unchecked(1 + q);
             *dst.get_unchecked_mut(k) = a + wb;
             *dst.get_unchecked_mut(k + prime) = a - wb;
@@ -278,7 +283,10 @@ fn combine_two_prime_ordered<F: MixedRadixScalar<Complex = eunomia::Complex<F>>>
 }
 
 #[inline]
-fn combine_two_prime_natural_compacted<F: MixedRadixScalar<Complex = eunomia::Complex<F>>>(
+fn combine_two_prime_natural_compacted<
+    F: MixedRadixScalar<Complex = eunomia::Complex<F>>,
+    const INVERSE: bool,
+>(
     dst: &mut [F::Complex],
     even: &[F::Complex],
     twiddles: &[F::Complex],
@@ -292,7 +300,9 @@ fn combine_two_prime_natural_compacted<F: MixedRadixScalar<Complex = eunomia::Co
         // SAFETY: `k < prime == twiddles.len() == even.len()`, and `k + prime < 2 prime <=
         // dst.len()`, the entry assert.
         unsafe {
-            let wb = *twiddles.get_unchecked(k) * *dst.get_unchecked(k);
+            let w = *twiddles.get_unchecked(k);
+            let w = if INVERSE { w.conj() } else { w };
+            let wb = w * *dst.get_unchecked(k);
             let a = *even.get_unchecked(k);
             *dst.get_unchecked_mut(k) = a + wb;
             *dst.get_unchecked_mut(k + prime) = a - wb;

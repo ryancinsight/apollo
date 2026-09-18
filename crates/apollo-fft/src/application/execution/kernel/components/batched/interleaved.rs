@@ -80,12 +80,14 @@ fn transpose_samples<T: Copy>(data: &mut [Complex<T>], m: usize) {
 
 /// Elementwise product of `data` and the four-step twiddle matrix, both
 /// interleaved, as one vector pass.
-struct TwiddlePass<'a, T> {
+/// Multiplies the data by the forward four-step matrix, or by its conjugate
+/// when `CONJ` (the inverse).
+struct TwiddlePass<'a, T, const CONJ: bool> {
     data: &'a mut [T],
     twiddles: &'a [T],
 }
 
-impl<T> LaneKernel<T> for TwiddlePass<'_, T>
+impl<T, const CONJ: bool> LaneKernel<T> for TwiddlePass<'_, T, CONJ>
 where
     T: LaneScalar + MixedRadixScalar,
 {
@@ -98,6 +100,7 @@ where
         while at + lanes <= total {
             let v = ComplexReg::<T, A>::from_interleaved(load::<T, A>(self.data, at));
             let w = ComplexReg::<T, A>::from_interleaved(load::<T, A>(self.twiddles, at));
+            let w = if CONJ { w.conj() } else { w };
             store::<T, A>((v * w).into_interleaved(), self.data, at);
             at += lanes;
         }
@@ -107,6 +110,7 @@ where
         while 2 * sample < total {
             let (ar, ai) = (self.data[2 * sample], self.data[2 * sample + 1]);
             let (wr, wi) = (self.twiddles[2 * sample], self.twiddles[2 * sample + 1]);
+            let wi = if CONJ { -wi } else { wi };
             self.data[2 * sample] = ar * wr - ai * wi;
             self.data[2 * sample + 1] = ar * wi + ai * wr;
             sample += 1;
@@ -322,9 +326,9 @@ where
     // 2. Four-step twiddle W_n^{b*k1}: the cached matrix is interleaved like
     //    the data, so this is one elementwise vector pass — the layout
     //    agreement the planar kernel never had.
-    let twiddles = T::cached_four_step_twiddles::<INVERSE>(n, m, m);
+    let twiddles = T::cached_four_step_twiddles(m, m);
     let flat: &mut [T] = eunomia::layout::cast_slice_mut(data);
-    hermes_simd::vectorize(TwiddlePass {
+    hermes_simd::vectorize(TwiddlePass::<T, INVERSE> {
         data: flat,
         twiddles: eunomia::layout::cast_slice(&twiddles),
     });

@@ -108,11 +108,9 @@ pub trait MixedRadixScalar:
     fn with_rader_padded_scratch<R>(n: usize, f: impl FnOnce(&mut [Self::Complex]) -> R) -> R;
     fn with_bluestein_scratch<R>(n: usize, f: impl FnOnce(&mut [Self::Complex]) -> R) -> R;
 
-    fn cached_four_step_twiddles<const INVERSE: bool>(
-        n: usize,
-        n1: usize,
-        n2: usize,
-    ) -> Arc<[Self::Complex]>;
+    /// The forward four-step matrix `W_N^{j k}` for `N = n1 n2`; an inverse
+    /// conjugates each entry at its multiply.
+    fn cached_four_step_twiddles(n1: usize, n2: usize) -> Arc<[Self::Complex]>;
 
     fn pointwise_mul(a: &mut [Self::Complex], b: &[Self::Complex]);
 

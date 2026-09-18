@@ -204,6 +204,12 @@ Change-class tags: [patch] backward-compatible fix, [minor] additive non-breakin
 
 ### Changed
 
+- [patch] `apollo-fft` caches one four-step `W_N^{jk}` matrix per shape
+  instead of one per direction. The generic four-step, the batched
+  interleaved route and the two-by-prime combine conjugate each entry at
+  the multiply on the inverse, an exact sign flip, so inverse outputs are
+  bitwise unchanged. The first inverse of a 2^22-point f64 plan now retains
+  33,300 bytes, down from 67,142,180.
 - [patch] `apollo-fft` batched four-step planar transforms (65536 to 2^20
   even powers, and the odd powers below 2^21) now build only the forward
   fold table and serve the inverse by conjugating it in the pass: the
