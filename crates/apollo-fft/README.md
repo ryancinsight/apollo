@@ -57,8 +57,9 @@ The free functions (`fft_1d_slice`, `fft_2d_array`, and the rest) reuse plans
 from per-scalar, per-dimension caches: a process-wide table of at most 64
 shapes that evicts the least recently used, and a four-shape ring per thread
 that keeps a repeated or alternating shape lock-free and allocation-free.
-`clear_plan_caches()` releases every cached plan no caller holds; another
-thread's ring releases on that thread's next lookup (ADR 0068).
+`clear_plan_caches()` releases every cached plan no caller holds; each of
+another thread's rings releases on that thread's next lookup through it
+(ADR 0068).
 
 ## Accelerator boundary
 

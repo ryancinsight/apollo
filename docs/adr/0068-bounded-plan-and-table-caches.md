@@ -33,14 +33,20 @@ Two slices, the plan level first.
 1. **Plans (slice 1).** One generic cache replaces the six hand-copied ones:
    - **Shared table:** at most `SHARED_CAPACITY = 64` plans per scalar and
      dimension. On a miss past that bound, the least recently used plan is
-     evicted, judged by a per-entry atomic stamp, so lookups stay under the
-     read lock.
+     evicted. The table and every ring holding a plan share one slot with
+     its stamp, so a use served by any thread's ring counts. Recency is kept
+     to miss granularity: the table's tick advances once per plan built, a
+     use stores the current tick only when the stamp moves, and plans used
+     since the last build tie. Lookups stay under the read lock, and a hit
+     does no atomic read-modify-write.
    - **Per-thread ring:** the `LOCAL_CAPACITY = 4` most recently used plans,
      replacing the unbounded per-thread map and the one-entry slot. A
      repeated or alternating shape takes no lock and allocates nothing.
    - **`apollo_fft::clear_plan_caches()`:** empties every shared table and
-     the calling thread's rings, and bumps a process epoch. Any other
-     thread's ring empties on that thread's next lookup.
+     the calling thread's rings, and bumps a process epoch. Each of another
+     thread's rings (one per scalar and dimension) empties on that thread's
+     next lookup through that ring. Called from a thread-local destructor,
+     it skips the caller's rings already destroyed.
    - Retained plan memory per scalar and dimension is then at most 64 shared
      plans plus 4 in each thread's ring, times the largest plan. A ring
      outlives a clear only until its thread's next lookup or exit.
@@ -49,7 +55,10 @@ Two slices, the plan level first.
    using it. The `_RAW` pointer fast path goes first: it is replaced by
    slices borrowed from plan-owned `Arc`s, under Miri. After slice 2,
    `clear_plan_caches()` returns a process to its baseline once no caller
-   holds a plan.
+   holds a plan. Plan-less kernel paths also read these caches: dispatch
+   with no table, Bluestein's padded transforms, and the four-step
+   sub-transforms. Under `Weak` they would rebuild on every call, so slice 2
+   starts with a spike that enumerates them and assigns each an owner.
 
 ## Alternatives
 
@@ -74,12 +83,30 @@ Two slices, the plan level first.
 - **Slice 1 tests (`orchestration/cache/plans/tests.rs`):**
   - repeated shapes share a plan through the ring and the shared table;
   - cycling 256 lengths leaves exactly `SHARED_CAPACITY` plans;
-  - the least recently used entry is the one evicted;
-  - a clear releases unheld plans, and the calling thread's ring with them;
+  - the least recently used entry is the one evicted, and a plan kept hot
+    only through a thread's ring survives eviction for another thread;
+  - a ring hit consults no table and moves to the front;
+  - concurrent misses build a shape once;
+  - a clear releases unheld plans and the calling thread's rings;
   - another thread's ring empties on its next lookup while that thread is
-    still alive. A mutation that skips the epoch check fails this test.
-- **Slice 1 timing:** a pinned A/B of the public-API hit path, same shape
-  and alternating shapes.
+    still alive;
+  - a clear from a thread-local destructor, after the rings are destroyed,
+    does not abort.
+  Each of seven mutations (no epoch check, no ring hit, no move to front,
+  no write-lock re-check, no ring stamp, most-recent eviction, borrowing a
+  destroyed ring) fails at least one of these tests.
+- **Slice 1 timing:** a pinned A/B of two release builds, minimum of 21
+  samples per case, four rounds on a P core and an E core. The ring pays
+  where it was meant to: two alternating shapes run 6.4% (E) and 9.1% (P)
+  faster than the map it replaces. One shape and six cycling shapes, which
+  overflow the ring on every call, are within the drift band. The lookup
+  itself, timed alone, is 8.6 to 8.7 ns (E) and 10.4 ns unchanged (P).
+  The F16 automatic path at 96 -- where const thread-local initialization
+  once regressed (commit 691fddcc) -- reads 2.9% slower on the E core, but
+  the same transform driven from a plan held outside the cache, whose code
+  is identical in both arms and consults no cache, reads 3.9% slower in the
+  same runs. The difference is code layout, not lookup cost; the P core
+  shows neither.
 - **Slice 2:** the audit's oracle. Retained bytes return to baseline after
   a clear, the allocation-free probes still pass, and Miri runs over the
   replaced raw path.
