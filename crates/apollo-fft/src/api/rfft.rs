@@ -2,7 +2,7 @@
 
 use crate::application::execution::kernel::mixed_radix::scalar::plan_scratch::PlanScratch;
 use crate::application::execution::plan::fft::real_storage::{
-    half_plane, half_volume, RealFftData,
+    RealFftData, half_plane, half_volume,
 };
 use crate::application::orchestration::cache::plans::PlanCacheProvider;
 use crate::domain::metadata::shape::{Shape1D, Shape2D, Shape3D};
@@ -312,7 +312,7 @@ where
     let plan = T::get_3d_plan(
         Shape3D::new(nx, ny, nz).expect("fft_3d_array requires non-zero dimensions"),
     );
-    if let Some(out) = half_volume::forward_owned_via_split::<T>(plan.as_ref(), field) {
+    if let Some(out) = half_volume::routed::forward_owned_via_split::<T>(plan.as_ref(), field) {
         return out;
     }
     T::forward_3d(plan.as_ref(), field)
@@ -332,7 +332,7 @@ where
     let plan = T::get_3d_plan(
         Shape3D::new(nx, ny, nz).expect("fft_3d_array_into requires non-zero dimensions"),
     );
-    if half_volume::forward_full_via_split::<T>(plan.as_ref(), field, out) {
+    if half_volume::routed::forward_full_via_split::<T>(plan.as_ref(), field, out) {
         return;
     }
     T::forward_3d_into(plan.as_ref(), field, out);
