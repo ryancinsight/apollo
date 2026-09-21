@@ -832,28 +832,31 @@ pub(super) fn exec_rader_inverse_unnorm<F: MixedRadixScalar<Complex = Complex<F>
 }
 
 pub(super) fn exec_bluestein_forward<F: MixedRadixScalar<Complex = Complex<F>>>(
-    _: &FftPlan1D<F>,
+    plan: &FftPlan1D<F>,
     slice: &mut [F::Complex],
 ) {
-    crate::application::execution::kernel::components::bluestein::bluestein_fft::<F, false, false>(
-        slice,
+    let tables = plan.bluestein_state().tables::<false>(plan.n);
+    crate::application::execution::kernel::components::bluestein::bluestein_with::<F, false, false>(
+        slice, tables,
     );
 }
 
 pub(super) fn exec_bluestein_inverse<F: MixedRadixScalar<Complex = Complex<F>>>(
-    _: &FftPlan1D<F>,
+    plan: &FftPlan1D<F>,
     slice: &mut [F::Complex],
 ) {
-    crate::application::execution::kernel::components::bluestein::bluestein_fft::<F, true, true>(
-        slice,
+    let tables = plan.bluestein_state().tables::<true>(plan.n);
+    crate::application::execution::kernel::components::bluestein::bluestein_with::<F, true, true>(
+        slice, tables,
     );
 }
 
 pub(super) fn exec_bluestein_inverse_unnorm<F: MixedRadixScalar<Complex = Complex<F>>>(
-    _: &FftPlan1D<F>,
+    plan: &FftPlan1D<F>,
     slice: &mut [F::Complex],
 ) {
-    crate::application::execution::kernel::components::bluestein::bluestein_fft::<F, true, false>(
-        slice,
+    let tables = plan.bluestein_state().tables::<true>(plan.n);
+    crate::application::execution::kernel::components::bluestein::bluestein_with::<F, true, false>(
+        slice, tables,
     );
 }

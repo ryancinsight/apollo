@@ -29,6 +29,7 @@ use super::executors::{
     pot_executors_64, pot_executors_8, runtime_tiny_direct_dispatch,
 };
 use super::strategy::{arc_to_cow, generic_four_step_applies, PlanStrategy};
+use crate::application::execution::kernel::components::bluestein::BluesteinState;
 use crate::application::execution::kernel::components::column_route::State180;
 use crate::application::execution::kernel::mixed_radix::scalar::plan_scratch::PlanScratch;
 use crate::application::execution::plan::fft::layout::with_c_order_view;
@@ -69,6 +70,8 @@ pub struct FftPlan1D<F: MixedRadixScalar> {
     /// transforms under a radix-5 column pass, built where the vector frame
     /// holds four complexes a register.
     pub(crate) column180: Option<Arc<State180<F>>>,
+    /// The chirp-z tables for a length every shaped route declines.
+    pub(crate) bluestein: Option<Arc<BluesteinState<F::Complex>>>,
 
     // Function pointers for execution routing, selected at construction for
     // this length on this host. The framed small power-of-two executors carry
@@ -95,6 +98,7 @@ impl<F: MixedRadixScalar> Clone for FftPlan1D<F> {
             base512: self.base512.clone(),
             base64: self.base64.clone(),
             column180: self.column180.clone(),
+            bluestein: self.bluestein.clone(),
             // `OnceLock: Clone` clones the initialized state, so a clone of a
             // plan that has run an inverse keeps the table handle.
             forward_impl: self.forward_impl,
@@ -175,6 +179,12 @@ impl<F: MixedRadixScalar<Complex = Complex<F>>> FftPlan1D<F> {
         self.base128
             .as_deref()
             .expect("invariant: base-128 executor requires its plan state")
+    }
+
+    pub(super) fn bluestein_state(&self) -> &BluesteinState<F::Complex> {
+        self.bluestein
+            .as_deref()
+            .expect("invariant: the Bluestein executor requires its plan state")
     }
 
     pub(super) fn column180_state(&self) -> &State180<F> {
@@ -360,6 +370,7 @@ impl<F: MixedRadixScalar<Complex = Complex<F>>> FftPlan1D<F> {
         // Lazy: no strategy populates the inverse table at construction.
         let twiddle_inv = std::sync::OnceLock::new();
 
+        let mut bluestein = None;
         let mut forward_impl: unsafe fn(&Self, &mut [F::Complex]) = exec_identity::<F>;
         let mut inverse_impl: unsafe fn(&Self, &mut [F::Complex]) = exec_identity::<F>;
         let mut inverse_unnorm_impl: unsafe fn(&Self, &mut [F::Complex]) = exec_identity::<F>;
@@ -600,6 +611,7 @@ impl<F: MixedRadixScalar<Complex = Complex<F>>> FftPlan1D<F> {
                 inverse_unnorm_impl = exec_rader_inverse_unnorm::<F>;
             }
             PlanStrategy::Bluestein => {
+                bluestein = Some(Arc::new(BluesteinState::new(n)));
                 forward_impl = exec_bluestein_forward::<F>;
                 inverse_impl = exec_bluestein_inverse::<F>;
                 inverse_unnorm_impl = exec_bluestein_inverse_unnorm::<F>;
@@ -620,6 +632,7 @@ impl<F: MixedRadixScalar<Complex = Complex<F>>> FftPlan1D<F> {
             base512,
             base64,
             column180,
+            bluestein,
             forward_impl,
             inverse_impl,
             inverse_unnorm_impl,
