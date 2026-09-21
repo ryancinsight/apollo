@@ -1,6 +1,6 @@
 //! One-dimensional real-storage transform implementations.
 
-use super::{RealFftData, fill_real, fill_spectrum, split};
+use super::{fill_real, fill_spectrum, split, RealFftData};
 use crate::application::execution::kernel::mixed_radix::{forward_inplace, inverse_inplace};
 use crate::application::execution::kernel::real_fft::{
     mirror_half_spectrum_in_place, split_twiddles,
