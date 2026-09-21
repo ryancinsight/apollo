@@ -1,6 +1,8 @@
 # Apollo DCT/DST
 
-`apollo-dctdst` owns real-to-real cosine and sine transform plans for Apollo.
+`apollo-dctdst` owns variable-length real-to-real cosine and sine transform
+plans, inverse scaling, fast execution, array integration, and accelerator
+dispatch for Apollo.
 
 ## Architecture
 
@@ -13,8 +15,10 @@ src/
 ```
 
 `DctDstPlan` is the single source of truth for transform length and transform
-kind. Direct kernels remain the authoritative production implementation until a
-derived FFT acceleration is proven equivalent.
+kind. `apollo-dctdst-core` owns the direct DCT-III equation and fixed-capacity
+precomputed plan; this crate owns the remaining direct kernels and the
+variable-length execution policy until derived FFT acceleration is proven
+equivalent.
 
 CPU typed caller-owned paths support high-accuracy `f64`, low-precision `f32`,
 and mixed `f16` storage profiles. The Hephaestus WGPU boundary is concretely

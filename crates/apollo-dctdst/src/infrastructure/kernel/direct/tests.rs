@@ -30,14 +30,6 @@ fn scalar_row(signal: &[f64], kind: DirectBasisKind, row: usize) -> f64 {
                 .map(|(index, value)| *value * (factor * (index as f64 + 0.5) * row as f64).cos())
                 .sum()
         }
-        DirectBasisKind::DctIII => {
-            let factor = std::f64::consts::PI / n as f64;
-            let mut sum = signal[0] * 0.5;
-            for (index, value) in signal.iter().enumerate().skip(1) {
-                sum += *value * (factor * index as f64 * (row as f64 + 0.5)).cos();
-            }
-            sum
-        }
         DirectBasisKind::DctIV => {
             let factor = std::f64::consts::PI / n as f64;
             signal
@@ -94,7 +86,6 @@ fn execute(kind: DirectBasisKind, input: &[f64], output: &mut [f64]) {
     match kind {
         DirectBasisKind::DctI => dct1(input, output),
         DirectBasisKind::DctII => dct2(input, output),
-        DirectBasisKind::DctIII => dct3(input, output),
         DirectBasisKind::DctIV => dct4(input, output),
         DirectBasisKind::DstI => dst1(input, output),
         DirectBasisKind::DstII => dst2(input, output),
@@ -110,7 +101,6 @@ fn hermes_direct_rows_match_scalar_formulas_at_threshold() {
     for kind in [
         DirectBasisKind::DctI,
         DirectBasisKind::DctII,
-        DirectBasisKind::DctIII,
         DirectBasisKind::DctIV,
         DirectBasisKind::DstI,
         DirectBasisKind::DstII,
@@ -132,7 +122,6 @@ fn direct_basis_rows_match_scalar_coefficients() {
     for kind in [
         DirectBasisKind::DctI,
         DirectBasisKind::DctII,
-        DirectBasisKind::DctIII,
         DirectBasisKind::DctIV,
         DirectBasisKind::DstI,
         DirectBasisKind::DstII,

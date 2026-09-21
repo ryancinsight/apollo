@@ -1,6 +1,7 @@
 //! Discrete Cosine/Sine Transform functions wrapping `apollo-dctdst`.
 
-use apollo_dctdst::{dct2, dct3, dst2, dst3};
+use apollo_dctdst::{dct2, dst2, dst3};
+use apollo_dctdst_core::dct3;
 use pyo3::prelude::*;
 
 use super::support::{py_array1_slice, require_contiguous_1d, vec1_into_pyarray, PyReadonlyArray1};

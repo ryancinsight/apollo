@@ -20,6 +20,7 @@ parallel = []
 mnemosyne-memory = []
 
 [dependencies]
+apollo-dctdst-core.workspace = true
 hephaestus-core = { workspace = true, optional = true }
 hephaestus-wgpu = { workspace = true, optional = true }
 hermes-simd = { workspace = true }

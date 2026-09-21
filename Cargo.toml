@@ -2,6 +2,7 @@
 members = [
     "crates/apollo-czt",
     "crates/apollo-dctdst",
+    "crates/apollo-dctdst-core",
     "crates/apollo-dht",
     "crates/apollo-fft",
     "crates/apollo-fft-macros",
@@ -81,6 +82,7 @@ authors = ["Ryan Clanton PhD <ryanclanton@outlook.com>"]
 repository = "https://github.com/ryancinsight/apollo"
 
 [workspace.dependencies]
+apollo-dctdst-core = { version = "0.16.0", path = "crates/apollo-dctdst-core" }
 anyhow = "1.0.103"
 csv = "1.4.0"
 # Eunomia PR #87 is merged; Cargo.lock records the reviewed default source.
