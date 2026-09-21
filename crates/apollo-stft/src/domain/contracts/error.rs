@@ -93,6 +93,12 @@ mod tests {
     /// The newline this crate must never emit inside a message.
     const LINE_FEED: char = '\n';
 
+    /// The repeated space that marks a flattened multi-line literal.
+    /// Named because a corruption of it — three spaces rather than two —
+    /// would leave every message passing while the guard quietly stopped
+    /// catching the defect; `the_guard_is_live` is what makes that loud.
+    const DOUBLE_SPACE: &str = "  ";
+
     /// One index per variant, so the list below can be checked against the
     /// match rather than merely beside it.
     const STFT_VARIANTS: usize = 9;
@@ -104,7 +110,15 @@ mod tests {
     /// alone is not enough: adding the arm is the minimal edit that clears
     /// the build, and it leaves the list short. So each arm carries a
     /// distinct index and the set of indices must be the full range — an
-    /// omitted variant shrinks it, a repeated one shrinks it too.
+    /// omitted variant shrinks it, and so does a repeat that displaces one.
+    ///
+    /// Three things move together for a new variant: the arm, the list entry
+    /// and the count below. The assertion catches any two of them moving
+    /// without the third, which is every accident; it cannot catch all three
+    /// staying put, because a runtime check only sees what the list holds.
+    /// Closing that last path wants the variant count from the type itself,
+    /// and `std::mem::variant_count` is nightly — a derive macro for it is a
+    /// dependency this crate will not take to format messages.
     fn every_stft_error() -> Vec<StftError> {
         let all = vec![
             StftError::EmptyFrameLength,
@@ -166,6 +180,23 @@ mod tests {
         all
     }
 
+    /// The guard's own needles, checked against text that has the defect
+    /// and text that does not. Without this, widening `DOUBLE_SPACE` to
+    /// three spaces would leave the suite green and the guard blind.
+    #[test]
+    fn the_guard_is_live() {
+        assert!(
+            "a  b".contains(DOUBLE_SPACE),
+            "the needle must match a pair"
+        );
+        assert!(!"a b".contains(DOUBLE_SPACE), "and must not match a single");
+        assert!(
+            "a\nb".contains(LINE_FEED),
+            "the needle must match a newline"
+        );
+        assert!(!"ab".contains(LINE_FEED), "and must not match plain text");
+    }
+
     /// A `#[error(...)]` literal written across source lines carries its own
     /// indentation into the message: `rustfmt` joins the lines and the
     /// continuation's spaces stay in the string. Nothing else catches it —
@@ -187,7 +218,7 @@ mod tests {
             .chain(peak.iter().map(ToString::to_string));
         for message in messages {
             assert!(
-                !message.contains("  "),
+                !message.contains(DOUBLE_SPACE),
                 "message carries a repeated space: {message:?}"
             );
             assert!(
