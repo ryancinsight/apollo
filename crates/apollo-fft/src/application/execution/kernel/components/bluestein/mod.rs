@@ -37,20 +37,113 @@
 //! absolute error of argument reduction grows with the magnitude and the phase
 //! loses significance precisely at the large `n` this route exists to serve.
 //!
-//! # Allocation
+//! # Tables
 //!
-//! This path allocates its chirp and kernel per call. That is deliberate for
-//! now: it replaces a route that returned wrong answers, and correctness with
-//! an allocation strictly dominates. Caching `FFT(kernel)` per `n` the way
-//! `rader::bluestein` does is tracked as a follow-up rather than folded into a
-//! correctness fix.
+//! The chirp, the output chirp and the transform of the kernel depend on
+//! the length and direction only. [`ChirpTables`] holds them; a plan owns
+//! one per direction ([`BluesteinState`]) so a warm call runs two
+//! transforms at `p` and allocates nothing (the padded work buffer is the
+//! thread's Bluestein scratch role), while the free-function route
+//! ([`bluestein_fft`]) builds them per call.
 
 use eunomia::Complex;
 
 use crate::application::execution::kernel::mixed_radix::dispatch::dispatch_inplace;
 use crate::application::execution::kernel::mixed_radix::MixedRadixScalar;
 
-/// Transform `data` in place at any length, via chirp-z.
+/// The chirp-z tables for one length and direction.
+pub(crate) struct ChirpTables<C> {
+    /// `c(m)`, `m < n`.
+    chirp: Box<[C]>,
+    /// `c(m) / p`: the output chirp with the inverse transform's `1/p`.
+    chirp_out: Box<[C]>,
+    /// `c(m) / (p n)`: the normalized inverse's output chirp; empty forward.
+    chirp_out_normalized: Box<[C]>,
+    /// The unnormalized forward transform of `conj(c)` padded to `p`.
+    kernel_spectrum: Box<[C]>,
+}
+
+impl<F: MixedRadixScalar<Complex = Complex<F>>> ChirpTables<Complex<F>> {
+    /// The tables for `n > 1` in direction `INVERSE`.
+    pub(crate) fn new<const INVERSE: bool>(n: usize) -> Self {
+        debug_assert!(n > 1);
+        let p = (2 * n - 1).next_power_of_two();
+        // The convolution is evaluated at `p`, so `p` must be a length the
+        // power-of-two path serves directly. If it were not,
+        // `dispatch_inplace` could route back here and recurse.
+        debug_assert!(p.is_power_of_two() && p >= 2 * n - 1);
+        let sign = if INVERSE { 1.0_f64 } else { -1.0_f64 };
+        // `1/p` undoes the unnormalized inverse transform; `1/n` is the
+        // caller's normalization. Folding both into the output chirp keeps
+        // the whole pass multiplicative, with no separate scaling sweep.
+        let scale = 1.0 / p as f64;
+        let scale_normalized = 1.0 / (p as f64 * n as f64);
+
+        let mut chirp = Vec::with_capacity(n);
+        let mut chirp_out = Vec::with_capacity(n);
+        let mut chirp_out_normalized = Vec::with_capacity(if INVERSE { n } else { 0 });
+        let mut kernel = vec![F::complex(0.0, 0.0); p];
+        let two_n = 2 * n;
+        for m in 0..n {
+            // `m * m` reaches ~n^2 and would overflow `usize` for large n on
+            // a 32-bit target; the widened product costs one multiply per
+            // element, once per table.
+            let residue = ((m as u128 * m as u128) % two_n as u128) as usize;
+            let angle = sign * std::f64::consts::PI * residue as f64 / n as f64;
+            let (sin, cos) = angle.sin_cos();
+            chirp.push(F::complex(cos, sin));
+            chirp_out.push(F::complex(cos * scale, sin * scale));
+            if INVERSE {
+                chirp_out_normalized
+                    .push(F::complex(cos * scale_normalized, sin * scale_normalized));
+            }
+            // The kernel is `conj(c)`, which is even in `m`, so one value
+            // fills both ends. `p >= 2n - 1` keeps `p - m > m` for every
+            // `m < n`, so these never collide.
+            let conj = F::complex(cos, -sin);
+            kernel[m] = conj;
+            if m > 0 {
+                kernel[p - m] = conj;
+            }
+        }
+        dispatch_inplace::<F, false, false>(&mut kernel, None);
+        Self {
+            chirp: chirp.into_boxed_slice(),
+            chirp_out: chirp_out.into_boxed_slice(),
+            chirp_out_normalized: chirp_out_normalized.into_boxed_slice(),
+            kernel_spectrum: kernel.into_boxed_slice(),
+        }
+    }
+}
+
+/// A plan's chirp-z tables: forward at construction, inverse on the first
+/// inverse execution, as the plan's inverse twiddles are.
+pub(crate) struct BluesteinState<C> {
+    forward: ChirpTables<C>,
+    inverse: std::sync::OnceLock<ChirpTables<C>>,
+}
+
+impl<F: MixedRadixScalar<Complex = Complex<F>>> BluesteinState<Complex<F>> {
+    /// The state for `n > 1`, forward tables built.
+    pub(crate) fn new(n: usize) -> Self {
+        Self {
+            forward: ChirpTables::new::<false>(n),
+            inverse: std::sync::OnceLock::new(),
+        }
+    }
+
+    /// The tables for direction `INVERSE`, the inverse built on first use.
+    pub(crate) fn tables<const INVERSE: bool>(&self, n: usize) -> &ChirpTables<Complex<F>> {
+        if INVERSE {
+            self.inverse.get_or_init(|| ChirpTables::new::<true>(n))
+        } else {
+            &self.forward
+        }
+    }
+}
+
+/// Transform `data` in place at any length, via chirp-z, building the
+/// tables for this call.
 ///
 /// `NORMALIZE` divides by `n`, and like every other kernel in this module it
 /// applies only on the inverse.
@@ -61,65 +154,49 @@ pub(crate) fn bluestein_fft<
 >(
     data: &mut [F::Complex],
 ) {
+    if data.len() <= 1 {
+        return;
+    }
+    let tables = ChirpTables::<Complex<F>>::new::<INVERSE>(data.len());
+    bluestein_with::<F, INVERSE, NORMALIZE>(data, &tables);
+}
+
+/// Transform `data` in place through prepared `tables` of its length and
+/// direction: two power-of-two transforms at `p` over the thread's
+/// Bluestein scratch, no allocation once that role is warm.
+pub(crate) fn bluestein_with<
+    F: MixedRadixScalar<Complex = Complex<F>>,
+    const INVERSE: bool,
+    const NORMALIZE: bool,
+>(
+    data: &mut [F::Complex],
+    tables: &ChirpTables<F::Complex>,
+) {
     let n = data.len();
     if n <= 1 {
         return;
     }
-
-    let p = (2 * n - 1).next_power_of_two();
-    // The convolution is evaluated at `p`, so `p` must be a length the
-    // power-of-two path serves directly. If it were not, `dispatch_inplace`
-    // could route back here and recurse.
-    debug_assert!(p.is_power_of_two() && p >= 2 * n - 1);
-
-    let sign = if INVERSE { 1.0_f64 } else { -1.0_f64 };
-
-    // `1/p` undoes the unnormalized inverse transform below; `1/n` is the
-    // caller's normalization. Folding both into the output chirp keeps the
-    // whole pass multiplicative — there is no separate scaling sweep.
-    let scale = if INVERSE && NORMALIZE {
-        1.0 / (p as f64 * n as f64)
+    let p = tables.kernel_spectrum.len();
+    assert!(
+        tables.chirp.len() == n && p >= 2 * n - 1,
+        "invariant: the chirp-z tables are built for this length"
+    );
+    let chirp_out: &[F::Complex] = if INVERSE && NORMALIZE {
+        &tables.chirp_out_normalized
     } else {
-        1.0 / p as f64
+        &tables.chirp_out
     };
-
-    let mut chirp = Vec::with_capacity(n);
-    let mut chirp_out = Vec::with_capacity(n);
-    let mut kernel = vec![F::complex(0.0, 0.0); p];
-
-    let two_n = 2 * n;
-    for m in 0..n {
-        // `m * m` reaches ~n^2 and would overflow `usize` for large n on a
-        // 32-bit target; the widened product costs one multiply per element
-        // on a path already dominated by three transforms.
-        let residue = ((m as u128 * m as u128) % two_n as u128) as usize;
-        let angle = sign * std::f64::consts::PI * residue as f64 / n as f64;
-        let (sin, cos) = angle.sin_cos();
-
-        chirp.push(F::complex(cos, sin));
-        chirp_out.push(F::complex(cos * scale, sin * scale));
-
-        // The kernel is `conj(c)`, which is even in `m`, so one value fills
-        // both ends. `p >= 2n - 1` keeps `p - m > m` for every `m < n`, so
-        // these never collide.
-        let conj = F::complex(cos, -sin);
-        kernel[m] = conj;
-        if m > 0 {
-            kernel[p - m] = conj;
-        }
-    }
-
-    let mut work = vec![F::complex(0.0, 0.0); p];
-    work[..n].copy_from_slice(data);
-    F::pointwise_mul(&mut work[..n], &chirp);
-
-    dispatch_inplace::<F, false, false>(&mut work, None);
-    dispatch_inplace::<F, false, false>(&mut kernel, None);
-    F::pointwise_mul(&mut work, &kernel);
-    dispatch_inplace::<F, true, false>(&mut work, None);
-
-    F::pointwise_mul(&mut work[..n], &chirp_out);
-    data.copy_from_slice(&work[..n]);
+    F::with_bluestein_scratch(p, |work| {
+        let work = &mut work[..p];
+        work[..n].copy_from_slice(data);
+        work[n..].fill(F::complex(0.0, 0.0));
+        F::pointwise_mul(&mut work[..n], &tables.chirp);
+        dispatch_inplace::<F, false, false>(work, None);
+        F::pointwise_mul(work, &tables.kernel_spectrum);
+        dispatch_inplace::<F, true, false>(work, None);
+        F::pointwise_mul(&mut work[..n], chirp_out);
+        data.copy_from_slice(&work[..n]);
+    });
 }
 
 #[cfg(test)]
@@ -191,6 +268,24 @@ mod tests {
                 .map(|(g, e)| (g.re - e.re).abs().max((g.im - e.im).abs()))
                 .fold(0.0f64, f64::max);
             assert!(worst < 1e-9, "n = {n}: roundtrip drifts by {worst:e}");
+        }
+    }
+
+    /// A plan runs the same tables through the same transforms as the free
+    /// route, so the two agree bit for bit in every direction.
+    #[test]
+    fn plan_matches_the_free_route_bit_for_bit() {
+        for n in [361usize, 961] {
+            let plan = crate::FftPlan1D::<f64>::new(crate::Shape1D::new(n).expect("non-zero"));
+            let x = signal(n);
+            let mut planned = x.clone();
+            let mut free = x.clone();
+            plan.forward_complex_slice_inplace(&mut planned);
+            bluestein_fft::<f64, false, false>(&mut free);
+            assert_eq!(planned, free, "n = {n}: forward");
+            plan.inverse_complex_slice_inplace(&mut planned);
+            bluestein_fft::<f64, true, true>(&mut free);
+            assert_eq!(planned, free, "n = {n}: normalized inverse");
         }
     }
 }
