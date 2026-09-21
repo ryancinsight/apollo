@@ -37,6 +37,13 @@ fn main() -> Result<(), apollo_bench::BenchmarkError> {
     );
     let mut suite = BenchmarkSuite::new(config);
     for &n in &LENGTHS {
+        suite.run_with_config(
+            config,
+            BenchmarkCase::new("plan_construction", "circle (Mersenne31)", n),
+            || {
+                black_box(CircleNttPlan::new(n).expect("Mersenne31 supports the length"));
+            },
+        );
         let circle = CircleNttPlan::new(n).expect("Mersenne31 supports the length");
         let cyclic = NttPlan::new(n).expect("the default prime supports the length");
         let circle_input = Array1::from(residues(n, circle.modulus()));
