@@ -64,7 +64,7 @@ pub use application::execution::plan::fft::{
     dimension_3d::{FftPlan3D, StaticFftPlan3D},
     real_storage::RealFftData,
 };
-pub use application::orchestration::cache::plans::PlanCacheProvider;
+pub use application::orchestration::cache::plans::{clear_plan_caches, PlanCacheProvider};
 pub use domain::contracts::backend::{BackendCapabilities, FftBackend};
 pub use domain::contracts::error::{ApolloError, ApolloResult};
 pub use domain::metadata::precision::{
