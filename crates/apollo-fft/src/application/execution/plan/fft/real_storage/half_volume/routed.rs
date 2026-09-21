@@ -1,9 +1,9 @@
 //! Full-volume routes built on the half-spectrum pair.
 
-use super::super::{RealFftData, expand};
+use super::super::{expand, RealFftData};
 use super::{forward_half, inverse_half};
 use crate::application::execution::kernel::mixed_radix::scalar::plan_scratch::{
-    PlanScratch, with_view_staging,
+    with_view_staging, PlanScratch,
 };
 use crate::application::execution::plan::fft::dimension_3d::FftPlan3D;
 use apollo_leto_interop::view_cow;

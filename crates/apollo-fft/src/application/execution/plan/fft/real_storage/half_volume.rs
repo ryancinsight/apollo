@@ -28,9 +28,9 @@
 //! routes take the pair from [`routed::ROUTED_LANE_FLOOR`] lanes, the owned forward
 //! from [`super::expand::OWNED_ROUTE_BYTES`] of output.
 
-use super::{RealFftData, split};
+use super::{split, RealFftData};
 use crate::application::execution::kernel::mixed_radix::scalar::plan_scratch::{
-    PlanScratch, with_3d_x_scratch, with_view_staging,
+    with_3d_x_scratch, with_view_staging, PlanScratch,
 };
 use crate::application::execution::plan::fft::dimension_3d::FftPlan3D;
 use crate::application::execution::plan::fft::lanes;

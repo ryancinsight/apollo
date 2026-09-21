@@ -1,7 +1,7 @@
 //! Three-dimensional inverse real FFT operations.
 
 use crate::application::execution::kernel::mixed_radix::scalar::plan_scratch::PlanScratch;
-use crate::application::execution::plan::fft::real_storage::{RealFftData, half_volume};
+use crate::application::execution::plan::fft::real_storage::{half_volume, RealFftData};
 use crate::application::orchestration::cache::plans::PlanCacheProvider;
 use crate::domain::metadata::shape::Shape3D;
 use eunomia::Complex;
