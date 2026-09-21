@@ -409,51 +409,76 @@ fn every_window_reconstructs_what_it_analyzed() {
     }
 }
 
-/// A plan accepted at the very bottom of the overlap-add floor still
-/// reconstructs to about six significant digits, which is what the floor is
-/// chosen for. A frame's transform error is relative to that frame's largest
-/// magnitude, so the error a small weight leaves is amplified by the square
-/// root of the weight ratio, not its reciprocal: `γ √(largest / weight)`.
-/// The window `[t, 1, 1, 1, t, 1, 1, 1]` at `hop = 4` puts the ratio at `t²`,
-/// so `t` just above `√ε` sits one step inside the floor.
+/// The floor buys about six significant digits, and it does so because the
+/// amplification is the square root of the weight ratio rather than its
+/// reciprocal. Both claims are measured here, because a single point cannot
+/// tell the two laws apart: at one `t` the reciprocal law's bound is larger,
+/// so an error under the square-root bound is under both.
+///
+/// The window `[t, 1, 1, 1, t, 1, 1, 1]` at `hop = 4` puts the weight ratio
+/// at `t²`, so `t` from 1 down to just above `√ε` stays inside the floor
+/// while sweeping the ratio over fifteen decades. Under `γ √(largest/weight)`
+/// the error grows as `1/t`; under `γ (largest/weight)` it would grow as
+/// `1/t²`. Four decades of `t` therefore separate them by four orders.
 #[test]
-fn a_plan_at_the_floor_still_holds_six_digits() {
+fn a_plan_at_the_floor_holds_the_square_root_law() {
     let frame_len = 8usize;
     let hop_len = 4usize;
     let signal_len = 64usize;
-    let faint = 1.6e-8;
-    assert!(
-        faint * faint > f64::EPSILON,
-        "the window must sit inside the floor, not on it"
-    );
-    let mut window = vec![1.0; frame_len];
-    window[0] = faint;
-    window[frame_len / 2] = faint;
-    let plan = StftPlan::with_window_values(frame_len, hop_len, window)
-        .expect("a weight ratio above the floor is accepted");
     let signal = Array1::from(
         (0..signal_len)
-            .map(|i| (i as f64 * 0.41).sin())
+            .map(|i| if i % 3 == 0 { 1.0f64 } else { -1.0f64 })
             .collect::<Vec<_>>(),
     );
     let peak = signal.iter().fold(0.0f64, |m, x| m.max(x.abs()));
-    let spectrum = plan.forward(&signal).expect("forward");
-    let recovered = plan.inverse(&spectrum, signal_len).expect("inverse");
-    // `largest / weight` is `1 / faint²` at the faint residues, so the bound
-    // is `γ / faint`; every other residue is better conditioned than this.
     let gamma = 16.0 * (frame_len as f64).log2().ceil() * f64::EPSILON;
-    let bound = gamma / faint * peak;
-    assert!(
-        bound < 1.0e-6,
-        "the floor is supposed to buy six digits, not fewer: bound {bound:e}"
-    );
-    for i in 0..signal_len {
-        let error = (recovered[i] - signal[i]).abs();
+    let worst_error = |faint: f64| -> f64 {
+        let mut window = vec![1.0; frame_len];
+        window[0] = faint;
+        window[frame_len / 2] = faint;
+        let plan = StftPlan::with_window_values(frame_len, hop_len, window)
+            .expect("a weight ratio above the floor is accepted");
+        let spectrum = plan.forward(&signal).expect("forward");
+        let recovered = plan.inverse(&spectrum, signal_len).expect("inverse");
+        (0..signal_len).fold(0.0f64, |m, i| m.max((recovered[i] - signal[i]).abs()))
+    };
+
+    // The bound holds at every sampled ratio, the floor included.
+    let faints = [1.0, 1.0e-4, 1.0e-6, 1.6e-8];
+    let errors: Vec<f64> = faints.iter().map(|&t| worst_error(t)).collect();
+    for (&faint, &error) in faints.iter().zip(&errors) {
+        assert!(
+            faint * faint > f64::EPSILON,
+            "every sampled window must sit inside the floor"
+        );
+        let bound = gamma / faint * peak;
         assert!(
             error <= bound,
-            "sample {i} error {error:e} exceeds the derived bound {bound:e}"
+            "t {faint:e}: error {error:e} exceeds the square-root bound {bound:e}"
         );
     }
+
+    // And it is the square-root law, not the reciprocal one. The slope is read
+    // between two ratios that are both in the amplified regime: at `t = 1` the
+    // window is flat and the error sits at the rounding floor, which is a
+    // baseline, not a point on either law's curve.
+    let (first, last) = (1, faints.len() - 1);
+    let growth = errors[last] / errors[first];
+    let span = faints[first] / faints[last];
+    assert!(
+        growth > span / 10.0 && growth < span * 10.0,
+        "error grew {growth:e} from t={:e} to t={:e}: the square-root law          predicts about {span:e}, the reciprocal law {:e}",
+        faints[first],
+        faints[last],
+        span * span
+    );
+
+    // Six digits at the floor is the claim the floor is chosen for.
+    let at_floor = errors[errors.len() - 1];
+    assert!(
+        at_floor < 1.0e-6 * peak,
+        "at the floor the error is {at_floor:e}, not the promised six digits"
+    );
 }
 
 /// The review's end-of-signal reproduction: every residue has energy, but

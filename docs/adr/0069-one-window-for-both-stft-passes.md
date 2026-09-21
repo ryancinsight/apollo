@@ -2,7 +2,7 @@
 
 - Status: Accepted
 - Date: 2026-09-21
-- Items: `backlog.md#apollo-cap-stft-window-inverse`
+- Items: `backlog.md#apollo-cap-stft-windows`
 - Evidence: `output/apollo-capability-audit-2026-09-18.md` item 5
 
 ## Context
@@ -32,8 +32,9 @@ The plan owns one window, and both passes use it.
   this record exists to close, so the parameter does not survive in any form.
 - Window values are evaluated at the nearer end (`x = min(i, n-1-i) / span`),
   so `w[i]` and `w[n-1-i]` are one evaluation and symmetry is bitwise, not
-  approximate. Tukey's taper compares `edge < alpha / 2` rather than scaling
-  `alpha`, so a subnormal α cannot underflow into "no taper".
+  approximate. Tukey's taper compares `2 edge >= alpha`, scaling the edge
+  rather than the parameter: `alpha / 2` halves a subnormal α to zero and
+  would read the taper as flat.
 - Where the overlap-add weight is at most `ε` times the largest, the inverse
   returns `StftError::WindowNotOverlapAdd` instead of dividing. The error
   enum gains that variant and `InvalidWindowParameter`, and becomes
@@ -47,6 +48,13 @@ sample covered only by small window values therefore collects absolute error
 of order `γ |w|max |x|max w_small` and is divided by a weight of order
 `w_small²`, leaving a relative error bounded by `γ √(largest / weight)` with
 `γ = 16 ⌈log₂ N⌉ ε`.
+
+This is an estimate validated by measurement, not a proof: it takes a
+frame's transform error as `γ |w|max |x|max`, which asserts
+`‖wx‖₂ ≤ |w|max |x|max` and is false by up to `√N`. It survives because `γ`
+overestimates the real round-trip error by more than `√N` does — the measured
+margin is flat in `N`, about 48x at `N = 8` and 35x at `N = 8192`, rather than
+shrinking as `1/√N`.
 
 The amplification is the square root of the weight ratio, not its reciprocal.
 The error reaches the sample's own magnitude only near
@@ -103,9 +111,13 @@ non-zero" to "wherever the denominator exceeds `ε` times the largest".
   a ramp and a `1e6`-scaled Hann at two hops, asserting a bound derived from
   the frame count, the window's largest value and `γ` — scale-invariant, as
   the `1e6` case pins.
-- `a_plan_at_the_floor_still_holds_six_digits` places the weight ratio one
-  step inside the floor and asserts the `γ √(largest / weight)` bound, so the
-  paragraph above is falsifiable rather than asserted.
+- `a_plan_at_the_floor_holds_the_square_root_law` sweeps `t` over four
+  decades inside the floor, which is what separates the two laws: at any
+  single ratio the reciprocal law's bound is the larger one, so an error under
+  the square-root bound is under both and discriminates nothing. Over four
+  decades the laws differ by four orders, and the test asserts the bound at
+  every sampled ratio, the growth against both predictions, and six digits at
+  the floor itself.
 - `every_window_is_symmetric` asserts bitwise equality, not a tolerance;
   `tukey_at_subnormal_alpha_tapers` fails against the `edge >= alpha / 2`
   form.

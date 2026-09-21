@@ -90,9 +90,19 @@ fn tukey(alpha: f64, x: f64) -> f64 {
 /// the bound is `γ / √ε`, about `7e-7` at `N = 8` and `2.4e-6` at
 /// `N = 1024`, so an accepted configuration still reconstructs to roughly
 /// six significant digits, while below it the analysis stops promising even
-/// half the mantissa. A measurement of the family `[t, 1, 1, 1, t, 1, 1, 1]`
-/// at `hop = 4` over `t = 1 … 1e-160` tracks the bound from beneath by two
-/// orders throughout, so the floor is conservative and the bound holds.
+/// half the mantissa.
+///
+/// The bound is an estimate validated by measurement, not a proof: it takes a
+/// frame's transform error as `γ |w|max |x|max`, which asserts
+/// `‖wx‖₂ ≤ |w|max |x|max` and is false by up to `√N` (the reconstruction
+/// test's sibling bound carries that `√N`). It survives because
+/// `γ = 16 ⌈log₂ N⌉ ε` overestimates the real round-trip error by more than
+/// `√N` does; measured margin is flat in `N`, about 48x at `N = 8` and 35x at
+/// `N = 8192`, rather than shrinking as `1/√N`. The family
+/// `[t, 1, 1, 1, t, 1, 1, 1]` at `hop = 4` puts the weight ratio at `t²`, so
+/// `t` from 1 down to just above `√ε` sweeps fifteen decades of ratio within
+/// the accepted range; `a_plan_at_the_floor_holds_the_square_root_law`
+/// measures across it.
 ///
 /// Frame `m` starts at `m hop - N / 2` for `m ≤ ⌈L / hop⌉`, the framing the
 /// forward and inverse share. From `N / 2` to `L - N / 2` every covering

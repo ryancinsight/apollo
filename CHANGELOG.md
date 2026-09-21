@@ -11,7 +11,7 @@ Change-class tags: [patch] backward-compatible fix, [minor] additive non-breakin
 ### Breaking
 
 - [major] `apollo-stft`: an `StftPlan` owns one window for both analysis and
-  synthesis.
+  synthesis (ADR 0069).
   - **Removed:** `forward_with_window`. It analyzed with a caller's window
     while `inverse` always synthesized with Hann, so a Hamming round trip
     reconstructed with 4.1e-2 error.
@@ -22,7 +22,11 @@ Change-class tags: [patch] backward-compatible fix, [minor] additive non-breakin
   - **Inverse precondition:** the inverse returns the new
     `StftError::WindowNotOverlapAdd` where some sample, in the interior or at
     an end covered only by a window's zero part, gets squared-window weight at
-    most `ε` of the largest, instead of writing zeros there. The WGPU inverse
+    most `ε` of the largest, instead of writing zeros there. The floor is a
+    conditioning choice, not the point of failure: the relative error a small
+    weight leaves is bounded by `γ √(largest / weight)`, about `7e-7` at the
+    floor for `N = 8`, so an accepted plan still reconstructs to roughly six
+    significant digits. The WGPU inverse
     refuses such plans with `WgpuError::InvalidPlan`.
   - **Errors:** `StftError` gains `InvalidWindowParameter` and becomes
     `#[non_exhaustive]`.

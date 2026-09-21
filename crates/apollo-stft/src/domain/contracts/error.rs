@@ -38,7 +38,9 @@ pub enum StftError {
     /// plan's hop. The inverse divides by that energy, and the relative error
     /// it leaves is bounded by `γ √(largest / weight)`, so below the floor the
     /// reconstruction is no longer held to six significant digits.
-    #[error("the window does not overlap-add at this hop and length; the inverse is undefined")]
+    #[error(
+        "the window's overlap-add weight falls to at most eps of the largest at          this hop and length; the inverse is too ill-conditioned to be held to          six significant digits there"
+    )]
     WindowNotOverlapAdd,
 }
 
