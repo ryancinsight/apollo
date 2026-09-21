@@ -526,7 +526,9 @@ if [ "$(git rev-parse --git-dir)" != "$(git rev-parse --git-common-dir)" ]; then
       esac
     fi
     gate_cwd="$(mktemp -d "${TMPDIR:-/tmp}/pre-push-lane.XXXXXX")"
-    gate_manifest="--manifest-path $repo_root/Cargo.toml"
+    # Leading space: the reproduce lines render as `cargo doc --no-deps$gate_specs`,
+    # and without it the flag joins the subcommand ("--no-deps--manifest-path").
+    gate_manifest=" --manifest-path $repo_root/Cargo.toml"
     gate_fmt_scope="--all"
     echo "pre-push: lane of an overlaid member; gating outside the stack overlay" >&2
   fi
