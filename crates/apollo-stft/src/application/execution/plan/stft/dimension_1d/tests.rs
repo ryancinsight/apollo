@@ -472,8 +472,12 @@ fn a_plan_at_the_floor_holds_the_square_root_law() {
     // Two decades either side, not one: the growth varies about 18x across
     // ordinary signals (sine, random sign, uniform, chirp) while the laws
     // differ by four orders, so a tighter window would fail on signal
-    // variance and blame the law. The reciprocal prediction still sits 625x
-    // outside this one.
+    // variance and blame the law. Writing `err ∝ (largest/weight)^p`, the
+    // ratio is `t²`, so this window admits `p ∈ [0.24, 0.76]` and excludes
+    // both failure modes that matter: the reciprocal law at `p = 1` sits
+    // 62.5x above the upper edge, and no amplification at all, `p = 0`,
+    // sits below the lower one. The √ law's `p = 1/2` is the only mechanism
+    // in between.
     assert!(
         growth > span / 100.0 && growth < span * 100.0,
         "error grew {growth:e} from t={:e} to t={:e}: square-root law predicts {span:e}, reciprocal law {:e}",

@@ -89,27 +89,73 @@ pub enum PeakEstimationError {
 mod tests {
     use super::{PeakEstimationError, StftError};
 
+    /// Every `StftError`, with the wildcard-free match that keeps the list
+    /// complete: a variant added to the enum stops compiling here, rather
+    /// than silently escaping the message check below.
+    fn every_stft_error() -> Vec<StftError> {
+        let all = vec![
+            StftError::EmptyFrameLength,
+            StftError::EmptyHopSize,
+            StftError::HopExceedsFrame,
+            StftError::InputTooShort,
+            StftError::LengthMismatch,
+            StftError::WindowLengthMismatch,
+            StftError::PrecisionMismatch,
+            StftError::InvalidWindowParameter,
+            StftError::WindowNotOverlapAdd,
+        ];
+        for error in &all {
+            match error {
+                StftError::EmptyFrameLength
+                | StftError::EmptyHopSize
+                | StftError::HopExceedsFrame
+                | StftError::InputTooShort
+                | StftError::LengthMismatch
+                | StftError::WindowLengthMismatch
+                | StftError::PrecisionMismatch
+                | StftError::InvalidWindowParameter
+                | StftError::WindowNotOverlapAdd => {}
+            }
+        }
+        all
+    }
+
+    /// Every `PeakEstimationError`, under the same rule.
+    fn every_peak_error() -> Vec<PeakEstimationError> {
+        let all = vec![
+            PeakEstimationError::FrameTooShort { len: 2 },
+            PeakEstimationError::FrameTooLong { len: 1 << 30 },
+            PeakEstimationError::PeakOutOfRange { bin: 9, len: 4 },
+            PeakEstimationError::DuplicatePeak { bin: 3 },
+            PeakEstimationError::MirrorPeak { bin: 5, mirror: 3 },
+        ];
+        for error in &all {
+            match error {
+                PeakEstimationError::FrameTooShort { .. }
+                | PeakEstimationError::FrameTooLong { .. }
+                | PeakEstimationError::PeakOutOfRange { .. }
+                | PeakEstimationError::DuplicatePeak { .. }
+                | PeakEstimationError::MirrorPeak { .. } => {}
+            }
+        }
+        all
+    }
+
     /// A `#[error(...)]` literal written across source lines carries its own
-    /// indentation into the message unless every continuation is stripped,
-    /// and nothing else checks: `rustfmt` joins the lines, `clippy` does not
-    /// read string contents, and the text reaches a caller through `Display`
-    /// and through `WgpuError::InvalidPlan`. This crate's messages are one
-    /// sentence of single-spaced prose, so a repeated space is that defect.
+    /// indentation into the message: `rustfmt` joins the lines and the
+    /// continuation's spaces stay in the string. Nothing else catches it --
+    /// fmt produces it, clippy does not read string contents, and the text
+    /// reaches a caller through `Display` and through
+    /// `WgpuError::InvalidPlan`. This crate's messages are one sentence of
+    /// single-spaced prose, so a repeated space is that defect.
     #[test]
     fn no_error_message_carries_source_indentation() {
-        let messages: Vec<String> = vec![
-            StftError::EmptyFrameLength.to_string(),
-            StftError::EmptyHopSize.to_string(),
-            StftError::HopExceedsFrame.to_string(),
-            StftError::InputTooShort.to_string(),
-            StftError::LengthMismatch.to_string(),
-            StftError::WindowLengthMismatch.to_string(),
-            StftError::PrecisionMismatch.to_string(),
-            StftError::InvalidWindowParameter.to_string(),
-            StftError::WindowNotOverlapAdd.to_string(),
-            PeakEstimationError::FrameTooShort { len: 2 }.to_string(),
-            PeakEstimationError::FrameTooLong { len: 1 << 30 }.to_string(),
-        ];
+        let stft = every_stft_error();
+        let peak = every_peak_error();
+        let messages = stft
+            .iter()
+            .map(ToString::to_string)
+            .chain(peak.iter().map(ToString::to_string));
         for message in messages {
             assert!(
                 !message.contains("  "),
@@ -119,6 +165,7 @@ mod tests {
                 !message.contains('\n'),
                 "message carries a newline: {message:?}"
             );
+            assert!(!message.is_empty(), "a variant renders no message");
         }
     }
 }
