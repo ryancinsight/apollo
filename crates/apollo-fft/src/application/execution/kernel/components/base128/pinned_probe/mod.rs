@@ -132,6 +132,7 @@ impl ProbeScalar for f32 {
     }
 }
 
+mod bluestein_tables;
 mod chain_phases;
 mod codelet_selection;
 mod composite_split_ab;
