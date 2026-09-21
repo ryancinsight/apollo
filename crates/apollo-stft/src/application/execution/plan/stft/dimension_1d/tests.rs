@@ -10,21 +10,13 @@ use super::{
     typed_workspace_capacities, window_complex_real_frame_into, window_signal_frame_into, StftPlan,
     HERMES_WINDOW_FRAME_THRESHOLD,
 };
-use crate::application::execution::kernel::hann::hann_window;
+use crate::application::execution::kernel::window::Window;
 use crate::domain::contracts::error::StftError;
 use apollo_fft::{PrecisionProfile, F16};
 use eunomia::assert_relative_eq;
 use eunomia::{Complex32, Complex64};
 use leto::Array1;
 use proptest::prelude::*;
-
-#[test]
-fn hann_window_is_symmetric() {
-    let window = hann_window(8);
-    for i in 0..8 {
-        assert_relative_eq!(window[i], window[7 - i], epsilon = 1.0e-12);
-    }
-}
 
 #[test]
 fn forward_and_inverse_roundtrip_for_cola_case() {
@@ -325,29 +317,100 @@ fn input_too_short_is_rejected() {
 }
 
 #[test]
-fn forward_with_window_rejects_wrong_length() {
-    let plan = StftPlan::new(8, 4).expect("valid plan");
-    let signal = Array1::from(vec![1.0f64; 12]);
-    let bad_window = vec![1.0f64; 6];
-    assert!(matches!(
-        plan.forward_with_window(&signal, &bad_window),
-        Err(StftError::WindowLengthMismatch)
-    ));
+fn window_values_are_validated() {
+    assert_eq!(
+        StftPlan::with_window_values(8, 4, vec![1.0f64; 6]).err(),
+        Some(StftError::WindowLengthMismatch)
+    );
+    let mut values = vec![1.0f64; 8];
+    values[3] = f64::NAN;
+    assert_eq!(
+        StftPlan::with_window_values(8, 4, values).err(),
+        Some(StftError::InvalidWindowParameter)
+    );
 }
 
 #[test]
-fn forward_with_custom_window_matches_internal_hann() {
-    let plan = StftPlan::new(8, 4).expect("valid plan");
-    let signal = Array1::from((0..12).map(|i| (i as f64 * 0.3).sin()).collect::<Vec<_>>());
-    let expected = plan.forward(&signal).expect("forward");
-    let window: Vec<f64> = hann_window(8).into_vec();
-    let actual = plan
-        .forward_with_window(&signal, &window)
-        .expect("forward_with_window");
-    for (lhs, rhs) in actual.iter().zip(expected.iter()) {
-        assert_relative_eq!(lhs.re, rhs.re, epsilon = 1.0e-12);
-        assert_relative_eq!(lhs.im, rhs.im, epsilon = 1.0e-12);
+fn hann_plan_is_the_default_plan() {
+    let default = StftPlan::new(8, 4).expect("valid plan");
+    let hann = StftPlan::with_window(8, 4, Window::Hann).expect("valid plan");
+    assert_eq!(default.window(), hann.window());
+}
+
+/// Every window family, and a caller-supplied window, reconstructs what the
+/// same plan analyzed, at half and quarter hops. The capability audit
+/// measured 4.1e-2 for a Hamming analysis inverted with Hann synthesis.
+///
+/// Bound: each frame passes a forward and an inverse FFT of length `N`,
+/// within `γ ‖frame‖₂` per sample with `γ = 8 ⌈log₂ N⌉ ε` (Higham, Accuracy
+/// and Stability of Numerical Algorithms, 2nd ed., §24.1, for both
+/// transforms); a sample sums at most `N / hop` frames weighted by `|w| ≤ 1`
+/// with `‖frame‖₂ ≤ √N max|x|`, and the overlap-add divides by at least the
+/// smallest per-residue `Σ w²`, `W`. So the error is below
+/// `(N / hop) γ √N max|x| / W`, with one more `ε` for the division.
+#[test]
+fn every_window_reconstructs_what_it_analyzed() {
+    let frame_len = 64usize;
+    let signal_len = 512usize;
+    let signal = Array1::from(
+        (0..signal_len)
+            .map(|i| (i as f64 * 0.37).sin() + 0.5 * (i as f64 * 0.113).cos())
+            .collect::<Vec<_>>(),
+    );
+    let peak = signal.iter().fold(0.0f64, |m, x| m.max(x.abs()));
+    let ramp: Vec<f64> = (0..frame_len).map(|i| 0.2 + (i as f64 / 63.0)).collect();
+    for hop_len in [frame_len / 2, frame_len / 4] {
+        let plans = [
+            StftPlan::with_window(frame_len, hop_len, Window::Hann),
+            StftPlan::with_window(frame_len, hop_len, Window::Hamming),
+            StftPlan::with_window(frame_len, hop_len, Window::Blackman),
+            StftPlan::with_window(frame_len, hop_len, Window::Tukey { alpha: 0.5 }),
+            StftPlan::with_window_values(frame_len, hop_len, ramp.clone()),
+        ];
+        for plan in plans {
+            let plan = plan.expect("valid plan");
+            let window = plan.window().as_slice().expect("contiguous").to_vec();
+            let least_weight = (0..hop_len)
+                .map(|r| {
+                    window
+                        .iter()
+                        .skip(r)
+                        .step_by(hop_len)
+                        .map(|w| w * w)
+                        .sum::<f64>()
+                })
+                .fold(f64::INFINITY, f64::min);
+            let largest = window.iter().fold(0.0f64, |m, w| m.max(w.abs()));
+            let gamma = 8.0 * (frame_len as f64).log2().ceil() * f64::EPSILON;
+            let bound =
+                (frame_len / hop_len) as f64 * largest * gamma * (frame_len as f64).sqrt() * peak
+                    / least_weight
+                    + peak * f64::EPSILON;
+            let spectrum = plan.forward(&signal).expect("forward");
+            let recovered = plan.inverse(&spectrum, signal_len).expect("inverse");
+            // The interior: every sample covered by frames at every residue.
+            for i in frame_len..signal_len - frame_len {
+                let error = (recovered[i] - signal[i]).abs();
+                assert!(
+                    error <= bound,
+                    "hop {hop_len} window {window:?}: sample {i} error {error:e} > {bound:e}"
+                );
+            }
+        }
     }
+}
+
+#[test]
+fn a_window_that_does_not_overlap_add_refuses_the_inverse() {
+    // Symmetric Hann is zero at both ends: a hop of the whole frame gives
+    // residue 0 no energy.
+    let plan = StftPlan::new(8, 8).expect("valid plan");
+    let signal = Array1::from((0..32).map(|i| (i as f64 * 0.3).sin()).collect::<Vec<_>>());
+    let spectrum = plan.forward(&signal).expect("the forward is defined");
+    assert_eq!(
+        plan.inverse(&spectrum, 32).err(),
+        Some(StftError::WindowNotOverlapAdd)
+    );
 }
 
 proptest::proptest! {

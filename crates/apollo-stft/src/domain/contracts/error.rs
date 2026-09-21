@@ -7,6 +7,7 @@ pub type StftResult<T> = Result<T, StftError>;
 
 /// Errors produced by STFT creation or execution.
 #[derive(Debug, Error, Clone, PartialEq, Eq)]
+#[non_exhaustive]
 pub enum StftError {
     /// Frame length is zero.
     #[error("frame length must be > 0")]
@@ -29,6 +30,14 @@ pub enum StftError {
     /// Precision profile does not match the requested storage type.
     #[error("precision profile does not match storage type")]
     PrecisionMismatch,
+    /// A window parameter is out of range, or a supplied window value is not
+    /// finite.
+    #[error("window parameter out of range or window value not finite")]
+    InvalidWindowParameter,
+    /// The plan's window gives some sample residue no energy at its hop, so
+    /// the weighted overlap-add inverse has nothing to divide by there.
+    #[error("the window does not overlap-add at this hop; the inverse is undefined")]
+    WindowNotOverlapAdd,
 }
 
 /// Errors produced by [`estimate_peaks`](crate::estimate_peaks) for inputs it
