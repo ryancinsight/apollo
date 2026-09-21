@@ -62,7 +62,7 @@ fn dct3_fast_boundary_impulse_matches_direct() {
         .expect("planned dct2");
     let mut direct = vec![0.0_f64; 32];
     let mut fast = vec![0.0_f64; 32];
-    crate::infrastructure::kernel::direct::dct3(&coefficients, &mut direct);
+    apollo_dctdst_core::dct3(&coefficients, &mut direct);
     crate::infrastructure::kernel::fast::dct3_fast(&coefficients, &mut fast);
     for (actual, expected) in fast.iter().zip(direct.iter()) {
         assert_abs_diff_eq!(*actual, *expected, epsilon = 1.0e-11);

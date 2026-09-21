@@ -1,4 +1,4 @@
-# 0069 — One window for both STFT passes
+# 0070 — One window for both STFT passes
 
 - Status: Accepted
 - Date: 2026-09-21

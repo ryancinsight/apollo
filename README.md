@@ -34,8 +34,10 @@ Stage 2 moves Apollo beyond the initial compatibility cut:
   fails closed on malformed or unpaired evidence. CI executes phase-reversed
   ABBA and BAAB blocks; a slowdown is reported only when the family-wise
   intervals are disjoint in all four base/head comparisons.
-- `apollo-dctdst` owns DCT/DST real-to-real transform plan metadata,
-  verified direct kernels, inverse scaling, and caller-owned output execution.
+- `apollo-dctdst-core` owns lightweight direct DCT mathematics and fixed-capacity
+  precomputed plans without array, runtime, memory, or accelerator dependencies.
+- `apollo-dctdst` owns variable-length DCT/DST plans, inverse scaling, fast
+  execution, array integration, and accelerator dispatch.
 - `apollo-dht` owns real-to-real Discrete Hartley Transform plans, coefficient storage, and self-inverse kernels.
 - `apollo-hilbert` owns Hilbert transform plans, analytic-signal storage, envelope extraction, and phase extraction.
 - `apollo-nufft` owns non-uniform FFT plans and direct-reference validation surfaces.
@@ -77,8 +79,10 @@ Mixed precision is now a first-class Apollo concept:
   and fallible Mnemosyne-backed output construction shared by transform crates.
 - `apollo-czt`: chirp z-transform plans, direct reference execution,
   Bluestein convolution execution, and caller-owned output paths.
-- `apollo-dctdst`: DCT/DST real-to-real transform plans, verified direct
-  kernels, inverse scaling, and caller-owned output execution.
+- `apollo-dctdst-core`: direct DCT mathematics and fixed-capacity precomputed
+  plans over native scalar precision.
+- `apollo-dctdst`: variable-length DCT/DST plans, inverse scaling, fast
+  execution, array integration, and accelerator dispatch.
 - `apollo-dht`: real-to-real Discrete Hartley Transform plans with forward/inverse kernel reuse.
 - `apollo-frft`: fractional Fourier transform reference plans with finite
   integer-rotation state and caller-owned output execution.

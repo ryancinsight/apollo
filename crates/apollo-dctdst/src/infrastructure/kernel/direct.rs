@@ -12,7 +12,6 @@ thread_local! {
 enum DirectBasisKind {
     DctI,
     DctII,
-    DctIII,
     DctIV,
     DstI,
     DstII,
@@ -66,64 +65,6 @@ pub fn dct2(signal: &[f64], output: &mut [f64]) {
             let mut sum = 0.0;
             for n_idx in 0..n {
                 sum += signal[n_idx] * (factor * (n_idx as f64 + 0.5) * k as f64).cos();
-            }
-            *out = sum;
-        });
-    }
-}
-
-/// Direct O(N²) analytical kernel for the Type-III Discrete Cosine Transform (DCT-III).
-///
-/// # Theorem: DCT-III Direct Projection (Inverse of DCT-II)
-///
-/// For a real coefficient sequence X ∈ ℝᴺ, the unnormalized DCT-III is defined by:
-///
-/// \\[ x_k = \frac{1}{2} X_0 + \sum_{n=1}^{N-1} X_n \cos\left[ \frac{\pi}{N} n \left(k + \frac{1}{2}\right) \right], \quad k = 0, \ldots, N-1 \\]
-///
-/// The leading `X_0 / 2` term arises from the n = 0 basis function evaluating to
-/// `cos(0) = 1` while sharing the same orthogonality weight as the n ≥ 1 terms under
-/// the standard half-sample-shifted inner product.
-///
-/// # Inverse relationship with DCT-II
-///
-/// The DCT-III is the exact inverse of DCT-II up to a scaling factor:
-///
-/// \\[ \text{DCT-III}(\text{DCT-II}(x)) = \frac{N}{2} \cdot x \\]
-///
-/// Proof: The cosine basis functions satisfy the finite orthogonality relation
-/// `Σ_{n=0}^{N-1} cos(πk(2n+1)/(2N)) cos(πl(2n+1)/(2N)) = (N/2) δ_{kl}` for k, l ≥ 1.
-/// The k = 0 row has norm N, and the factor of ½ in the definition compensates to yield
-/// a uniform N/2 diagonal.
-///
-/// # Complexity
-///
-/// Time: O(N²). Space: O(1) auxiliary.
-///
-/// For N ≥ 16 the O(N log N) fast kernel in `infrastructure::kernel::fast` is preferred.
-///
-/// # References
-///
-/// - Rao, K. R. & Yip, P. (1990). *Discrete Cosine Transform: Algorithms, Advantages,
-///   Applications*. Academic Press. (Definition 2.3, Inverse DCT, pp. 30–33.)
-/// - Makhoul, J. (1980). A fast cosine transform in one and two dimensions. *IEEE Trans.
-///   Acoust. Speech Signal Process.*, 28(1), 27–34.
-pub fn dct3(signal: &[f64], output: &mut [f64]) {
-    let n = signal.len();
-    if n == 0 {
-        return;
-    }
-    let factor = std::f64::consts::PI / n as f64;
-
-    if n >= PAR_THRESHOLD {
-        output.par_mut().enumerate(|k, out| {
-            *out = direct_row_hermes(signal, DirectBasisKind::DctIII, k);
-        });
-    } else {
-        let x0 = signal[0] * 0.5;
-        output.iter_mut().enumerate().for_each(|(k, out)| {
-            let mut sum = x0;
-            for n_idx in 1..n {
-                sum += signal[n_idx] * (factor * n_idx as f64 * (k as f64 + 0.5)).cos();
             }
             *out = sum;
         });
@@ -522,13 +463,6 @@ fn fill_direct_basis_row(basis: &mut [f64], kind: DirectBasisKind, row: usize) {
             let factor = std::f64::consts::PI / n as f64;
             for (index, weight) in basis.iter_mut().enumerate() {
                 *weight = (factor * (index as f64 + 0.5) * row as f64).cos();
-            }
-        }
-        DirectBasisKind::DctIII => {
-            let factor = std::f64::consts::PI / n as f64;
-            basis[0] = 0.5;
-            for (index, weight) in basis.iter_mut().enumerate().skip(1) {
-                *weight = (factor * index as f64 * (row as f64 + 0.5)).cos();
             }
         }
         DirectBasisKind::DctIV => {

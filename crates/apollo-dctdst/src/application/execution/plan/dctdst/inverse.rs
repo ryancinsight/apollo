@@ -1,11 +1,12 @@
 use super::DctDstPlan;
 use crate::domain::contracts::error::{DctDstError, DctDstResult};
 use crate::domain::metadata::kind::RealTransformKind;
-use crate::infrastructure::kernel::direct::{dct1, dct2, dct3, dct4, dst1, dst2, dst3, dst4};
+use crate::infrastructure::kernel::direct::{dct1, dct2, dct4, dst1, dst2, dst3, dst4};
 use crate::infrastructure::kernel::fast::{
     dct1_fast, dct2_fast, dct3_fast, dct4_fast, dst1_fast, dst2_fast, dst3_fast, dst4_fast,
     FAST_THRESHOLD,
 };
+use apollo_dctdst_core::dct3;
 use leto::{Array, Array2, Array3, MnemosyneStorage, Storage, StorageMut};
 
 impl DctDstPlan {

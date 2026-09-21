@@ -11,7 +11,7 @@ Change-class tags: [patch] backward-compatible fix, [minor] additive non-breakin
 ### Breaking
 
 - [major] `apollo-stft`: an `StftPlan` owns one window for both analysis and
-  synthesis (ADR 0069).
+  synthesis (ADR 0070).
   - **Removed:** `forward_with_window`. It analyzed with a caller's window
     while `inverse` always synthesized with Hann, so a Hamming round trip
     reconstructed with 4.1e-2 error.

@@ -74,4 +74,5 @@
 | [0066](0066-sub-bin-peak-estimation.md) | Sub-bin peak parameters from three bins and estimate-and-subtract | Accepted |
 | [0067](0067-normalization-modes.md) | Normalization modes through a direction strategy | Accepted |
 | [0068](0068-bounded-plan-and-table-caches.md) | Bounded, clearable plan and table caches | Accepted |
-| [0069](0069-one-window-for-both-stft-passes.md) | One window for both STFT passes | Accepted |
+| [0069](0069-lightweight-direct-dct-kernel.md) | Lightweight direct DCT kernel ownership | Accepted |
+| [0070](0070-one-window-for-both-stft-passes.md) | One window for both STFT passes | Accepted |

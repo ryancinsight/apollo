@@ -25,6 +25,7 @@ apollo-nufft = { path = "../apollo-nufft" }
 apollo-dht = { path = "../apollo-dht" }
 apollo-fwht = { path = "../apollo-fwht" }
 apollo-dctdst = { path = "../apollo-dctdst" }
+apollo-dctdst-core.workspace = true
 leto = { workspace = true }
 eunomia = { workspace = true }
 hephaestus-core = { workspace = true }
