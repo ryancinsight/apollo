@@ -1,10 +1,10 @@
 //! Inverse real FFT API functions.
 
 use crate::application::execution::kernel::mixed_radix::scalar::plan_scratch::{
-    with_view_staging, PlanScratch,
+    PlanScratch, with_view_staging,
 };
 use crate::application::execution::plan::fft::real_storage::{
-    half_plane, half_volume, RealFftData,
+    RealFftData, half_plane, half_volume,
 };
 use crate::application::orchestration::cache::plans::PlanCacheProvider;
 use crate::domain::metadata::shape::{Shape1D, Shape2D, Shape3D};
@@ -437,7 +437,7 @@ where
     let plan = T::get_3d_plan(
         Shape3D::new(nx, ny, nz).expect("ifft_3d_array requires non-zero dimensions"),
     );
-    if let Some(out) = half_volume::inverse_owned_via_split::<T>(plan.as_ref(), field_hat) {
+    if let Some(out) = half_volume::routed::inverse_owned_via_split::<T>(plan.as_ref(), field_hat) {
         return out;
     }
     T::inverse_3d(plan.as_ref(), field_hat)
@@ -461,7 +461,7 @@ pub fn ifft_3d_array_into<T>(
     let plan = T::get_3d_plan(
         Shape3D::new(nx, ny, nz).expect("ifft_3d_array_into requires non-zero dimensions"),
     );
-    if half_volume::inverse_into_via_split::<T>(plan.as_ref(), field_hat, out, scratch) {
+    if half_volume::routed::inverse_into_via_split::<T>(plan.as_ref(), field_hat, out, scratch) {
         return;
     }
     T::inverse_3d_into(plan.as_ref(), field_hat, out, scratch);
@@ -492,7 +492,7 @@ pub fn ifft_3d_array_into_spectrum_scratch<T>(
         Shape3D::new(nx, ny, nz)
             .expect("ifft_3d_array_into_spectrum_scratch requires non-zero dimensions"),
     );
-    if half_volume::inverse_spectrum_via_split::<T>(plan.as_ref(), field_hat, out) {
+    if half_volume::routed::inverse_spectrum_via_split::<T>(plan.as_ref(), field_hat, out) {
         return;
     }
     T::inverse_3d_spectrum_into(plan.as_ref(), field_hat, out);

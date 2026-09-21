@@ -7,20 +7,16 @@
 //! default body; storage scalars define only the two boundary conversions.
 //! Each storage scalar's impl lives in its own submodule for SRP isolation.
 
+use crate::application::execution::kernel::mixed_radix::MixedRadixScalar;
 use crate::application::execution::kernel::mixed_radix::scalar::plan_scratch::PlanScratch;
-use crate::application::execution::kernel::mixed_radix::{
-    forward_inplace, inverse_inplace, MixedRadixScalar,
-};
-use crate::application::execution::kernel::real_fft::{
-    mirror_half_spectrum_in_place, split_twiddles,
-};
-use crate::application::execution::plan::fft::dimension_1d::{FftPlan1D, StaticFftPlan1D};
+use crate::application::execution::plan::fft::dimension_1d::FftPlan1D;
 use crate::application::execution::plan::fft::dimension_2d::{FftPlan2D, StaticFftPlan2D};
 use crate::application::execution::plan::fft::dimension_3d::{FftPlan3D, StaticFftPlan3D};
 use eunomia::Complex;
 use leto::{Array1, Array2, Array3};
 
 mod compact;
+mod dimension_1d;
 mod expand;
 pub(super) mod fill;
 pub(crate) mod half_plane;
@@ -30,11 +26,6 @@ mod reduced;
 mod split;
 
 use fill::{fill_real, fill_spectrum};
-
-/// The power-of-two length from which the static forward takes the split;
-/// below it the zero-sized plan's constant-length kernels win or tie, and at
-/// it the two measure at parity (ADR 0063).
-const STATIC_FORWARD_SPLIT_FLOOR: usize = 128;
 
 /// Real-domain storage type supported by Apollo FFT plans.
 ///
@@ -159,9 +150,7 @@ where
         input: &[Self],
         out: &mut [Complex<Self::PlanScalar>],
     ) {
-        split::forward(input, out, split_twiddles(input.len()), |packed| {
-            half_plan.forward_complex_slice_inplace(packed);
-        });
+        dimension_1d::forward_half_into::<Self>(half_plan, input, out);
     }
 
     /// Inverse of [`RealFftData::forward_1d_half_into`]: the `n/2 + 1` bins
@@ -182,11 +171,7 @@ where
         input: &mut [Complex<Self::PlanScalar>],
         out: &mut [Self],
     ) {
-        let n = out.len();
-        split::inverse_packed::<Self>(input, n, split_twiddles(n), |packed| {
-            half_plan.inverse_complex_slice_inplace(packed);
-        });
-        split::unpack(&input[..n / 2], out);
+        dimension_1d::inverse_half_into::<Self>(half_plan, input, out);
     }
 
     /// Forward transform of a real array into caller-owned spectrum storage,
@@ -202,16 +187,7 @@ where
         input: &Array1<Self>,
         output: &mut Array1<Complex<Self::PlanScalar>>,
     ) -> bool {
-        let n = input.size();
-        if !Self::real_split_applies(n) || output.size() != n {
-            return false;
-        }
-        let (Some(src), Some(dst)) = (input.as_slice(), output.as_slice_mut()) else {
-            return false;
-        };
-        Self::forward_1d_half_into(half_plan, src, dst);
-        mirror_half_spectrum_in_place(dst);
-        true
+        dimension_1d::forward_into_via_split::<Self>(half_plan, input, output)
     }
 
     /// Forward transform of a real slice returning the full `n`-bin spectrum,
@@ -225,11 +201,7 @@ where
         half_plan: &FftPlan1D<Self::PlanScalar>,
         input: &[Self],
     ) -> Vec<Complex<Self::PlanScalar>> {
-        let n = input.len();
-        let mut output = vec![Complex::<Self::PlanScalar>::default(); n];
-        Self::forward_1d_half_into(half_plan, input, &mut output);
-        mirror_half_spectrum_in_place(&mut output);
-        output
+        dimension_1d::forward_slice_owned_via_split::<Self>(half_plan, input)
     }
 
     /// Inverse 1D transform from a spectrum slice into owned real storage.
@@ -248,31 +220,7 @@ where
         input: &Array1<Self>,
         output: &mut Array1<Complex<Self::PlanScalar>>,
     ) {
-        // Where the split admits `N`, the half transform runs through the
-        // plan-free runtime kernel (ADR 0063): `N / 2` is not a const-generic
-        // argument on the stable toolchain and the bound names no plan cache.
-        // On the forward the static plan's constant-length power-of-two
-        // kernels win at 4 and 8 by more than half (0.44x, 0.45x of the
-        // split's runtime half on the census host, two runs) and at 32 by
-        // 14% in one run; at 16 and 64 the two sit inside that host's
-        // run-to-run drift (1.04-1.06x, 0.95-1.25x) and at 128 at parity
-        // (1.02x, one run). The forward keeps the static plan on powers
-        // of two below 128 and takes the split from there, where it wins from
-        // 256 (1.35x).
-        if Self::real_split_applies(N) && (N >= STATIC_FORWARD_SPLIT_FLOOR || !N.is_power_of_two())
-        {
-            if let (Some(src), Some(dst)) = (input.as_slice(), output.as_slice_mut()) {
-                if src.len() == N && dst.len() == N {
-                    split::forward(src, dst, split_twiddles(N), |packed| {
-                        forward_inplace::<Self::PlanScalar>(packed);
-                    });
-                    mirror_half_spectrum_in_place(dst);
-                    return;
-                }
-            }
-        }
-        fill_spectrum(input, output);
-        StaticFftPlan1D::<Self::PlanScalar, N>::new().forward_complex_inplace(output);
+        dimension_1d::forward_static_into::<Self, N>(input, output);
     }
     /// Inverse 1D transform into caller-owned real storage and scratch spectrum
     /// using a compile-time-known length and zero-sized static plan.
@@ -281,30 +229,7 @@ where
         output: &mut Array1<Self>,
         scratch: &mut Array1<Complex<Self::PlanScalar>>,
     ) {
-        // The split reads only the lower `N / 2 + 1` bins, copied into the
-        // front of `scratch`, and runs the half-length inverse through the
-        // runtime kernel (ADR 0063).
-        if Self::real_split_applies(N) {
-            if let (Some(bins), Some(values), Some(work)) = (
-                input.as_slice(),
-                output.as_slice_mut(),
-                scratch.as_slice_mut(),
-            ) {
-                if bins.len() == N && values.len() == N && work.len() == N {
-                    let depth = N / 2 + 1;
-                    let half = &mut work[..depth];
-                    half.copy_from_slice(&bins[..depth]);
-                    split::inverse_packed::<Self>(half, N, split_twiddles(N), |packed| {
-                        inverse_inplace::<Self::PlanScalar>(packed);
-                    });
-                    split::unpack(&half[..N / 2], values);
-                    return;
-                }
-            }
-        }
-        scratch.assign(&input.view());
-        StaticFftPlan1D::<Self::PlanScalar, N>::new().inverse_complex_inplace(scratch);
-        fill_real(scratch, output);
+        dimension_1d::inverse_static_into::<Self, N>(input, output, scratch);
     }
 
     /// Forward 2D transform dispatch.
