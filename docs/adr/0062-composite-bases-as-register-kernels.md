@@ -136,6 +136,7 @@ core, the residue the kernel's fused-multiply count.
 - The 36-point kernel against `dft36_impl` in both directions and at an
   impulse in every position, within the bound the twiddle rounding derives.
 - The 180 route against the composite route and the direct DFT oracle.
-- The pinned probe (`small_sizes_against_the_references_by_core_type`), two
+- The pinned probe (`mixed_radix_sizes_against_the_references_by_core_type`,
+  the shard the composite lengths moved to), two
   runs, both scalars, both cores; kept only under the composite route at
   every reading.
