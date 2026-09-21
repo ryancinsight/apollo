@@ -12,9 +12,11 @@
 //! any thread's ring refreshes the plan's recency for eviction. Recency is
 //! kept to the granularity of misses: the table's tick advances once per
 //! plan built, and a use stamps the current tick, so plans used since the
-//! last build tie and the eviction among them is arbitrary. The stamp is
-//! written only when it moves, keeping threads that hit one plan off a
-//! shared cache line.
+//! last build tie. The victim among tied plans is one whose slot no ring
+//! holds -- the only evidence of use the table has between ticks -- and
+//! position order decides only when every tied slot is equally held. The
+//! stamp is written only when it moves, keeping threads that hit one plan
+//! off a shared cache line.
 
 use crate::application::execution::plan::fft::dimension_1d::FftPlan1D;
 use crate::application::execution::plan::fft::dimension_2d::FftPlan2D;
@@ -152,7 +154,20 @@ impl<K: Copy + Eq, P> SharedPlans<K, P> {
             let oldest = entries
                 .iter()
                 .enumerate()
-                .min_by_key(|(_, entry)| entry.slot.last_used.load(Ordering::Relaxed))
+                .min_by_key(|(_, entry)| {
+                    (
+                        entry.slot.last_used.load(Ordering::Relaxed),
+                        // Stamps tie often: the tick advances once per build,
+                        // so every plan used since the last one carries the
+                        // same one. A ring holding the slot is then the only
+                        // evidence of use left, and a slot the table alone
+                        // holds is the colder of two tied entries. Without
+                        // this the victim is the first tied entry in the
+                        // vector, which is a plan kept hot through a ring as
+                        // readily as a one-shot built at the current tick.
+                        Arc::strong_count(&entry.slot),
+                    )
+                })
                 .map(|(index, _)| index);
             if let Some(oldest) = oldest {
                 entries.swap_remove(oldest);
@@ -177,6 +192,12 @@ impl<K: Copy + Eq, P> SharedPlans<K, P> {
     #[cfg(test)]
     fn len(&self) -> usize {
         self.entries.read().len()
+    }
+
+    /// Whether the table itself holds `key`, which a ring hit would hide.
+    #[cfg(test)]
+    fn holds(&self, key: K) -> bool {
+        self.entries.read().iter().any(|entry| entry.key == key)
     }
 }
 

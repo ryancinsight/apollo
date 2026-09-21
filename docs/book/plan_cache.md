@@ -14,9 +14,31 @@ plan; direction is not a separate plan-cache key.
 
 The array API resolves cached plans through `PlanCacheProvider` on the storage
 scalar. Its `get_1d_plan`, `get_2d_plan`, and `get_3d_plan` methods return `Arc`
-handles. The process caches retain plans by shape for each scalar implementation;
-thread-local handles avoid repeated shared lookups. Explicitly constructing a
-plan does not insert that plan into these caches.
+handles. Explicitly constructing a plan does not insert that plan into these
+caches.
+
+Each scalar and dimension has two caches, both bounded (ADR 0068). A
+process-wide table holds at most 64 shapes. A thread's own ring holds the
+four it used most recently, so a repeated or alternating shape is served
+without taking the table's lock and without allocating. The ring and the
+table share one slot per plan, so a use the ring serves still counts as a
+use for eviction.
+
+Past 64 shapes the table evicts the least recently used. Recency is measured
+at the granularity of misses: the table's tick advances once per plan built,
+which is what keeps a ring hit free of any read-modify-write, so plans used
+since the last build carry the same stamp and tie. The victim among tied
+plans is one whose slot no ring holds -- between ticks that is the only
+evidence of use the table has -- and position order decides only when every
+tied slot is equally held.
+
+Retained plan memory is therefore bounded: at most 64 plans per scalar and
+dimension, plus four in each live thread's ring.
+
+`apollo_fft::clear_plan_caches()` releases what the caches alone hold. It
+empties every shared table and the calling thread's rings; each other
+thread's ring empties at that thread's next lookup through it. A plan a
+caller still holds stays alive through its `Arc` and is not re-cached.
 
 `StaticFftPlan1D<T, N>`, `StaticFftPlan2D<T, NX, NY>`, and
 `StaticFftPlan3D<T, NX, NY, NZ>` encode shape in const generics. Their values are

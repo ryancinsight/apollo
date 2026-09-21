@@ -196,6 +196,42 @@ fn ring_hits_keep_a_plan_recent_in_the_shared_table() {
 }
 
 #[test]
+fn a_ring_held_plan_survives_a_tie_with_plans_no_ring_holds() {
+    let builds = std::sync::atomic::AtomicUsize::new(0);
+    // Fill the table. Each build advances the tick, so the stamps differ.
+    for key in 0..SHARED_CAPACITY {
+        let _ = counted(key, &builds);
+    }
+    // Use every plan once more. Nothing is built, so the tick stands still
+    // and all 64 stamps tie at it.
+    for key in 0..SHARED_CAPACITY {
+        let _ = counted(key, &builds);
+    }
+    // Key 0 left the ring during that pass; this use brings it back, so the
+    // ring holds it while most of the tied entries are held by the table
+    // alone.
+    let hot = counted(0, &builds);
+    let before = builds.load(std::sync::atomic::Ordering::Relaxed);
+    assert_eq!(before, SHARED_CAPACITY, "the second pass built nothing");
+
+    // One miss, so one eviction among entries that all carry the same stamp.
+    let _ = counted(SHARED_CAPACITY, &builds);
+    assert!(
+        TEST_SHARED.holds(0),
+        "a plan a ring holds is not the victim of a tie"
+    );
+    assert!(
+        Arc::ptr_eq(&hot, &counted(0, &builds)),
+        "and it is still the same plan"
+    );
+    assert_eq!(
+        builds.load(std::sync::atomic::Ordering::Relaxed),
+        before + 1,
+        "only the missing shape was built"
+    );
+}
+
+#[test]
 fn concurrent_misses_build_a_shape_once() {
     const THREADS: usize = 8;
     let shared = SharedPlans::<usize, usize>::new();

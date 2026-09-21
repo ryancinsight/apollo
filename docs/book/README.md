@@ -7,7 +7,9 @@ specialized transforms with a shared plan cache and GPU dispatch hooks.
 ## Design goals
 
 - **Plan cache** — transform plans are computed once and cached by size and
-  precision; repeated calls reuse the cached plan without re-allocation.
+  precision, within a bound: 64 shapes per scalar and dimension, plus a
+  four-shape ring per thread. Repeated calls reuse the cached plan without
+  re-allocation, and `clear_plan_caches()` releases what the caches hold.
 - **Generic over precision** — the same `fft_1d_array` works for `f32` and
   `f64`; the plan selects the correct kernel for the precision.
 - **GPU hooks** — CPU kernels and GPU kernels share one plan type; the
