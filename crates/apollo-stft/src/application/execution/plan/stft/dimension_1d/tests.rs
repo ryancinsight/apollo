@@ -463,11 +463,20 @@ fn a_plan_at_the_floor_holds_the_square_root_law() {
     // window is flat and the error sits at the rounding floor, which is a
     // baseline, not a point on either law's curve.
     let (first, last) = (1, faints.len() - 1);
+    assert!(
+        errors[first] > 0.0,
+        "the slope's anchor must be in the amplified regime, not at zero error"
+    );
     let growth = errors[last] / errors[first];
     let span = faints[first] / faints[last];
+    // Two decades either side, not one: the growth varies about 18x across
+    // ordinary signals (sine, random sign, uniform, chirp) while the laws
+    // differ by four orders, so a tighter window would fail on signal
+    // variance and blame the law. The reciprocal prediction still sits 625x
+    // outside this one.
     assert!(
-        growth > span / 10.0 && growth < span * 10.0,
-        "error grew {growth:e} from t={:e} to t={:e}: the square-root law          predicts about {span:e}, the reciprocal law {:e}",
+        growth > span / 100.0 && growth < span * 100.0,
+        "error grew {growth:e} from t={:e} to t={:e}: square-root law predicts {span:e}, reciprocal law {:e}",
         faints[first],
         faints[last],
         span * span
