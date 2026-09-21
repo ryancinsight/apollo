@@ -7,6 +7,14 @@
 //! per-thread ring of the `LOCAL_CAPACITY` (4) most recently used, which keeps
 //! a repeated shape on a lock-free, allocation-free path.
 //! [`clear_plan_caches`] empties both.
+//!
+//! The table and every ring holding a plan share one slot, so a use from
+//! any thread's ring refreshes the plan's recency for eviction. Recency is
+//! kept to the granularity of misses: the table's tick advances once per
+//! plan built, and a use stamps the current tick, so plans used since the
+//! last build tie and the eviction among them is arbitrary. The stamp is
+//! written only when it moves, keeping threads that hit one plan off a
+//! shared cache line.
 
 use crate::application::execution::plan::fft::dimension_1d::FftPlan1D;
 use crate::application::execution::plan::fft::dimension_2d::FftPlan2D;
@@ -48,11 +56,13 @@ pub trait PlanCacheProvider: RealFftData {
 
 /// Releases every plan the crate's plan caches hold.
 ///
-/// The shared tables empty at once, and so does the calling thread's ring;
-/// another thread's ring empties on that thread's next plan lookup, so a
-/// thread that never transforms again keeps at most `LOCAL_CAPACITY` (4)
-/// plans per cache until it exits. A plan a caller still holds stays alive
-/// with that caller. Plans are rebuilt on their next use.
+/// The shared tables empty at once, and so do the calling thread's rings.
+/// Another thread keeps one ring per scalar and dimension, and each empties
+/// on that thread's next lookup through it, so a thread keeps at most
+/// `LOCAL_CAPACITY` (4) plans per ring it does not use again until it exits.
+/// A plan a caller still holds stays alive with that caller. Plans are
+/// rebuilt on their next use. Called from a thread-local destructor, it
+/// skips that thread's rings already destroyed.
 pub fn clear_plan_caches() {
     SHARED_1D_PRECISE.clear();
     SHARED_2D_PRECISE.clear();
@@ -63,19 +73,47 @@ pub fn clear_plan_caches() {
     // No other access is ordered against this one: a thread reading the
     // old value keeps plans that are still valid, only for longer.
     EPOCH.fetch_add(1, Ordering::Relaxed);
-    LOCAL_1D_PRECISE.with_borrow_mut(LocalPlans::clear);
-    LOCAL_2D_PRECISE.with_borrow_mut(LocalPlans::clear);
-    LOCAL_3D_PRECISE.with_borrow_mut(LocalPlans::clear);
-    LOCAL_1D_REDUCED.with_borrow_mut(LocalPlans::clear);
-    LOCAL_2D_REDUCED.with_borrow_mut(LocalPlans::clear);
-    LOCAL_3D_REDUCED.with_borrow_mut(LocalPlans::clear);
+    clear_ring(&LOCAL_1D_PRECISE);
+    clear_ring(&LOCAL_2D_PRECISE);
+    clear_ring(&LOCAL_3D_PRECISE);
+    clear_ring(&LOCAL_1D_REDUCED);
+    clear_ring(&LOCAL_2D_REDUCED);
+    clear_ring(&LOCAL_3D_REDUCED);
 }
 
-/// One cached plan and the tick of its last use.
-struct Entry<K, P> {
-    key: K,
+/// Empties the calling thread's `ring`. A ring its thread has already
+/// destroyed (the call comes from a later thread-local destructor) holds
+/// nothing, so there is nothing to clear there.
+fn clear_ring<K: Copy + Eq + 'static, P: 'static>(
+    ring: &'static LocalKey<RefCell<LocalPlans<K, P>>>,
+) {
+    // `AccessError` is the destroyed ring: nothing is left to clear.
+    ring.try_with(|cell| cell.borrow_mut().clear())
+        .unwrap_or_default();
+}
+
+/// One cached plan and the table tick of its last use, shared by the table
+/// and every thread's ring that holds the plan.
+struct Slot<P> {
     plan: Arc<P>,
     last_used: AtomicU64,
+}
+
+impl<P> Slot<P> {
+    /// Stamps a use at `tick`. Stamps only order uses for eviction, so no
+    /// access synchronizes through them; writing only when the stamp moves
+    /// keeps threads that hit one plan from contending on its line.
+    fn touch(&self, tick: u64) {
+        if self.last_used.load(Ordering::Relaxed) != tick {
+            self.last_used.store(tick, Ordering::Relaxed);
+        }
+    }
+}
+
+/// A table entry: the shape and its shared slot.
+struct Entry<K, P> {
+    key: K,
+    slot: Arc<Slot<P>>,
 }
 
 /// The process-wide table of one scalar and dimension, least recently used
@@ -93,41 +131,43 @@ impl<K: Copy + Eq, P> SharedPlans<K, P> {
         }
     }
 
-    /// The next recency stamp. Stamps only order uses for eviction, so no
-    /// access synchronizes through them.
-    fn stamp(&self) -> u64 {
-        self.tick.fetch_add(1, Ordering::Relaxed)
+    /// The current recency tick: advanced once per plan built.
+    fn now(&self) -> u64 {
+        self.tick.load(Ordering::Relaxed)
     }
 
-    /// The plan for `key`, built by `build` under the write lock on a miss
-    /// so concurrent callers build it once.
-    fn get_or_build(&self, key: K, build: impl FnOnce() -> P) -> Arc<P> {
+    /// The slot for `key`, its plan built by `build` under the write lock on
+    /// a miss, re-checked there so concurrent callers build it once.
+    fn get_or_build(&self, key: K, build: impl FnOnce() -> P) -> Arc<Slot<P>> {
         if let Some(entry) = self.entries.read().iter().find(|entry| entry.key == key) {
-            entry.last_used.store(self.stamp(), Ordering::Relaxed);
-            return Arc::clone(&entry.plan);
+            entry.slot.touch(self.now());
+            return Arc::clone(&entry.slot);
         }
         let mut entries = self.entries.write();
         if let Some(entry) = entries.iter().find(|entry| entry.key == key) {
-            entry.last_used.store(self.stamp(), Ordering::Relaxed);
-            return Arc::clone(&entry.plan);
+            entry.slot.touch(self.now());
+            return Arc::clone(&entry.slot);
         }
         if entries.len() >= SHARED_CAPACITY {
             let oldest = entries
                 .iter()
                 .enumerate()
-                .min_by_key(|(_, entry)| entry.last_used.load(Ordering::Relaxed))
+                .min_by_key(|(_, entry)| entry.slot.last_used.load(Ordering::Relaxed))
                 .map(|(index, _)| index);
             if let Some(oldest) = oldest {
                 entries.swap_remove(oldest);
             }
         }
-        let plan = Arc::new(build());
+        let tick = self.tick.fetch_add(1, Ordering::Relaxed) + 1;
+        let slot = Arc::new(Slot {
+            plan: Arc::new(build()),
+            last_used: AtomicU64::new(tick),
+        });
         entries.push(Entry {
             key,
-            plan: Arc::clone(&plan),
-            last_used: AtomicU64::new(self.stamp()),
+            slot: Arc::clone(&slot),
         });
-        plan
+        slot
     }
 
     fn clear(&self) {
@@ -144,7 +184,7 @@ impl<K: Copy + Eq, P> SharedPlans<K, P> {
 /// [`EPOCH`] it records.
 struct LocalPlans<K, P> {
     epoch: u64,
-    ring: [Option<(K, Arc<P>)>; LOCAL_CAPACITY],
+    ring: [Option<(K, Arc<Slot<P>>)>; LOCAL_CAPACITY],
 }
 
 impl<K: Copy + Eq, P> LocalPlans<K, P> {
@@ -159,8 +199,9 @@ impl<K: Copy + Eq, P> LocalPlans<K, P> {
         self.ring = [const { None }; LOCAL_CAPACITY];
     }
 
-    /// The plan for `key` if the ring holds it, moved to the front.
-    fn get(&mut self, key: K) -> Option<Arc<P>> {
+    /// The plan for `key` if the ring holds it, moved to the front and its
+    /// shared slot stamped at `tick`.
+    fn get(&mut self, key: K, tick: u64) -> Option<Arc<P>> {
         let epoch = EPOCH.load(Ordering::Relaxed);
         if self.epoch != epoch {
             self.clear();
@@ -172,13 +213,16 @@ impl<K: Copy + Eq, P> LocalPlans<K, P> {
             .iter()
             .position(|slot| slot.as_ref().is_some_and(|(held, _)| *held == key))?;
         self.ring[..=at].rotate_right(1);
-        self.ring[0].as_ref().map(|(_, plan)| Arc::clone(plan))
+        self.ring[0].as_ref().map(|(_, slot)| {
+            slot.touch(tick);
+            Arc::clone(&slot.plan)
+        })
     }
 
-    /// Records `plan` as the most recent, dropping the least recent.
-    fn put(&mut self, key: K, plan: &Arc<P>) {
+    /// Records `slot` as the most recent, dropping the least recent.
+    fn put(&mut self, key: K, slot: Arc<Slot<P>>) {
         self.ring.rotate_right(1);
-        self.ring[0] = Some((key, Arc::clone(plan)));
+        self.ring[0] = Some((key, slot));
     }
 }
 
@@ -189,11 +233,12 @@ fn lookup<K: Copy + Eq + 'static, P: 'static>(
     key: K,
     build: impl FnOnce() -> P,
 ) -> Arc<P> {
-    if let Some(plan) = local.with_borrow_mut(|ring| ring.get(key)) {
+    if let Some(plan) = local.with_borrow_mut(|ring| ring.get(key, shared.now())) {
         return plan;
     }
-    let plan = shared.get_or_build(key, build);
-    local.with_borrow_mut(|ring| ring.put(key, &plan));
+    let slot = shared.get_or_build(key, build);
+    let plan = Arc::clone(&slot.plan);
+    local.with_borrow_mut(|ring| ring.put(key, slot));
     plan
 }
 

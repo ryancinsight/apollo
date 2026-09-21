@@ -118,3 +118,129 @@ fn another_threads_ring_empties_on_its_next_lookup() {
     to_worker.send(()).expect("worker receives the end");
     worker.join().expect("worker completes");
 }
+
+static TEST_SHARED: SharedPlans<usize, usize> = SharedPlans::new();
+
+thread_local! {
+    static TEST_LOCAL: std::cell::RefCell<super::LocalPlans<usize, usize>> =
+        const { std::cell::RefCell::new(super::LocalPlans::new()) };
+}
+
+/// Looks `key` up through the test ring and table, counting builds.
+fn counted(key: usize, builds: &std::sync::atomic::AtomicUsize) -> Arc<usize> {
+    super::lookup(&TEST_LOCAL, &TEST_SHARED, key, || {
+        builds.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+        key
+    })
+}
+
+#[test]
+fn a_ring_hit_does_not_consult_the_shared_table() {
+    let builds = std::sync::atomic::AtomicUsize::new(0);
+    let first = counted(7, &builds);
+    // Emptying the table without an epoch bump leaves only the ring able to
+    // serve the shape.
+    TEST_SHARED.clear();
+    assert!(
+        Arc::ptr_eq(&first, &counted(7, &builds)),
+        "served from the ring"
+    );
+    assert_eq!(builds.load(std::sync::atomic::Ordering::Relaxed), 1);
+}
+
+#[test]
+fn a_ring_hit_moves_to_the_front() {
+    let builds = std::sync::atomic::AtomicUsize::new(0);
+    let a = counted(1, &builds);
+    for key in 2..=LOCAL_CAPACITY {
+        let _ = counted(key, &builds);
+    }
+    // Hitting 1 makes 2 the least recent; one more shape pushes 2 out.
+    let _ = counted(1, &builds);
+    let _ = counted(LOCAL_CAPACITY + 1, &builds);
+    TEST_SHARED.clear();
+    let before = builds.load(std::sync::atomic::Ordering::Relaxed);
+    assert!(
+        Arc::ptr_eq(&a, &counted(1, &builds)),
+        "1 stayed in the ring"
+    );
+    let _ = counted(2, &builds);
+    assert_eq!(
+        builds.load(std::sync::atomic::Ordering::Relaxed),
+        before + 1,
+        "2 left the ring and the table, so it was rebuilt"
+    );
+}
+
+#[test]
+fn ring_hits_keep_a_plan_recent_in_the_shared_table() {
+    let builds = std::sync::atomic::AtomicUsize::new(0);
+    let hot = counted(0, &builds);
+    // Every shape after 0 is a miss, and 0 is used from the ring between
+    // them, so it is the most recent plan throughout.
+    for key in 1..=SHARED_CAPACITY {
+        let _ = counted(key, &builds);
+        let _ = counted(0, &builds);
+    }
+    assert_eq!(TEST_SHARED.len(), SHARED_CAPACITY);
+    // Another thread, with its own empty ring, must find 0 in the table.
+    let (hot_again, rebuilt) = std::thread::spawn(move || {
+        let builds = std::sync::atomic::AtomicUsize::new(0);
+        let plan = counted(0, &builds);
+        (plan, builds.load(std::sync::atomic::Ordering::Relaxed))
+    })
+    .join()
+    .expect("the other thread completes");
+    assert_eq!(rebuilt, 0, "the hot plan was evicted");
+    assert!(Arc::ptr_eq(&hot, &hot_again));
+}
+
+#[test]
+fn concurrent_misses_build_a_shape_once() {
+    const THREADS: usize = 8;
+    let shared = SharedPlans::<usize, usize>::new();
+    for key in 0..32 {
+        let builds = std::sync::atomic::AtomicUsize::new(0);
+        let start = std::sync::Barrier::new(THREADS);
+        std::thread::scope(|scope| {
+            for _ in 0..THREADS {
+                scope.spawn(|| {
+                    start.wait();
+                    let _ = shared.get_or_build(key, || {
+                        builds.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+                        // Work long enough that the other threads' read
+                        // checks all miss before the write lock is released.
+                        (0..20_000).fold(key, |acc, i| acc.wrapping_add(i))
+                    });
+                });
+            }
+        });
+        assert_eq!(
+            builds.load(std::sync::atomic::Ordering::Relaxed),
+            1,
+            "key {key}"
+        );
+    }
+}
+
+#[test]
+fn clearing_from_a_thread_local_destructor_does_not_abort() {
+    struct ClearsOnDrop;
+    impl Drop for ClearsOnDrop {
+        fn drop(&mut self) {
+            clear_plan_caches();
+        }
+    }
+    thread_local! {
+        static GUARD: std::cell::RefCell<Option<ClearsOnDrop>> =
+            const { std::cell::RefCell::new(None) };
+    }
+    std::thread::spawn(|| {
+        // Registered before the ring, so destroyed after it: the clear then
+        // runs with this thread's ring already gone.
+        GUARD.with_borrow_mut(|guard| *guard = Some(ClearsOnDrop));
+        let _ = plan(64);
+    })
+    .join()
+    .expect("thread teardown with a clear in a destructor completes");
+}
