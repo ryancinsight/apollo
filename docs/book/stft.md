@@ -30,7 +30,10 @@ frames that cover it. The plan's one window serves both passes, so
 reconstruction is exact in exact arithmetic wherever that sum is non-zero (the
 nonzero overlap-add condition, weaker than constant overlap-add); the inverse
 refuses a plan and length where some sample's sum is at most `ε` of the
-largest. The window is Hann by default, a `Window` family (Hann, Hamming,
+largest. That floor is conditioning, not failure: the relative error a small
+weight leaves is bounded by `γ √(largest / weight)`, about `7e-7` at `N = 8`,
+and only reaches the sample's own magnitude near `weight / largest ≈ γ²`, so
+every accepted plan reconstructs to roughly six significant digits. The window is Hann by default, a `Window` family (Hann, Hamming,
 Blackman, Tukey) through `StftPlan::with_window`, or caller values through
 `StftPlan::with_window_values`.
 

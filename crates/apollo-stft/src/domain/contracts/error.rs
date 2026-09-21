@@ -35,8 +35,9 @@ pub enum StftError {
     #[error("window parameter out of range or window value not finite")]
     InvalidWindowParameter,
     /// Some sample receives window energy at most `ε` of the largest at the
-    /// plan's hop, so the weighted overlap-add inverse has nothing reliable to
-    /// divide by there.
+    /// plan's hop. The inverse divides by that energy, and the relative error
+    /// it leaves is bounded by `γ √(largest / weight)`, so below the floor the
+    /// reconstruction is no longer held to six significant digits.
     #[error("the window does not overlap-add at this hop and length; the inverse is undefined")]
     WindowNotOverlapAdd,
 }

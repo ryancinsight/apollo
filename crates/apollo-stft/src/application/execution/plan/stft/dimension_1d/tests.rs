@@ -409,6 +409,53 @@ fn every_window_reconstructs_what_it_analyzed() {
     }
 }
 
+/// A plan accepted at the very bottom of the overlap-add floor still
+/// reconstructs to about six significant digits, which is what the floor is
+/// chosen for. A frame's transform error is relative to that frame's largest
+/// magnitude, so the error a small weight leaves is amplified by the square
+/// root of the weight ratio, not its reciprocal: `γ √(largest / weight)`.
+/// The window `[t, 1, 1, 1, t, 1, 1, 1]` at `hop = 4` puts the ratio at `t²`,
+/// so `t` just above `√ε` sits one step inside the floor.
+#[test]
+fn a_plan_at_the_floor_still_holds_six_digits() {
+    let frame_len = 8usize;
+    let hop_len = 4usize;
+    let signal_len = 64usize;
+    let faint = 1.6e-8;
+    assert!(
+        faint * faint > f64::EPSILON,
+        "the window must sit inside the floor, not on it"
+    );
+    let mut window = vec![1.0; frame_len];
+    window[0] = faint;
+    window[frame_len / 2] = faint;
+    let plan = StftPlan::with_window_values(frame_len, hop_len, window)
+        .expect("a weight ratio above the floor is accepted");
+    let signal = Array1::from(
+        (0..signal_len)
+            .map(|i| (i as f64 * 0.41).sin())
+            .collect::<Vec<_>>(),
+    );
+    let peak = signal.iter().fold(0.0f64, |m, x| m.max(x.abs()));
+    let spectrum = plan.forward(&signal).expect("forward");
+    let recovered = plan.inverse(&spectrum, signal_len).expect("inverse");
+    // `largest / weight` is `1 / faint²` at the faint residues, so the bound
+    // is `γ / faint`; every other residue is better conditioned than this.
+    let gamma = 16.0 * (frame_len as f64).log2().ceil() * f64::EPSILON;
+    let bound = gamma / faint * peak;
+    assert!(
+        bound < 1.0e-6,
+        "the floor is supposed to buy six digits, not fewer: bound {bound:e}"
+    );
+    for i in 0..signal_len {
+        let error = (recovered[i] - signal[i]).abs();
+        assert!(
+            error <= bound,
+            "sample {i} error {error:e} exceeds the derived bound {bound:e}"
+        );
+    }
+}
+
 /// The review's end-of-signal reproduction: every residue has energy, but
 /// the first samples are covered only by the window's zero half.
 #[test]

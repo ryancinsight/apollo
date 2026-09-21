@@ -106,9 +106,18 @@ at every sample `t` whose weight `sum_m w[t - mH]^2` is non-zero, ends of the
 signal included. The inverse checks the weight of every sample: where one is
 at most `ε` of the largest, whether in the interior (the nonzero overlap-add
 condition) or at an end covered only by a window's zero part, it returns
-`StftError::WindowNotOverlapAdd` instead of dividing. A symmetric Hann at
-`H = N` is the common refusal, since it is zero at both ends; the GPU inverse,
-which synthesizes with Hann, refuses the same plans. Ordered command streams preserve every
+`StftError::WindowNotOverlapAdd` instead of dividing. The floor is a
+conditioning choice, not the point of failure: a frame's transform error is
+relative to that frame's largest magnitude, so a sample covered only by small
+window values keeps a relative error bounded by `γ √(largest / weight)`, which
+at the floor is about `7e-7` for `N = 8` and `2.4e-6` for `N = 1024`, and only
+reaches the sample's own magnitude near `weight / largest ≈ γ²`. Accepting to
+the floor therefore holds reconstruction to roughly six significant digits.
+A symmetric Hann at `H = N` is the common refusal, since it is zero at both
+ends. The GPU inverse synthesizes with Hann and applies the same check to its
+own Hann weights; a CPU plan carrying another window is not a configuration it
+can see, so pairing a non-Hann CPU forward with the GPU inverse is the caller's
+error, not one the GPU refuses. Ordered command streams preserve every
 producer-before-consumer dependency, including the provider-owned
 non-power-of-two transform and inverse overlap-add. This is an exact-arithmetic
 theorem; the finite-precision GPU result is supported by CPU differential and

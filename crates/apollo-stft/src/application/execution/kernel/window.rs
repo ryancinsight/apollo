@@ -73,9 +73,26 @@ fn tukey(alpha: f64, x: f64) -> f64 {
 }
 
 /// Whether the weighted overlap-add inverse of a `signal_len`-sample signal
-/// has a defined weight at every sample: the `Σ w²` it divides by must
-/// exceed `ε` times the largest such weight, or the division amplifies
-/// rounding past the sample's own magnitude.
+/// reconstructs every sample: the `Σ w²` it divides by must exceed `ε` times
+/// the largest such weight.
+///
+/// A frame's transform carries error relative to that frame's own largest
+/// magnitude, `|w|max |x|max`, not relative to the sample being recovered.
+/// So a sample covered only by small window values collects absolute error
+/// `γ |w|max |x|max w_small` and is divided by a weight of order `w_small²`,
+/// leaving a relative error bounded by `γ √(largest / weight)` with
+/// `γ = 16 ⌈log₂ N⌉ ε` (Higham Thm 24.2). The amplification is the square
+/// root of the weight ratio, not its reciprocal: the error reaches the
+/// sample's own magnitude only near `weight / largest ≈ γ²`, which is
+/// `1.1e-28` at `N = 8` and `1.3e-27` at `N = 1024`.
+///
+/// The floor is `ε` rather than that crossing, deliberately: at `ε largest`
+/// the bound is `γ / √ε`, about `7e-7` at `N = 8` and `2.4e-6` at
+/// `N = 1024`, so an accepted configuration still reconstructs to roughly
+/// six significant digits, while below it the analysis stops promising even
+/// half the mantissa. A measurement of the family `[t, 1, 1, 1, t, 1, 1, 1]`
+/// at `hop = 4` over `t = 1 … 1e-160` tracks the bound from beneath by two
+/// orders throughout, so the floor is conservative and the bound holds.
 ///
 /// Frame `m` starts at `m hop - N / 2` for `m ≤ ⌈L / hop⌉`, the framing the
 /// forward and inverse share. From `N / 2` to `L - N / 2` every covering
