@@ -113,12 +113,15 @@ mod tests {
     /// omitted variant shrinks it, and so does a repeat that displaces one.
     ///
     /// Three things move together for a new variant: the arm, the list entry
-    /// and the count below. The assertion catches any two of them moving
-    /// without the third, which is every accident; it cannot catch all three
-    /// staying put, because a runtime check only sees what the list holds.
-    /// Closing that last path wants the variant count from the type itself,
-    /// and `std::mem::variant_count` is nightly — a derive macro for it is a
-    /// dependency this crate will not take to format messages.
+    /// and the count below. Leaving the arm out is a compile error, and
+    /// moving the arm with only one of the other two fires the assertion.
+    /// What it cannot catch is the arm moving alone — which is exactly the
+    /// minimal edit that clears the build error that brought you here, so
+    /// take the list entry and the count in the same change. A runtime check
+    /// sees only what the list holds; closing that path wants the variant
+    /// count from the type itself, and `std::mem::variant_count` is nightly
+    /// — a derive macro for it is a dependency this crate will not take to
+    /// format messages.
     fn every_stft_error() -> Vec<StftError> {
         let all = vec![
             StftError::EmptyFrameLength,
