@@ -29,7 +29,9 @@ leaf. Every existing test keeps its input, oracle, and derived tolerance.
 
 ADR 0008 records the weighted-overlap-add identity
 `sum_m x[t] w[t-mH]^2 / sum_m w[t-mH]^2 = x[t]` where its denominator is
-non-zero. The inverse/reconstruction leaf preserves that theorem's
+non-zero; ADR 0070 narrows the implementation's accepted range to a
+denominator above `eps` times the largest. The inverse/reconstruction leaf
+preserves that theorem's
 finite-precision tests unchanged. This is a proof sketch plus empirical
 CPU-differential and reconstruction evidence, not a machine-checked proof.
 

@@ -78,9 +78,14 @@ Apollo FFT paths use a shared normalization convention:
 - SFT computes dense Apollo FFT coefficients, retains the top-K magnitudes with
   deterministic frequency-index tie-breaking, and reconstructs by expanding the
   sparse support before inverse FFT evaluation.
-- STFT uses centered Hann-window frames. Inverse reconstruction overlap-adds
-  inverse FFT frames and divides by the accumulated squared-window weights,
-  recovering every covered sample with non-zero weight in exact arithmetic.
+- STFT uses centered frames under the plan's window (Hann by default).
+  Inverse reconstruction overlap-adds inverse FFT frames under the same
+  window and divides by the accumulated squared-window weights, recovering
+  every sample in exact arithmetic; it refuses a plan and length where some
+  sample's weight is at most `ε` of the largest. In floating point a small
+  weight leaves a relative error bounded by `γ √(largest / weight)`, so the
+  floor holds an accepted plan to roughly six significant digits while the
+  error reaches unity only near `weight / largest ≈ γ²`.
 - Wavelet DWT uses orthogonal filter banks; inverse reconstruction is verified
   for Haar and Daubechies-4. CWT uses direct real wavelet correlations with
   Ricker and DC-corrected real Morlet kernels. The Morlet correction subtracts

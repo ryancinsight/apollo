@@ -9,6 +9,7 @@ pub mod domain;
 pub mod infrastructure;
 
 pub use application::execution::kernel::peak::{estimate_peaks, PeakEstimate};
+pub use application::execution::kernel::window::Window;
 pub use application::execution::plan::stft::dimension_1d::{is_valid_length, StftPlan};
 pub use domain::contracts::error::{PeakEstimationError, StftError};
 pub use infrastructure::transport::cpu::{istft, istft_leto, stft, stft_leto};

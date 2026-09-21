@@ -168,7 +168,7 @@ The removed role is 16N bytes per active worker: 2,048 bytes at N = 128 and
 
 ## CPU STFT forward-frame fusion is control-confounded (2026-09-01) <a id="stft-window-fusion"></a>
 The reusable CPU STFT forward path copies one real frame into retained scratch,
-multiplies it by the Hann window into a second retained scratch, then
+multiplies it by the plan's window into a second retained scratch, then
 materializes interleaved complex input. At frame length 1,024 those two buffers
 retain 16,384 bytes per active worker. A source-equivalent candidate replaced
 the three passes for interior frames with one Hermes multiply-and-interleave

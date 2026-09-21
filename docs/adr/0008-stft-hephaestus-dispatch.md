@@ -40,7 +40,11 @@ For a complete frame DFT, root-of-unity orthogonality makes the normalized
 inverse recover the windowed analysis frame exactly. Synthesis applies the
 same window, so weighted overlap-add evaluates
 `sum_m x[t] w[t-mH]^2 / sum_m w[t-mH]^2`, which equals `x[t]` wherever the
-denominator is non-zero. Command stream order establishes the corresponding
+denominator is non-zero. Narrowed 2026-09-21 by ADR 0070: the identity is
+exact-arithmetic and holds as stated, but the implementation now refuses a
+denominator at or below `eps` times the largest, where finite precision no
+longer holds the quotient to six significant digits. Command stream order
+establishes the corresponding
 device write-before-read dependencies. This is an exact-arithmetic theorem;
 CPU differential and reconstruction tests are empirical finite-precision
 evidence rather than a machine-checked proof.

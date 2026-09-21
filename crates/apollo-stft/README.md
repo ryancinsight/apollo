@@ -12,12 +12,16 @@ src/
   infrastructure/  CPU convenience wrappers
 ```
 
-`StftPlan` is the single source of truth for frame length, hop length, Hann
-window coefficients, frame count, and the backing Apollo FFT plan.
+`StftPlan` is the single source of truth for frame length, hop length, window
+coefficients, frame count, and the backing Apollo FFT plan. The window is
+Hann by default (`StftPlan::new`), a named `Window` family (Hann, Hamming,
+Blackman, Tukey) through `StftPlan::with_window`, or caller-supplied values
+through `StftPlan::with_window_values`; one window serves both analysis and
+synthesis.
 
 ## Mathematical Contract
 
-Forward STFT uses centered frames. Each frame is multiplied by the Hann window
+Forward STFT uses centered frames. Each frame is multiplied by the plan's window
 and transformed by the Apollo FFT plan. Inverse STFT applies the inverse frame
 FFT, multiplies by the same window, overlap-adds, and divides each sample by
 the accumulated squared-window weight.
@@ -98,7 +102,22 @@ The synthesis pass multiplies by `w[n]`, and the output sample is
 y[t] = sum_m x[t] w[t - mH]^2 / sum_m w[t - mH]^2 = x[t]
 ```
 
-whenever the denominator is non-zero. Ordered command streams preserve every
+at every sample `t` whose weight `sum_m w[t - mH]^2` is non-zero, ends of the
+signal included. The inverse checks the weight of every sample: where one is
+at most `ε` of the largest, whether in the interior (the nonzero overlap-add
+condition) or at an end covered only by a window's zero part, it returns
+`StftError::WindowNotOverlapAdd` instead of dividing. The floor is a
+conditioning choice, not the point of failure: a frame's transform error is
+relative to that frame's largest magnitude, so a sample covered only by small
+window values keeps a relative error bounded by `γ √(largest / weight)`, which
+at the floor is about `7e-7` for `N = 8` and `2.4e-6` for `N = 1024`, and only
+reaches the sample's own magnitude near `weight / largest ≈ γ²`. Accepting to
+the floor therefore holds reconstruction to roughly six significant digits.
+A symmetric Hann at `H = N` is the common refusal, since it is zero at both
+ends. The GPU inverse synthesizes with Hann and applies the same check to its
+own Hann weights; a CPU plan carrying another window is not a configuration it
+can see, so pairing a non-Hann CPU forward with the GPU inverse is the caller's
+error, not one the GPU refuses. Ordered command streams preserve every
 producer-before-consumer dependency, including the provider-owned
 non-power-of-two transform and inverse overlap-add. This is an exact-arithmetic
 theorem; the finite-precision GPU result is supported by CPU differential and
@@ -129,7 +148,8 @@ Profile/storage mismatches return `StftError::PrecisionMismatch`.
 
 ## Verification
 
-The crate verifies Hann symmetry, forward/inverse reconstruction,
+The crate verifies window closed forms and exact symmetry, reconstruction for
+every window family and a caller-supplied window within a derived bound,
 caller-owned forward and inverse parity, invalid configuration rejection,
 short-input rejection, and property-based reconstruction over deterministic
 signals, inverse workspace reuse, and caller-owned forward parity. Typed tests
