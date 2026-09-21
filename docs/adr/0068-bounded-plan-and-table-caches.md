@@ -39,6 +39,17 @@ Two slices, the plan level first.
      use stores the current tick only when the stamp moves, and plans used
      since the last build tie. Lookups stay under the read lock, and a hit
      does no atomic read-modify-write.
+
+     Ties are the common case, so how they break is part of the policy, not
+     an implementation detail. The table alone holding a slot is the only
+     evidence of non-use left between ticks -- a ring holds the slot of
+     every plan its thread touched recently -- so the victim among tied
+     entries is one whose slot has no ring holder. Breaking the tie by
+     position instead, as the first draft did, is not arbitrary but biased:
+     new entries append, so the victim is the longest-resident tied entry,
+     which is a plan kept hot through a ring as readily as a one-shot built
+     at the current tick. Ties that remain, between entries equally held,
+     carry no information to order them and break by position.
    - **Per-thread ring:** the `LOCAL_CAPACITY = 4` most recently used plans,
      replacing the unbounded per-thread map and the one-entry slot. A
      repeated or alternating shape takes no lock and allocates nothing.
@@ -83,8 +94,11 @@ Two slices, the plan level first.
 - **Slice 1 tests (`orchestration/cache/plans/tests.rs`):**
   - repeated shapes share a plan through the ring and the shared table;
   - cycling 256 lengths leaves exactly `SHARED_CAPACITY` plans;
-  - the least recently used entry is the one evicted, and a plan kept hot
-    only through a thread's ring survives eviction for another thread;
+  - the least recently used entry is the one evicted when the stamps
+    differ, and a plan kept hot only through a thread's ring survives
+    eviction for another thread;
+  - when every stamp ties, the entry evicted is one no ring holds, not the
+    ring-held entry that happens to sit first;
   - a ring hit consults no table and moves to the front;
   - concurrent misses build a shape once;
   - a clear releases unheld plans and the calling thread's rings;
@@ -92,9 +106,10 @@ Two slices, the plan level first.
     still alive;
   - a clear from a thread-local destructor, after the rings are destroyed,
     does not abort.
-  Each of seven mutations (no epoch check, no ring hit, no move to front,
-  no write-lock re-check, no ring stamp, most-recent eviction, borrowing a
-  destroyed ring) fails at least one of these tests.
+  Each of eight mutations (no epoch check, no ring hit, no move to front,
+  no write-lock re-check, no ring stamp, most-recent eviction, position
+  tie-breaking, borrowing a destroyed ring) fails at least one of these
+  tests.
 - **Slice 1 timing:** a pinned A/B of two release builds, minimum of 21
   samples per case, four rounds on a P core and an E core. The ring pays
   where it was meant to: two alternating shapes run 6.4% (E) and 9.1% (P)

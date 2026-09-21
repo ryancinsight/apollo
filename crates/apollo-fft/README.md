@@ -57,6 +57,9 @@ The free functions (`fft_1d_slice`, `fft_2d_array`, and the rest) reuse plans
 from per-scalar, per-dimension caches: a process-wide table of at most 64
 shapes that evicts the least recently used, and a four-shape ring per thread
 that keeps a repeated or alternating shape lock-free and allocation-free.
+Recency is measured at the granularity of misses -- a ring hit costs no
+atomic read-modify-write, so plans used since the last plan was built carry
+the same stamp, and among those the table evicts one no ring holds.
 `clear_plan_caches()` releases every cached plan no caller holds; each of
 another thread's rings releases on that thread's next lookup through it
 (ADR 0068).

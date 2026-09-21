@@ -114,7 +114,9 @@ Change-class tags: [patch] backward-compatible fix, [minor] additive non-breakin
 
 - [minor] `apollo-fft` bounds its plan caches and adds
   `clear_plan_caches()` (ADR 0068). Each scalar and dimension keeps at most
-  64 shapes process-wide, evicting the least recently used, and four per
+  64 shapes process-wide, evicting the least recently used at the
+  granularity of misses (plans used since the last build tie, and a plan no
+  ring holds is evicted before one a ring does), and four per
   thread in a most-recently-used ring; they used to grow by one plan per
   distinct shape for the life of the process, and each thread's map pinned
   every plan it had used. Alternating two shapes through the free functions
