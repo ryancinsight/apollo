@@ -30,6 +30,11 @@ Change-class tags: [patch] backward-compatible fix, [minor] additive non-breakin
     refuses such plans with `WgpuError::InvalidPlan`.
   - **Errors:** `StftError` gains `InvalidWindowParameter` and becomes
     `#[non_exhaustive]`.
+  - **Removed:** the public `application::execution::kernel::hann` module and
+    its `hann_window(n)`, superseded by the `window` module. Migrate
+    `hann_window(n)` to `Window::Hann.coefficients(n)?`, which returns the
+    same values for every `n` except that they are now evaluated at the
+    nearer end and so are exactly symmetric.
   - **Window values:** windows are now evaluated at the nearer end, so they are
     exactly symmetric. Hann values past the midpoint can differ from before in
     the last bit.

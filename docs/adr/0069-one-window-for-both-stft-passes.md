@@ -96,8 +96,15 @@ invented one to a derived one.
 
 ## Consequences
 
-Breaking, and the CHANGELOG carries the migration: `forward_with_window(&x,
-&w)` becomes `with_window_values(frame, hop, w)` plus `forward(&x)`. A plan
+Breaking in four ways, which `cargo semver-checks` reports and the CHANGELOG
+carries the migration for: `forward_with_window(&x, &w)` becomes
+`with_window_values(frame, hop, w)` plus `forward(&x)`; `StftError` gains two
+variants and `#[non_exhaustive]`; and the public `kernel::hann` module and
+its `hann_window(n)` are gone, superseded by `Window::Hann.coefficients(n)`.
+The window module replaces the Hann one outright rather than joining it —
+one window abstraction is the point of this record, and leaving `hann_window`
+beside `Window::Hann` would be the second source this change exists to
+remove. A plan
 built with a non-Hann window and inverted on the GPU is not a configuration
 the GPU can detect — its payload carries only frame and hop lengths, so it
 synthesizes with Hann. That pairing is the caller's error; the CPU plan is
