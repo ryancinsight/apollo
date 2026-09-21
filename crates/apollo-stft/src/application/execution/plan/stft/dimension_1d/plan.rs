@@ -4,7 +4,7 @@ use super::windowing::{
     window_complex_real_frame_into, window_signal_frame_into, with_forward_typed_workspaces,
     with_inverse_typed_workspaces, with_inverse_wola_workspaces,
 };
-use crate::application::execution::kernel::window::{overlap_adds, Window};
+use crate::application::execution::kernel::window::{wola_weights_defined, Window};
 use crate::domain::contracts::error::{StftError, StftResult};
 use apollo_fft::{CpuStorage, FftPlan1D, PrecisionProfile, Shape1D};
 use eunomia::Complex64;
@@ -21,8 +21,6 @@ pub struct StftPlan {
     frame_len: usize,
     hop_len: usize,
     window: Array1<f64>,
-    /// Whether `window` overlap-adds at `hop_len`, so the inverse is defined.
-    overlap_adds: bool,
     fft_plan: FftPlan1D<f64>,
 }
 
@@ -74,12 +72,6 @@ impl StftPlan {
     }
 
     fn build(frame_len: usize, hop_len: usize, window: Array1<f64>) -> Self {
-        let overlap_adds = overlap_adds(
-            window
-                .as_slice()
-                .expect("invariant: a built window is contiguous"),
-            hop_len,
-        );
         let fft_plan = FftPlan1D::<f64>::new(
             Shape1D::new(frame_len).expect("STFT frame length must be valid"),
         );
@@ -87,7 +79,6 @@ impl StftPlan {
             frame_len,
             hop_len,
             window,
-            overlap_adds,
             fft_plan,
         }
     }
@@ -275,8 +266,9 @@ impl StftPlan {
     ///
     /// # Errors
     /// Returns `Err(StftError::LengthMismatch)` when spectrum length is inconsistent,
-    /// and [`StftError::WindowNotOverlapAdd`] when the window leaves some sample
-    /// residue without energy at the hop.
+    /// and [`StftError::WindowNotOverlapAdd`] when some sample of the signal,
+    /// at either end or in the interior, receives window energy at most `ε`
+    /// of the largest.
     pub fn inverse(
         &self,
         spectrum: &Array1<Complex64>,
@@ -348,10 +340,10 @@ impl StftPlan {
         if signal_len < self.frame_len {
             return Err(StftError::InputTooShort);
         }
-        if !self.overlap_adds {
+        let window = self.window.as_slice().expect("window must be contiguous");
+        if !wola_weights_defined(window, self.hop_len, signal_len) {
             return Err(StftError::WindowNotOverlapAdd);
         }
-        let window = self.window.as_slice().expect("window must be contiguous");
         with_inverse_wola_workspaces(
             frames,
             self.frame_len,
@@ -382,12 +374,9 @@ impl StftPlan {
                         }
                     }
                 }
+                // `wola_weights_defined` held every weight above zero.
                 for i in 0..signal_len {
-                    output[i] = if weight[i] > 0.0 {
-                        overlap[i] / weight[i]
-                    } else {
-                        0.0
-                    };
+                    output[i] = overlap[i] / weight[i];
                 }
                 Ok(())
             },

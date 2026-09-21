@@ -102,13 +102,13 @@ The synthesis pass multiplies by `w[n]`, and the output sample is
 y[t] = sum_m x[t] w[t - mH]^2 / sum_m w[t - mH]^2 = x[t]
 ```
 
-for any window whose squares do not all vanish at some residue of `t` modulo
-`H` (the nonzero overlap-add condition). A plan whose window fails it keeps
-its forward transform and returns `StftError::WindowNotOverlapAdd` from the
-inverse; a symmetric Hann at `H = N` is the common case, since it is zero at
-both ends.
-
-whenever the denominator is non-zero. Ordered command streams preserve every
+at every sample `t` whose weight `sum_m w[t - mH]^2` is non-zero, ends of the
+signal included. The inverse checks the weight of every sample: where one is
+at most `ε` of the largest, whether in the interior (the nonzero overlap-add
+condition) or at an end covered only by a window's zero part, it returns
+`StftError::WindowNotOverlapAdd` instead of dividing. A symmetric Hann at
+`H = N` is the common refusal, since it is zero at both ends; the GPU inverse,
+which synthesizes with Hann, refuses the same plans. Ordered command streams preserve every
 producer-before-consumer dependency, including the provider-owned
 non-power-of-two transform and inverse overlap-add. This is an exact-arithmetic
 theorem; the finite-precision GPU result is supported by CPU differential and
