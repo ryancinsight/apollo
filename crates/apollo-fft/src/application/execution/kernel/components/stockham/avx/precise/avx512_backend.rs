@@ -1,4 +1,4 @@
-use super::super::backend::StockhamAvxBackend;
+use super::super::backend::{StockhamAvxBackend, StockhamPairGroups};
 use eunomia::Complex64;
 use std::arch::x86_64::{
     __m512d, _mm512_add_pd, _mm512_fmaddsub_pd, _mm512_loadu_pd, _mm512_mul_pd, _mm512_permute_pd,
@@ -28,6 +28,23 @@ impl StockhamAvxBackend for Avx512BackendPrecise {
         _mm512_permute_pd(a, 0x55)
     }
 
+    #[inline]
+    unsafe fn stockham_quad_groups_eight_low_live(
+        src: &[Complex64],
+        dst: &mut [Complex64],
+        radix: usize,
+        first_twiddles: &[Complex64],
+        second_twiddles: &[Complex64],
+        third_twiddles: &[Complex64],
+        fourth_twiddles: &[Complex64],
+    ) {
+        crate::application::execution::kernel::components::stockham::avx::precise::quad::stockham_quad_groups_eight_precise(
+            src, dst, radix, first_twiddles, second_twiddles, third_twiddles, fourth_twiddles,
+        )
+    }
+}
+
+impl StockhamPairGroups for Avx512BackendPrecise {
     #[inline]
     unsafe fn stage_pair_groups_two(
         src: &[Complex64],
@@ -113,20 +130,5 @@ impl StockhamAvxBackend for Avx512BackendPrecise {
             dst[j + half_n + quarter_n] = b0 - c1;
             j += 1;
         }
-    }
-
-    #[inline]
-    unsafe fn stockham_quad_groups_eight_low_live(
-        src: &[Complex64],
-        dst: &mut [Complex64],
-        radix: usize,
-        first_twiddles: &[Complex64],
-        second_twiddles: &[Complex64],
-        third_twiddles: &[Complex64],
-        fourth_twiddles: &[Complex64],
-    ) {
-        crate::application::execution::kernel::components::stockham::avx::precise::quad::stockham_quad_groups_eight_precise(
-            src, dst, radix, first_twiddles, second_twiddles, third_twiddles, fourth_twiddles,
-        )
     }
 }
