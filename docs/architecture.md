@@ -64,6 +64,7 @@ The table below is the authoritative record of per-crate precision support. Each
 |---|---|---|---|
 | apollo-fft | HIGH_ACCURACY (f64/f32/f16 storage) | Hephaestus-owned f32/native-f16 FFT | Apollo exposes no dense WGPU FFT plan or shader |
 | apollo-czt | HIGH_ACCURACY (Complex64/32/f16) | LOW_PRECISION_F32 (f32/[f16;2] storage, f32 compute) | Forward/inverse CZT; f16 promoted at host boundary |
+| apollo-dctdst-core | Native f64/f32 compute and storage | Not applicable | Lightweight direct DCT-III equation and fixed-capacity plans |
 | apollo-dctdst | HIGH_ACCURACY (f64/f32/f16 storage) | LOW_PRECISION_F32 (f32 storage, f32 compute) | Mixed f16 host path present |
 | apollo-dht | HIGH_ACCURACY (f64/f32/f16 storage) | LOW_PRECISION_F32 (f32/f16 storage, f32 compute) | f16 promoted at host boundary |
 | apollo-frft | HIGH_ACCURACY (Complex64/32/f16) | LOW_PRECISION_F32 (Complex32/[f16;2] storage, f32 compute) | Hephaestus typed direct/unitary kernels; Complex64 excluded from GPU |

@@ -39,10 +39,17 @@ section A.3.3. Apollo's existing unnormalized convention remains
 `X[0]/2 + sum(...)`.
 
 The same private coefficient function constructs both the precomputed plan and
-the dynamic slice operation. `apollo-dctdst` routes its direct DCT-III entry
-point through that operation and removes its scalar and Hermes-basis copies.
+the dynamic slice operation. `apollo-dctdst` calls that operation directly and
+removes its scalar and Hermes-basis copies.
 Other DCT/DST kinds remain in `apollo-dctdst` until their own bounded migration;
 this slice does not duplicate or redesign them.
+
+This ownership move removes the public `apollo_dctdst::dct3` function rather
+than retaining a forwarding wrapper or re-export. Callers of the direct kernel
+migrate to `apollo_dctdst_core::dct3`; callers of transform plans retain the
+existing `DctDstPlan` contract. This is a breaking public-surface change and is
+recorded here without a version bump because the workspace version is assigned
+by the release integration step.
 
 ## Alternatives
 
@@ -72,8 +79,12 @@ FFT-derived plans remain in `apollo-dctdst`.
 - Instantiate one generic suite for `f32` and `f64`.
 - Check the unnormalized and orthonormal basis against analytical impulse
   values, including the DC and first AC terms at `N = 8`.
-- Check orthonormal row inner products against the identity with error bounds
-  derived from `N` and the scalar epsilon.
+- Check every `N = 8` basis coefficient against an independent table derived
+  from the closed-form radical values. The coefficient interval derives from
+  absolute phase error; the test therefore verifies the locked cosine provider
+  at all finite basis phases without assuming a universal libm error bound.
+- Propagate that verified coefficient interval through the Gram inner product
+  to bound the orthonormality residual.
 - Check the cached plan against the dynamic direct operation.
 - Run all existing `apollo-dctdst` regressions after routing DCT-III through the
   core.
