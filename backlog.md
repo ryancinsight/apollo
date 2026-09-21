@@ -3,7 +3,7 @@
 <a id="apollo-raster-pointer-conformance"></a>
 ## APOLLO-RASTER-POINTER-CONFORMANCE — Restore the Atlas source-size ratchet [patch] — review
 - **Integrator:** Codex `/root/fit`; branch `refactor/apollo-pointer-conformance`.
-- **Scope:** `real_storage/{mod.rs,half_volume.rs,half_volume/routed.rs}`, `dimension_1d/tests.rs` and cohesive test sidecars; live Stockham and `Cargo.lock` edits are excluded.
+- **Scope:** `real_storage/{mod.rs,dimension_1d.rs,half_volume.rs,half_volume/routed.rs}`, `api/irfft/`, `dimension_1d/tests.rs`, and cohesive test sidecars; live Stockham and `Cargo.lock` edits are excluded.
 - **Outcome:** partition the two real-storage operation families and the STFT value-test families without changing public APIs, formulas, routing, fixtures, or assertions.
 - **Acceptance:** all resulting files stay below 500 lines; focused warning-denied Clippy and configured Nextest pass; the Atlas scanner restores `oversized_files` to at most 41 without a baseline raise.
 
