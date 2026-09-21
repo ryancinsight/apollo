@@ -88,10 +88,23 @@ pub enum PeakEstimationError {
 #[cfg(test)]
 mod tests {
     use super::{PeakEstimationError, StftError};
+    use std::collections::BTreeSet;
 
-    /// Every `StftError`, with the wildcard-free match that keeps the list
-    /// complete: a variant added to the enum stops compiling here, rather
-    /// than silently escaping the message check below.
+    /// The newline this crate must never emit inside a message.
+    const LINE_FEED: char = '\n';
+
+    /// One index per variant, so the list below can be checked against the
+    /// match rather than merely beside it.
+    const STFT_VARIANTS: usize = 9;
+    const PEAK_VARIANTS: usize = 5;
+
+    /// Every `StftError`, kept complete in both directions.
+    ///
+    /// The wildcard-free match forces an arm when a variant is added. That
+    /// alone is not enough: adding the arm is the minimal edit that clears
+    /// the build, and it leaves the list short. So each arm carries a
+    /// distinct index and the set of indices must be the full range — an
+    /// omitted variant shrinks it, a repeated one shrinks it too.
     fn every_stft_error() -> Vec<StftError> {
         let all = vec![
             StftError::EmptyFrameLength,
@@ -104,19 +117,25 @@ mod tests {
             StftError::InvalidWindowParameter,
             StftError::WindowNotOverlapAdd,
         ];
-        for error in &all {
-            match error {
-                StftError::EmptyFrameLength
-                | StftError::EmptyHopSize
-                | StftError::HopExceedsFrame
-                | StftError::InputTooShort
-                | StftError::LengthMismatch
-                | StftError::WindowLengthMismatch
-                | StftError::PrecisionMismatch
-                | StftError::InvalidWindowParameter
-                | StftError::WindowNotOverlapAdd => {}
-            }
-        }
+        let seen: BTreeSet<usize> = all
+            .iter()
+            .map(|error| match error {
+                StftError::EmptyFrameLength => 0,
+                StftError::EmptyHopSize => 1,
+                StftError::HopExceedsFrame => 2,
+                StftError::InputTooShort => 3,
+                StftError::LengthMismatch => 4,
+                StftError::WindowLengthMismatch => 5,
+                StftError::PrecisionMismatch => 6,
+                StftError::InvalidWindowParameter => 7,
+                StftError::WindowNotOverlapAdd => 8,
+            })
+            .collect();
+        assert_eq!(
+            seen,
+            (0..STFT_VARIANTS).collect::<BTreeSet<usize>>(),
+            "the list omits or repeats a variant the match names"
+        );
         all
     }
 
@@ -129,25 +148,35 @@ mod tests {
             PeakEstimationError::DuplicatePeak { bin: 3 },
             PeakEstimationError::MirrorPeak { bin: 5, mirror: 3 },
         ];
-        for error in &all {
-            match error {
-                PeakEstimationError::FrameTooShort { .. }
-                | PeakEstimationError::FrameTooLong { .. }
-                | PeakEstimationError::PeakOutOfRange { .. }
-                | PeakEstimationError::DuplicatePeak { .. }
-                | PeakEstimationError::MirrorPeak { .. } => {}
-            }
-        }
+        let seen: BTreeSet<usize> = all
+            .iter()
+            .map(|error| match error {
+                PeakEstimationError::FrameTooShort { .. } => 0,
+                PeakEstimationError::FrameTooLong { .. } => 1,
+                PeakEstimationError::PeakOutOfRange { .. } => 2,
+                PeakEstimationError::DuplicatePeak { .. } => 3,
+                PeakEstimationError::MirrorPeak { .. } => 4,
+            })
+            .collect();
+        assert_eq!(
+            seen,
+            (0..PEAK_VARIANTS).collect::<BTreeSet<usize>>(),
+            "the list omits or repeats a variant the match names"
+        );
         all
     }
 
     /// A `#[error(...)]` literal written across source lines carries its own
     /// indentation into the message: `rustfmt` joins the lines and the
-    /// continuation's spaces stay in the string. Nothing else catches it --
+    /// continuation's spaces stay in the string. Nothing else catches it —
     /// fmt produces it, clippy does not read string contents, and the text
     /// reaches a caller through `Display` and through
     /// `WgpuError::InvalidPlan`. This crate's messages are one sentence of
     /// single-spaced prose, so a repeated space is that defect.
+    ///
+    /// The enforcement is live only because this module sits in the defining
+    /// crate, where `#[non_exhaustive]` does not apply; moved to `tests/` the
+    /// matches above would need a `_` arm and would stop enforcing.
     #[test]
     fn no_error_message_carries_source_indentation() {
         let stft = every_stft_error();
@@ -162,7 +191,7 @@ mod tests {
                 "message carries a repeated space: {message:?}"
             );
             assert!(
-                !message.contains('\n'),
+                !message.contains(LINE_FEED),
                 "message carries a newline: {message:?}"
             );
             assert!(!message.is_empty(), "a variant renders no message");
