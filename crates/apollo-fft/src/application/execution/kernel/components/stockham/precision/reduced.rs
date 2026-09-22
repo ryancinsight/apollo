@@ -1,5 +1,5 @@
 #[cfg(target_arch = "x86_64")]
-use super::super::avx::backend::StockhamAvxBackend;
+use super::super::avx::reduced::quad::stockham_quad_groups_eight_reduced;
 use super::super::butterfly::{stage_pair_impl, stage_quad_impl, stage_triple_impl};
 // The lane kernels live in `butterfly::lanes`, which `butterfly/mod.rs`
 // gates on x86_64 along with its re-export; every caller below sits under
@@ -375,7 +375,7 @@ impl StockhamPrecision for ReducedStockhamAvxFma {
             // host, and `groups == 8` with the stage loop's stride-aligned slices is the kernel's
             // shape.
             unsafe {
-                <f32 as StockhamAvxBackend>::stockham_quad_groups_eight(
+                stockham_quad_groups_eight_reduced(
                     src,
                     dst,
                     radix,
@@ -395,178 +395,6 @@ impl StockhamPrecision for ReducedStockhamAvxFma {
                 third_twiddles,
                 fourth_twiddles,
             );
-        }
-    }
-
-    fn scale(data: &mut [Complex32], scale: f32) {
-        normalize_inplace(data, scale);
-    }
-}
-#[cfg(target_arch = "x86_64")]
-pub(crate) struct ReducedStockhamAvx512;
-
-#[cfg(target_arch = "x86_64")]
-impl private::Sealed for ReducedStockhamAvx512 {}
-
-#[cfg(target_arch = "x86_64")]
-impl StockhamPrecision for ReducedStockhamAvx512 {
-    type Real = f32;
-    type Complex = Complex32;
-
-    const MAX_FUSED_STAGES: u32 = 4;
-
-    #[inline]
-    fn stage_triple_enabled(stride: usize, n: usize, input_is_data: bool) -> bool {
-        let groups = n / (stride << 1);
-        groups > 4 || (groups == 4 && !input_is_data)
-    }
-
-    #[inline]
-    fn stage_quad_enabled(stride: usize, n: usize, _input_is_data: bool) -> bool {
-        n / (stride << 1) == 8
-    }
-
-    #[inline]
-    fn stage(src: &[Complex32], dst: &mut [Complex32], radix: usize, twiddles: &[Complex32]) {
-        let groups = src.len() / (radix << 1);
-        if groups == 1 && radix >= 2 {
-            if !stage_groups_one_lanes::<f32, 16>(src, dst, radix, twiddles) {
-                <ReducedStockhamAvxFma as StockhamPrecision>::stage(src, dst, radix, twiddles);
-            }
-        } else if groups < 8 || !stage_lanes::<f32, 16>(src, dst, radix, twiddles) {
-            <ReducedStockhamAvxFma as StockhamPrecision>::stage(src, dst, radix, twiddles);
-        }
-    }
-
-    #[inline]
-    fn stage_pair(
-        src: &[Complex32],
-        dst: &mut [Complex32],
-        radix: usize,
-        first_twiddles: &[Complex32],
-        second_twiddles: &[Complex32],
-    ) {
-        let groups = src.len() / (radix << 1);
-        if radix == 1 {
-            if src.len() < 16 || !stage_pair_radix_one_lanes::<f32, 16>(src, dst, second_twiddles) {
-                <ReducedStockhamAvxFma as StockhamPrecision>::stage_pair(
-                    src,
-                    dst,
-                    radix,
-                    first_twiddles,
-                    second_twiddles,
-                );
-            }
-        } else if groups == 8 && radix >= 2 {
-            // avx512 pairs require multiples of 8
-            // SAFETY: this precision is selected only after AVX-512F was established on the host
-            // (`stockham/mod.rs`), and the group count with the stage loop's stride-aligned slices
-            // is the kernel's shape.
-            unsafe {
-                <crate::application::execution::kernel::components::stockham::avx::reduced::avx512_backend::Avx512BackendReduced as StockhamAvxBackend>::stage_pair_groups_two(
-                    src,
-                    dst,
-                    radix,
-                    first_twiddles,
-                    second_twiddles,
-                )
-            };
-        } else if groups < 16
-            || !stage_pair_lanes::<f32, 16>(src, dst, radix, first_twiddles, second_twiddles)
-        {
-            <ReducedStockhamAvxFma as StockhamPrecision>::stage_pair(
-                src,
-                dst,
-                radix,
-                first_twiddles,
-                second_twiddles,
-            );
-        }
-    }
-
-    #[inline]
-    fn stage_triple(
-        src: &[Complex32],
-        dst: &mut [Complex32],
-        radix: usize,
-        first_twiddles: &[Complex32],
-        second_twiddles: &[Complex32],
-        third_twiddles: &[Complex32],
-    ) {
-        let n = src.len();
-        let groups = n / (radix << 1);
-        if radix == 1 && groups >= 32 {
-            if !stage_triple_radix_one_lanes::<f32, 16>(src, dst, second_twiddles, third_twiddles) {
-                <ReducedStockhamAvxFma as StockhamPrecision>::stage_triple(
-                    src,
-                    dst,
-                    radix,
-                    first_twiddles,
-                    second_twiddles,
-                    third_twiddles,
-                );
-            }
-        } else if groups >= 32 {
-            if !stage_triple_lanes::<f32, 16>(
-                src,
-                dst,
-                radix,
-                first_twiddles,
-                second_twiddles,
-                third_twiddles,
-            ) {
-                <ReducedStockhamAvxFma as StockhamPrecision>::stage_triple(
-                    src,
-                    dst,
-                    radix,
-                    first_twiddles,
-                    second_twiddles,
-                    third_twiddles,
-                );
-            }
-        } else {
-            <ReducedStockhamAvxFma as StockhamPrecision>::stage_triple(
-                src,
-                dst,
-                radix,
-                first_twiddles,
-                second_twiddles,
-                third_twiddles,
-            );
-        }
-    }
-
-    #[inline]
-    fn stage_quad(
-        src: &[Complex32],
-        dst: &mut [Complex32],
-        radix: usize,
-        first_twiddles: &[Complex32],
-        second_twiddles: &[Complex32],
-        third_twiddles: &[Complex32],
-        fourth_twiddles: &[Complex32],
-    ) {
-        let groups = src.len() / (radix << 1);
-        if groups == 8 {
-            // SAFETY: this precision is selected only after AVX-512F was established on the host
-            // (`stockham/mod.rs`), and the group count with the stage loop's stride-aligned slices
-            // is the kernel's shape.
-            unsafe {
-                <crate::application::execution::kernel::components::stockham::avx::reduced::avx512_backend::Avx512BackendReduced
-                    as StockhamAvxBackend>::stockham_quad_groups_eight_low_live(
-                    src, dst, radix, first_twiddles, second_twiddles, third_twiddles, fourth_twiddles,
-                )
-            }
-        } else {
-            <ReducedStockhamAvxFma as StockhamPrecision>::stage_quad(
-                src,
-                dst,
-                radix,
-                first_twiddles,
-                second_twiddles,
-                third_twiddles,
-                fourth_twiddles,
-            )
         }
     }
 
