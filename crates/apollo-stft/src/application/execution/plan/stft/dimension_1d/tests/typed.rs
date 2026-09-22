@@ -1,9 +1,9 @@
 //! Typed storage paths and their reusable bridge workspaces.
 
-use super::super::{StftPlan, typed_workspace_capacities};
+use super::super::{typed_workspace_capacities, StftPlan};
 use crate::domain::contracts::error::StftError;
-use apollo_fft::{F16, PrecisionProfile};
-use eunomia::{Complex32, Complex64, assert_relative_eq};
+use apollo_fft::{PrecisionProfile, F16};
+use eunomia::{assert_relative_eq, Complex32, Complex64};
 use leto::Array1;
 
 #[test]
