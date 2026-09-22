@@ -7,8 +7,8 @@
 //! default body; storage scalars define only the two boundary conversions.
 //! Each storage scalar's impl lives in its own submodule for SRP isolation.
 
-use crate::application::execution::kernel::mixed_radix::MixedRadixScalar;
 use crate::application::execution::kernel::mixed_radix::scalar::plan_scratch::PlanScratch;
+use crate::application::execution::kernel::mixed_radix::MixedRadixScalar;
 use crate::application::execution::plan::fft::dimension_1d::FftPlan1D;
 use crate::application::execution::plan::fft::dimension_2d::{FftPlan2D, StaticFftPlan2D};
 use crate::application::execution::plan::fft::dimension_3d::{FftPlan3D, StaticFftPlan3D};

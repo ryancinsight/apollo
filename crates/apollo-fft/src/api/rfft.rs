@@ -2,7 +2,7 @@
 
 use crate::application::execution::kernel::mixed_radix::scalar::plan_scratch::PlanScratch;
 use crate::application::execution::plan::fft::real_storage::{
-    RealFftData, half_plane, half_volume,
+    half_plane, half_volume, RealFftData,
 };
 use crate::application::orchestration::cache::plans::PlanCacheProvider;
 use crate::domain::metadata::shape::{Shape1D, Shape2D, Shape3D};

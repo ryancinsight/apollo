@@ -1,7 +1,7 @@
 //! One-dimensional inverse real FFT operations.
 
 use crate::application::execution::kernel::mixed_radix::scalar::plan_scratch::{
-    PlanScratch, with_view_staging,
+    with_view_staging, PlanScratch,
 };
 use crate::application::execution::plan::fft::real_storage::RealFftData;
 use crate::application::orchestration::cache::plans::PlanCacheProvider;
