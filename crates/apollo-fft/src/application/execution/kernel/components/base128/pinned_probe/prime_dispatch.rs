@@ -3,7 +3,8 @@
 //!
 //! `ATLAS-APOLLO-F32-NONPOT-WIDTH` records `f32` at n = 101 slower than its
 //! own `f64` on the full transform path (672 vs 585 ns on this tree,
-//! `small_sizes_against_the_references_by_core_type`), while `rader_width`
+//! `mixed_radix_sizes_against_the_references_by_core_type`), while
+//! `rader_width`
 //! shows the isolated Rader entry in the opposite order (804 vs 872). Both
 //! instruments measure real quantities; their disagreement is the datum. The
 //! full path for a prime is `exec_rader_forward` -> `rader_fft`, and the

@@ -98,9 +98,13 @@ def run(test: str, runs: int, destination: Path, manifest_path: Path, cwd: Path,
     if runs < 1:
         raise ValueError("a campaign needs at least one run")
     destination.mkdir(parents=True, exist_ok=False)
-    command = ["cargo", "nextest", "run", "--manifest-path", str(manifest_path.resolve(strict=True)),
-               "-p", "apollo-fft", "--release", "--features", "kernel-strategy-bench",
-               "--run-ignored", "ignored-only", "--no-capture", "-E", f"test({test})"]
+    selection = ["--manifest-path", str(manifest_path.resolve(strict=True)),
+                 "-p", "apollo-fft", "--release", "--features", "kernel-strategy-bench",
+                 "--run-ignored", "ignored-only", "-E", f"test({test})"]
+    command = ["cargo", "nextest", "run", *selection, "--no-capture"]
+    # Same build and selection, no test executed: this is what moves nextest's
+    # own build out of the campaign clock below.
+    settle = ["cargo", "nextest", "list", *selection]
     environment = dict(os.environ)
     if target_dir is not None:
         environment["CARGO_TARGET_DIR"] = str(target_dir)
@@ -112,6 +116,15 @@ def run(test: str, runs: int, destination: Path, manifest_path: Path, cwd: Path,
                            errors="replace", cwd=cwd, env=environment, timeout=1800, check=False)
     (destination / "build.log").write_text(built.stderr, encoding="utf-8")
     built.check_returncode()
+    # nextest builds before it runs, and under a shared target directory that
+    # build blocks on the cargo file lock for as long as peers hold it. That
+    # wait is neither measurement nor bounded, so it is spent here, against the
+    # build timeout, rather than inside the campaign budget.
+    listed = subprocess.run(settle, capture_output=True, text=True, encoding="utf-8",
+                            errors="replace", cwd=cwd, env=environment, timeout=1800,
+                            check=False)
+    (destination / "settle.log").write_text(listed.stderr, encoding="utf-8")
+    listed.check_returncode()
     manifest = {
         "test": test,
         "runs": runs,

@@ -132,12 +132,14 @@ impl ProbeScalar for f32 {
     }
 }
 
+mod block_sizes;
 mod bluestein_tables;
 mod chain_phases;
 mod codelet_selection;
 mod composite_split_ab;
 mod lane_routes;
 mod large_sizes;
+mod mixed_radix_sizes;
 mod page_offset;
 mod prime_dispatch;
 mod rader_width;

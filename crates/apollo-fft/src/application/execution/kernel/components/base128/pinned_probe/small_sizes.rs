@@ -1,5 +1,14 @@
-//! The inner gate: the small-size transforms this construction is built
+//! The inner gate: the base-route transforms this construction is built
 //! from, measured against the reference implementations at both scalars.
+//!
+//! One shard of the reference sweep. The lengths are split by the routes
+//! they reach and the reasons they move, so a campaign re-measures the one
+//! it changed and every shard fits the runner's 300-second budget with room
+//! to replicate: the base routes here (8 to 1024), the column-first block
+//! routes in `block_sizes` (2048 to 32768), the composite and Rader routes
+//! in `mixed_radix_sizes`, and the lengths past the caches in
+//! `large_sizes`. All four share `sizes_for_scalar` and the budgets below,
+//! so their arms stay comparable across shards.
 
 use super::{phase_attribution, split_attribution, ProbeScalar};
 use crate::application::execution::kernel::measurement_cores;
@@ -11,22 +20,27 @@ use hermes_simd::{ProcessorBinding, ProcessorIndex};
 use rustfft::num_complex::Complex as RustComplex;
 use std::time::Duration;
 
-/// The per-case budget this sweep measures under, derived from its own size.
+/// The per-case budget every reference shard measures under, derived from
+/// the shards' size.
 ///
 /// `BenchmarkConfig::regression()` spends 100 ms of warm-up and 400 ms of
-/// measurement, which is the right budget for *one* case. This sweep runs
-/// about a hundred: nineteen lengths against apollo and RustFFT at both
-/// scalars, PhastFT at the eleven powers of two, plus the base-128 and
-/// half-storage cases; the lengths past the caches run in the large-sizes
-/// sweep beside it, where a reading is a median over replicated runs. The discarded warm-up pass repeats the set, and both core types run
-/// the whole thing, so half a second per case is 184 s against a committed
-/// nextest bound of 60 s — the sweep has been terminated rather than reported.
+/// measurement, which is the right budget for *one* case. A shard runs far
+/// more than one. Counting arms rather than lengths: apollo and RustFFT at
+/// every length, PhastFT at the powers of two, plus the two base-128 shapes
+/// and the base-256 arm — 27 cases per scalar here, doubled for the second
+/// scalar and again for the second core class, so this shard is 108, the
+/// block shard 60, the mixed-radix shard 48 and the large shard 48. The
+/// discarded warm-up pass repeats the set at half the budget, so the cost of
+/// a shard is `cases × 1.5 ×` the reported budget.
 ///
-/// A hundred milliseconds per case brings the reported pass to about 17 s. The
-/// estimator is unchanged at 100 samples; each one simply calibrates to fewer
-/// iterations, which at these lengths still leaves thousands per sample below
-/// N = 1024 and a handful at N = 32768. Sizing the instrument to a committed
-/// bound is instrument design; the alternative — raising the bound — would be
+/// At half a second per case that is 81 s for this shard alone, against a
+/// committed nextest bound of 60 s. At a hundred milliseconds it is 16 s,
+/// and the runner's five replicated processes cost 81 s of the 300-second
+/// campaign budget — which is what leaves room for the replication a reading
+/// past L1 requires. The estimator is unchanged at 100 samples; each one
+/// simply calibrates to fewer iterations, which at these lengths still
+/// leaves thousands per sample. Sizing the instrument to a committed bound
+/// is instrument design; the alternative — raising the bound — would be
 /// hiding a breach.
 pub(super) fn sweep_config() -> BenchmarkConfig {
     BenchmarkConfig::try_with_budgets(Duration::from_millis(20), Duration::from_millis(80))
@@ -47,10 +61,11 @@ pub(super) fn sweep_warm_up_config() -> BenchmarkConfig {
         .expect("invariant: both budgets above are non-zero")
 }
 
-const SMALL_SIZE_CASES: [usize; 19] = [
-    8, 16, 32, 64, 128, 256, 512, 1024, 2048, 4096, 8192, 16384, 32768, 100, 180, 384, 1000, 101,
-    1009,
-];
+/// The base routes: the register and L1-resident powers of two, up to the
+/// last length the 256 base covers without a column pass. 2048 upward runs
+/// in `block_sizes`, and the non-power-of-two lengths in
+/// `mixed_radix_sizes`.
+const SMALL_SIZE_CASES: [usize; 8] = [8, 16, 32, 64, 128, 256, 512, 1024];
 const LIVENESS_CASES: [usize; 3] = [16, 32, 64];
 
 /// `n` copies of `fill` in a buffer whose returned range starts on a
@@ -285,31 +300,6 @@ fn small_sizes_against_the_references_by_core_type() {
             println!(
                 "B128 phases: load_and_rows={} retired={} columns_and_sink={}",
                 phases[0], phases[1], phases[2]
-            );
-        }
-        {
-            let n = 2048usize;
-            let src: Vec<Complex64> = (0..n)
-                .map(|i| {
-                    let x = i as f64;
-                    Complex64::new((0.017 * x).sin(), 0.25 * (0.031 * x).cos())
-                })
-                .collect();
-            let mut work = src.clone();
-            let state = super::instance_major::State512::<f64>::new_if_supported(n)
-                .expect("the pinned host must provide a native base capability");
-            let split = split_attribution(&src, &mut work, |work| {
-                super::transform_via_base_512::<f64, false, true>(work, &state)
-            });
-            println!(
-                "B512 split n={n}: gather={} blocks={} levels={} total={} | per block ({}): load_and_rows={} columns_and_sink={}",
-                split.gather,
-                split.blocks,
-                split.levels,
-                split.gather + split.blocks + split.levels,
-                split.blocks_per_call,
-                split.rows,
-                split.columns
             );
         }
         {
