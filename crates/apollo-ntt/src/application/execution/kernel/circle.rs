@@ -45,6 +45,8 @@
 use crate::domain::contracts::circle::{inverse, two_adic_generator, two_adicity, CirclePoint};
 use crate::domain::contracts::error::NttError;
 use crate::domain::contracts::math::{bit_reverse_permute, mod_add, mod_mul, mod_sub};
+use std::collections::hash_map::Entry;
+use std::collections::HashMap;
 
 /// A twin-coset domain of size `2^n` with the twiddles of both directions.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -102,11 +104,16 @@ impl CircleDomain {
         }
         let x_values: Vec<u64> = representatives.iter().map(|point| point.x).collect();
         let ordered = order_for_splitting(&x_values, modulus);
+        // Lookup table, not a search: `ordered` holds every representative `x`
+        // exactly once (the distinctness test below pins this), so indexing
+        // replaces the former linear scan per entry.
+        let y_by_x: HashMap<u64, u64> = representatives
+            .iter()
+            .map(|point| (point.x, point.y))
+            .collect();
         let y_of = |x: u64| {
-            representatives
-                .iter()
-                .find(|point| point.x == x)
-                .map(|point| point.y)
+            *y_by_x
+                .get(&x)
                 .expect("invariant: every ordered x is a representative's x")
         };
         let mut points: Vec<CirclePoint> = ordered
@@ -262,22 +269,24 @@ fn order_for_splitting(values: &[u64], modulus: u64) -> Vec<u64> {
     if values.len() <= 1 {
         return values.to_vec();
     }
-    // One representative per `{x, −x}` pair, keyed by `π(x)`.
-    let mut representatives: Vec<(u64, u64)> = Vec::with_capacity(values.len() / 2);
+    // One representative per `{x, −x}` pair, keyed by `π(x)`. The map keeps
+    // first-seen order in `images` alongside it: `HashMap` iteration order is
+    // unspecified, and the recursion below must see images in input order so
+    // the domain layout is bit-identical to the former linear scan.
+    let mut representative_of: HashMap<u64, u64> = HashMap::with_capacity(values.len() / 2);
+    let mut images: Vec<u64> = Vec::with_capacity(values.len() / 2);
     for &x in values {
         let image = square_x(x, modulus);
-        if !representatives.iter().any(|&(key, _)| key == image) {
-            representatives.push((image, x));
+        if let Entry::Vacant(slot) = representative_of.entry(image) {
+            slot.insert(x);
+            images.push(image);
         }
     }
-    debug_assert_eq!(representatives.len(), values.len() / 2);
-    let images: Vec<u64> = representatives.iter().map(|&(image, _)| image).collect();
+    debug_assert_eq!(representative_of.len(), values.len() / 2);
     let ordered_images = order_for_splitting(&images, modulus);
     let preimage_of = |image: u64| {
-        representatives
-            .iter()
-            .find(|&&(key, _)| key == image)
-            .map(|&(_, x)| x)
+        *representative_of
+            .get(&image)
             .expect("invariant: every ordered image came from a representative")
     };
     let firsts: Vec<u64> = ordered_images

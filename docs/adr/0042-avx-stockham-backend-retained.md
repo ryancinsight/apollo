@@ -4,6 +4,13 @@
 - Item: `ATLAS-APOLLO-AVX-STOCKHAM-AUDIT-2026-08-25` (reopened 2026-09-01)
 - Driving evidence: `backend_matrix` pinned probe, re-run 2026-09-01 on
   queried-class processors
+- **Revision 2026-09-21 (structural, behavior-preserving):** the two
+  hand-written AVX-512 markers (`PreciseStockhamAvx512`,
+  `ReducedStockhamAvx512`) are replaced by one generic dispatch
+  (`StockhamAvx512<B: StockhamWideBackend>`, `ATLAS-APOLLO-STOCKHAM-POLICY-050C`),
+  and the `unreachable!` backend defaults by the `StockhamPairGroups`
+  split trait. No route, threshold, or kernel changes; the arms below stay
+   unmeasurable on this host for the same reason.
 - **Revision 2026-09-01: the finding this record was built on was inverted.**
   The original table's `P` column was measured on an efficiency core and its
   `E` column on a performance core, because the probe pinned to cpu 2 and
@@ -155,9 +162,10 @@ Three conclusions:
   four-step inner rows (256-rows at N = 65536, 512-rows at N = 262144) and
   2-D/3-D lane transforms, which the `rustfft_comparison` default sweep
   (sizes ≤ 512, and standalone 256 routes four-step) cannot witness.
-- The AVX-512 arms (`PreciseStockhamAvx512`) are unmeasurable on this host
-  (Arrow Lake has no AVX-512) and are untouched; their evidence remains gated
-  on real silicon (hermes HS-429 class).
+- The AVX-512 arms (`StockhamAvx512` over the precise/reduced wide backends,
+  one generic dispatch since the 050C consolidation) are unmeasurable on this
+  host (Arrow Lake has no AVX-512) and are restructured-but-unrerouted here;
+  their evidence remains gated on real silicon (hermes HS-429 class).
 - The scalar route at 256/512 autovectorizes at the build's baseline ISA
   (SSE2 here); a build with `-C target-feature=+avx2` would change both arms
   and the crossover should be re-measured there.

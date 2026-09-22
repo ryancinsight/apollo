@@ -188,18 +188,18 @@ impl StockhamKernel for f64 {
         #[cfg(all(target_arch = "x86_64", target_feature = "avx512f"))]
         {
             let log2 = data.len().trailing_zeros();
-            transform_sized::<precision::PreciseStockhamAvx512>(
-                data, scratch, twiddles, None, log2,
-            );
+            transform_sized::<
+                precision::StockhamAvx512<avx::precise::avx512_backend::Avx512BackendPrecise>,
+            >(data, scratch, twiddles, None, log2);
             return;
         }
         #[cfg(all(target_arch = "x86_64", not(target_feature = "avx512f")))]
         {
             if std::arch::is_x86_feature_detected!("avx512f") {
                 let log2 = data.len().trailing_zeros();
-                transform_sized::<precision::PreciseStockhamAvx512>(
-                    data, scratch, twiddles, None, log2,
-                );
+                transform_sized::<
+                    precision::StockhamAvx512<avx::precise::avx512_backend::Avx512BackendPrecise>,
+                >(data, scratch, twiddles, None, log2);
                 return;
             }
             #[cfg(all(target_feature = "avx", target_feature = "fma"))]
@@ -296,17 +296,17 @@ impl StockhamKernel for f64 {
         }
         #[cfg(all(target_arch = "x86_64", target_feature = "avx512f"))]
         {
-            transform_sized::<precision::PreciseStockhamAvx512>(
-                data, scratch, twiddles, None, LOG2,
-            );
+            transform_sized::<
+                precision::StockhamAvx512<avx::precise::avx512_backend::Avx512BackendPrecise>,
+            >(data, scratch, twiddles, None, LOG2);
             return;
         }
         #[cfg(all(target_arch = "x86_64", not(target_feature = "avx512f")))]
         {
             if std::arch::is_x86_feature_detected!("avx512f") {
-                transform_sized::<precision::PreciseStockhamAvx512>(
-                    data, scratch, twiddles, None, LOG2,
-                );
+                transform_sized::<
+                    precision::StockhamAvx512<avx::precise::avx512_backend::Avx512BackendPrecise>,
+                >(data, scratch, twiddles, None, LOG2);
                 return;
             }
             #[cfg(all(target_feature = "avx", target_feature = "fma"))]
@@ -400,18 +400,18 @@ impl StockhamKernel for f32 {
         #[cfg(all(target_arch = "x86_64", target_feature = "avx512f"))]
         {
             let log2 = data.len().trailing_zeros();
-            transform_sized::<precision::ReducedStockhamAvx512>(
-                data, scratch, twiddles, None, log2,
-            );
+            transform_sized::<
+                precision::StockhamAvx512<avx::reduced::avx512_backend::Avx512BackendReduced>,
+            >(data, scratch, twiddles, None, log2);
             return;
         }
         #[cfg(all(target_arch = "x86_64", not(target_feature = "avx512f")))]
         {
             if std::arch::is_x86_feature_detected!("avx512f") {
                 let log2 = data.len().trailing_zeros();
-                transform_sized::<precision::ReducedStockhamAvx512>(
-                    data, scratch, twiddles, None, log2,
-                );
+                transform_sized::<
+                    precision::StockhamAvx512<avx::reduced::avx512_backend::Avx512BackendReduced>,
+                >(data, scratch, twiddles, None, log2);
                 return;
             }
             #[cfg(all(target_feature = "avx", target_feature = "fma"))]
@@ -504,17 +504,17 @@ impl StockhamKernel for f32 {
         }
         #[cfg(all(target_arch = "x86_64", target_feature = "avx512f"))]
         {
-            transform_sized::<precision::ReducedStockhamAvx512>(
-                data, scratch, twiddles, None, LOG2,
-            );
+            transform_sized::<
+                precision::StockhamAvx512<avx::reduced::avx512_backend::Avx512BackendReduced>,
+            >(data, scratch, twiddles, None, LOG2);
             return;
         }
         #[cfg(all(target_arch = "x86_64", not(target_feature = "avx512f")))]
         {
             if std::arch::is_x86_feature_detected!("avx512f") {
-                transform_sized::<precision::ReducedStockhamAvx512>(
-                    data, scratch, twiddles, None, LOG2,
-                );
+                transform_sized::<
+                    precision::StockhamAvx512<avx::reduced::avx512_backend::Avx512BackendReduced>,
+                >(data, scratch, twiddles, None, LOG2);
                 return;
             }
             #[cfg(all(target_feature = "avx", target_feature = "fma"))]

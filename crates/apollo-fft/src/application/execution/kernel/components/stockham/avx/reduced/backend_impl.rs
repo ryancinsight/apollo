@@ -26,31 +26,6 @@ impl StockhamAvxBackend for f32 {
     }
 
     #[inline]
-    unsafe fn stockham_quad_groups_eight(
-        src: &[Complex32],
-        dst: &mut [Complex32],
-        radix: usize,
-        first_twiddles: &[Complex32],
-        second_twiddles: &[Complex32],
-        third_twiddles: &[Complex32],
-        fourth_twiddles: &[Complex32],
-    ) {
-        // SAFETY: forwarded under the trait's contract, which is also the callee's
-        // (`#[target_feature(enable = "avx,fma")]`), with the slices the stage loop sized.
-        unsafe {
-            super::quad::stockham_quad_groups_eight_reduced(
-                src,
-                dst,
-                radix,
-                first_twiddles,
-                second_twiddles,
-                third_twiddles,
-                fourth_twiddles,
-            )
-        }
-    }
-
-    #[inline]
     unsafe fn stockham_quad_groups_eight_low_live(
         src: &[Complex32],
         dst: &mut [Complex32],

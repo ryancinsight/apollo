@@ -7,13 +7,14 @@ mod leto_reference;
 mod typed;
 
 use super::{
-    HERMES_WINDOW_FRAME_THRESHOLD, StftPlan, inverse_real_lane_workspace_capacity,
-    inverse_wola_workspace_capacities, window_complex_real_frame_into, window_signal_frame_into,
+    inverse_real_lane_workspace_capacity, inverse_wola_workspace_capacities,
+    window_complex_real_frame_into, window_signal_frame_into, StftPlan,
+    HERMES_WINDOW_FRAME_THRESHOLD,
 };
 use crate::application::execution::kernel::window::Window;
 use crate::domain::contracts::error::StftError;
-use eunomia::Complex64;
 use eunomia::assert_relative_eq;
+use eunomia::Complex64;
 use leto::Array1;
 use proptest::prelude::*;
 
