@@ -1,8 +1,11 @@
 //! Sparse Fourier transform tests.
 
-#![expect(
-    clippy::unwrap_used,
-    reason = "ratchet APOLLO-UNWRAP-1: pre-existing debt"
+#![cfg_attr(
+    test,
+    expect(
+        clippy::unwrap_used,
+        reason = "ratchet APOLLO-UNWRAP-1: pre-existing debt"
+    )
 )]
 
 use crate::{SparseFftPlan, SparseSpectrum};
