@@ -1,12 +1,13 @@
 # Apollo Backlog
 
 <a id="apollo-dht-verification-split"></a>
-## APOLLO-DHT-VERIFICATION-SPLIT — Restore the DHT source-size ratchet [patch] — in-progress
+## APOLLO-DHT-VERIFICATION-SPLIT — Restore the DHT source-size ratchet [patch] — review
 - **Integrator:** Codex `/root/apollo_verification_split`; branch `refactor/apollo-dht-verification-split`.
 - **Scope:** `crates/apollo-dht/src/verification/` and this item only; public APIs, formulas, fixtures, and assertions remain unchanged.
 - **Outcome:** keep the verification module root as a manifest and partition its tests by one-dimensional laws and multidimensional behavior.
 - **Acceptance:** the Atlas conformance scan restores `oversized_files` to 37; focused warning-denied Clippy, configured Nextest, format, and the Apollo local gate pass.
 - **Evidence:** `origin/main` at `90527901d370b54da84e0d09c1aa4c46401ce403` increased `crates/apollo-dht/src/verification/mod.rs` to 506 lines when the test lint floor was restored.
+- **Verification:** the moved bodies compare exactly after de-indentation; Nextest passes 30/30; strict all-target Clippy, doctests, warning-denied Rustdoc, format, and the Atlas origin-baseline conformance gate pass with `oversized_files = 37` and zero regressions.
 
 <a id="apollo-unwrap-1"></a>
 ## APOLLO-UNWRAP-1 — Burn down the per-file `unwrap_used` ratchet [patch] — todo
