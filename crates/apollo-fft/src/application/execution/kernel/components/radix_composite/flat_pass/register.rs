@@ -148,7 +148,7 @@ pub(in super::super) unsafe fn store_arms<T, A, const R: usize>(
             && at + R * per + scatter_spill::<T, A, R>() <= dst.len()
     );
     if R == 2 {
-        let (first, second) = b[0].interleave_pairs(b[1]);
+        let [first, second] = Vector::interleave_pairs([b[0], b[1]]);
         // SAFETY: the caller's contract; two registers cover `2 * per` complexes.
         unsafe {
             store(first, dst, at);
@@ -157,7 +157,7 @@ pub(in super::super) unsafe fn store_arms<T, A, const R: usize>(
         return;
     }
     if R == 3 {
-        let (first, second, third) = b[0].interleave_pairs3(b[1], b[2]);
+        let [first, second, third] = Vector::interleave_pairs([b[0], b[1], b[2]]);
         // SAFETY: the caller's contract; three registers cover `3 * per`
         // complexes with no run-over.
         unsafe {
@@ -183,18 +183,20 @@ pub(in super::super) unsafe fn store_arms<T, A, const R: usize>(
                 // one group.
                 1 => store(b[base], dst, at + base),
                 4 => {
-                    let (c0, c1, c2, c3) = arm_or_zero(b, base).deinterleave_pairs4(
+                    let [c0, c1, c2, c3] = Vector::deinterleave_pairs([
+                        arm_or_zero(b, base),
                         arm_or_zero(b, base + 1),
                         arm_or_zero(b, base + 2),
                         arm_or_zero(b, base + 3),
-                    );
+                    ]);
                     store(c0, dst, at + base);
                     store(c1, dst, at + R + base);
                     store(c2, dst, at + 2 * R + base);
                     store(c3, dst, at + 3 * R + base);
                 }
                 8 => {
-                    let columns = arm_or_zero(b, base).deinterleave_pairs8(
+                    let columns = Vector::deinterleave_pairs([
+                        arm_or_zero(b, base),
                         arm_or_zero(b, base + 1),
                         arm_or_zero(b, base + 2),
                         arm_or_zero(b, base + 3),
@@ -202,7 +204,7 @@ pub(in super::super) unsafe fn store_arms<T, A, const R: usize>(
                         arm_or_zero(b, base + 5),
                         arm_or_zero(b, base + 6),
                         arm_or_zero(b, base + 7),
-                    );
+                    ]);
                     for (i, column) in columns.into_iter().enumerate() {
                         store(column, dst, at + i * R + base);
                     }

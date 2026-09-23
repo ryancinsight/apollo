@@ -296,12 +296,12 @@ where
             let mut dst_view = simd.view_mut(eunomia::layout::cast_slice_mut::<Complex<T>, T>(dst));
             for j in (0..vector_end).step_by(per_register) {
                 let base = (4 * j) / per_register;
-                let (x0, x1, x2, x3) = Vector::from_view_chunk(&src_view, base)
-                    .deinterleave_pairs4(
-                        Vector::from_view_chunk(&src_view, base + 1),
-                        Vector::from_view_chunk(&src_view, base + 2),
-                        Vector::from_view_chunk(&src_view, base + 3),
-                    );
+                let [x0, x1, x2, x3] = Vector::deinterleave_pairs([
+                    Vector::from_view_chunk(&src_view, base),
+                    Vector::from_view_chunk(&src_view, base + 1),
+                    Vector::from_view_chunk(&src_view, base + 2),
+                    Vector::from_view_chunk(&src_view, base + 3),
+                ]);
                 let chunk = j / per_register;
                 let w1 = ComplexReg::from_interleaved(Vector::from_view_chunk(&first_view, chunk));
                 let w2 = ComplexReg::from_interleaved(Vector::from_view_chunk(&second_view, chunk));

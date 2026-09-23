@@ -295,13 +295,11 @@ fn four_by_nine<F, A, const INVERSE: bool>(
     // The 9x4 tile to 4x9: column 0 is lane 0 of the first group's four
     // registers, two pair decimations; the other columns are two square
     // transposes.
-    let (even01, _) = first[0]
-        .into_interleaved()
-        .deinterleave_pairs(first[1].into_interleaved());
-    let (even23, _) = first[2]
-        .into_interleaved()
-        .deinterleave_pairs(first[3].into_interleaved());
-    let (column0, _) = even01.deinterleave_pairs(even23);
+    let [even01, _] =
+        Vector::deinterleave_pairs([first[0].into_interleaved(), first[1].into_interleaved()]);
+    let [even23, _] =
+        Vector::deinterleave_pairs([first[2].into_interleaved(), first[3].into_interleaved()]);
+    let [column0, _] = Vector::deinterleave_pairs([even01, even23]);
     ComplexReg::transpose_square(&mut middle);
     ComplexReg::transpose_square(&mut last);
     let columns = [

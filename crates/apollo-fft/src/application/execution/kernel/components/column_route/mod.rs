@@ -215,14 +215,13 @@ where
         let scale = simd.splat(F::from_precise(1.0 / 180.0));
         for chunk in 0..chunks {
             let j = complexes * chunk;
-            let packed = load(simd, &spectra[j..j + complexes])
-                .into_interleaved()
-                .interleave_pairs5(
-                    load(simd, &spectra[36 + j..36 + j + complexes]).into_interleaved(),
-                    load(simd, &spectra[72 + j..72 + j + complexes]).into_interleaved(),
-                    load(simd, &spectra[108 + j..108 + j + complexes]).into_interleaved(),
-                    load(simd, &spectra[144 + j..144 + j + complexes]).into_interleaved(),
-                );
+            let packed = Vector::interleave_pairs([
+                load(simd, &spectra[j..j + complexes]).into_interleaved(),
+                load(simd, &spectra[36 + j..36 + j + complexes]).into_interleaved(),
+                load(simd, &spectra[72 + j..72 + j + complexes]).into_interleaved(),
+                load(simd, &spectra[108 + j..108 + j + complexes]).into_interleaved(),
+                load(simd, &spectra[144 + j..144 + j + complexes]).into_interleaved(),
+            ]);
             let base = 5 * j;
             for (index, register) in packed.into_iter().enumerate() {
                 let value = if INVERSE && NORMALIZE {
