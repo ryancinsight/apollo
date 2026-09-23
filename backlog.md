@@ -15,6 +15,7 @@
 - **Baseline (2026-09-23, delivered with the deny floor that restored `unwrap_used = "deny"`):** 59 files pinned, 44 under `src/` (most pins are `cfg_attr(test, ...)` on inline test modules) and 15 under `tests/`/`benches/`/`examples/`; 390 `.unwrap()` occurrences in the pinned `src/` files.
 - **Acceptance:** `git grep -c 'ratchet APOLLO-UNWRAP-1'` decreases with every increment and reaches 0; `cargo clippy --workspace --all-targets --all-features --locked -- -D warnings` stays green.
 - **Increments:** one crate per PR, production (`src/`, non-test) pins first.
+- **Progress (2026-09-23, apollo-nufft):** `git grep -c` total 58. `apollo-nufft`'s one production site (`application/execution/transform/dimension_1d.rs`, `Array1::as_slice()` on a caller-supplied array whose contiguity the type does not guarantee) now routes through `apollo_leto_interop::view_cow`, the same copy-on-demand idiom `type2_leto` already uses; the file's pin narrows to `cfg_attr(test, ...)` for its remaining test-module unwraps.
 
 <a id="apollo-raster-pointer-conformance"></a>
 ## APOLLO-RASTER-POINTER-CONFORMANCE — Restore the Atlas source-size ratchet [patch] — review
