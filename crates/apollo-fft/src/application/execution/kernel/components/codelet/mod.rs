@@ -71,7 +71,9 @@
 
 use crate::application::execution::kernel::mixed_radix::MixedRadixScalar;
 use eunomia::Complex;
-use hermes_simd::{ComplexReg, LaneKernel, LaneScalar, Simd, SimdArch, SimdKernel, SimdStorage};
+use hermes_simd::{
+    ComplexReg, LaneKernel, LaneScalar, Simd, SimdArch, SimdKernel, SimdStorage, Vector,
+};
 
 /// `cos(pi/8)`, exactly rounded.
 const COS_PI_8: f64 = 0.923_879_532_511_286_7;
@@ -147,9 +149,10 @@ where
         }
         let mut r = [ComplexReg::<T, A>::zero(); 8];
         for (position, low) in REGISTER_PAIR_ORDER.into_iter().enumerate() {
-            let (even, odd) = natural[low]
-                .into_interleaved()
-                .deinterleave_pairs(natural[low + 4].into_interleaved());
+            let [even, odd] = Vector::deinterleave_pairs([
+                natural[low].into_interleaved(),
+                natural[low + 4].into_interleaved(),
+            ]);
             r[position] = ComplexReg::from_interleaved(even);
             r[position + 4] = ComplexReg::from_interleaved(odd);
         }

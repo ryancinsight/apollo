@@ -99,9 +99,7 @@ fn transpose_pair<A>(
 where
     A: SimdArch + SimdKernel<f64>,
 {
-    let (even, odd) = a
-        .into_interleaved()
-        .deinterleave_pairs(b.into_interleaved());
+    let [even, odd] = Vector::deinterleave_pairs([a.into_interleaved(), b.into_interleaved()]);
     (
         ComplexReg::from_interleaved(even),
         ComplexReg::from_interleaved(odd),

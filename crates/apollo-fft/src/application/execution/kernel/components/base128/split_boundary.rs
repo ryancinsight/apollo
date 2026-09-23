@@ -115,11 +115,12 @@ impl<T: LaneScalar + MixedRadixScalar, const BLOCKS: usize, const BLOCK_LANES: u
         // the bit-reversed block order [0, 2, 1, 3].
         let cpb = BLOCK_LANES / lanes;
         for k in 0..cpb {
-            let (b0, b1, b2, b3) = chunk::<T, A>(self.src, 4 * k).deinterleave_pairs4(
+            let [b0, b1, b2, b3] = Vector::<T, A>::deinterleave_pairs([
+                chunk(self.src, 4 * k),
                 chunk(self.src, 4 * k + 1),
                 chunk(self.src, 4 * k + 2),
                 chunk(self.src, 4 * k + 3),
-            );
+            ]);
             put_chunk(b0, self.dst, k);
             put_chunk(b2, self.dst, cpb + k);
             put_chunk(b1, self.dst, 2 * cpb + k);
@@ -414,7 +415,7 @@ impl<T: LaneScalar + MixedRadixScalar, const BLOCKS: usize> LaneKernel<T>
                 let r0 = chunk::<T, A>(self.src, k);
                 let r1 = chunk::<T, A>(self.src, cpb + k);
                 let r2 = chunk::<T, A>(self.src, 2 * cpb + k);
-                let (o0, o1, o2) = r0.interleave_pairs3(r1, r2);
+                let [o0, o1, o2] = Vector::interleave_pairs([r0, r1, r2]);
                 put_chunk(o0, self.dst, 3 * k);
                 put_chunk(o1, self.dst, 3 * k + 1);
                 put_chunk(o2, self.dst, 3 * k + 2);
@@ -427,15 +428,15 @@ impl<T: LaneScalar + MixedRadixScalar, const BLOCKS: usize> LaneKernel<T>
                 let r1 = chunk::<T, A>(self.src, cpb + k);
                 let r2 = chunk::<T, A>(self.src, 2 * cpb + k);
                 let r3 = chunk::<T, A>(self.src, 3 * cpb + k);
-                let (o0, o1, o2, o3) = if lanes == 8 {
+                let [o0, o1, o2, o3] = if lanes == 8 {
                     // The four registers are one 4-by-4 complex tile.
-                    r0.deinterleave_pairs4(r1, r2, r3)
+                    Vector::deinterleave_pairs([r0, r1, r2, r3])
                 } else {
                     // Output register `4 k + 2 s + p` holds blocks `2 p` and
                     // `2 p + 1` at sample `2 k + s`.
-                    let (o0, o2) = r0.interleave_pairs(r1);
-                    let (o1, o3) = r2.interleave_pairs(r3);
-                    (o0, o1, o2, o3)
+                    let [o0, o2] = Vector::interleave_pairs([r0, r1]);
+                    let [o1, o3] = Vector::interleave_pairs([r2, r3]);
+                    [o0, o1, o2, o3]
                 };
                 put_chunk(o0, self.dst, 4 * k);
                 put_chunk(o1, self.dst, 4 * k + 1);
@@ -456,8 +457,8 @@ impl<T: LaneScalar + MixedRadixScalar, const BLOCKS: usize> LaneKernel<T>
             if lanes == 8 {
                 // Each four-register tile is a 4-by-4 complex transpose.
                 // The fused primitive avoids repeating cross-half shuffles.
-                let (o0, o2, o4, o6) = r0.deinterleave_pairs4(r1, r2, r3);
-                let (o1, o3, o5, o7) = r4.deinterleave_pairs4(r5, r6, r7);
+                let [o0, o2, o4, o6] = Vector::deinterleave_pairs([r0, r1, r2, r3]);
+                let [o1, o3, o5, o7] = Vector::deinterleave_pairs([r4, r5, r6, r7]);
                 put_chunk(o0, self.dst, 8 * k);
                 put_chunk(o1, self.dst, 8 * k + 1);
                 put_chunk(o2, self.dst, 8 * k + 2);
@@ -469,10 +470,10 @@ impl<T: LaneScalar + MixedRadixScalar, const BLOCKS: usize> LaneKernel<T>
             } else {
                 // Output register `8 k + 4 s + p` holds blocks `2 p` and `2 p + 1`
                 // at sample `2 k + s`, where `s` is zero or one.
-                let (o0, o4) = r0.interleave_pairs(r1);
-                let (o1, o5) = r2.interleave_pairs(r3);
-                let (o2, o6) = r4.interleave_pairs(r5);
-                let (o3, o7) = r6.interleave_pairs(r7);
+                let [o0, o4] = Vector::interleave_pairs([r0, r1]);
+                let [o1, o5] = Vector::interleave_pairs([r2, r3]);
+                let [o2, o6] = Vector::interleave_pairs([r4, r5]);
+                let [o3, o7] = Vector::interleave_pairs([r6, r7]);
                 put_chunk(o0, self.dst, 8 * k);
                 put_chunk(o1, self.dst, 8 * k + 1);
                 put_chunk(o2, self.dst, 8 * k + 2);

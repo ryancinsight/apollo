@@ -52,7 +52,7 @@ where
                 // power of two once the loop runs.
                 let lower = Vector::from_view_chunk(&src_view, (2 * j) / per_register);
                 let upper = Vector::from_view_chunk(&src_view, (2 * j) / per_register + 1);
-                let (evens, odds) = lower.deinterleave_pairs(upper);
+                let [evens, odds] = Vector::deinterleave_pairs([lower, upper]);
                 let w = ComplexReg::from_interleaved(Vector::from_view_chunk(
                     &twiddle_view,
                     j / per_register,

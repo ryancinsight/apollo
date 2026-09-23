@@ -25,24 +25,6 @@ struct TripleStageQuarterGroupsOne<'a, T> {
     third_twiddles: &'a [Complex<T>],
 }
 
-/// Splits eight registers of consecutive samples into the eight stride-8
-/// subsequences: a 4-way split of each half, then a 2-way split across the
-/// halves, so output `i` holds the samples congruent to `i` modulo 8.
-#[inline]
-fn deinterleave_pairs8<T, A>(v: [Vector<T, A>; 8]) -> [Vector<T, A>; 8]
-where
-    T: LaneScalar,
-    A: SimdArch + SimdKernel<T>,
-{
-    let (a0, a1, a2, a3) = v[0].deinterleave_pairs4(v[1], v[2], v[3]);
-    let (b0, b1, b2, b3) = v[4].deinterleave_pairs4(v[5], v[6], v[7]);
-    let (x0, x4) = a0.deinterleave_pairs(b0);
-    let (x1, x5) = a1.deinterleave_pairs(b1);
-    let (x2, x6) = a2.deinterleave_pairs(b2);
-    let (x3, x7) = a3.deinterleave_pairs(b3);
-    [x0, x1, x2, x3, x4, x5, x6, x7]
-}
-
 impl<T> LaneKernel<T> for TripleStageQuarterGroupsOne<'_, T>
 where
     T: LaneScalar + eunomia::layout::Pod,
@@ -87,7 +69,7 @@ where
             let mut dst_view = simd.view_mut(eunomia::layout::cast_slice_mut::<Complex<T>, T>(dst));
             for j in (0..vector_end).step_by(per_register) {
                 let base = (8 * j) / per_register;
-                let x = deinterleave_pairs8(core::array::from_fn(|i| {
+                let x: [_; 8] = Vector::deinterleave_pairs(core::array::from_fn(|i| {
                     Vector::from_view_chunk(&src_view, base + i)
                 }))
                 .map(ComplexReg::from_interleaved);

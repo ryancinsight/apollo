@@ -197,7 +197,7 @@ where
         let (y0, y1) =
             window(simd, parent, start + 6).interleave_halves(window(simd, parent, start + 9));
         let (x, y) = if col / 2 == 0 { (x0, y0) } else { (x1, y1) };
-        let (even, odd) = x.deinterleave_pairs(y);
+        let [even, odd] = Vector::deinterleave_pairs([x, y]);
         if col % 2 == 0 {
             even
         } else {
@@ -227,7 +227,7 @@ where
         let (y0, y1) =
             window(simd, parent, base + 8).interleave_halves(window(simd, parent, base + 12));
         let (x, y) = if OFFSET / 2 == 0 { (x0, y0) } else { (x1, y1) };
-        let (even, odd) = x.deinterleave_pairs(y);
+        let [even, odd] = Vector::deinterleave_pairs([x, y]);
         if OFFSET % 2 == 0 {
             even
         } else {

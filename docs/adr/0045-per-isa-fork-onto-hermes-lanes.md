@@ -288,8 +288,8 @@ where every Stockham digit owns one `k`, so its inputs are adjacent and its
 outputs strided — became `PairStageGroupsTwo` and
 `TripleStageQuarterGroupsOne`: a register of consecutive digits reads its
 inputs as four (eight) consecutive registers and splits them with
-`deinterleave_pairs4` (twice, then `deinterleave_pairs`) into the
-stride-4 (stride-8) subsequences; twiddles and outputs are contiguous. The
+hermes' stride-4 (stride-8) pair decimation, `deinterleave_pairs` over
+four (eight) registers; twiddles and outputs are contiguous. The
 AVX2 specialisations and their impls were deleted; the AVX-512 pair impl
 stays for the `groups == 4/8` arms it serves. Ratchet: 162 → 154.
 
