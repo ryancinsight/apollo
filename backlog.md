@@ -1,5 +1,13 @@
 # Apollo Backlog
 
+<a id="apollo-dht-verification-split"></a>
+## APOLLO-DHT-VERIFICATION-SPLIT — Restore the DHT source-size ratchet [patch] — in-progress
+- **Integrator:** Codex `/root/apollo_verification_split`; branch `refactor/apollo-dht-verification-split`.
+- **Scope:** `crates/apollo-dht/src/verification/` and this item only; public APIs, formulas, fixtures, and assertions remain unchanged.
+- **Outcome:** keep the verification module root as a manifest and partition its tests by one-dimensional laws and multidimensional behavior.
+- **Acceptance:** the Atlas conformance scan restores `oversized_files` to 37; focused warning-denied Clippy, configured Nextest, format, and the Apollo local gate pass.
+- **Evidence:** `origin/main` at `90527901d370b54da84e0d09c1aa4c46401ce403` increased `crates/apollo-dht/src/verification/mod.rs` to 506 lines when the test lint floor was restored.
+
 <a id="apollo-unwrap-1"></a>
 ## APOLLO-UNWRAP-1 — Burn down the per-file `unwrap_used` ratchet [patch] — todo
 - **Outcome:** no file carries `#![expect(clippy::unwrap_used, reason = "ratchet APOLLO-UNWRAP-1")]`; input-dependent absence is propagated with `?`/`ok_or_else`, proven invariants use `expect("invariant: ...")`, and test code keeps a scoped test-only expectation.
