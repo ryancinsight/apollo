@@ -99,7 +99,7 @@ jobs:
     needs: scope
     if: ${{ !cancelled() && (github.event_name != 'pull_request' || !github.event.pull_request.draft) && needs.scope.outputs.code != 'false' }}
     name: SemVer gate
-    uses: ryancinsight/atlas/.github/workflows/semver-gate.yml@806949a176cc139efe7c514d7e42c9b9a9447f45
+    uses: ryancinsight/atlas/.github/workflows/semver-gate.yml@b44c45c3875c9c03ac9fc83994ee068c1805bb49
     with:
       package: apollo-czt,apollo-dctdst,apollo-dht,apollo-fft,apollo-fft-macros,apollo-frft,apollo-fwht,apollo-gft,apollo-hilbert,apollo-leto-interop,apollo-mellin,apollo-ntt,apollo-nufft,apollo-qft,apollo-radon,apollo-sdft,apollo-sft,apollo-sht,apollo-stft,apollo-validation,apollo-wavelet
       rust-toolchain: 1.97.0
