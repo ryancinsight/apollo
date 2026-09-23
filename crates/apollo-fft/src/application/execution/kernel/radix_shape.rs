@@ -18,9 +18,12 @@
 //! - Cooley, J.W. & Tukey, J.W. (1965). *Math. Comp.* 19, 297-301.
 //! - Van Loan, C. (1992). *Computational Frameworks for the FFT*. SIAM, §3.4.
 
-#![expect(
-    clippy::unwrap_used,
-    reason = "ratchet APOLLO-UNWRAP-1: pre-existing debt"
+#![cfg_attr(
+    test,
+    expect(
+        clippy::unwrap_used,
+        reason = "ratchet APOLLO-UNWRAP-1: pre-existing debt"
+    )
 )]
 
 include!(concat!(
@@ -224,7 +227,9 @@ pub(crate) fn coprime_factors(n: usize) -> Option<(usize, usize)> {
         return None;
     }
 
-    let n1 = prime_powers.pop().unwrap();
+    let n1 = prime_powers
+        .pop()
+        .expect("invariant: prime_powers.len() >= 2, checked above");
     let n2 = prime_powers.iter().product();
     Some((n1, n2))
 }
