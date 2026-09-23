@@ -1,8 +1,3 @@
-#![expect(
-    clippy::unwrap_used,
-    reason = "ratchet APOLLO-UNWRAP-1: pre-existing debt"
-)]
-
 use proc_macro::TokenStream as CompilerTokenStream;
 use quote::{format_ident, quote};
 use syn::parse::{Parse, ParseStream};
@@ -60,14 +55,23 @@ impl Parse for TwoByPrimeInput {
 pub fn generate_two_by_prime_natural_dispatch(input: CompilerTokenStream) -> CompilerTokenStream {
     let input = parse_macro_input!(input as TwoByPrimeInput);
 
-    let route_fns = input.pairs.iter().map(|pair| {
-        let p = pair.prime.base10_parse::<usize>().unwrap();
-        let h = pair.half.base10_parse::<usize>().unwrap();
-        two_by_prime_kernel(p, h)
-    });
+    let parsed_pairs: Vec<(usize, usize)> = match input
+        .pairs
+        .iter()
+        .map(|pair| {
+            let p = pair.prime.base10_parse::<usize>()?;
+            let h = pair.half.base10_parse::<usize>()?;
+            syn::Result::Ok((p, h))
+        })
+        .collect::<syn::Result<Vec<_>>>()
+    {
+        Ok(parsed_pairs) => parsed_pairs,
+        Err(error) => return error.to_compile_error().into(),
+    };
 
-    let match_arms = input.pairs.iter().map(|pair| {
-        let p = pair.prime.base10_parse::<usize>().unwrap();
+    let route_fns = parsed_pairs.iter().map(|&(p, h)| two_by_prime_kernel(p, h));
+
+    let match_arms = input.pairs.iter().zip(&parsed_pairs).map(|(pair, &(p, _h))| {
         let route = route_ident(p);
         let prime = &pair.prime;
         let half = &pair.half;
