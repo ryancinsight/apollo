@@ -1,11 +1,6 @@
 //! Published-reference fixtures for the GFT transform family.
 
 #![allow(unused_imports)]
-#![expect(
-    clippy::unwrap_used,
-    reason = "ratchet APOLLO-UNWRAP-1: pre-existing debt"
-)]
-
 use super::super::SuiteResult;
 use super::builders::{
     published_complex_fixture, published_real_fixture, published_real_fixture_with_threshold,
@@ -80,7 +75,9 @@ pub(crate) fn gft_path_graph_inverse_roundtrip_fixture() -> SuiteResult<Publishe
         "GFT",
         "GFT-K2-inverse-roundtrip([3,-1])",
         "Sandryhaila and Moura (2013) ICASSP §II: GFT\u{207b}\u{00b9}(GFT(s))=s via orthonormal Laplacian eigenbasis U; K\u{2082} path graph",
-        recovered.as_slice().unwrap(),
+        recovered
+            .as_slice()
+            .expect("invariant: GftPlan::inverse returns a freshly constructed, C-contiguous Array1"),
         &expected,
         1.0e-12,
     ))

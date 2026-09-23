@@ -1,8 +1,3 @@
-#![expect(
-    clippy::unwrap_used,
-    reason = "ratchet APOLLO-UNWRAP-1: pre-existing debt"
-)]
-
 use crate::domain::report::{BenchmarkReport, PrecisionBenchmarkReport, PrecisionRunReport};
 use crate::infrastructure::dft_reference::{dft_1d_array, dft_3d_real};
 use crate::infrastructure::numpy::benchmark_fft;
@@ -26,14 +21,18 @@ pub fn run_benchmark_suite() -> SuiteResult<BenchmarkReport> {
     let field = representative_field_3d([4, 4, 4]);
     let signal_leto = leto::Array::<_, leto::MnemosyneStorage<_>, 1>::from_mnemosyne_slice(
         [signal.size()],
-        signal.as_slice().unwrap(),
+        signal
+            .as_slice()
+            .expect("invariant: representative_signal_1d is C-contiguous"),
     )
-    .unwrap();
+    .expect("invariant: shape [signal.size()] matches signal's own length");
     let field_leto = leto::Array::<_, leto::MnemosyneStorage<_>, 3>::from_mnemosyne_slice(
         [4, 4, 4],
-        field.as_slice().unwrap(),
+        field
+            .as_slice()
+            .expect("invariant: representative_field_3d is C-contiguous"),
     )
-    .unwrap();
+    .expect("invariant: shape [4, 4, 4] matches field's own length");
 
     let apollo_fft1_ms = elapsed_ms(|| {
         let _ = apollo_fft::fft_1d_leto(signal_leto.view());
@@ -142,25 +141,31 @@ pub(super) fn precision_profile_reports() -> Vec<PrecisionRunReport> {
     let reference = representative_field_3d([4, 4, 4]);
     let reference_leto = leto::Array::<_, leto::MnemosyneStorage<_>, 3>::from_mnemosyne_slice(
         [4, 4, 4],
-        reference.as_slice().unwrap(),
+        reference
+            .as_slice()
+            .expect("invariant: representative_field_3d is C-contiguous"),
     )
-    .unwrap();
+    .expect("invariant: shape [4, 4, 4] matches reference's own length");
 
     // f64 high-accuracy path — the authoritative reference for forward error comparisons.
     let high_spectrum = apollo_fft::fft_3d_leto(reference_leto.view());
     let high_recovered = apollo_fft::ifft_3d_leto::<f64>(high_spectrum.view());
     let high_recovered_nd =
         leto::Array3::from_shape_vec([4, 4, 4], high_recovered.storage().as_slice().to_vec())
-            .unwrap();
+            .expect(
+                "invariant: storage().as_slice().to_vec() has exactly [4, 4, 4]'s element count",
+            );
     let high_error = max_real_abs_delta_3d(&reference, &high_recovered_nd);
 
     // f32 low-precision path.
     let low_input = reference.mapv(|value| value as f32);
     let low_input_leto = leto::Array::<_, leto::MnemosyneStorage<_>, 3>::from_mnemosyne_slice(
         [4, 4, 4],
-        low_input.as_slice().unwrap(),
+        low_input
+            .as_slice()
+            .expect("invariant: mapv output is C-contiguous"),
     )
-    .unwrap();
+    .expect("invariant: shape [4, 4, 4] matches low_input's own length");
     let low_spectrum = apollo_fft::fft_3d_leto::<f32>(low_input_leto.view());
     // Forward error: max |f32 spectrum - f64 reference spectrum|.
     let low_spectrum_slice = low_spectrum.storage().as_slice();
@@ -175,7 +180,9 @@ pub(super) fn precision_profile_reports() -> Vec<PrecisionRunReport> {
     let low_recovered = apollo_fft::ifft_3d_leto::<f32>(low_spectrum.view());
     let low_recovered_nd =
         leto::Array3::from_shape_vec([4, 4, 4], low_recovered.storage().as_slice().to_vec())
-            .unwrap()
+            .expect(
+                "invariant: storage().as_slice().to_vec() has exactly [4, 4, 4]'s element count",
+            )
             .mapv(f64::from);
     let low_reference = low_input.mapv(f64::from);
     let low_error = max_real_abs_delta_3d(&low_reference, &low_recovered_nd);
@@ -184,18 +191,22 @@ pub(super) fn precision_profile_reports() -> Vec<PrecisionRunReport> {
     let mixed_input = reference.mapv(|value| F16::from_f32(value as f32));
     let mixed_input_leto = leto::Array::<_, leto::MnemosyneStorage<_>, 3>::from_mnemosyne_slice(
         [4, 4, 4],
-        mixed_input.as_slice().unwrap(),
+        mixed_input
+            .as_slice()
+            .expect("invariant: mapv output is C-contiguous"),
     )
-    .unwrap();
+    .expect("invariant: shape [4, 4, 4] matches mixed_input's own length");
     let mixed_spectrum = apollo_fft::fft_3d_leto::<F16>(mixed_input_leto.view());
     // Use f64 FFT of the quantized input as the mixed-precision forward reference.
     let mixed_input_f64 = mixed_input.mapv(|v| f64::from(v.to_f32()));
     let mixed_input_f64_leto =
         leto::Array::<_, leto::MnemosyneStorage<_>, 3>::from_mnemosyne_slice(
             [4, 4, 4],
-            mixed_input_f64.as_slice().unwrap(),
+            mixed_input_f64
+                .as_slice()
+                .expect("invariant: mapv output is C-contiguous"),
         )
-        .unwrap();
+        .expect("invariant: shape [4, 4, 4] matches mixed_input_f64's own length");
     let mixed_reference_spectrum = apollo_fft::fft_3d_leto(mixed_input_f64_leto.view());
 
     let mixed_spectrum_slice = mixed_spectrum.storage().as_slice();
@@ -210,7 +221,9 @@ pub(super) fn precision_profile_reports() -> Vec<PrecisionRunReport> {
     let mixed_recovered = apollo_fft::ifft_3d_leto::<F16>(mixed_spectrum.view());
     let mixed_recovered_nd =
         leto::Array3::from_shape_vec([4, 4, 4], mixed_recovered.storage().as_slice().to_vec())
-            .unwrap()
+            .expect(
+                "invariant: storage().as_slice().to_vec() has exactly [4, 4, 4]'s element count",
+            )
             .mapv(|value| f64::from(value.to_f32()));
     let mixed_reference = mixed_input.mapv(|value| f64::from(value.to_f32()));
     let mixed_error = max_real_abs_delta_3d(&mixed_reference, &mixed_recovered_nd);

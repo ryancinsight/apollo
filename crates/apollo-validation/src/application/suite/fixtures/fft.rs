@@ -1,11 +1,6 @@
 //! Published-reference fixtures for the FFT transform family.
 
 #![allow(unused_imports)]
-#![expect(
-    clippy::unwrap_used,
-    reason = "ratchet APOLLO-UNWRAP-1: pre-existing debt"
-)]
-
 use super::super::SuiteResult;
 use super::builders::{
     published_complex_fixture, published_real_fixture, published_real_fixture_with_threshold,
@@ -37,9 +32,11 @@ pub(crate) fn fft_four_point_difference_fixture() -> PublishedFixtureReport {
     let signal_nd = Array1::from(vec![1.0, 0.0, -1.0, 0.0]);
     let signal = leto::Array::<_, leto::MnemosyneStorage<_>, 1>::from_mnemosyne_slice(
         [signal_nd.size()],
-        signal_nd.as_slice().unwrap(),
+        signal_nd
+            .as_slice()
+            .expect("invariant: Array1::from(Vec) is C-contiguous"),
     )
-    .unwrap();
+    .expect("invariant: shape [signal_nd.size()] matches signal_nd's own length");
     let actual_leto = apollo_fft::fft_1d_leto(signal.view());
     let actual = leto::Array1::from(actual_leto.storage().as_slice().to_vec());
     let expected = [
@@ -74,9 +71,11 @@ pub(crate) fn fft_inverse_four_point_fixture() -> PublishedFixtureReport {
     ]);
     let spectrum = leto::Array::<_, leto::MnemosyneStorage<_>, 1>::from_mnemosyne_slice(
         [spectrum_nd.size()],
-        spectrum_nd.as_slice().unwrap(),
+        spectrum_nd
+            .as_slice()
+            .expect("invariant: Array1::from(Vec) is C-contiguous"),
     )
-    .unwrap();
+    .expect("invariant: shape [spectrum_nd.size()] matches spectrum_nd's own length");
     let actual_leto = apollo_fft::ifft_1d_leto::<f64>(spectrum.view());
     let actual = leto::Array1::from(actual_leto.storage().as_slice().to_vec());
     let expected = [1.0_f64, 0.0, 0.0, 0.0];
@@ -84,7 +83,9 @@ pub(crate) fn fft_inverse_four_point_fixture() -> PublishedFixtureReport {
         "FFT",
         "IDFT4([1,1,1,1])",
         "Cooley and Tukey (1965), DFT inversion theorem: IDFT(DFT(x))=x; DFT([1,0,0,0])=[1,1,1,1] so IDFT([1,1,1,1])=[1,0,0,0]",
-        actual.as_slice().unwrap(),
+        actual
+            .as_slice()
+            .expect("invariant: Array1::from(Vec) is C-contiguous"),
         &expected,
     )
 }
