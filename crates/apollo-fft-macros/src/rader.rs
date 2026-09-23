@@ -1,8 +1,3 @@
-#![expect(
-    clippy::unwrap_used,
-    reason = "ratchet APOLLO-UNWRAP-1: pre-existing debt"
-)]
-
 use proc_macro::TokenStream as CompilerTokenStream;
 use quote::{format_ident, quote};
 use syn::parse::{Parse, ParseStream};
@@ -40,7 +35,10 @@ fn naive_dft_scaled(b: &[ComplexF64], scale: f64) -> Vec<ComplexF64> {
 
 pub fn generate_rader_fft(input: CompilerTokenStream) -> CompilerTokenStream {
     let input_ast = parse_macro_input!(input as RaderInput);
-    let p = input_ast.p.base10_parse::<usize>().unwrap();
+    let p = match input_ast.p.base10_parse::<usize>() {
+        Ok(p) => p,
+        Err(error) => return error.to_compile_error().into(),
+    };
     let p_minus_1 = p - 1;
 
     let g = find_primitive_root(p);
