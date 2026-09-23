@@ -1,6 +1,11 @@
 //! Independent ordering and normalization oracles for the column-first
 //! routes: 2048 and 4096, and the chains from 8192 to 262144.
 
+#![expect(
+    clippy::unwrap_used,
+    reason = "ratchet APOLLO-UNWRAP-1: pre-existing debt"
+)]
+
 use eunomia::{Complex32, Complex64};
 
 const LENGTH: usize = 2048;

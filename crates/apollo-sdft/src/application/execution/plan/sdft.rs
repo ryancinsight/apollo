@@ -6,6 +6,14 @@
 //! a fixed cadence so the rounding a bin carries is bounded at every update
 //! count (`SdftPlan::drift_bound`).
 
+#![cfg_attr(
+    test,
+    expect(
+        clippy::unwrap_used,
+        reason = "ratchet APOLLO-UNWRAP-1: pre-existing debt"
+    )
+)]
+
 use crate::domain::contracts::error::{SdftError, SdftResult};
 use crate::domain::metadata::window::SlidingDftConfig;
 use crate::infrastructure::kernel::sliding::{

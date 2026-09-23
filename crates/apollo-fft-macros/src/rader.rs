@@ -1,3 +1,8 @@
+#![expect(
+    clippy::unwrap_used,
+    reason = "ratchet APOLLO-UNWRAP-1: pre-existing debt"
+)]
+
 use proc_macro::TokenStream as CompilerTokenStream;
 use quote::{format_ident, quote};
 use syn::parse::{Parse, ParseStream};

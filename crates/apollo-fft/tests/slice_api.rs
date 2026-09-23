@@ -1,5 +1,10 @@
 //! Leto and slice FFT boundaries: value parity across dimensional APIs.
 
+#![expect(
+    clippy::unwrap_used,
+    reason = "ratchet APOLLO-UNWRAP-1: pre-existing debt"
+)]
+
 use apollo_fft::{
     fft_1d_array, fft_1d_leto, fft_1d_slice, fft_2d_array, fft_2d_leto, fft_3d_array, fft_3d_leto,
     ifft_1d_array, ifft_1d_leto, ifft_1d_slice, ifft_2d_array, ifft_2d_leto, ifft_3d_array,

@@ -1,5 +1,10 @@
 //! Verification modules for the Radon transform.
 
+#![expect(
+    clippy::unwrap_used,
+    reason = "ratchet APOLLO-UNWRAP-1: pre-existing debt"
+)]
+
 #[cfg(test)]
 mod tests {
     use crate::{ramp_filter_projection, ramp_filter_projection_into, RadonError, RadonPlan};

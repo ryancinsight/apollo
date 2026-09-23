@@ -1,3 +1,8 @@
+#![expect(
+    clippy::unwrap_used,
+    reason = "ratchet APOLLO-UNWRAP-1: pre-existing debt"
+)]
+
 use crate::application::execution::kernel::components::winograd::*;
 use crate::application::execution::kernel::direct::{dft_forward, dft_inverse};
 use eunomia::{Complex32, Complex64};

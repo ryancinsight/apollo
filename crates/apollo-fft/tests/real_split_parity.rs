@@ -21,6 +21,11 @@
 //! *Accuracy and Stability of Numerical Algorithms*, 2nd ed., section 24.1)
 //! with `|X_k| <= ||x||_1`, not from observed error.
 
+#![expect(
+    clippy::unwrap_used,
+    reason = "ratchet APOLLO-UNWRAP-1: pre-existing debt"
+)]
+
 use eunomia::Complex64;
 use realfft::RealFftPlanner;
 use std::f64::consts::TAU;
