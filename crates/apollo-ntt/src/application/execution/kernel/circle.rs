@@ -42,6 +42,14 @@
 //! apart. The forward butterflies therefore run in place and leave the
 //! coefficients in bit-reversed order, undone by one permutation.
 
+#![cfg_attr(
+    test,
+    expect(
+        clippy::unwrap_used,
+        reason = "ratchet APOLLO-UNWRAP-1: pre-existing debt"
+    )
+)]
+
 use crate::domain::contracts::circle::{inverse, two_adic_generator, two_adicity, CirclePoint};
 use crate::domain::contracts::error::NttError;
 use crate::domain::contracts::math::{bit_reverse_permute, mod_add, mod_mul, mod_sub};

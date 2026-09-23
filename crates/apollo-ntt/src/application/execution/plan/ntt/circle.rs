@@ -18,6 +18,14 @@
 //! polynomial `v_n(x)` of `D`, the analogue of the cyclic NTT's reduction
 //! modulo `x^N − 1`.
 
+#![cfg_attr(
+    test,
+    expect(
+        clippy::unwrap_used,
+        reason = "ratchet APOLLO-UNWRAP-1: pre-existing debt"
+    )
+)]
+
 use crate::application::execution::kernel::circle::CircleDomain;
 use crate::domain::contracts::circle::CirclePoint;
 use crate::domain::contracts::config::MERSENNE31;

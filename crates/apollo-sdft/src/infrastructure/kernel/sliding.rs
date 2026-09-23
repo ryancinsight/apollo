@@ -30,6 +30,15 @@
 //! (`refresh_bin` below), which resets its error to that of one direct sum. The
 //! resulting bound, independent of the update count, is derived on
 //! `SdftPlan::drift_bound`.
+
+#![cfg_attr(
+    test,
+    expect(
+        clippy::unwrap_used,
+        reason = "ratchet APOLLO-UNWRAP-1: pre-existing debt"
+    )
+)]
+
 use crate::domain::contracts::error::{SdftError, SdftResult};
 use eunomia::Complex64;
 use mnemosyne::scratch::ScratchPool;

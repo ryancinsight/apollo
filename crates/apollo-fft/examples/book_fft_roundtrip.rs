@@ -6,6 +6,11 @@
 //! round-trip for a known analytical signal and shows how to read back
 //! spectral magnitude.
 
+#![expect(
+    clippy::unwrap_used,
+    reason = "ratchet APOLLO-UNWRAP-1: pre-existing debt"
+)]
+
 extern crate apollo_fft;
 extern crate leto;
 

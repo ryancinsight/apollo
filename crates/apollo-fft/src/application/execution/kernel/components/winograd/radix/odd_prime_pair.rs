@@ -1,3 +1,11 @@
+#![cfg_attr(
+    test,
+    expect(
+        clippy::unwrap_used,
+        reason = "ratchet APOLLO-UNWRAP-1: pre-existing debt"
+    )
+)]
+
 use super::super::traits::WinogradScalar;
 
 /// Canonical catalog of odd-prime Winograd-pair (N, H) sizes.

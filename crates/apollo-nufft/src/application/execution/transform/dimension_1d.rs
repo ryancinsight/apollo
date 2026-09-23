@@ -32,6 +32,12 @@
 //! - positions/value arrays must have equal length
 //! - oversampling factor must satisfy `sigma >= 2`
 //! - kernel width must satisfy `kernel_width >= 2`
+
+#![expect(
+    clippy::unwrap_used,
+    reason = "ratchet APOLLO-UNWRAP-1: pre-existing debt"
+)]
+
 use apollo_fft::{
     ApolloError, ApolloResult, CpuStorage, FftPlan1D, PrecisionProfile, Shape1D, F16,
 };

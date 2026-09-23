@@ -16,6 +16,11 @@
 //! generated codelets compose these same leaves, so a defect at a leaf is
 //! visible here without reproducing every pair.
 
+#![expect(
+    clippy::unwrap_used,
+    reason = "ratchet APOLLO-UNWRAP-1: pre-existing debt"
+)]
+
 use crate::application::execution::kernel::measurement_cores;
 use crate::application::execution::kernel::mixed_radix::traits::ShortDft;
 use apollo_bench::{BenchmarkCase, BenchmarkConfig, BenchmarkSuite};

@@ -29,6 +29,15 @@
 //! - positions/value arrays must have equal length
 //! - oversampling factor must satisfy `sigma >= 2`
 //! - kernel width must satisfy `kernel_width >= 2`
+
+#![cfg_attr(
+    test,
+    expect(
+        clippy::unwrap_used,
+        reason = "ratchet APOLLO-UNWRAP-1: pre-existing debt"
+    )
+)]
+
 use apollo_fft::{ApolloError, ApolloResult, CpuStorage, FftPlan1D, PrecisionProfile, Shape1D};
 use eunomia::Complex64;
 use leto::{Array3, ArrayView3, ArrayViewMut3};
