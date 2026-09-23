@@ -1,8 +1,3 @@
-#![expect(
-    clippy::unwrap_used,
-    reason = "ratchet APOLLO-UNWRAP-1: pre-existing debt"
-)]
-
 use crate::domain::report::{EnvironmentReport, ExternalBackendReport};
 use crate::infrastructure::numpy::{compare_fft, PythonEnvironmentProbe};
 use eunomia::Complex64;
@@ -22,14 +17,27 @@ pub(super) fn environment_report(probe: Option<&PythonEnvironmentProbe>) -> Envi
 }
 
 pub(super) fn numpy_comparison_report(signal: &Array1<f64>) -> ExternalBackendReport {
+    let Some(signal_slice) = signal.as_slice() else {
+        return ExternalBackendReport {
+            backend: "numpy".to_string(),
+            available: false,
+            attempted: false,
+            fft1_max_abs_error: None,
+            fft1_prime_max_abs_error: None,
+            fft3_max_abs_error: None,
+            stability_max_abs_delta: None,
+            version: None,
+            note: Some("signal array is not C-contiguous".to_string()),
+        };
+    };
     let signal_shape = [signal.size()];
-    match compare_fft(&signal_shape[..], signal.as_slice().unwrap_or(&[]), 2) {
+    match compare_fft(&signal_shape[..], signal_slice, 2) {
         Ok(report) => {
             let signal_leto = leto::Array::<_, leto::MnemosyneStorage<_>, 1>::from_mnemosyne_slice(
                 [signal.size()],
-                signal.as_slice().unwrap(),
+                signal_slice,
             )
-            .unwrap();
+            .expect("invariant: shape [signal.size()] matches signal_slice's own length");
             let apollo_leto = apollo_fft::fft_1d_leto(signal_leto.view());
             let apollo = leto::Array1::from(apollo_leto.storage().as_slice().to_vec());
             let numpy_values: Vec<Complex64> = report
