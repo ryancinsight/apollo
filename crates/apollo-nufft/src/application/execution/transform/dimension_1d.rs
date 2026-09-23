@@ -33,9 +33,12 @@
 //! - oversampling factor must satisfy `sigma >= 2`
 //! - kernel width must satisfy `kernel_width >= 2`
 
-#![expect(
-    clippy::unwrap_used,
-    reason = "ratchet APOLLO-UNWRAP-1: pre-existing debt"
+#![cfg_attr(
+    test,
+    expect(
+        clippy::unwrap_used,
+        reason = "ratchet APOLLO-UNWRAP-1: pre-existing debt"
+    )
 )]
 
 use apollo_fft::{
@@ -269,12 +272,8 @@ impl NufftPlan1D {
     pub fn type2(&self, fourier_coeffs: &Array1<Complex64>, positions: &[f64]) -> Vec<Complex64> {
         let mut spread = vec![Complex64::new(0.0, 0.0); self.m];
         let mut output = vec![Complex64::new(0.0, 0.0); positions.len()];
-        self.type2_into(
-            fourier_coeffs.as_slice().unwrap(),
-            positions,
-            &mut spread,
-            &mut output,
-        );
+        let fourier_coeffs = apollo_leto_interop::view_cow(&fourier_coeffs.view());
+        self.type2_into(fourier_coeffs.as_ref(), positions, &mut spread, &mut output);
         output
     }
 
