@@ -1,8 +1,3 @@
-#![expect(
-    clippy::unwrap_used,
-    reason = "ratchet APOLLO-UNWRAP-1: pre-existing debt"
-)]
-
 use super::super::radix::dft8_array_impl;
 use super::super::traits::{apply_twiddle_impl, WinogradScalar};
 use eunomia::Complex64;
@@ -384,8 +379,12 @@ pub(crate) fn dft64_array_impl<F: WinogradScalar, const INVERSE: bool, const NOR
             }
         }
         let (even, odd) = scratch.split_at_mut(32);
-        dft32_array_impl::<F, INVERSE, false>(even.try_into().unwrap());
-        dft32_array_impl::<F, INVERSE, false>(odd.try_into().unwrap());
+        dft32_array_impl::<F, INVERSE, false>(even.try_into().expect(
+            "invariant: with_winograd_scratch(64, ..) yields an exactly-64 slice, split at 32",
+        ));
+        dft32_array_impl::<F, INVERSE, false>(odd.try_into().expect(
+            "invariant: with_winograd_scratch(64, ..) yields an exactly-64 slice, split at 32",
+        ));
         if NORMALIZE {
             let q = F::from_precise(1.0 / 64.0);
             for k in 0..32 {
@@ -450,8 +449,12 @@ pub(crate) fn dft128_array_impl<F: WinogradScalar, const INVERSE: bool, const NO
             }
         }
         let (even, odd) = scratch.split_at_mut(64);
-        dft64_array_impl::<F, INVERSE, false>(even.try_into().unwrap());
-        dft64_array_impl::<F, INVERSE, false>(odd.try_into().unwrap());
+        dft64_array_impl::<F, INVERSE, false>(even.try_into().expect(
+            "invariant: with_winograd_scratch(128, ..) yields an exactly-128 slice, split at 64",
+        ));
+        dft64_array_impl::<F, INVERSE, false>(odd.try_into().expect(
+            "invariant: with_winograd_scratch(128, ..) yields an exactly-128 slice, split at 64",
+        ));
         if NORMALIZE {
             let q = F::from_precise(1.0 / 128.0);
             for k in 0..64 {
