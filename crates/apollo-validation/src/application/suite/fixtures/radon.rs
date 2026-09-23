@@ -1,11 +1,6 @@
 //! Published-reference fixtures for the RADON transform family.
 
 #![allow(unused_imports)]
-#![expect(
-    clippy::unwrap_used,
-    reason = "ratchet APOLLO-UNWRAP-1: pre-existing debt"
-)]
-
 use super::super::SuiteResult;
 use super::builders::{
     published_complex_fixture, published_real_fixture, published_real_fixture_with_threshold,
@@ -99,7 +94,7 @@ pub(crate) fn radon_fourier_slice_theorem_theta0_fixture() -> SuiteResult<Publis
         [projection.len()],
         projection.as_slice(),
     )
-    .unwrap();
+    .expect("invariant: shape [projection.len()] matches projection's own length");
     let dft_of_projection_leto = apollo_fft::fft_1d_leto(projection_leto.view());
     let dft_of_projection =
         leto::Array1::from(dft_of_projection_leto.storage().as_slice().to_vec());

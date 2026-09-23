@@ -1,8 +1,3 @@
-#![expect(
-    clippy::unwrap_used,
-    reason = "ratchet APOLLO-UNWRAP-1: pre-existing debt"
-)]
-
 use std::path::Path;
 
 use crate::domain::report::{
@@ -52,9 +47,11 @@ pub fn run_external_comparison_suite() -> SuiteResult<ExternalComparisonReport> 
     let signal = representative_signal_1d(16);
     let signal_leto = leto::Array::<_, leto::MnemosyneStorage<_>, 1>::from_mnemosyne_slice(
         [signal.size()],
-        signal.as_slice().unwrap(),
+        signal
+            .as_slice()
+            .expect("invariant: representative_signal_1d is C-contiguous"),
     )
-    .unwrap();
+    .expect("invariant: shape [signal.size()] matches signal's own length");
 
     let dft_report = {
         let apollo_leto = apollo_fft::fft_1d_leto(signal_leto.view());
@@ -66,9 +63,11 @@ pub fn run_external_comparison_suite() -> SuiteResult<ExternalComparisonReport> 
         let prime_signal_leto =
             leto::Array::<_, leto::MnemosyneStorage<_>, 1>::from_mnemosyne_slice(
                 [prime_signal.size()],
-                prime_signal.as_slice().unwrap(),
+                prime_signal
+                    .as_slice()
+                    .expect("invariant: representative_signal_1d is C-contiguous"),
             )
-            .unwrap();
+            .expect("invariant: shape [prime_signal.size()] matches prime_signal's own length");
         let prime_apollo_leto = apollo_fft::fft_1d_leto(prime_signal_leto.view());
         let prime_apollo = leto::Array1::from(prime_apollo_leto.storage().as_slice().to_vec());
         let prime_dft = dft_1d_array(&prime_signal);
@@ -77,13 +76,17 @@ pub fn run_external_comparison_suite() -> SuiteResult<ExternalComparisonReport> 
         let field = representative_field_3d([4, 4, 4]);
         let field_leto = leto::Array::<_, leto::MnemosyneStorage<_>, 3>::from_mnemosyne_slice(
             [4, 4, 4],
-            field.as_slice().unwrap(),
+            field
+                .as_slice()
+                .expect("invariant: representative_field_3d is C-contiguous"),
         )
-        .unwrap();
+        .expect("invariant: shape [4, 4, 4] matches field's own length");
         let apollo_3d_leto = apollo_fft::fft_3d_leto(field_leto.view());
         let apollo_3d =
             leto::Array3::from_shape_vec([4, 4, 4], apollo_3d_leto.storage().as_slice().to_vec())
-                .unwrap();
+                .expect(
+                "invariant: storage().as_slice().to_vec() has exactly [4, 4, 4]'s element count",
+            );
         let dft_3d = dft_3d_real(&field);
         let dft_fft3_max_abs_error = max_complex_abs_delta(apollo_3d.iter(), dft_3d.iter());
 

@@ -1,11 +1,6 @@
 //! Published-reference fixtures for the FWHT transform family.
 
 #![allow(unused_imports)]
-#![expect(
-    clippy::unwrap_used,
-    reason = "ratchet APOLLO-UNWRAP-1: pre-existing debt"
-)]
-
 use super::super::SuiteResult;
 use super::builders::{
     published_complex_fixture, published_real_fixture, published_real_fixture_with_threshold,
@@ -49,7 +44,9 @@ pub(crate) fn fwht_two_point_fixture() -> SuiteResult<PublishedFixtureReport> {
         "FWHT",
         "FWHT2([1,1])",
         "Hadamard (1893), H_2=[[1,1],[1,-1]], H_2\u{00b7}[1,1]^T=[2,0]^T",
-        actual.as_slice().unwrap(),
+        actual.as_slice().expect(
+            "invariant: FwhtPlan::forward returns a freshly constructed, C-contiguous Array1",
+        ),
         &expected,
     ))
 }
@@ -74,7 +71,9 @@ pub(crate) fn fwht_inverse_roundtrip_fixture() -> SuiteResult<PublishedFixtureRe
         "FWHT",
         "FWHT-inverse-roundtrip(N=4,[1,2,3,4])",
         "Walsh (1923) Am. J. Math. 45 sec.2: W_N^2=N*I, IFWHT(FWHT(x))=x; Hadamard (1893)",
-        recovered.as_slice().unwrap(),
+        recovered.as_slice().expect(
+            "invariant: FwhtPlan::inverse returns a freshly constructed, C-contiguous Array1",
+        ),
         &input,
         1.0e-14,
     ))

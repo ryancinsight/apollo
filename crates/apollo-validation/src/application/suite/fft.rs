@@ -1,8 +1,3 @@
-#![expect(
-    clippy::unwrap_used,
-    reason = "ratchet APOLLO-UNWRAP-1: pre-existing debt"
-)]
-
 use crate::domain::report::{CpuFftReport, GpuFftReport, PrecisionRunReport};
 use hephaestus_core::{
     ComputeDevice, FftDirection, FftOperands, FftOps, HephaestusError, StridedView,
@@ -135,9 +130,11 @@ pub fn run_fft_cpu_suite() -> SuiteResult<CpuFftReport> {
     );
     let signal = leto::Array::<_, leto::MnemosyneStorage<_>, 1>::from_mnemosyne_slice(
         [signal_nd.size()],
-        signal_nd.as_slice().unwrap(),
+        signal_nd
+            .as_slice()
+            .expect("invariant: Array1::from(Vec) is C-contiguous"),
     )
-    .unwrap();
+    .expect("invariant: shape [signal_nd.size()] matches signal_nd's own length");
     let spectrum = apollo_fft::fft_1d_leto(signal.view());
     let recovered = apollo_fft::ifft_1d_leto::<f64>(spectrum.view());
     let recovered_nd = leto::Array1::from(recovered.storage().as_slice().to_vec());
@@ -162,9 +159,11 @@ pub fn run_fft_cpu_suite() -> SuiteResult<CpuFftReport> {
     let non_finite_nd = Array1::from(vec![1.0, f64::NAN, 2.0, f64::INFINITY]);
     let non_finite = leto::Array::<_, leto::MnemosyneStorage<_>, 1>::from_mnemosyne_slice(
         [non_finite_nd.size()],
-        non_finite_nd.as_slice().unwrap(),
+        non_finite_nd
+            .as_slice()
+            .expect("invariant: Array1::from(Vec) is C-contiguous"),
     )
-    .unwrap();
+    .expect("invariant: shape [non_finite_nd.size()] matches non_finite_nd's own length");
     let non_finite_input_propagates = apollo_fft::fft_1d_leto(non_finite.view())
         .storage()
         .as_slice()
