@@ -537,57 +537,15 @@ impl NufftPlan3D {
     }
 
     fn ifft_z_pass(&self, grid: &mut ArrayViewMut3<'_, Complex64>) {
-        FFT3D_LANE_SCRATCH.with(|pool| {
-            pool.with_scratch(self.mz, |lane| {
-                for ix in 0..self.mx {
-                    for iy in 0..self.my {
-                        for iz in 0..self.mz {
-                            lane[iz] = view3_mut_value(grid, [ix, iy, iz]);
-                        }
-                        self.fft_z.inverse_complex_slice_unnorm_inplace(lane);
-                        for iz in 0..self.mz {
-                            view3_write(grid, [ix, iy, iz], lane[iz]);
-                        }
-                    }
-                }
-            });
-        });
+        self.lane_fft_pass::<2, true>(grid, &self.fft_z, self.mz);
     }
 
     fn ifft_y_pass(&self, grid: &mut ArrayViewMut3<'_, Complex64>) {
-        FFT3D_LANE_SCRATCH.with(|pool| {
-            pool.with_scratch(self.my, |lane| {
-                for ix in 0..self.mx {
-                    for iz in 0..self.mz {
-                        for iy in 0..self.my {
-                            lane[iy] = view3_mut_value(grid, [ix, iy, iz]);
-                        }
-                        self.fft_y.inverse_complex_slice_unnorm_inplace(lane);
-                        for iy in 0..self.my {
-                            view3_write(grid, [ix, iy, iz], lane[iy]);
-                        }
-                    }
-                }
-            });
-        });
+        self.lane_fft_pass::<1, true>(grid, &self.fft_y, self.my);
     }
 
     fn ifft_x_pass(&self, grid: &mut ArrayViewMut3<'_, Complex64>) {
-        FFT3D_LANE_SCRATCH.with(|pool| {
-            pool.with_scratch(self.mx, |lane| {
-                for iy in 0..self.my {
-                    for iz in 0..self.mz {
-                        for ix in 0..self.mx {
-                            lane[ix] = view3_mut_value(grid, [ix, iy, iz]);
-                        }
-                        self.fft_x.inverse_complex_slice_unnorm_inplace(lane);
-                        for ix in 0..self.mx {
-                            view3_write(grid, [ix, iy, iz], lane[ix]);
-                        }
-                    }
-                }
-            });
-        });
+        self.lane_fft_pass::<0, true>(grid, &self.fft_x, self.mx);
     }
 
     /// Type-2 3D NUFFT: interpolate from uniform Fourier coefficients to non-uniform points.
@@ -851,54 +809,78 @@ impl NufftPlan3D {
     }
 
     fn fft_z_pass(&self, grid: &mut ArrayViewMut3<'_, Complex64>) {
-        FFT3D_LANE_SCRATCH.with(|pool| {
-            pool.with_scratch(self.mz, |lane| {
-                for ix in 0..self.mx {
-                    for iy in 0..self.my {
-                        for iz in 0..self.mz {
-                            lane[iz] = view3_mut_value(grid, [ix, iy, iz]);
-                        }
-                        self.fft_z.forward_complex_slice_inplace(lane);
-                        for iz in 0..self.mz {
-                            view3_write(grid, [ix, iy, iz], lane[iz]);
-                        }
-                    }
-                }
-            });
-        });
+        self.lane_fft_pass::<2, false>(grid, &self.fft_z, self.mz);
     }
 
     fn fft_y_pass(&self, grid: &mut ArrayViewMut3<'_, Complex64>) {
-        FFT3D_LANE_SCRATCH.with(|pool| {
-            pool.with_scratch(self.my, |lane| {
-                for ix in 0..self.mx {
-                    for iz in 0..self.mz {
-                        for iy in 0..self.my {
-                            lane[iy] = view3_mut_value(grid, [ix, iy, iz]);
-                        }
-                        self.fft_y.forward_complex_slice_inplace(lane);
-                        for iy in 0..self.my {
-                            view3_write(grid, [ix, iy, iz], lane[iy]);
-                        }
-                    }
-                }
-            });
-        });
+        self.lane_fft_pass::<1, false>(grid, &self.fft_y, self.my);
     }
 
     fn fft_x_pass(&self, grid: &mut ArrayViewMut3<'_, Complex64>) {
+        self.lane_fft_pass::<0, false>(grid, &self.fft_x, self.mx);
+    }
+
+    fn lane_fft_pass<const AXIS: usize, const INVERSE: bool>(
+        &self,
+        grid: &mut ArrayViewMut3<'_, Complex64>,
+        fft: &FftPlan1D<f64>,
+        lane_len: usize,
+    ) {
         FFT3D_LANE_SCRATCH.with(|pool| {
-            pool.with_scratch(self.mx, |lane| {
-                for iy in 0..self.my {
-                    for iz in 0..self.mz {
-                        for ix in 0..self.mx {
-                            lane[ix] = view3_mut_value(grid, [ix, iy, iz]);
-                        }
-                        self.fft_x.forward_complex_slice_inplace(lane);
-                        for ix in 0..self.mx {
-                            view3_write(grid, [ix, iy, iz], lane[ix]);
+            pool.with_scratch(lane_len, |lane| {
+                match AXIS {
+                    0 => {
+                        for iy in 0..self.my {
+                            for iz in 0..self.mz {
+                                for ix in 0..self.mx {
+                                    lane[ix] = view3_mut_value(grid, [ix, iy, iz]);
+                                }
+                                if INVERSE {
+                                    fft.inverse_complex_slice_unnorm_inplace(lane);
+                                } else {
+                                    fft.forward_complex_slice_inplace(lane);
+                                }
+                                for ix in 0..self.mx {
+                                    view3_write(grid, [ix, iy, iz], lane[ix]);
+                                }
+                            }
                         }
                     }
+                    1 => {
+                        for ix in 0..self.mx {
+                            for iz in 0..self.mz {
+                                for iy in 0..self.my {
+                                    lane[iy] = view3_mut_value(grid, [ix, iy, iz]);
+                                }
+                                if INVERSE {
+                                    fft.inverse_complex_slice_unnorm_inplace(lane);
+                                } else {
+                                    fft.forward_complex_slice_inplace(lane);
+                                }
+                                for iy in 0..self.my {
+                                    view3_write(grid, [ix, iy, iz], lane[iy]);
+                                }
+                            }
+                        }
+                    }
+                    2 => {
+                        for ix in 0..self.mx {
+                            for iy in 0..self.my {
+                                for iz in 0..self.mz {
+                                    lane[iz] = view3_mut_value(grid, [ix, iy, iz]);
+                                }
+                                if INVERSE {
+                                    fft.inverse_complex_slice_unnorm_inplace(lane);
+                                } else {
+                                    fft.forward_complex_slice_inplace(lane);
+                                }
+                                for iz in 0..self.mz {
+                                    view3_write(grid, [ix, iy, iz], lane[iz]);
+                                }
+                            }
+                        }
+                    }
+                    _ => unreachable!("3D NUFFT axis must be one of 0, 1, or 2"),
                 }
             });
         });
