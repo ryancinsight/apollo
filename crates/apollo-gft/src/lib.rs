@@ -14,7 +14,7 @@ pub mod infrastructure;
 mod verification;
 
 pub use application::execution::plan::gft::{GftPlan, GftStorage};
-pub use domain::contracts::error::{GftError, GftResult};
+pub use domain::contracts::error::{GftError, GftResult, SpectralFailure};
 pub use domain::graph::adjacency::GraphAdjacency;
 
 #[cfg(feature = "wgpu")]
