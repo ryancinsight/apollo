@@ -42,7 +42,7 @@
 //! can be replaced by a faster recursive kernel without changing the public
 //! contract.
 
-use eunomia::{Complex32, Complex64};
+use eunomia::{CastFrom, Complex, FloatElement};
 
 /// Scalar interface required by the Apollo FFT kernel.
 pub trait KernelScalar: Copy + Clone + Default {
@@ -68,7 +68,17 @@ pub trait KernelScalar: Copy + Clone + Default {
     fn precise_im(value: Self) -> f64;
 }
 
-impl KernelScalar for Complex64 {
+/// One implementation for every complex element the crate carries.
+///
+/// The arithmetic runs in `T` itself; only the angle and the inverse's
+/// accumulator are held in `f64`, which is the reference precision the trait
+/// contract names. `from_precise` narrows through [`FloatElement::from_f64`]
+/// and `precise_re`/`precise_im` widen exactly through [`CastFrom`].
+impl<T> KernelScalar for Complex<T>
+where
+    T: FloatElement,
+    f64: CastFrom<T>,
+{
     #[inline]
     fn complex(re: Self, im: Self) -> Self {
         Self::new(re.re, im.re)
@@ -86,59 +96,22 @@ impl KernelScalar for Complex64 {
 
     #[inline]
     fn zero() -> Self {
-        Self::new(0.0, 0.0)
+        Self::new(T::ZERO, T::ZERO)
     }
 
     #[inline]
     fn from_precise(value: f64) -> Self {
-        Self::new(value, 0.0)
+        Self::new(T::from_f64(value), T::ZERO)
     }
 
     #[inline]
     fn precise_re(value: Self) -> f64 {
-        value.re
+        f64::cast_from(value.re)
     }
 
     #[inline]
     fn precise_im(value: Self) -> f64 {
-        value.im
-    }
-}
-
-impl KernelScalar for Complex32 {
-    #[inline]
-    fn complex(re: Self, im: Self) -> Self {
-        Self::new(re.re, im.re)
-    }
-
-    #[inline]
-    fn add(lhs: Self, rhs: Self) -> Self {
-        lhs + rhs
-    }
-
-    #[inline]
-    fn mul(lhs: Self, rhs: Self) -> Self {
-        lhs * rhs
-    }
-
-    #[inline]
-    fn zero() -> Self {
-        Self::new(0.0, 0.0)
-    }
-
-    #[inline]
-    fn from_precise(value: f64) -> Self {
-        Self::new(value as f32, 0.0)
-    }
-
-    #[inline]
-    fn precise_re(value: Self) -> f64 {
-        f64::from(value.re)
-    }
-
-    #[inline]
-    fn precise_im(value: Self) -> f64 {
-        f64::from(value.im)
+        f64::cast_from(value.im)
     }
 }
 
@@ -200,45 +173,103 @@ pub fn dft_inverse<T: KernelScalar>(input: &[T]) -> Vec<T> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use eunomia::F16;
 
-    fn approx_eq(a: Complex64, b: Complex64, eps: f64) -> bool {
-        (a.re - b.re).abs() <= eps && (a.im - b.im).abs() <= eps
+    /// Worst-component error bound for a length-`n` direct transform of `x`.
+    ///
+    /// Each forward output is `n` products `x_j·w` summed sequentially in `T`:
+    /// the twiddle rounds once, the complex product adds at most `2u`, and
+    /// sequential summation adds `(n − 1)u` (Higham, *Accuracy and Stability
+    /// of Numerical Algorithms*, 2nd ed., §3.1 and §4.2), so every component
+    /// lies within `(n + 2)·u·‖x‖₁`. The inverse accumulates in `f64` and
+    /// rounds once into `T`, adding `u·‖X‖∞ ≤ u·‖x‖₁`. With `ε = 2u`,
+    /// `(n + 4)·ε·‖x‖₁` covers a forward pass followed by an inverse.
+    fn bound<T>(input: &[Complex<T>], epsilon: f64) -> f64
+    where
+        T: FloatElement,
+        f64: CastFrom<T>,
+    {
+        let norm: f64 = input
+            .iter()
+            .map(|&z| {
+                let re = Complex::<T>::precise_re(z);
+                let im = Complex::<T>::precise_im(z);
+                re.hypot(im)
+            })
+            .sum();
+        (input.len() as f64 + 4.0) * epsilon * norm
     }
+
+    fn assert_close<T>(actual: &[Complex<T>], expected: &[(f64, f64)], tolerance: f64)
+    where
+        T: FloatElement,
+        f64: CastFrom<T>,
+    {
+        assert_eq!(actual.len(), expected.len());
+        for (index, (&value, &(re, im))) in actual.iter().zip(expected).enumerate() {
+            let got = (
+                Complex::<T>::precise_re(value),
+                Complex::<T>::precise_im(value),
+            );
+            assert!(
+                (got.0 - re).abs() <= tolerance && (got.1 - im).abs() <= tolerance,
+                "bin {index}: {got:?} differs from ({re}, {im}) by more than {tolerance}"
+            );
+        }
+    }
+
+    fn signal<T: FloatElement>(values: &[(f64, f64)]) -> Vec<Complex<T>> {
+        values
+            .iter()
+            .map(|&(re, im)| Complex::new(T::from_f64(re), T::from_f64(im)))
+            .collect()
+    }
+
+    fn forward_two_point<T>(epsilon: f64)
+    where
+        T: FloatElement,
+        f64: CastFrom<T>,
+    {
+        let input = signal::<T>(&[(1.0, 0.0), (2.0, 0.0)]);
+        let tolerance = bound(&input, epsilon);
+        assert_close(&dft_forward(&input), &[(3.0, 0.0), (-1.0, 0.0)], tolerance);
+    }
+
+    fn round_trip<T>(values: &[(f64, f64)], epsilon: f64)
+    where
+        T: FloatElement,
+        f64: CastFrom<T>,
+    {
+        let input = signal::<T>(values);
+        let tolerance = bound(&input, epsilon);
+        let expected: Vec<(f64, f64)> = input
+            .iter()
+            .map(|&z| (Complex::<T>::precise_re(z), Complex::<T>::precise_im(z)))
+            .collect();
+        assert_close(&dft_inverse(&dft_forward(&input)), &expected, tolerance);
+    }
+
+    const COMPLEX_SIGNAL: [(f64, f64); 4] = [(1.0, -1.0), (2.0, 0.5), (-0.5, 0.25), (0.75, -0.125)];
+    const REAL_SIGNAL: [(f64, f64); 4] = [(0.0, 0.0), (1.0, 0.0), (0.0, 0.0), (-1.0, 0.0)];
 
     #[test]
     fn forward_matches_known_two_point_transform() {
-        let input = vec![Complex64::new(1.0, 0.0), Complex64::new(2.0, 0.0)];
-        let output = dft_forward(&input);
-        assert!(approx_eq(output[0], Complex64::new(3.0, 0.0), 1.0e-12));
-        assert!(approx_eq(output[1], Complex64::new(-1.0, 0.0), 1.0e-12));
+        forward_two_point::<f64>(f64::EPSILON);
+        forward_two_point::<f32>(f64::from(f32::EPSILON));
+        forward_two_point::<F16>(f64::cast_from(F16::EPSILON));
     }
 
     #[test]
     fn inverse_recovers_input() {
-        let input = vec![
-            Complex64::new(1.0, -1.0),
-            Complex64::new(2.0, 0.5),
-            Complex64::new(-0.5, 0.25),
-            Complex64::new(0.75, -0.125),
-        ];
-        let spectrum = dft_forward(&input);
-        let recovered = dft_inverse(&spectrum);
-        for (actual, expected) in recovered.iter().zip(input.iter()) {
-            assert!(approx_eq(*actual, *expected, 1.0e-10));
-        }
+        round_trip::<f64>(&COMPLEX_SIGNAL, f64::EPSILON);
+        round_trip::<f32>(&COMPLEX_SIGNAL, f64::from(f32::EPSILON));
+        round_trip::<F16>(&COMPLEX_SIGNAL, f64::cast_from(F16::EPSILON));
     }
 
     #[test]
     fn forward_inverse_is_identity_on_real_signal() {
-        let input = vec![
-            Complex64::new(0.0, 0.0),
-            Complex64::new(1.0, 0.0),
-            Complex64::new(0.0, 0.0),
-            Complex64::new(-1.0, 0.0),
-        ];
-        let recovered = dft_inverse(&dft_forward(&input));
-        for (actual, expected) in recovered.iter().zip(input.iter()) {
-            assert!(approx_eq(*actual, *expected, 1.0e-10));
-        }
+        round_trip::<f64>(&REAL_SIGNAL, f64::EPSILON);
+        round_trip::<f32>(&REAL_SIGNAL, f64::from(f32::EPSILON));
+        round_trip::<F16>(&REAL_SIGNAL, f64::cast_from(F16::EPSILON));
     }
 }
