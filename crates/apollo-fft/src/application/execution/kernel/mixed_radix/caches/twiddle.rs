@@ -1,8 +1,10 @@
+use super::super::super::twiddle_table::{build_twiddle_table, TwiddleOutput};
 use eunomia::{Complex32, Complex64};
 use parking_lot::RwLock;
 use rustc_hash::FxHashMap;
-use std::cell::RefCell;
+use std::cell::{Cell, RefCell};
 use std::sync::Arc;
+use std::thread::LocalKey;
 
 static TWIDDLE_FWD_PRECISE_CACHE: std::sync::LazyLock<RwLock<FxHashMap<usize, Arc<[Complex64]>>>> =
     std::sync::LazyLock::new(|| RwLock::new(FxHashMap::default()));
@@ -24,13 +26,13 @@ thread_local! {
         RefCell::new(FxHashMap::with_capacity_and_hasher(8, Default::default()));
 
     #[expect(clippy::missing_const_for_thread_local, reason = "Counterbalanced mixed-radix benchmarks favor lazy cache initialization")]
-    static TL_FWD_PRECISE_POW2: RefCell<[Option<Arc<[Complex64]>>; 32]> = RefCell::new([const { None }; 32]);
+    static TL_FWD_PRECISE_POW2: Pow2Tables<Complex64> = Pow2Tables(RefCell::new([const { None }; 32]));
     #[expect(clippy::missing_const_for_thread_local, reason = "Counterbalanced mixed-radix benchmarks favor lazy cache initialization")]
-    static TL_INV_PRECISE_POW2: RefCell<[Option<Arc<[Complex64]>>; 32]> = RefCell::new([const { None }; 32]);
+    static TL_INV_PRECISE_POW2: Pow2Tables<Complex64> = Pow2Tables(RefCell::new([const { None }; 32]));
     #[expect(clippy::missing_const_for_thread_local, reason = "Counterbalanced mixed-radix benchmarks favor lazy cache initialization")]
-    static TL_FWD_REDUCED_POW2: RefCell<[Option<Arc<[Complex32]>>; 32]> = RefCell::new([const { None }; 32]);
+    static TL_FWD_REDUCED_POW2: Pow2Tables<Complex32> = Pow2Tables(RefCell::new([const { None }; 32]));
     #[expect(clippy::missing_const_for_thread_local, reason = "Counterbalanced mixed-radix benchmarks favor lazy cache initialization")]
-    static TL_INV_REDUCED_POW2: RefCell<[Option<Arc<[Complex32]>>; 32]> = RefCell::new([const { None }; 32]);
+    static TL_INV_REDUCED_POW2: Pow2Tables<Complex32> = Pow2Tables(RefCell::new([const { None }; 32]));
 
     // INVARIANT (raw-cache immortality): every pointer stored in the `_RAW`
     // caches below is derived from an `Arc<[C]>` allocation that
@@ -42,10 +44,10 @@ thread_local! {
     // pointed-to allocation alive and immutable for the remainder of the
     // program, so a non-null raw entry can never dangle. Every `unsafe`
     // dereference of these pointers relies on this invariant.
-    static TL_FWD_PRECISE_POW2_RAW: std::cell::Cell<[*const [Complex64]; 32]> = const { std::cell::Cell::new([std::ptr::slice_from_raw_parts(std::ptr::null(), 0); 32]) };
-    static TL_INV_PRECISE_POW2_RAW: std::cell::Cell<[*const [Complex64]; 32]> = const { std::cell::Cell::new([std::ptr::slice_from_raw_parts(std::ptr::null(), 0); 32]) };
-    static TL_FWD_REDUCED_POW2_RAW: std::cell::Cell<[*const [Complex32]; 32]> = const { std::cell::Cell::new([std::ptr::slice_from_raw_parts(std::ptr::null(), 0); 32]) };
-    static TL_INV_REDUCED_POW2_RAW: std::cell::Cell<[*const [Complex32]; 32]> = const { std::cell::Cell::new([std::ptr::slice_from_raw_parts(std::ptr::null(), 0); 32]) };
+    static TL_FWD_PRECISE_POW2_RAW: Cell<[*const [Complex64]; 32]> = const { Cell::new([std::ptr::slice_from_raw_parts(std::ptr::null(), 0); 32]) };
+    static TL_INV_PRECISE_POW2_RAW: Cell<[*const [Complex64]; 32]> = const { Cell::new([std::ptr::slice_from_raw_parts(std::ptr::null(), 0); 32]) };
+    static TL_FWD_REDUCED_POW2_RAW: Cell<[*const [Complex32]; 32]> = const { Cell::new([std::ptr::slice_from_raw_parts(std::ptr::null(), 0); 32]) };
+    static TL_INV_REDUCED_POW2_RAW: Cell<[*const [Complex32]; 32]> = const { Cell::new([std::ptr::slice_from_raw_parts(std::ptr::null(), 0); 32]) };
 
     static TL_FWD_PRECISE_RAW: RefCell<FxHashMap<usize, *const [Complex64]>> = RefCell::new(FxHashMap::with_capacity_and_hasher(8, Default::default()));
     static TL_INV_PRECISE_RAW: RefCell<FxHashMap<usize, *const [Complex64]>> = RefCell::new(FxHashMap::with_capacity_and_hasher(8, Default::default()));
@@ -91,8 +93,59 @@ declare_cache_store! {
     global_reduced: TWIDDLE_INV_REDUCED_CACHE,
 }
 
+/// Per-thread `Arc` handles to the power-of-two tables, indexed by `log2 n`.
+pub(crate) struct Pow2Tables<C>(RefCell<[Option<Arc<[C]>>; 32]>);
+
+/// The thread-local twiddle slots one transform direction of one element owns.
+///
+/// Every key names a `thread_local!` declared above; the raw-cache immortality
+/// invariant stated there covers the `pow2_raw` and `raw` slots.
+pub(crate) struct TwiddleSlotKeys<C: 'static> {
+    pow2: &'static LocalKey<Pow2Tables<C>>,
+    pow2_raw: &'static LocalKey<Cell<[*const [C]; 32]>>,
+    raw: &'static LocalKey<RefCell<FxHashMap<usize, *const [C]>>>,
+}
+
+mod slots_sealed {
+    /// Binds a complex element to its thread-local twiddle slots.
+    ///
+    /// Rust has no generic statics, so the slots each element owns are the
+    /// one per-element fact; everything done with them is written once, in
+    /// the blanket [`TwiddleStore`](super::TwiddleStore) implementation.
+    pub(crate) trait TwiddleSlots: Sized + 'static {
+        const FWD: super::TwiddleSlotKeys<Self>;
+        const INV: super::TwiddleSlotKeys<Self>;
+    }
+}
+
+impl slots_sealed::TwiddleSlots for Complex64 {
+    const FWD: TwiddleSlotKeys<Self> = TwiddleSlotKeys {
+        pow2: &TL_FWD_PRECISE_POW2,
+        pow2_raw: &TL_FWD_PRECISE_POW2_RAW,
+        raw: &TL_FWD_PRECISE_RAW,
+    };
+    const INV: TwiddleSlotKeys<Self> = TwiddleSlotKeys {
+        pow2: &TL_INV_PRECISE_POW2,
+        pow2_raw: &TL_INV_PRECISE_POW2_RAW,
+        raw: &TL_INV_PRECISE_RAW,
+    };
+}
+
+impl slots_sealed::TwiddleSlots for Complex32 {
+    const FWD: TwiddleSlotKeys<Self> = TwiddleSlotKeys {
+        pow2: &TL_FWD_REDUCED_POW2,
+        pow2_raw: &TL_FWD_REDUCED_POW2_RAW,
+        raw: &TL_FWD_REDUCED_RAW,
+    };
+    const INV: TwiddleSlotKeys<Self> = TwiddleSlotKeys {
+        pow2: &TL_INV_REDUCED_POW2,
+        pow2_raw: &TL_INV_REDUCED_POW2_RAW,
+        raw: &TL_INV_REDUCED_RAW,
+    };
+}
+
 /// Combined twiddle-cache trait: inherits fwd+inv cache dispatch and adds
-/// precision-specific build helpers.
+/// the table builders and the thread-local slot accessors.
 pub(crate) trait TwiddleStore: TwiddleFwdStore + TwiddleInvStore {
     fn build_twiddle_fwd(n: usize) -> Vec<Self>;
     fn build_twiddle_inv(n: usize) -> Vec<Self>;
@@ -113,157 +166,105 @@ pub(crate) trait TwiddleStore: TwiddleFwdStore + TwiddleInvStore {
     fn twiddle_tl_inv_insert_raw(n: usize, ptr: *const [Self]);
 }
 
-impl TwiddleStore for Complex64 {
-    #[inline]
-    fn build_twiddle_fwd(n: usize) -> Vec<Complex64> {
-        <f64 as crate::application::execution::kernel::real_fft::RealFft>::build_forward_twiddle_table(n)
-    }
-    #[inline]
-    fn build_twiddle_inv(n: usize) -> Vec<Complex64> {
-        <f64 as crate::application::execution::kernel::real_fft::RealFft>::build_inverse_twiddle_table(n)
-    }
-    #[inline]
-    fn twiddle_tl_fwd_get_pow2(idx: usize) -> Option<Arc<[Complex64]>> {
-        TL_FWD_PRECISE_POW2.with(|c| c.borrow()[idx].clone())
-    }
-    #[inline]
-    fn twiddle_tl_fwd_insert_pow2(idx: usize, v: Arc<[Complex64]>) {
-        TL_FWD_PRECISE_POW2.with(|c| {
-            c.borrow_mut()[idx] = Some(v);
-        });
-    }
-    #[inline]
-    fn twiddle_tl_inv_get_pow2(idx: usize) -> Option<Arc<[Complex64]>> {
-        TL_INV_PRECISE_POW2.with(|c| c.borrow()[idx].clone())
-    }
-    #[inline]
-    fn twiddle_tl_inv_insert_pow2(idx: usize, v: Arc<[Complex64]>) {
-        TL_INV_PRECISE_POW2.with(|c| {
-            c.borrow_mut()[idx] = Some(v);
-        });
-    }
-
-    #[inline]
-    fn twiddle_tl_fwd_get_pow2_raw(idx: usize) -> *const [Complex64] {
-        TL_FWD_PRECISE_POW2_RAW.with(|c| c.get()[idx])
-    }
-    #[inline]
-    fn twiddle_tl_fwd_insert_pow2_raw(idx: usize, ptr: *const [Complex64]) {
-        TL_FWD_PRECISE_POW2_RAW.with(|c| {
-            let mut arr = c.get();
-            arr[idx] = ptr;
-            c.set(arr);
-        });
-    }
-    #[inline]
-    fn twiddle_tl_inv_get_pow2_raw(idx: usize) -> *const [Complex64] {
-        TL_INV_PRECISE_POW2_RAW.with(|c| c.get()[idx])
-    }
-    #[inline]
-    fn twiddle_tl_inv_insert_pow2_raw(idx: usize, ptr: *const [Complex64]) {
-        TL_INV_PRECISE_POW2_RAW.with(|c| {
-            let mut arr = c.get();
-            arr[idx] = ptr;
-            c.set(arr);
-        });
-    }
-
-    #[inline]
-    fn twiddle_tl_fwd_get_raw(n: usize) -> Option<*const [Complex64]> {
-        TL_FWD_PRECISE_RAW.with(|c| c.borrow().get(&n).copied())
-    }
-    #[inline]
-    fn twiddle_tl_fwd_insert_raw(n: usize, ptr: *const [Complex64]) {
-        TL_FWD_PRECISE_RAW.with(|c| {
-            c.borrow_mut().insert(n, ptr);
-        });
-    }
-    #[inline]
-    fn twiddle_tl_inv_get_raw(n: usize) -> Option<*const [Complex64]> {
-        TL_INV_PRECISE_RAW.with(|c| c.borrow().get(&n).copied())
-    }
-    #[inline]
-    fn twiddle_tl_inv_insert_raw(n: usize, ptr: *const [Complex64]) {
-        TL_INV_PRECISE_RAW.with(|c| {
-            c.borrow_mut().insert(n, ptr);
-        });
-    }
+#[inline]
+fn slot_get_pow2<C>(keys: &TwiddleSlotKeys<C>, idx: usize) -> Option<Arc<[C]>> {
+    keys.pow2.with(|c| c.0.borrow()[idx].clone())
 }
 
-impl TwiddleStore for Complex32 {
+#[inline]
+fn slot_insert_pow2<C>(keys: &TwiddleSlotKeys<C>, idx: usize, v: Arc<[C]>) {
+    keys.pow2.with(|c| {
+        c.0.borrow_mut()[idx] = Some(v);
+    });
+}
+
+#[inline]
+fn slot_get_pow2_raw<C>(keys: &TwiddleSlotKeys<C>, idx: usize) -> *const [C] {
+    keys.pow2_raw.with(|c| c.get()[idx])
+}
+
+#[inline]
+fn slot_insert_pow2_raw<C>(keys: &TwiddleSlotKeys<C>, idx: usize, ptr: *const [C]) {
+    keys.pow2_raw.with(|c| {
+        let mut arr = c.get();
+        arr[idx] = ptr;
+        c.set(arr);
+    });
+}
+
+#[inline]
+fn slot_get_raw<C>(keys: &TwiddleSlotKeys<C>, n: usize) -> Option<*const [C]> {
+    keys.raw.with(|c| c.borrow().get(&n).copied())
+}
+
+#[inline]
+fn slot_insert_raw<C>(keys: &TwiddleSlotKeys<C>, n: usize, ptr: *const [C]) {
+    keys.raw.with(|c| {
+        c.borrow_mut().insert(n, ptr);
+    });
+}
+
+impl<C> TwiddleStore for C
+where
+    C: TwiddleFwdStore + TwiddleInvStore + slots_sealed::TwiddleSlots + TwiddleOutput,
+{
     #[inline]
-    fn build_twiddle_fwd(n: usize) -> Vec<Complex32> {
-        <f32 as crate::application::execution::kernel::real_fft::RealFft>::build_forward_twiddle_table(n)
+    fn build_twiddle_fwd(n: usize) -> Vec<C> {
+        build_twiddle_table(n, -1.0)
     }
     #[inline]
-    fn build_twiddle_inv(n: usize) -> Vec<Complex32> {
-        <f32 as crate::application::execution::kernel::real_fft::RealFft>::build_inverse_twiddle_table(n)
+    fn build_twiddle_inv(n: usize) -> Vec<C> {
+        build_twiddle_table(n, 1.0)
     }
     #[inline]
-    fn twiddle_tl_fwd_get_pow2(idx: usize) -> Option<Arc<[Complex32]>> {
-        TL_FWD_REDUCED_POW2.with(|c| c.borrow()[idx].clone())
+    fn twiddle_tl_fwd_get_pow2(idx: usize) -> Option<Arc<[C]>> {
+        slot_get_pow2(&C::FWD, idx)
     }
     #[inline]
-    fn twiddle_tl_fwd_insert_pow2(idx: usize, v: Arc<[Complex32]>) {
-        TL_FWD_REDUCED_POW2.with(|c| {
-            c.borrow_mut()[idx] = Some(v);
-        });
+    fn twiddle_tl_fwd_insert_pow2(idx: usize, v: Arc<[C]>) {
+        slot_insert_pow2(&C::FWD, idx, v);
     }
     #[inline]
-    fn twiddle_tl_inv_get_pow2(idx: usize) -> Option<Arc<[Complex32]>> {
-        TL_INV_REDUCED_POW2.with(|c| c.borrow()[idx].clone())
+    fn twiddle_tl_inv_get_pow2(idx: usize) -> Option<Arc<[C]>> {
+        slot_get_pow2(&C::INV, idx)
     }
     #[inline]
-    fn twiddle_tl_inv_insert_pow2(idx: usize, v: Arc<[Complex32]>) {
-        TL_INV_REDUCED_POW2.with(|c| {
-            c.borrow_mut()[idx] = Some(v);
-        });
+    fn twiddle_tl_inv_insert_pow2(idx: usize, v: Arc<[C]>) {
+        slot_insert_pow2(&C::INV, idx, v);
     }
 
     #[inline]
-    fn twiddle_tl_fwd_get_pow2_raw(idx: usize) -> *const [Complex32] {
-        TL_FWD_REDUCED_POW2_RAW.with(|c| c.get()[idx])
+    fn twiddle_tl_fwd_get_pow2_raw(idx: usize) -> *const [C] {
+        slot_get_pow2_raw(&C::FWD, idx)
     }
     #[inline]
-    fn twiddle_tl_fwd_insert_pow2_raw(idx: usize, ptr: *const [Complex32]) {
-        TL_FWD_REDUCED_POW2_RAW.with(|c| {
-            let mut arr = c.get();
-            arr[idx] = ptr;
-            c.set(arr);
-        });
+    fn twiddle_tl_fwd_insert_pow2_raw(idx: usize, ptr: *const [C]) {
+        slot_insert_pow2_raw(&C::FWD, idx, ptr);
     }
     #[inline]
-    fn twiddle_tl_inv_get_pow2_raw(idx: usize) -> *const [Complex32] {
-        TL_INV_REDUCED_POW2_RAW.with(|c| c.get()[idx])
+    fn twiddle_tl_inv_get_pow2_raw(idx: usize) -> *const [C] {
+        slot_get_pow2_raw(&C::INV, idx)
     }
     #[inline]
-    fn twiddle_tl_inv_insert_pow2_raw(idx: usize, ptr: *const [Complex32]) {
-        TL_INV_REDUCED_POW2_RAW.with(|c| {
-            let mut arr = c.get();
-            arr[idx] = ptr;
-            c.set(arr);
-        });
+    fn twiddle_tl_inv_insert_pow2_raw(idx: usize, ptr: *const [C]) {
+        slot_insert_pow2_raw(&C::INV, idx, ptr);
     }
 
     #[inline]
-    fn twiddle_tl_fwd_get_raw(n: usize) -> Option<*const [Complex32]> {
-        TL_FWD_REDUCED_RAW.with(|c| c.borrow().get(&n).copied())
+    fn twiddle_tl_fwd_get_raw(n: usize) -> Option<*const [C]> {
+        slot_get_raw(&C::FWD, n)
     }
     #[inline]
-    fn twiddle_tl_fwd_insert_raw(n: usize, ptr: *const [Complex32]) {
-        TL_FWD_REDUCED_RAW.with(|c| {
-            c.borrow_mut().insert(n, ptr);
-        });
+    fn twiddle_tl_fwd_insert_raw(n: usize, ptr: *const [C]) {
+        slot_insert_raw(&C::FWD, n, ptr);
     }
     #[inline]
-    fn twiddle_tl_inv_get_raw(n: usize) -> Option<*const [Complex32]> {
-        TL_INV_REDUCED_RAW.with(|c| c.borrow().get(&n).copied())
+    fn twiddle_tl_inv_get_raw(n: usize) -> Option<*const [C]> {
+        slot_get_raw(&C::INV, n)
     }
     #[inline]
-    fn twiddle_tl_inv_insert_raw(n: usize, ptr: *const [Complex32]) {
-        TL_INV_REDUCED_RAW.with(|c| {
-            c.borrow_mut().insert(n, ptr);
-        });
+    fn twiddle_tl_inv_insert_raw(n: usize, ptr: *const [C]) {
+        slot_insert_raw(&C::INV, n, ptr);
     }
 }
 
