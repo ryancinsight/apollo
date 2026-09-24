@@ -1,7 +1,8 @@
 //! Combinatorial Laplacian and graph spectral basis construction.
 
+use crate::domain::contracts::error::{GftError, GftResult, SpectralFailure};
 use crate::domain::graph::adjacency::GraphAdjacency;
-use leto::Array2;
+use leto::{Array2, LetoError};
 use leto_ops::symmetric_eigen_jacobi;
 
 /// Laplacian eigensystem stored for application-layer plans.
@@ -32,12 +33,18 @@ pub fn combinatorial_laplacian(graph: &GraphAdjacency) -> Array2<f64> {
 }
 
 /// Compute the graph Fourier basis from the combinatorial Laplacian.
-#[must_use]
-pub fn spectral_basis(graph: &GraphAdjacency) -> GraphSpectralBasis {
+///
+/// # Errors
+///
+/// [`GftError::SpectralDecomposition`] when the eigensolver rejects the
+/// Laplacian. Adjacency validation cannot exclude every such case: degree sums
+/// can overflow finite weights, and the solver's symmetry bound is tighter than
+/// the adjacency tolerance.
+pub fn spectral_basis(graph: &GraphAdjacency) -> GftResult<GraphSpectralBasis> {
     let laplacian = combinatorial_laplacian(graph);
     let n = graph.len();
     let decomposition = symmetric_eigen_jacobi(&laplacian.view())
-        .expect("combinatorial Laplacian from validated undirected graph must be finite symmetric");
+        .map_err(|error| GftError::SpectralDecomposition(classify(&error)))?;
 
     let mut eigenvalues = Vec::with_capacity(n);
     let mut eigenvectors = Vec::with_capacity(n * n);
@@ -53,8 +60,22 @@ pub fn spectral_basis(graph: &GraphAdjacency) -> GraphSpectralBasis {
         }
     }
 
-    GraphSpectralBasis {
+    Ok(GraphSpectralBasis {
         eigenvalues,
         eigenvectors,
+    })
+}
+
+/// Map a leto eigensolver failure onto the GFT contract.
+fn classify(error: &LetoError) -> SpectralFailure {
+    match error {
+        LetoError::InvalidInput(_)
+        | LetoError::StorageError { .. }
+        | LetoError::ShapeMismatch { .. } => SpectralFailure::RejectedInput,
+        LetoError::ConvergenceError { max_iters, .. } => SpectralFailure::NotConverged {
+            max_iters: *max_iters,
+        },
+        LetoError::Overflow { .. } => SpectralFailure::Overflow,
+        _ => SpectralFailure::Unclassified,
     }
 }

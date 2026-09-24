@@ -10,6 +10,13 @@ Change-class tags: [patch] backward-compatible fix, [minor] additive non-breakin
 
 ### Breaking
 
+- [major] `apollo-gft`: `GftPlan::from_adjacency` and `from_graph` return
+  `GftError::SpectralDecomposition(SpectralFailure)` when the leto
+  eigensolver rejects the Laplacian, instead of panicking. Validation cannot
+  exclude every such graph: finite weights can overflow the degree sums, and
+  the solver's symmetry bound is tighter than the adjacency tolerance.
+  `GftError` gains the variant, so exhaustive matches add an arm.
+
 - [major] `apollo-stft`: an `StftPlan` owns one window for both analysis and
   synthesis (ADR 0070).
   - **Removed:** `forward_with_window`. It analyzed with a caller's window
