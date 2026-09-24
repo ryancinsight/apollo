@@ -10,7 +10,7 @@
 
 #[cfg(test)]
 mod tests {
-    use crate::{GftError, GftPlan, GraphAdjacency};
+    use crate::{GftError, GftPlan, GraphAdjacency, SpectralFailure};
     use eunomia::assert_abs_diff_eq;
     use leto::Array1;
     use leto::Array2;
@@ -86,6 +86,19 @@ mod tests {
         assert_eq!(
             GftPlan::from_adjacency(non_finite.view()).unwrap_err(),
             GftError::NonFiniteWeight
+        );
+
+        // Finite weights whose degree sum overflows: adjacency validation
+        // passes, the Laplacian diagonal is 2·1e308 = inf, and the eigensolver
+        // rejects it. The plan returns the typed error instead of panicking.
+        let overflowing = Array2::from_shape_vec(
+            [3, 3],
+            vec![0.0, 1e308, 1e308, 1e308, 0.0, 1e308, 1e308, 1e308, 0.0],
+        )
+        .unwrap();
+        assert_eq!(
+            GftPlan::from_adjacency(overflowing.view()).unwrap_err(),
+            GftError::SpectralDecomposition(SpectralFailure::RejectedInput)
         );
 
         let adjacency = Array2::from_shape_vec([2, 2], vec![0.0, 1.0, 1.0, 0.0]).unwrap();

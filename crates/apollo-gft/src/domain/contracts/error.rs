@@ -26,4 +26,30 @@ pub enum GftError {
     /// Precision profile does not match the requested storage type.
     #[error("precision profile does not match storage type")]
     PrecisionMismatch,
+    /// The Laplacian eigendecomposition failed.
+    #[error("Laplacian eigendecomposition failed: {0}")]
+    SpectralDecomposition(SpectralFailure),
+}
+
+/// Why the Laplacian eigensolver rejected a graph that passed adjacency
+/// validation.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Error)]
+#[non_exhaustive]
+pub enum SpectralFailure {
+    /// The Laplacian was rejected as input: non-finite (degree sums past the
+    /// scalar range) or not symmetric to the eigensolver's rounding bound.
+    #[error("the eigensolver rejected the Laplacian as input")]
+    RejectedInput,
+    /// The eigensolver exhausted its iteration budget.
+    #[error("the eigensolver did not converge within {max_iters} iterations")]
+    NotConverged {
+        /// The exhausted iteration budget.
+        max_iters: usize,
+    },
+    /// An eigenvalue exceeds the scalar range.
+    #[error("an eigenvalue exceeds the scalar range")]
+    Overflow,
+    /// A failure mode the eigensolver added after this mapping was written.
+    #[error("the eigensolver failed")]
+    Unclassified,
 }
