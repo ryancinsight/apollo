@@ -42,8 +42,13 @@ impl GftPlan {
     }
 
     /// Create a graph Fourier plan from a validated graph adjacency descriptor.
+    ///
+    /// # Errors
+    ///
+    /// [`GftError::SpectralDecomposition`] when the Laplacian eigensolver
+    /// rejects the graph.
     pub fn from_graph(graph: &GraphAdjacency) -> GftResult<Self> {
-        let basis = spectral_basis(graph);
+        let basis = spectral_basis(graph)?;
         Ok(Self {
             n: graph.len(),
             eigenvalues: basis.eigenvalues,
