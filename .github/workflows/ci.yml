@@ -20,11 +20,17 @@ on:
     # ready keeps its skipped checks until its next push and the merge gate
     # never sees a verdict (#469 on 2026-09-15).
     types: [opened, synchronize, reopened, ready_for_review]
+  # The merge queue is the integrator: it tests each queued change against
+  # the tip it will land on and reports the required checks from this run.
+  merge_group:
+    types: [checks_requested]
 
 concurrency:
+  # A merge_group ref is a unique gh-readonly-queue/... branch, so queue runs
+  # never share a group and never cancel each other.
   group: ci-${{ github.workflow }}-${{ github.ref }}
-  # A push to main is the merge gate and must reach a verdict; only a
-  # superseded pull-request run is safe to cancel.
+  # A push to main and a merge-queue run are merge gates and must reach a
+  # verdict; only a superseded pull-request run is safe to cancel.
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
@@ -32,9 +38,10 @@ jobs:
     # What a pull request changes. One that touches only the board, the ADRs
     # or the tooling scripts needs the script tests and none of the Rust
     # pipeline, which on a hosted runner is most of an hour of minutes per
-    # board record. Every other change, every push to main, and any failure
-    # of this job leaves `code` other than `false`, which runs everything:
-    # the gate defaults to blame.
+    # board record. A merge-queue run applies the same rule to the group's
+    # whole delta over the queue base. Every other change, every push to
+    # main, and any failure of this job leaves `code` other than `false`,
+    # which runs everything: the gate defaults to blame.
     if: ${{ github.event_name != 'pull_request' || !github.event.pull_request.draft }}
     name: change scope
     runs-on: ubuntu-24.04
@@ -51,15 +58,16 @@ jobs:
       - id: diff
         env:
           EVENT: ${{ github.event_name }}
-          BASE: ${{ github.event.pull_request.base.sha }}
-          HEAD: ${{ github.event.pull_request.head.sha }}
+          BASE: ${{ github.event.pull_request.base.sha || github.event.merge_group.base_sha }}
+          HEAD: ${{ github.event.pull_request.head.sha || github.event.merge_group.head_sha }}
         run: |
           set -euo pipefail
-          if [ "$EVENT" != "pull_request" ]; then
+          if [ "$EVENT" != "pull_request" ] && [ "$EVENT" != "merge_group" ]; then
             echo "code=true" >> "$GITHUB_OUTPUT"
             exit 0
           fi
           # Tree comparison only: rename detection would fetch every blob.
+          # The queue head descends from its base, so the merge base is BASE.
           git diff --no-renames --name-only "$BASE...$HEAD" > changed.txt
           echo "changed files:"
           cat changed.txt
