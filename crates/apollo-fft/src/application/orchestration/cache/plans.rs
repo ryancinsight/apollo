@@ -18,6 +18,7 @@
 //! stamp is written only when it moves, keeping threads that hit one plan
 //! off a shared cache line.
 
+use crate::application::execution::kernel::mixed_radix::MixedRadixScalar;
 use crate::application::execution::plan::fft::dimension_1d::FftPlan1D;
 use crate::application::execution::plan::fft::dimension_2d::FftPlan2D;
 use crate::application::execution::plan::fft::dimension_3d::FftPlan3D;
@@ -66,21 +67,41 @@ pub trait PlanCacheProvider: RealFftData {
 /// rebuilt on their next use. Called from a thread-local destructor, it
 /// skips that thread's rings already destroyed.
 pub fn clear_plan_caches() {
-    SHARED_1D_PRECISE.clear();
-    SHARED_2D_PRECISE.clear();
-    SHARED_3D_PRECISE.clear();
-    SHARED_1D_REDUCED.clear();
-    SHARED_2D_REDUCED.clear();
-    SHARED_3D_REDUCED.clear();
+    clear_plan_cache_tier(
+        &SHARED_1D_PRECISE,
+        &SHARED_2D_PRECISE,
+        &SHARED_3D_PRECISE,
+        &LOCAL_1D_PRECISE,
+        &LOCAL_2D_PRECISE,
+        &LOCAL_3D_PRECISE,
+    );
+    clear_plan_cache_tier(
+        &SHARED_1D_REDUCED,
+        &SHARED_2D_REDUCED,
+        &SHARED_3D_REDUCED,
+        &LOCAL_1D_REDUCED,
+        &LOCAL_2D_REDUCED,
+        &LOCAL_3D_REDUCED,
+    );
     // No other access is ordered against this one: a thread reading the
     // old value keeps plans that are still valid, only for longer.
     EPOCH.fetch_add(1, Ordering::Relaxed);
-    clear_ring(&LOCAL_1D_PRECISE);
-    clear_ring(&LOCAL_2D_PRECISE);
-    clear_ring(&LOCAL_3D_PRECISE);
-    clear_ring(&LOCAL_1D_REDUCED);
-    clear_ring(&LOCAL_2D_REDUCED);
-    clear_ring(&LOCAL_3D_REDUCED);
+}
+
+fn clear_plan_cache_tier<P: MixedRadixScalar>(
+    shared_1d: &SharedPlans<usize, FftPlan1D<P>>,
+    shared_2d: &SharedPlans<(usize, usize), FftPlan2D<P>>,
+    shared_3d: &SharedPlans<(usize, usize, usize), FftPlan3D<P>>,
+    local_1d: &'static LocalKey<RefCell<LocalPlans<usize, FftPlan1D<P>>>>,
+    local_2d: &'static LocalKey<RefCell<LocalPlans<(usize, usize), FftPlan2D<P>>>>,
+    local_3d: &'static LocalKey<RefCell<LocalPlans<(usize, usize, usize), FftPlan3D<P>>>>,
+) {
+    shared_1d.clear();
+    shared_2d.clear();
+    shared_3d.clear();
+    clear_ring(local_1d);
+    clear_ring(local_2d);
+    clear_ring(local_3d);
 }
 
 /// Empties the calling thread's `ring`. A ring its thread has already
@@ -263,81 +284,77 @@ fn lookup<K: Copy + Eq + 'static, P: 'static>(
     plan
 }
 
-static SHARED_1D_PRECISE: SharedPlans<usize, FftPlan1D<f64>> = SharedPlans::new();
-static SHARED_2D_PRECISE: SharedPlans<(usize, usize), FftPlan2D<f64>> = SharedPlans::new();
-static SHARED_3D_PRECISE: SharedPlans<(usize, usize, usize), FftPlan3D<f64>> = SharedPlans::new();
-static SHARED_1D_REDUCED: SharedPlans<usize, FftPlan1D<f32>> = SharedPlans::new();
-static SHARED_2D_REDUCED: SharedPlans<(usize, usize), FftPlan2D<f32>> = SharedPlans::new();
-static SHARED_3D_REDUCED: SharedPlans<(usize, usize, usize), FftPlan3D<f32>> = SharedPlans::new();
+macro_rules! define_plan_cache_tier {
+    (
+        $scalar:ty;
+        $shared_1d:ident, $shared_2d:ident, $shared_3d:ident;
+        $local_1d:ident, $local_2d:ident, $local_3d:ident
+    ) => {
+        static $shared_1d: SharedPlans<usize, FftPlan1D<$scalar>> = SharedPlans::new();
+        static $shared_2d: SharedPlans<(usize, usize), FftPlan2D<$scalar>> = SharedPlans::new();
+        static $shared_3d: SharedPlans<(usize, usize, usize), FftPlan3D<$scalar>> =
+            SharedPlans::new();
 
-thread_local! {
-    static LOCAL_1D_PRECISE: RefCell<LocalPlans<usize, FftPlan1D<f64>>> =
-        const { RefCell::new(LocalPlans::new()) };
-    static LOCAL_2D_PRECISE: RefCell<LocalPlans<(usize, usize), FftPlan2D<f64>>> =
-        const { RefCell::new(LocalPlans::new()) };
-    static LOCAL_3D_PRECISE: RefCell<LocalPlans<(usize, usize, usize), FftPlan3D<f64>>> =
-        const { RefCell::new(LocalPlans::new()) };
-    static LOCAL_1D_REDUCED: RefCell<LocalPlans<usize, FftPlan1D<f32>>> =
-        const { RefCell::new(LocalPlans::new()) };
-    static LOCAL_2D_REDUCED: RefCell<LocalPlans<(usize, usize), FftPlan2D<f32>>> =
-        const { RefCell::new(LocalPlans::new()) };
-    static LOCAL_3D_REDUCED: RefCell<LocalPlans<(usize, usize, usize), FftPlan3D<f32>>> =
-        const { RefCell::new(LocalPlans::new()) };
+        thread_local! {
+            static $local_1d: RefCell<LocalPlans<usize, FftPlan1D<$scalar>>> =
+                const { RefCell::new(LocalPlans::new()) };
+            static $local_2d: RefCell<LocalPlans<(usize, usize), FftPlan2D<$scalar>>> =
+                const { RefCell::new(LocalPlans::new()) };
+            static $local_3d: RefCell<LocalPlans<(usize, usize, usize), FftPlan3D<$scalar>>> =
+                const { RefCell::new(LocalPlans::new()) };
+        }
+    };
 }
 
-impl PlanCacheProvider for f64 {
-    #[inline]
-    fn get_1d_plan(shape: Shape1D) -> Arc<FftPlan1D<Self::PlanScalar>> {
-        lookup(&LOCAL_1D_PRECISE, &SHARED_1D_PRECISE, shape.n(), || {
-            FftPlan1D::new(shape)
-        })
-    }
+macro_rules! impl_plan_cache_provider {
+    (
+        $storage:ty;
+        $shared_1d:ident, $shared_2d:ident, $shared_3d:ident;
+        $local_1d:ident, $local_2d:ident, $local_3d:ident
+    ) => {
+        impl PlanCacheProvider for $storage {
+            #[inline]
+            fn get_1d_plan(shape: Shape1D) -> Arc<FftPlan1D<Self::PlanScalar>> {
+                lookup(&$local_1d, &$shared_1d, shape.n(), || FftPlan1D::new(shape))
+            }
 
-    #[inline]
-    fn get_2d_plan(shape: Shape2D) -> Arc<FftPlan2D<Self::PlanScalar>> {
-        lookup(
-            &LOCAL_2D_PRECISE,
-            &SHARED_2D_PRECISE,
-            (shape.nx(), shape.ny()),
-            || FftPlan2D::new(shape),
-        )
-    }
+            #[inline]
+            fn get_2d_plan(shape: Shape2D) -> Arc<FftPlan2D<Self::PlanScalar>> {
+                lookup(&$local_2d, &$shared_2d, (shape.nx(), shape.ny()), || {
+                    FftPlan2D::new(shape)
+                })
+            }
 
-    #[inline]
-    fn get_3d_plan(shape: Shape3D) -> Arc<FftPlan3D<Self::PlanScalar>> {
-        let key = (shape.nx(), shape.ny(), shape.nz());
-        lookup(&LOCAL_3D_PRECISE, &SHARED_3D_PRECISE, key, || {
-            FftPlan3D::new(shape)
-        })
-    }
+            #[inline]
+            fn get_3d_plan(shape: Shape3D) -> Arc<FftPlan3D<Self::PlanScalar>> {
+                let key = (shape.nx(), shape.ny(), shape.nz());
+                lookup(&$local_3d, &$shared_3d, key, || FftPlan3D::new(shape))
+            }
+        }
+    };
 }
 
-impl PlanCacheProvider for f32 {
-    #[inline]
-    fn get_1d_plan(shape: Shape1D) -> Arc<FftPlan1D<Self::PlanScalar>> {
-        lookup(&LOCAL_1D_REDUCED, &SHARED_1D_REDUCED, shape.n(), || {
-            FftPlan1D::new(shape)
-        })
-    }
+define_plan_cache_tier!(
+    f64;
+    SHARED_1D_PRECISE, SHARED_2D_PRECISE, SHARED_3D_PRECISE;
+    LOCAL_1D_PRECISE, LOCAL_2D_PRECISE, LOCAL_3D_PRECISE
+);
+define_plan_cache_tier!(
+    f32;
+    SHARED_1D_REDUCED, SHARED_2D_REDUCED, SHARED_3D_REDUCED;
+    LOCAL_1D_REDUCED, LOCAL_2D_REDUCED, LOCAL_3D_REDUCED
+);
 
-    #[inline]
-    fn get_2d_plan(shape: Shape2D) -> Arc<FftPlan2D<Self::PlanScalar>> {
-        lookup(
-            &LOCAL_2D_REDUCED,
-            &SHARED_2D_REDUCED,
-            (shape.nx(), shape.ny()),
-            || FftPlan2D::new(shape),
-        )
-    }
-
-    #[inline]
-    fn get_3d_plan(shape: Shape3D) -> Arc<FftPlan3D<Self::PlanScalar>> {
-        let key = (shape.nx(), shape.ny(), shape.nz());
-        lookup(&LOCAL_3D_REDUCED, &SHARED_3D_REDUCED, key, || {
-            FftPlan3D::new(shape)
-        })
-    }
-}
+impl_plan_cache_provider!(
+    f64;
+    SHARED_1D_PRECISE, SHARED_2D_PRECISE, SHARED_3D_PRECISE;
+    LOCAL_1D_PRECISE, LOCAL_2D_PRECISE, LOCAL_3D_PRECISE
+);
+impl_plan_cache_provider!(
+    f32;
+    SHARED_1D_REDUCED, SHARED_2D_REDUCED, SHARED_3D_REDUCED;
+    LOCAL_1D_REDUCED, LOCAL_2D_REDUCED, LOCAL_3D_REDUCED
+);
 
 impl PlanCacheProvider for F16 {
     #[inline]
