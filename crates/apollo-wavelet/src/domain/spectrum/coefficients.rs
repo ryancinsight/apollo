@@ -7,9 +7,9 @@ use leto::Array2;
 ///
 /// Detail levels are stored contiguously in one buffer, finest level first:
 /// level `i` occupies `detail_level(i) = &details[len - (len >> i)..len - (len >> (i + 1))]`,
-/// the halving shape [`DwtPlan::coefficient_shapes`](crate::application::execution::plan::DwtPlan::coefficient_shapes)
-/// fixes for every level — one allocation instead of one per level, and level
-/// access is a slice view rather than a pointer chase.
+/// the halving level shape every `DwtPlan` fixes for its levels — one
+/// allocation instead of one per level, and level access is a slice view
+/// rather than a pointer chase.
 #[derive(Debug, Clone, PartialEq)]
 pub struct DwtCoefficients {
     len: usize,
