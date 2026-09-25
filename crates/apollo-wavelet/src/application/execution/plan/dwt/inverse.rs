@@ -11,7 +11,7 @@ impl DwtPlan {
             return Err(WaveletError::CoefficientShapeMismatch);
         }
         let mut current = coefficients.approximation().to_vec();
-        for detail in coefficients.details().iter().rev() {
+        for detail in coefficients.detail_levels().rev() {
             let n = current.len() * 2;
             let mut output = vec![0.0; n];
             synthesis_stage_into(&current, detail, self.wavelet(), &mut output);

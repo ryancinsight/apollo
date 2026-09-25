@@ -1,26 +1,45 @@
 //! Wavelet coefficient containers.
 
+use crate::domain::contracts::error::{WaveletError, WaveletResult};
 use leto::Array2;
 
 /// Multilevel DWT coefficient storage.
+///
+/// Detail levels are stored contiguously in one buffer, finest level first:
+/// level `i` occupies `detail_level(i) = &details[len - (len >> i)..len - (len >> (i + 1))]`,
+/// the halving level shape every `DwtPlan` fixes for its levels — one
+/// allocation instead of one per level, and level access is a slice view
+/// rather than a pointer chase.
 #[derive(Debug, Clone, PartialEq)]
 pub struct DwtCoefficients {
     len: usize,
     levels: usize,
     approximation: Vec<f64>,
-    details: Vec<Vec<f64>>,
+    details: Vec<f64>,
 }
 
 impl DwtCoefficients {
-    /// Create DWT coefficient storage.
-    #[must_use]
-    pub fn new(len: usize, levels: usize, approximation: Vec<f64>, details: Vec<Vec<f64>>) -> Self {
-        Self {
+    /// Create DWT coefficient storage from the flat detail buffer.
+    ///
+    /// # Errors
+    /// `CoefficientShapeMismatch` unless `approximation.len() == len >> levels`
+    /// and `details.len() == len - (len >> levels)` — the two halves of the
+    /// telescoping shape the level slices are derived from.
+    pub fn new(
+        len: usize,
+        levels: usize,
+        approximation: Vec<f64>,
+        details: Vec<f64>,
+    ) -> WaveletResult<Self> {
+        if approximation.len() != len >> levels || details.len() != len - (len >> levels) {
+            return Err(WaveletError::CoefficientShapeMismatch);
+        }
+        Ok(Self {
             len,
             levels,
             approximation,
             details,
-        }
+        })
     }
 
     /// Return original signal length.
@@ -47,10 +66,31 @@ impl DwtCoefficients {
         &self.approximation
     }
 
-    /// Return detail coefficients from finest to coarsest.
+    /// Return the flat detail buffer, finest level first.
+    ///
+    /// Level boundaries are derived from `(len, levels)`; prefer
+    /// [`Self::detail_levels`] for per-level views.
     #[must_use]
-    pub fn details(&self) -> &[Vec<f64>] {
+    pub fn details(&self) -> &[f64] {
         &self.details
+    }
+
+    /// Iterate the detail levels, finest first, each as a contiguous slice.
+    pub fn detail_levels(&self) -> impl DoubleEndedIterator<Item = &[f64]> {
+        let len = self.len;
+        (0..self.levels).map(move |level| self.detail_slice(len, level))
+    }
+
+    /// Return detail level `level` (0 = finest), or `None` when out of range.
+    #[must_use]
+    pub fn detail_level(&self, level: usize) -> Option<&[f64]> {
+        (level < self.levels).then(|| self.detail_slice(self.len, level))
+    }
+
+    /// Level slice from the telescoping offsets; `level < self.levels` is the
+    /// caller's proven invariant.
+    fn detail_slice(&self, len: usize, level: usize) -> &[f64] {
+        &self.details[len - (len >> level)..len - (len >> (level + 1))]
     }
 }
 

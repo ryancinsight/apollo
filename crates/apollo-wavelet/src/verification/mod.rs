@@ -31,12 +31,11 @@ mod tests {
             2.0 * scale,
             epsilon = 1.0e-12
         );
-        assert_abs_diff_eq!(
-            coefficients.details()[0][0],
-            -2.0 * scale,
-            epsilon = 1.0e-12
-        );
-        assert_abs_diff_eq!(coefficients.details()[0][1], 2.0 * scale, epsilon = 1.0e-12);
+        let finest_detail = coefficients
+            .detail_level(0)
+            .expect("invariant: a one-level plan has a finest detail level");
+        assert_abs_diff_eq!(finest_detail[0], -2.0 * scale, epsilon = 1.0e-12);
+        assert_abs_diff_eq!(finest_detail[1], 2.0 * scale, epsilon = 1.0e-12);
     }
 
     #[test]

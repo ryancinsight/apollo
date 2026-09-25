@@ -226,12 +226,7 @@ impl SparseFftPlan {
     /// squared time-domain reconstruction residual by Parseval's theorem; see
     /// module-level *Top-K Coefficient Selection Optimality* theorem.
     pub fn forward(&self, signal: &[Complex64]) -> ApolloResult<SparseSpectrum> {
-        if signal.len() != self.len() {
-            return Err(ApolloError::ShapeMismatch {
-                expected: self.len().to_string(),
-                actual: signal.len().to_string(),
-            });
-        }
+        validate_transform_len(self.len(), signal.len())?;
 
         // Candidates in ascending frequency order: every bin on the dense
         // route, the resolved tones on the downsampled one, whose count is
@@ -314,12 +309,7 @@ impl SparseFftPlan {
     /// the standard IDFT: x_n = (1/N) sum_k X_k exp(2 pi i k n / N).
     pub fn inverse(&self, spectrum: &SparseSpectrum) -> ApolloResult<Vec<Complex64>> {
         spectrum.validate()?;
-        if spectrum.n != self.len() {
-            return Err(ApolloError::ShapeMismatch {
-                expected: self.len().to_string(),
-                actual: spectrum.n.to_string(),
-            });
-        }
+        validate_transform_len(self.len(), spectrum.n)?;
 
         let mut arr = Array1::from(spectrum.to_dense());
         apollo_fft::ifft_1d_complex_inplace(&mut arr);
@@ -332,13 +322,7 @@ impl SparseFftPlan {
         spectrum: &SparseSpectrum,
     ) -> ApolloResult<leto::Array<Complex64, leto::MnemosyneStorage<Complex64>, 1>> {
         let signal = self.inverse(spectrum)?;
-        apollo_leto_interop::try_array1_from_slice(&signal).ok_or_else(|| {
-            ApolloError::validation(
-                "leto_array",
-                "rejected length",
-                "Mnemosyne-backed 1D array construction",
-            )
-        })
+        try_mnemosyne_array1_from_slice(&signal)
     }
 
     /// Return the retained support as a list of (frequency, coefficient) pairs.
@@ -379,13 +363,7 @@ impl SparseFftPlan {
         let mut frequencies = Vec::new();
         let mut values = Vec::new();
         self.forward_typed_into(&signal, &mut frequencies, &mut values, profile)?;
-        let values = apollo_leto_interop::try_array1_from_slice(&values).ok_or_else(|| {
-            ApolloError::validation(
-                "leto_array",
-                "rejected length",
-                "Mnemosyne-backed 1D array construction",
-            )
-        })?;
+        let values = try_mnemosyne_array1_from_slice(&values)?;
         Ok(SparseLetoSpectrum {
             frequencies,
             values,
@@ -413,13 +391,7 @@ impl SparseFftPlan {
         let values = apollo_leto_interop::view_cow(&values);
         let mut output = vec![T::from_cpu(Complex64::new(0.0, 0.0)); self.len()];
         self.inverse_typed_into(frequencies, &values, &mut output, profile)?;
-        apollo_leto_interop::try_array1_from_slice(&output).ok_or_else(|| {
-            ApolloError::validation(
-                "leto_array",
-                "rejected length",
-                "Mnemosyne-backed 1D array construction",
-            )
-        })
+        try_mnemosyne_array1_from_slice(&output)
     }
 }
 
@@ -434,12 +406,7 @@ pub trait SparseComplexStorage: CpuStorage<Complex64> {
         profile: PrecisionProfile,
     ) -> ApolloResult<()> {
         validate_profile(profile, Self::PROFILE)?;
-        if signal.len() != plan.len() {
-            return Err(ApolloError::ShapeMismatch {
-                expected: plan.len().to_string(),
-                actual: signal.len().to_string(),
-            });
-        }
+        validate_transform_len(plan.len(), signal.len())?;
         let owner_values = owner_values_from_storage(signal);
         let spectrum = plan.forward(&owner_values)?;
         frequencies.clear();
@@ -460,23 +427,8 @@ pub trait SparseComplexStorage: CpuStorage<Complex64> {
         profile: PrecisionProfile,
     ) -> ApolloResult<()> {
         validate_profile(profile, Self::PROFILE)?;
-        if output.len() != plan.len() {
-            return Err(ApolloError::ShapeMismatch {
-                expected: plan.len().to_string(),
-                actual: output.len().to_string(),
-            });
-        }
-        if frequencies.len() != values.len() {
-            return Err(ApolloError::validation(
-                "sparse_values",
-                values.len().to_string(),
-                "frequency and value counts must match",
-            ));
-        }
-        let mut spectrum = SparseSpectrum::new(plan.len());
-        for (&frequency, &value) in frequencies.iter().zip(values.iter()) {
-            spectrum.insert(frequency, value.to_cpu())?;
-        }
+        validate_transform_len(plan.len(), output.len())?;
+        let spectrum = sparse_spectrum_from_storage(plan.len(), frequencies, values)?;
         let owner_values = plan.inverse(&spectrum)?;
         write_storage_from_owner_values(output, &owner_values);
         Ok(())
@@ -508,23 +460,8 @@ impl SparseComplexStorage for Complex64 {
         profile: PrecisionProfile,
     ) -> ApolloResult<()> {
         validate_profile(profile, Self::PROFILE)?;
-        if output.len() != plan.len() {
-            return Err(ApolloError::ShapeMismatch {
-                expected: plan.len().to_string(),
-                actual: output.len().to_string(),
-            });
-        }
-        if frequencies.len() != values.len() {
-            return Err(ApolloError::validation(
-                "sparse_values",
-                values.len().to_string(),
-                "frequency and value counts must match",
-            ));
-        }
-        let mut spectrum = SparseSpectrum::new(plan.len());
-        for (&frequency, &value) in frequencies.iter().zip(values.iter()) {
-            spectrum.insert(frequency, value)?;
-        }
+        validate_transform_len(plan.len(), output.len())?;
+        let spectrum = sparse_spectrum_from_storage(plan.len(), frequencies, values)?;
         let signal = plan.inverse(&spectrum)?;
         output.copy_from_slice(&signal);
         Ok(())
@@ -548,6 +485,56 @@ fn validate_profile(actual: PrecisionProfile, expected: PrecisionProfile) -> Apo
             ),
         ))
     }
+}
+
+#[inline]
+fn validate_transform_len(expected: usize, actual: usize) -> ApolloResult<()> {
+    if actual == expected {
+        Ok(())
+    } else {
+        Err(ApolloError::ShapeMismatch {
+            expected: expected.to_string(),
+            actual: actual.to_string(),
+        })
+    }
+}
+
+#[inline]
+fn validate_support_len(frequencies_len: usize, values_len: usize) -> ApolloResult<()> {
+    if frequencies_len == values_len {
+        Ok(())
+    } else {
+        Err(ApolloError::validation(
+            "sparse_values",
+            values_len.to_string(),
+            "frequency and value counts must match",
+        ))
+    }
+}
+
+fn sparse_spectrum_from_storage<T: SparseComplexStorage>(
+    len: usize,
+    frequencies: &[usize],
+    values: &[T],
+) -> ApolloResult<SparseSpectrum> {
+    validate_support_len(frequencies.len(), values.len())?;
+    let mut spectrum = SparseSpectrum::new(len);
+    for (&frequency, &value) in frequencies.iter().zip(values.iter()) {
+        spectrum.insert(frequency, value.to_cpu())?;
+    }
+    Ok(spectrum)
+}
+
+fn try_mnemosyne_array1_from_slice<T: Copy>(
+    values: &[T],
+) -> ApolloResult<leto::Array<T, leto::MnemosyneStorage<T>, 1>> {
+    apollo_leto_interop::try_array1_from_slice(values).ok_or_else(|| {
+        ApolloError::validation(
+            "leto_array",
+            "rejected length",
+            "Mnemosyne-backed 1D array construction",
+        )
+    })
 }
 
 fn owner_values_from_storage<T: SparseComplexStorage>(values: &[T]) -> Vec<Complex64> {

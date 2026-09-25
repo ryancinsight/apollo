@@ -99,7 +99,7 @@ fn forward_matches_cpu_haar_coefficients_when_device_exists() {
         .iter()
         .map(|&value| value as f32)
         .collect::<Vec<_>>();
-    for detail in cpu_coeffs.details().iter().rev() {
+    for detail in cpu_coeffs.detail_levels().rev() {
         expected.extend(detail.iter().map(|&value| value as f32));
     }
 
