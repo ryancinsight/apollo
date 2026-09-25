@@ -870,6 +870,15 @@ impl NufftPlan3D {
         self.lane_fft_pass::<0, false>(grid, &self.fft_x, self.mx);
     }
 
+    #[inline]
+    fn apply_fft_to_lane<const INVERSE: bool>(fft: &FftPlan1D<f64>, lane: &mut [Complex64]) {
+        if INVERSE {
+            fft.inverse_complex_slice_unnorm_inplace(lane);
+        } else {
+            fft.forward_complex_slice_inplace(lane);
+        }
+    }
+
     fn lane_fft_pass<const AXIS: usize, const INVERSE: bool>(
         &self,
         grid: &mut ArrayViewMut3<'_, Complex64>,
@@ -877,61 +886,47 @@ impl NufftPlan3D {
         lane_len: usize,
     ) {
         FFT3D_LANE_SCRATCH.with(|pool| {
-            pool.with_scratch(lane_len, |lane| {
-                match AXIS {
-                    0 => {
+            pool.with_scratch(lane_len, |lane| match AXIS {
+                0 => {
+                    for iy in 0..self.my {
+                        for iz in 0..self.mz {
+                            for ix in 0..self.mx {
+                                lane[ix] = view3_mut_value(grid, [ix, iy, iz]);
+                            }
+                            Self::apply_fft_to_lane::<INVERSE>(fft, lane);
+                            for ix in 0..self.mx {
+                                view3_write(grid, [ix, iy, iz], lane[ix]);
+                            }
+                        }
+                    }
+                }
+                1 => {
+                    for ix in 0..self.mx {
+                        for iz in 0..self.mz {
+                            for iy in 0..self.my {
+                                lane[iy] = view3_mut_value(grid, [ix, iy, iz]);
+                            }
+                            Self::apply_fft_to_lane::<INVERSE>(fft, lane);
+                            for iy in 0..self.my {
+                                view3_write(grid, [ix, iy, iz], lane[iy]);
+                            }
+                        }
+                    }
+                }
+                2 => {
+                    for ix in 0..self.mx {
                         for iy in 0..self.my {
                             for iz in 0..self.mz {
-                                for ix in 0..self.mx {
-                                    lane[ix] = view3_mut_value(grid, [ix, iy, iz]);
-                                }
-                                if INVERSE {
-                                    fft.inverse_complex_slice_unnorm_inplace(lane);
-                                } else {
-                                    fft.forward_complex_slice_inplace(lane);
-                                }
-                                for ix in 0..self.mx {
-                                    view3_write(grid, [ix, iy, iz], lane[ix]);
-                                }
+                                lane[iz] = view3_mut_value(grid, [ix, iy, iz]);
                             }
-                        }
-                    }
-                    1 => {
-                        for ix in 0..self.mx {
+                            Self::apply_fft_to_lane::<INVERSE>(fft, lane);
                             for iz in 0..self.mz {
-                                for iy in 0..self.my {
-                                    lane[iy] = view3_mut_value(grid, [ix, iy, iz]);
-                                }
-                                if INVERSE {
-                                    fft.inverse_complex_slice_unnorm_inplace(lane);
-                                } else {
-                                    fft.forward_complex_slice_inplace(lane);
-                                }
-                                for iy in 0..self.my {
-                                    view3_write(grid, [ix, iy, iz], lane[iy]);
-                                }
+                                view3_write(grid, [ix, iy, iz], lane[iz]);
                             }
                         }
                     }
-                    2 => {
-                        for ix in 0..self.mx {
-                            for iy in 0..self.my {
-                                for iz in 0..self.mz {
-                                    lane[iz] = view3_mut_value(grid, [ix, iy, iz]);
-                                }
-                                if INVERSE {
-                                    fft.inverse_complex_slice_unnorm_inplace(lane);
-                                } else {
-                                    fft.forward_complex_slice_inplace(lane);
-                                }
-                                for iz in 0..self.mz {
-                                    view3_write(grid, [ix, iy, iz], lane[iz]);
-                                }
-                            }
-                        }
-                    }
-                    _ => unreachable!("3D NUFFT axis must be one of 0, 1, or 2"),
                 }
+                _ => unreachable!("3D NUFFT axis must be one of 0, 1, or 2"),
             });
         });
     }
