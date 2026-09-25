@@ -42,7 +42,9 @@ pub(crate) fn wavelet_haar_one_level_detail_fixture() -> SuiteResult<PublishedFi
     let input = [1.0_f64, -1.0, 0.0, 0.0];
     let plan = DwtPlan::new(4, 1, DiscreteWavelet::Haar)?;
     let coeffs = plan.forward(&input)?;
-    let detail = coeffs.details()[0].as_slice();
+    let detail = coeffs
+        .detail_level(0)
+        .expect("invariant: a one-level plan has a finest detail level");
     let expected = [std::f64::consts::SQRT_2, 0.0_f64];
     Ok(published_real_fixture(
         "DWT-Haar",
@@ -116,7 +118,11 @@ pub(crate) fn wavelet_daubechies4_one_level_known_coefficients_fixture(
     let coefficients = plan.forward(&[1.0_f64, 0.0, 0.0, 0.0])?;
     let mut actual = Vec::with_capacity(4);
     actual.extend_from_slice(coefficients.approximation());
-    actual.extend_from_slice(&coefficients.details()[0]);
+    actual.extend_from_slice(
+        coefficients
+            .detail_level(0)
+            .expect("invariant: a one-level plan has a finest detail level"),
+    );
     let expected = [
         0.482_962_913_144_534_1,
         0.224_143_868_042_013_4,

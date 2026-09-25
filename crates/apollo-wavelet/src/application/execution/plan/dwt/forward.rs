@@ -14,27 +14,28 @@ impl DwtPlan {
         // One scratch buffer ping-pongs with `current` across the shrinking
         // levels instead of allocating a fresh approximation per level: the
         // analysis kernel fully overwrites its outputs, so stale contents
-        // surviving `truncate` never reach the coefficients. Only `detail`,
-        // which the result keeps, is allocated per level.
+        // surviving `truncate` never reach the coefficients. The detail
+        // levels share one flat buffer sized by the telescoping shape, so
+        // the whole transform allocates one detail region, not one per level.
         let mut scratch = vec![0.0_f64; current.len() / 2];
-        let mut details = Vec::with_capacity(self.levels());
+        let mut details = vec![0.0_f64; self.len() - (self.len() >> self.levels())];
+        let mut detail_offset = 0;
         for _ in 0..self.levels() {
             let half = current.len() / 2;
-            let mut detail = vec![0.0_f64; half];
             scratch.truncate(half);
-            analysis_stage_into(&current, self.wavelet(), &mut scratch, &mut detail);
-            details.push(detail);
+            analysis_stage_into(
+                &current,
+                self.wavelet(),
+                &mut scratch,
+                &mut details[detail_offset..detail_offset + half],
+            );
+            detail_offset += half;
             std::mem::swap(&mut current, &mut scratch);
         }
         // The surviving buffer carries ping-pong capacity; return the
         // approximation at its exact size, as the per-level allocation did.
         current.shrink_to_fit();
-        Ok(DwtCoefficients::new(
-            self.len(),
-            self.levels(),
-            current,
-            details,
-        ))
+        DwtCoefficients::new(self.len(), self.levels(), current, details)
     }
 
     /// Execute a multilevel forward DWT from a Leto 1D signal view.

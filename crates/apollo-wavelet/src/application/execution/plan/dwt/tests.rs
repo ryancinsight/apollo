@@ -28,7 +28,7 @@ fn typed_dwt_paths_support_f64_f32_and_mixed_f16_storage() {
     for (actual, expected) in approx64.iter().zip(expected.approximation()) {
         assert_abs_diff_eq!(actual, expected, epsilon = 1.0e-12);
     }
-    for (actual_detail, expected_detail) in details64.iter().zip(expected.details()) {
+    for (actual_detail, expected_detail) in details64.iter().zip(expected.detail_levels()) {
         for (actual, expected) in actual_detail.iter().zip(expected_detail) {
             assert_abs_diff_eq!(actual, expected, epsilon = 1.0e-12);
         }
@@ -101,7 +101,7 @@ fn leto_forward_and_inverse_match_slice_reference() {
     for (actual, expected) in actual_approximation.iter().zip(expected.approximation()) {
         assert_abs_diff_eq!(actual, expected, epsilon = 1.0e-12);
     }
-    for (actual_detail, expected_detail) in actual.details().iter().zip(expected.details()) {
+    for (actual_detail, expected_detail) in actual.details().iter().zip(expected.detail_levels()) {
         let actual_detail = actual_detail.view();
         let actual_detail = actual_detail.as_slice().expect("contiguous detail");
         for (actual, expected) in actual_detail.iter().zip(expected_detail) {
@@ -145,7 +145,7 @@ fn leto_strided_forward_matches_slice_reference() {
     for (actual, expected) in actual_approximation.iter().zip(expected.approximation()) {
         assert_abs_diff_eq!(actual, expected, epsilon = 1.0e-12);
     }
-    for (actual_detail, expected_detail) in actual.details().iter().zip(expected.details()) {
+    for (actual_detail, expected_detail) in actual.details().iter().zip(expected.detail_levels()) {
         let actual_detail = actual_detail.view();
         let actual_detail = actual_detail.as_slice().expect("contiguous detail");
         for (actual, expected) in actual_detail.iter().zip(expected_detail) {

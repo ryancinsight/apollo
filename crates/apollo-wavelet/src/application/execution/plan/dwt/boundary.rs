@@ -11,8 +11,7 @@ pub(crate) fn dwt_coefficients_to_leto(
     let approximation = apollo_leto_interop::try_array1_from_slice(coefficients.approximation())
         .ok_or(WaveletError::CoefficientShapeMismatch)?;
     let details = coefficients
-        .details()
-        .iter()
+        .detail_levels()
         .map(|detail| {
             apollo_leto_interop::try_array1_from_slice(detail)
                 .ok_or(WaveletError::CoefficientShapeMismatch)
@@ -57,23 +56,20 @@ pub(crate) fn dwt_coefficients_from_leto(
         return Err(WaveletError::EmptySignal);
     }
     let approximation = apollo_leto_interop::view_cow(&approximation_view).into_owned();
-    let details = coefficients
-        .details()
-        .iter()
-        .map(|detail| {
-            let detail_view = detail.view();
-            if detail_view.shape()[0] == 0 {
-                return Err(WaveletError::EmptySignal);
-            }
-            Ok(apollo_leto_interop::view_cow(&detail_view).into_owned())
-        })
-        .collect::<WaveletResult<Vec<_>>>()?;
-    Ok(DwtCoefficients::new(
+    let mut details = Vec::new();
+    for detail in coefficients.details() {
+        let detail_view = detail.view();
+        if detail_view.shape()[0] == 0 {
+            return Err(WaveletError::EmptySignal);
+        }
+        details.extend_from_slice(&apollo_leto_interop::view_cow(&detail_view));
+    }
+    DwtCoefficients::new(
         coefficients.len(),
         coefficients.levels(),
         approximation,
         details,
-    ))
+    )
 }
 
 pub(crate) fn validate_profile(

@@ -245,52 +245,71 @@ fn decode_as(
 /// Hankel system `m_{a+i} + Σ_j c_j m_{i+j} = 0`, or `None` when the system
 /// is singular (fewer than `a` tones present).
 fn prony_coefficients(syndromes: &[Complex64; SHIFTS], tones: usize) -> Option<Vec<Complex64>> {
-    let mut matrix: Vec<Vec<Complex64>> = (0..tones)
-        .map(|i| (0..tones).map(|j| syndromes[i + j]).collect())
-        .collect();
+    // One flat row-major buffer; a row per tone was a heap row per tone.
+    let mut matrix = vec![Complex64::default(); tones * tones];
+    for (i, row) in matrix.chunks_exact_mut(tones).enumerate() {
+        for (j, slot) in row.iter_mut().enumerate() {
+            *slot = syndromes[i + j];
+        }
+    }
     let mut rhs: Vec<Complex64> = (0..tones).map(|i| -syndromes[tones + i]).collect();
-    solve_in_place(&mut matrix, &mut rhs)
+    solve_in_place(&mut matrix, tones, &mut rhs)
 }
 
 /// Solves the Vandermonde system `Σ_j p_j z_j^ℓ = m_ℓ`, `ℓ < a`, for the
 /// amplitudes `p`.
 fn vandermonde_solve(roots: &[Complex64], syndromes: &[Complex64]) -> Option<Vec<Complex64>> {
-    let mut matrix: Vec<Vec<Complex64>> = (0..roots.len())
-        .map(|row| roots.iter().map(|&z| power(z, row)).collect())
-        .collect();
+    let size = roots.len();
+    let mut matrix = vec![Complex64::default(); size * size];
+    for (row, slot_row) in matrix.chunks_exact_mut(size).enumerate() {
+        for (slot, &z) in slot_row.iter_mut().zip(roots) {
+            *slot = power(z, row);
+        }
+    }
     let mut rhs = syndromes.to_vec();
-    solve_in_place(&mut matrix, &mut rhs)
+    solve_in_place(&mut matrix, size, &mut rhs)
 }
 
-/// Gaussian elimination with partial pivoting over a small complex system;
-/// `None` when a pivot vanishes relative to the largest entry.
-fn solve_in_place(matrix: &mut [Vec<Complex64>], rhs: &mut [Complex64]) -> Option<Vec<Complex64>> {
-    let size = rhs.len();
-    let scale = matrix
-        .iter()
-        .flatten()
-        .map(|v| v.norm())
-        .fold(0.0_f64, f64::max);
+/// Gaussian elimination with partial pivoting over a small square complex
+/// system held as one flat row-major buffer — row `r` is
+/// `matrix[r * size..(r + 1) * size]`. `None` when a pivot vanishes
+/// relative to the largest entry.
+fn solve_in_place(
+    matrix: &mut [Complex64],
+    size: usize,
+    rhs: &mut [Complex64],
+) -> Option<Vec<Complex64>> {
+    let scale = matrix.iter().map(|v| v.norm()).fold(0.0_f64, f64::max);
     for column in 0..size {
         let pivot_row = (column..size).max_by(|&a, &b| {
-            matrix[a][column]
+            matrix[a * size + column]
                 .norm()
-                .total_cmp(&matrix[b][column].norm())
+                .total_cmp(&matrix[b * size + column].norm())
         })?;
-        if matrix[pivot_row][column].norm() <= scale * 1e-12 {
+        if matrix[pivot_row * size + column].norm() <= scale * 1e-12 {
             return None;
         }
-        matrix.swap(column, pivot_row);
-        rhs.swap(column, pivot_row);
-        let pivot = matrix[column][column];
+        if column != pivot_row {
+            let (low, high) = if column < pivot_row {
+                (column, pivot_row)
+            } else {
+                (pivot_row, column)
+            };
+            let (head, tail) = matrix.split_at_mut(high * size);
+            head[low * size..(low + 1) * size].swap_with_slice(&mut tail[..size]);
+            rhs.swap(column, pivot_row);
+        }
+        let pivot = matrix[column * size + column];
         for row in column + 1..size {
-            let factor = matrix[row][column] / pivot;
+            let factor = matrix[row * size + column] / pivot;
             if factor.norm() == 0.0 {
                 continue;
             }
-            for k in column..size {
-                let above = matrix[column][k];
-                matrix[row][k] -= factor * above;
+            let (head, tail) = matrix.split_at_mut(row * size);
+            let target = &mut tail[column..size];
+            let source = &head[column * size + column..(column + 1) * size];
+            for (slot, &above) in target.iter_mut().zip(source) {
+                *slot -= factor * above;
             }
             let above = rhs[column];
             rhs[row] -= factor * above;
@@ -298,11 +317,12 @@ fn solve_in_place(matrix: &mut [Vec<Complex64>], rhs: &mut [Complex64]) -> Optio
     }
     let mut solution = vec![Complex64::default(); size];
     for row in (0..size).rev() {
+        let matrix_row = &matrix[row * size..(row + 1) * size];
         let mut sum = rhs[row];
-        for k in row + 1..size {
-            sum -= matrix[row][k] * solution[k];
+        for (k, &coefficient) in matrix_row.iter().enumerate().skip(row + 1) {
+            sum -= coefficient * solution[k];
         }
-        solution[row] = sum / matrix[row][row];
+        solution[row] = sum / matrix_row[row];
     }
     Some(solution)
 }

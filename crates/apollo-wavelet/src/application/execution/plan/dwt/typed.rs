@@ -115,7 +115,7 @@ pub trait WaveletStorage: CpuStorage {
         {
             *slot = Self::from_cpu(value);
         }
-        for (detail_out, detail_in) in details.iter_mut().zip(coefficients.details()) {
+        for (detail_out, detail_in) in details.iter_mut().zip(coefficients.detail_levels()) {
             for (slot, value) in detail_out.iter_mut().zip(detail_in.iter().copied()) {
                 *slot = Self::from_cpu(value);
             }
@@ -141,12 +141,14 @@ pub trait WaveletStorage: CpuStorage {
             .copied()
             .map(CpuStorage::to_cpu)
             .collect();
-        let details64: Vec<Vec<f64>> = details
-            .iter()
-            .map(|detail| detail.iter().copied().map(CpuStorage::to_cpu).collect())
-            .collect();
+        // One flat buffer in the halving level order `DwtCoefficients` derives
+        // its level slices from — no per-level heap rows.
+        let mut details64 = Vec::with_capacity(plan.len() - (plan.len() >> plan.levels()));
+        for detail in details {
+            details64.extend(detail.iter().copied().map(CpuStorage::to_cpu));
+        }
         let coefficients =
-            DwtCoefficients::new(plan.len(), plan.levels(), approximation64, details64);
+            DwtCoefficients::new(plan.len(), plan.levels(), approximation64, details64)?;
         let signal = plan.inverse(&coefficients)?;
         for (slot, value) in output.iter_mut().zip(signal.into_iter()) {
             *slot = Self::from_cpu(value);
@@ -195,7 +197,7 @@ impl WaveletStorage for f64 {
         }
         let coefficients = plan.forward(signal)?;
         approximation.copy_from_slice(coefficients.approximation());
-        for (detail_out, detail_in) in details.iter_mut().zip(coefficients.details()) {
+        for (detail_out, detail_in) in details.iter_mut().zip(coefficients.detail_levels()) {
             detail_out.copy_from_slice(detail_in);
         }
         Ok(())
@@ -217,8 +219,8 @@ impl WaveletStorage for f64 {
             plan.len(),
             plan.levels(),
             approximation.to_vec(),
-            details.to_vec(),
-        );
+            details.concat(),
+        )?;
         let signal = plan.inverse(&coefficients)?;
         output.copy_from_slice(&signal);
         Ok(())
