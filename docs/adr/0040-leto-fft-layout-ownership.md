@@ -193,8 +193,9 @@ resolves the old default-runtime requirement conflict. Lock
 selects default Moirai 0.6 `5c8a9e8`, default Mnemosyne `82d3daa1` and
 Aequitas `a442d16`. Eunomia, Hermes and Themis identities remain unchanged.
 Moirai adds eight Mnemosyne packages pinned to `2eb49c1`; the old direct
-runtime retains its eight-package `7f173751` memory pin. There are three
-Mnemosyne identities and two Moirai identities; total packages rise 307→314.
+runtime retains its eight-package memory pin from `mnemosyne#123` (proposed,
+not merged). There are three Mnemosyne identities and two Moirai identities;
+total packages rise 307→314.
 
 The `2eb49c1` pin belongs to Moirai's WASM provider co-evolution. Its manifest
 gives no concrete removal condition; correcting that provider declaration and
@@ -202,9 +203,11 @@ stale ADR is upstream work, not a downstream source patch. Distinct runtime
 and allocator sources carry distinct nominal types and state. The public Leto
 partition API's Moirai 0.6 types cannot accept Apollo's direct 0.5 types.
 
-Apollo retains direct Moirai `83aa411` because
+Apollo retains a direct Moirai pin for the worker-idle-reclamation capability
+that later merged as `moirai#290` (`3eb9f3ced34`) and was bounded by
+`moirai#298` (`83725bd5ddb`), because
 [source inspection](../../../../output/apollo-square-transpose/integration/provider-graph/moirai-closure.json)
-finds its worker-idle hook absent from default `5c8a9e8`. Allocator maintenance
+found its worker-idle hook absent from default `5c8a9e8` at pin time. Allocator maintenance
 cannot release Apollo's live worker-thread scratch. Removing the pin requires
 an upstream owner-thread idle capability and the existing reclamation oracles;
 it must not delete reclamation or substitute an adapter. Keeping the direct
