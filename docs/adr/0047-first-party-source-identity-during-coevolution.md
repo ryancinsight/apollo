@@ -25,7 +25,7 @@ co-evolution pins. The current graph follows these reviewed revisions:
 | Provider | Revision | Upstream change |
 | --- | --- | --- |
 | Eunomia | `fdbf122` | PR #87 |
-| Mnemosyne | `da5c6be` | PR #123 |
+| Mnemosyne | proposed, not merged | PR #123 (closed unmerged) |
 | Hermes | `5a399ee` | PR #155 |
 | Leto | `1caa846` | PR #164 |
 | Hephaestus | `7ca992d` | PR #270 |
