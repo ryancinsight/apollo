@@ -1,34 +1,18 @@
-#![warn(missing_docs)]
+#![deny(missing_docs)]
 // ── Pedantic suppressions ────────────────────────────────────────────────────
-// FFT math inherently uses index-to-float casts for normalisation factors and
-// twiddle-factor computation. Grid sizes are bounded by available memory
-// (< 2^52), so precision loss and truncation are hypothetical, not real.
-// Naming conventions in signal processing (n_x / n_y, coeff_re / coeff_im)
-// are standardised in the literature; renaming them reduces clarity.
-// Complex FFT plans necessarily carry many boolean precision-mode flags;
-// bitset refactors would add complexity without improving safety.
-// These suppressions mirror those already configured in the apollo sub-workspace
-// Cargo.toml (`similar_names = "allow"`, `too_many_lines = "allow"`, etc.).
+// Only the lints the workspace lint table does *not* already allow live here.
+// The cast, naming, length and doc suppressions this block used to repeat are
+// configured once in the apollo `Cargo.toml` `[workspace.lints.clippy]` table
+// and were redundant at crate level.
 #![allow(
-    clippy::cast_possible_truncation, // grid sizes < 2^24 for f32, < 2^52 for f64
-    clippy::cast_precision_loss,      // usize→f32/f64 normalisation, bounded by memory
-    clippy::cast_sign_loss,           // non-negative index arithmetic
-    clippy::cast_possible_wrap,       // modular butterfly arithmetic
-    clippy::similar_names,            // n_x/n_y/n_z, coeff_re/coeff_im — math convention
-    clippy::many_single_char_names,    // FFT/Rader formulas use standard n, m, j, k, w notation
-    clippy::too_many_lines,           // FFT plan builders are inherently long
-    clippy::missing_panics_doc,       // cache helpers panic only on logic error / OOM
-    clippy::missing_errors_doc,       // error paths documented inline in struct fields
-    clippy::missing_fields_in_debug,  // manual Debug omits large internal buffers by design
-    clippy::struct_excessive_bools,   // PrecisionProfile flags are orthogonal bit fields
-    clippy::cast_ptr_alignment,       // loadu/storeu SIMD intrinsics intentionally accept unaligned lanes
-    clippy::option_option,             // tri-state caches encode unknown/unsupported/supported distinctly
-    clippy::approx_constant,           // generated tables preserve audited literal bit patterns
-    clippy::needless_pass_by_value,          // Copy-sized plan/shape types passed by value intentionally
-    clippy::excessive_precision,             // Winograd/codelet coefficients carry one guard digit past
-                                             // f64 precision so the compiler selects the intended
-                                             // nearest-representable value; trimming would alter
-                                             // bit-exact differential-test results (e.g. -13/12 literal)
+    clippy::many_single_char_names, // FFT/Rader formulas use standard n, m, j, k, w notation
+    clippy::cast_ptr_alignment,     // loadu/storeu SIMD intrinsics intentionally accept unaligned lanes
+    clippy::option_option,          // tri-state caches encode unknown/unsupported/supported distinctly
+    clippy::approx_constant,        // generated tables preserve audited literal bit patterns
+    clippy::excessive_precision,    // Winograd/codelet coefficients carry one guard digit past
+                                    // f64 precision so the compiler selects the intended
+                                    // nearest-representable value; trimming would alter
+                                    // bit-exact differential-test results (e.g. -13/12 literal)
 )]
 //! Apollo core crate.
 //!

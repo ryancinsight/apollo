@@ -1,4 +1,4 @@
-#![warn(missing_docs)]
+#![deny(missing_docs)]
 //! Python bindings for Apollo FFT and NUFFT.
 
 #![allow(clippy::unused_self)]

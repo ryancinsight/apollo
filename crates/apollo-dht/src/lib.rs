@@ -1,4 +1,4 @@
-#![warn(missing_docs)]
+#![deny(missing_docs)]
 //! Discrete Hartley Transform plans for real-valued Apollo signals.
 //!
 //! The DHT maps a real signal `x[n]` to a real spectrum

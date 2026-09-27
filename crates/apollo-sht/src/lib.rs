@@ -1,4 +1,4 @@
-#![warn(missing_docs)]
+#![deny(missing_docs)]
 //! Spherical harmonic transform plans for Apollo.
 //!
 //! `apollo-sht` owns spherical-surface sampling metadata, complex coefficient

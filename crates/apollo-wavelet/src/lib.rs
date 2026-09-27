@@ -1,4 +1,4 @@
-#![warn(missing_docs)]
+#![deny(missing_docs)]
 //! Discrete and continuous wavelet transforms for Apollo.
 //!
 //! Wavelet transforms provide multiresolution analysis: high-frequency content

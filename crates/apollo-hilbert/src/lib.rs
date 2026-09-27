@@ -1,4 +1,4 @@
-#![warn(missing_docs)]
+#![deny(missing_docs)]
 //! Hilbert transform and analytic-signal plans for Apollo.
 //!
 //! The discrete Hilbert transform shifts positive-frequency components by
