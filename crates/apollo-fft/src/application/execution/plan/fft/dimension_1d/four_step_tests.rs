@@ -99,18 +99,15 @@ where
         assert_eq!(dynamic.twiddle_fwd.as_deref().map_or(0, <[_]>::len), 0);
     } else {
         assert!(matches!(dynamic.strategy, PlanStrategy::FourStep));
-        assert!(dynamic.planar.is_some());
+        let dynamic_planar = dynamic.planar.as_ref().expect("four-step plan owns state");
         // Execution must not acquire a plan-owned stage table, including on
         // odd powers whose combining pass acquires its own global table.
         assert_eq!(dynamic.twiddle_fwd.as_deref().map_or(0, <[_]>::len), 0);
         assert_eq!(dynamic.twiddle_inv.get().map_or(0, |table| table.len()), 0);
         let cloned = dynamic.clone();
         assert!(matches!(cloned.strategy, PlanStrategy::FourStep));
-        assert!(cloned.planar.is_some());
-        assert!(std::sync::Arc::ptr_eq(
-            dynamic.planar.as_ref().expect("four-step plan owns state"),
-            cloned.planar.as_ref().expect("four-step clone owns state")
-        ));
+        let cloned_planar = cloned.planar.as_ref().expect("four-step clone owns state");
+        assert!(std::sync::Arc::ptr_eq(dynamic_planar, cloned_planar));
         assert_eq!(cloned.twiddle_fwd.as_deref().map_or(0, <[_]>::len), 0);
         assert_eq!(cloned.twiddle_inv.get().map_or(0, |table| table.len()), 0);
     }

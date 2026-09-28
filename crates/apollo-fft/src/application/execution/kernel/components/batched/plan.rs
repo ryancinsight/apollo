@@ -37,4 +37,9 @@ impl<T: ShortWinogradScalar> BatchedPlan<T> {
         }
         Self { len, tw }
     }
+
+    #[cfg(test)]
+    pub(super) fn retained_bytes(&self) -> usize {
+        core::mem::size_of::<Self>() + self.tw.capacity() * core::mem::size_of::<(T, T)>()
+    }
 }

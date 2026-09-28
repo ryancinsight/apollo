@@ -3,7 +3,6 @@
 use super::super::lane_order::LaneOrder;
 use super::super::plane::{transpose_planes, transpose_planes_into, PlaneView};
 use super::super::{boundary, BatchedPlanCache};
-use eunomia::Complex;
 
 #[test]
 fn transpose_is_its_own_inverse_and_never_touches_the_pad() {

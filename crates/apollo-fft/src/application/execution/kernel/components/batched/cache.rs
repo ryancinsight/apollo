@@ -1,4 +1,4 @@
-//! Shared immutable tables and bounded worker-local handles.
+//! Weak indexes for operation-owned immutable tables.
 
 use super::fold::FourStepFold;
 use super::plan::BatchedPlan;
@@ -7,18 +7,17 @@ use hermes_simd::LaneScalar;
 use parking_lot::RwLock;
 use std::cell::RefCell;
 use std::collections::HashMap;
-use std::sync::{Arc, LazyLock};
+use std::sync::{Arc, LazyLock, Weak};
 
-/// A worker needs one active length per direction. Tables themselves remain
-/// process-shared; changing lengths replaces only a handle, without growing
-/// a per-worker map or allocating when a later submission uses a new worker.
+/// A worker indexes one active length per direction. Changing lengths replaces
+/// only a weak handle, so worker-local state neither retains tables nor grows.
 struct TableCache<T> {
     directions: RefCell<[Option<TableEntry<T>>; 2]>,
 }
 
 struct TableEntry<T> {
     length: usize,
-    table: Arc<T>,
+    table: Weak<T>,
 }
 
 impl<T> TableCache<T> {
@@ -32,13 +31,13 @@ impl<T> TableCache<T> {
         self.directions.borrow()[usize::from(INVERSE)]
             .as_ref()
             .filter(|entry| entry.length == length)
-            .map(|entry| Arc::clone(&entry.table))
+            .and_then(|entry| entry.table.upgrade())
     }
 
     fn insert<const INVERSE: bool>(&self, length: usize, table: &Arc<T>) {
         self.directions.borrow_mut()[usize::from(INVERSE)] = Some(TableEntry {
             length,
-            table: Arc::clone(table),
+            table: Arc::downgrade(table),
         });
     }
 }
@@ -66,18 +65,18 @@ impl<T> FoldTableCache<T> {
             .borrow()
             .as_ref()
             .filter(|entry| entry.length == length)
-            .map(|entry| Arc::clone(&entry.table))
+            .and_then(|entry| entry.table.upgrade())
     }
 
     fn insert(&self, length: usize, table: &Arc<T>) {
         *self.entry.borrow_mut() = Some(TableEntry {
             length,
-            table: Arc::clone(table),
+            table: Arc::downgrade(table),
         });
     }
 }
 
-/// Process-wide plan storage behind the bounded per-thread handles.
+/// Process-wide weak indexes behind the bounded per-thread indexes.
 ///
 /// A `BatchedPlan` owns `len - 1` twiddle pairs, O(16 sqrt(n)) bytes, and a
 /// `FourStepFold` its two-level tables, O(16 sqrt(n) (F + sqrt(n) / F)),
@@ -86,11 +85,11 @@ impl<T> FoldTableCache<T> {
 /// (`APOLLO-MEM-INVERSE-CONJUGATE`). The thread-local handles below are the
 /// lock-free fast path, but a miss used to *build* a private table, so
 /// retention multiplied by the worker count of whatever executor drives the
-/// transform. A miss now takes the shared table and replaces one handle, so
-/// every thread converges on one allocation without growing its own table
-/// index.
-type GlobalPlanCache<T> = LazyLock<RwLock<HashMap<(usize, bool), Arc<BatchedPlan<T>>>>>;
-type GlobalFoldCache<T> = LazyLock<RwLock<HashMap<usize, Arc<FourStepFold<T>>>>>;
+/// transform. A miss now takes a live operation owner's shared table and
+/// replaces one weak handle, so every thread converges on one allocation.
+/// Dead weak entries are pruned on a miss, bounding metadata by live owners.
+type GlobalPlanCache<T> = LazyLock<RwLock<HashMap<(usize, bool), Weak<BatchedPlan<T>>>>>;
+type GlobalFoldCache<T> = LazyLock<RwLock<HashMap<usize, Weak<FourStepFold<T>>>>>;
 
 static PLAN_GLOBAL_F64: GlobalPlanCache<f64> = LazyLock::new(|| RwLock::new(HashMap::new()));
 static PLAN_GLOBAL_F32: GlobalPlanCache<f32> = LazyLock::new(|| RwLock::new(HashMap::new()));
@@ -133,7 +132,7 @@ macro_rules! impl_plan_cache {
                     // Drop the read guard before the write path: a guard held in
                     // an `if let` scrutinee outlives the `else` arm, and this lock
                     // is not reentrant.
-                    let shared = $plan_global.read().get(&key).cloned();
+                    let shared = $plan_global.read().get(&key).and_then(Weak::upgrade);
                     if let Some(plan) = shared {
                         return plan;
                     }
@@ -141,11 +140,13 @@ macro_rules! impl_plan_cache {
                     // are O(16n), so blocking a concurrent misser costs less than
                     // letting it build a duplicate the map discards.
                     let mut guard = $plan_global.write();
-                    Arc::clone(
-                        guard
-                            .entry(key)
-                            .or_insert_with(|| Arc::new(BatchedPlan::<$t>::new::<INVERSE>(len))),
-                    )
+                    if let Some(plan) = guard.get(&key).and_then(Weak::upgrade) {
+                        return plan;
+                    }
+                    guard.retain(|_, plan| plan.strong_count() != 0);
+                    let plan = Arc::new(BatchedPlan::<$t>::new::<INVERSE>(len));
+                    guard.insert(key, Arc::downgrade(&plan));
+                    plan
                 }
 
                 $cache.with(|c| {
@@ -167,19 +168,23 @@ macro_rules! impl_plan_cache {
                 #[cold]
                 #[inline(never)]
                 fn miss(n: usize, rows: usize, cols: usize) -> Arc<FourStepFold<$t>> {
-                    let shared = $planes_global.read().get(&n).cloned();
+                    let shared = $planes_global.read().get(&n).and_then(Weak::upgrade);
                     if let Some(planes) = shared {
                         return planes;
                     }
                     let mut guard = $planes_global.write();
-                    Arc::clone(guard.entry(n).or_insert_with(|| {
-                        Arc::new(FourStepFold::<$t>::new(
-                            n,
-                            rows,
-                            cols,
-                            super::lane_order::LaneOrder::for_batch::<$t>(cols),
-                        ))
-                    }))
+                    if let Some(planes) = guard.get(&n).and_then(Weak::upgrade) {
+                        return planes;
+                    }
+                    guard.retain(|_, planes| planes.strong_count() != 0);
+                    let planes = Arc::new(FourStepFold::<$t>::new(
+                        n,
+                        rows,
+                        cols,
+                        super::lane_order::LaneOrder::for_batch::<$t>(cols),
+                    ));
+                    guard.insert(n, Arc::downgrade(&planes));
+                    planes
                 }
 
                 $planes.with(|c| {
@@ -202,6 +207,23 @@ impl_plan_cache!(
     PLAN_GLOBAL_F64,
     FOLD_GLOBAL_F64
 );
+
+#[cfg(test)]
+pub(crate) fn retained_bytes_f64() -> usize {
+    let plans = PLAN_GLOBAL_F64
+        .read()
+        .values()
+        .filter_map(Weak::upgrade)
+        .map(|plan| plan.retained_bytes())
+        .sum::<usize>();
+    plans
+        + FOLD_GLOBAL_F64
+            .read()
+            .values()
+            .filter_map(Weak::upgrade)
+            .map(|fold| fold.retained_bytes())
+            .sum::<usize>()
+}
 impl_plan_cache!(
     f32,
     PLAN_CACHE_F32,

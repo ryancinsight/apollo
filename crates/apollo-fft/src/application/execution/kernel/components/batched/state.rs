@@ -1,7 +1,6 @@
 //! Operation-owned tables for one planar four-step length.
 
 use super::fold::FourStepFold;
-use super::lane_order::LaneOrder;
 use super::plan::BatchedPlan;
 use super::plane::{planar_applies, plane_geometry};
 use super::BatchedPlanCache;
@@ -35,7 +34,11 @@ impl<T: BatchedPlanCache> PlanarState<T> {
         &self,
         data: &mut [eunomia::Complex<T>],
         scratch: &mut [eunomia::Complex<T>],
-    ) {
+    ) where
+        T: crate::application::execution::kernel::mixed_radix::MixedRadixScalar<
+            Complex = eunomia::Complex<T>,
+        >,
+    {
         super::driver::execute_planar::<T, INVERSE>(self, data, scratch);
     }
 

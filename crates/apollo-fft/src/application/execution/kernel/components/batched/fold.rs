@@ -92,4 +92,11 @@ impl<T: ShortWinogradScalar> FourStepFold<T> {
             coarse_im: coarse_im.into_boxed_slice(),
         }
     }
+
+    #[cfg(test)]
+    pub(super) fn retained_bytes(&self) -> usize {
+        let entries =
+            self.fine_re.len() + self.fine_im.len() + self.coarse_re.len() + self.coarse_im.len();
+        core::mem::size_of::<Self>() + entries * core::mem::size_of::<T>()
+    }
 }

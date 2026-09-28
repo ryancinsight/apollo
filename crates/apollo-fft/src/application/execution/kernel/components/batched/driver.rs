@@ -9,6 +9,7 @@ use super::plane::{
 };
 use super::seams::FoldDirection;
 use super::{boundary, sweep, BatchedPlanCache, PlanarState};
+use crate::application::execution::kernel::mixed_radix::MixedRadixScalar;
 use eunomia::Complex;
 
 /// Four-step FFT over the padded planar layout.
@@ -30,7 +31,7 @@ pub(super) fn execute_planar<T, const INVERSE: bool>(
     data: &mut [Complex<T>],
     scratch: &mut [Complex<T>],
 ) where
-    T: BatchedPlanCache,
+    T: BatchedPlanCache + MixedRadixScalar<Complex = Complex<T>>,
 {
     let n = data.len();
     assert_eq!(

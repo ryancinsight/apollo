@@ -286,7 +286,7 @@ where
 /// Runs the stage set over rows the caller has already bit-reversed.
 fn run_stages<T>(data: &mut [Complex<T>], plan: &BatchedPlan<T>)
 where
-    T: BatchedPlanCache,
+    T: BatchedPlanCache + crate::application::execution::kernel::mixed_radix::MixedRadixScalar,
 {
     let flat: &mut [T] = eunomia::layout::cast_slice_mut(data);
     hermes_simd::vectorize(InterleavedStages {

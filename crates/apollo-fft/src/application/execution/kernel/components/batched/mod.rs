@@ -73,6 +73,8 @@ mod sink;
 mod state;
 mod sweep;
 
+#[cfg(test)]
+pub(crate) use cache::retained_bytes_f64;
 pub(crate) use cache::BatchedPlanCache;
 pub(crate) use plane::{planar_applies, scratch_len};
 pub(crate) use state::PlanarState;
