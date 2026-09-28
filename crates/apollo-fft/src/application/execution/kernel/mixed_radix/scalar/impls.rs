@@ -31,6 +31,60 @@ use std::sync::Arc;
 
 // ── AVX/SIMD helpers (shared by f32 and f64 impls) ─────────────────────────
 
+// ── Consolidate LOG2 dispatch for pot_inplace_sized (zero-cost helper) ────
+
+macro_rules! dispatch_pot_sized_by_log2 {
+    (
+        $log2:expr,
+        $data:expr,
+        $twiddles:expr,
+        $inverse:expr,
+        $normalize:expr
+    ) => {
+        match $log2 {
+            // SAFETY: data.len() == 1 << LOG2 by the length match in dispatch.rs that
+            // selected this arm, and N is that length.
+            1 => unsafe {
+                Self::small_pot_inplace_sized::<2, $inverse, $normalize>($data);
+            },
+            // SAFETY: data.len() == 1 << LOG2 by the length match in dispatch.rs that
+            // selected this arm, and N is that length.
+            2 => unsafe {
+                Self::small_pot_inplace_sized::<4, $inverse, $normalize>($data);
+            },
+            // SAFETY: data.len() == 1 << LOG2 by the length match in dispatch.rs that
+            // selected this arm, and N is that length.
+            3 => unsafe {
+                Self::small_pot_inplace_sized::<8, $inverse, $normalize>($data);
+            },
+            // SAFETY: data.len() == 1 << LOG2 by the length match in dispatch.rs that
+            // selected this arm, and N is that length.
+            4 => unsafe {
+                Self::small_pot_inplace_sized::<16, $inverse, $normalize>($data);
+            },
+            // SAFETY: data.len() == 1 << LOG2 by the length match in dispatch.rs that
+            // selected this arm, and N is that length.
+            5 => unsafe {
+                Self::small_pot_inplace_sized::<32, $inverse, $normalize>($data);
+            },
+            // SAFETY: data.len() == 1 << LOG2 by the length match in dispatch.rs that
+            // selected this arm, and N is that length.
+            6 => unsafe {
+                Self::small_pot_inplace_sized::<64, $inverse, $normalize>($data);
+            },
+            _ => {
+                let n = 1usize << $log2;
+                Self::with_scratch(n, |scratch| {
+                    if $inverse && $normalize {
+                        Self::stockham_forward_normalized_sized::<$log2>($data, scratch, $twiddles);
+                    } else {
+                        Self::stockham_forward_sized::<$log2>($data, scratch, $twiddles);
+                    }
+                });
+            }
+        }
+    };
+}
 impl MixedRadixScalar for f32 {
     const HALF_CYCLIC_RADER_THRESHOLD: usize = 32;
     const HALF_CYCLIC_RADER_PRIMES: &'static [usize] = &[];
@@ -252,48 +306,8 @@ impl MixedRadixScalar for f32 {
         // no-scratch path (memory efficiency + best for 32/64 which have dedicated AVX fixed column);
         // for 128+ (md-worst PoT) use stockham sized path so const LOG2 flows end-to-end to
         // kernel forward_with_scratch_sized -> transform_sized / with_strategy / len* bodies.
-        match LOG2 {
-            // SAFETY: `data.len() == 1 << LOG2` by the length match in `dispatch.rs` that
-            // selected this arm, and `N` is that length.
-            1 => unsafe {
-                Self::small_pot_inplace_sized::<2, INVERSE, NORMALIZE>(data);
-            },
-            // SAFETY: `data.len() == 1 << LOG2` by the length match in `dispatch.rs` that
-            // selected this arm, and `N` is that length.
-            2 => unsafe {
-                Self::small_pot_inplace_sized::<4, INVERSE, NORMALIZE>(data);
-            },
-            // SAFETY: `data.len() == 1 << LOG2` by the length match in `dispatch.rs` that
-            // selected this arm, and `N` is that length.
-            3 => unsafe {
-                Self::small_pot_inplace_sized::<8, INVERSE, NORMALIZE>(data);
-            },
-            // SAFETY: `data.len() == 1 << LOG2` by the length match in `dispatch.rs` that
-            // selected this arm, and `N` is that length.
-            4 => unsafe {
-                Self::small_pot_inplace_sized::<16, INVERSE, NORMALIZE>(data);
-            },
-            // SAFETY: `data.len() == 1 << LOG2` by the length match in `dispatch.rs` that
-            // selected this arm, and `N` is that length.
-            5 => unsafe {
-                Self::small_pot_inplace_sized::<32, INVERSE, NORMALIZE>(data);
-            },
-            // SAFETY: `data.len() == 1 << LOG2` by the length match in `dispatch.rs` that
-            // selected this arm, and `N` is that length.
-            6 => unsafe {
-                Self::small_pot_inplace_sized::<64, INVERSE, NORMALIZE>(data);
-            },
-            _ => {
-                let n = 1usize << LOG2;
-                Self::with_scratch(n, |scratch| {
-                    if INVERSE && NORMALIZE {
-                        Self::stockham_forward_normalized_sized::<LOG2>(data, scratch, twiddles);
-                    } else {
-                        Self::stockham_forward_sized::<LOG2>(data, scratch, twiddles);
-                    }
-                });
-            }
-        }
+        // Dispatch based on LOG2 for zero-cost monomorphization (consolidated from duplication)
+        dispatch_pot_sized_by_log2!(LOG2, data, twiddles, INVERSE, NORMALIZE);
     }
 
     #[inline]
@@ -573,48 +587,8 @@ impl MixedRadixScalar for f64 {
         // for 128+ (md-worst PoT) use stockham sized path so const LOG2 flows end-to-end to
         // kernel forward_with_scratch_sized -> transform_sized / with_strategy / len* bodies.
         // twiddles passed directly as &[Complex] (zero-copy reference from plan).
-        match LOG2 {
-            // SAFETY: `data.len() == 1 << LOG2` by the length match in `dispatch.rs` that
-            // selected this arm, and `N` is that length.
-            1 => unsafe {
-                Self::small_pot_inplace_sized::<2, INVERSE, NORMALIZE>(data);
-            },
-            // SAFETY: `data.len() == 1 << LOG2` by the length match in `dispatch.rs` that
-            // selected this arm, and `N` is that length.
-            2 => unsafe {
-                Self::small_pot_inplace_sized::<4, INVERSE, NORMALIZE>(data);
-            },
-            // SAFETY: `data.len() == 1 << LOG2` by the length match in `dispatch.rs` that
-            // selected this arm, and `N` is that length.
-            3 => unsafe {
-                Self::small_pot_inplace_sized::<8, INVERSE, NORMALIZE>(data);
-            },
-            // SAFETY: `data.len() == 1 << LOG2` by the length match in `dispatch.rs` that
-            // selected this arm, and `N` is that length.
-            4 => unsafe {
-                Self::small_pot_inplace_sized::<16, INVERSE, NORMALIZE>(data);
-            },
-            // SAFETY: `data.len() == 1 << LOG2` by the length match in `dispatch.rs` that
-            // selected this arm, and `N` is that length.
-            5 => unsafe {
-                Self::small_pot_inplace_sized::<32, INVERSE, NORMALIZE>(data);
-            },
-            // SAFETY: `data.len() == 1 << LOG2` by the length match in `dispatch.rs` that
-            // selected this arm, and `N` is that length.
-            6 => unsafe {
-                Self::small_pot_inplace_sized::<64, INVERSE, NORMALIZE>(data);
-            },
-            _ => {
-                let n = 1usize << LOG2;
-                Self::with_scratch(n, |scratch| {
-                    if INVERSE && NORMALIZE {
-                        Self::stockham_forward_normalized_sized::<LOG2>(data, scratch, twiddles);
-                    } else {
-                        Self::stockham_forward_sized::<LOG2>(data, scratch, twiddles);
-                    }
-                });
-            }
-        }
+        // Dispatch based on LOG2 for zero-cost monomorphization (consolidated)
+        dispatch_pot_sized_by_log2!(LOG2, data, twiddles, INVERSE, NORMALIZE);
     }
 
     #[inline]

@@ -90,57 +90,69 @@ struct IndexedPosition3D {
     bucket: usize,
 }
 
-fn sort_points_3d(
-    positions: &[(f64, f64, f64)],
-    values: &[Complex64],
-    grid: UniformGrid3D,
-    oversampled_shape: [usize; 3],
-    kernel_width: usize,
-) -> Vec<IndexedPoint3D> {
-    let (lx, ly, lz) = grid.lengths();
-    let bx = bucket_count(oversampled_shape[0], kernel_width);
-    let by = bucket_count(oversampled_shape[1], kernel_width);
-    let bz = bucket_count(oversampled_shape[2], kernel_width);
-    let sx = bx as f64 / lx;
-    let sy = by as f64 / ly;
-    let sz = bz as f64 / lz;
-
-    let mut indexed: Vec<_> = positions
-        .iter()
-        .zip(values.iter())
-        .map(|(&(x, y, z), &value)| {
-            let x_mod = x.rem_euclid(lx);
-            let y_mod = y.rem_euclid(ly);
-            let z_mod = z.rem_euclid(lz);
-            let ix = ((x_mod * sx).floor() as usize).min(bx - 1);
-            let iy = ((y_mod * sy).floor() as usize).min(by - 1);
-            let iz = ((z_mod * sz).floor() as usize).min(bz - 1);
-            IndexedPoint3D {
-                x: x_mod,
-                y: y_mod,
-                z: z_mod,
-                value,
-                bucket: (ix * by + iy) * bz + iz,
-            }
-        })
-        .collect();
-
-    indexed.sort_unstable_by(|lhs, rhs| {
-        lhs.bucket
-            .cmp(&rhs.bucket)
-            .then_with(|| lhs.x.partial_cmp(&rhs.x).unwrap_or(Ordering::Equal))
-            .then_with(|| lhs.y.partial_cmp(&rhs.y).unwrap_or(Ordering::Equal))
-            .then_with(|| lhs.z.partial_cmp(&rhs.z).unwrap_or(Ordering::Equal))
-    });
-    indexed
+trait BucketIndexed3D {
+    fn bucket(&self) -> usize;
+    fn x(&self) -> f64;
+    fn y(&self) -> f64;
+    fn z(&self) -> f64;
 }
 
-fn sort_positions_3d(
+impl BucketIndexed3D for IndexedPoint3D {
+    #[inline]
+    fn bucket(&self) -> usize {
+        self.bucket
+    }
+
+    #[inline]
+    fn x(&self) -> f64 {
+        self.x
+    }
+
+    #[inline]
+    fn y(&self) -> f64 {
+        self.y
+    }
+
+    #[inline]
+    fn z(&self) -> f64 {
+        self.z
+    }
+}
+
+impl BucketIndexed3D for IndexedPosition3D {
+    #[inline]
+    fn bucket(&self) -> usize {
+        self.bucket
+    }
+
+    #[inline]
+    fn x(&self) -> f64 {
+        self.x
+    }
+
+    #[inline]
+    fn y(&self) -> f64 {
+        self.y
+    }
+
+    #[inline]
+    fn z(&self) -> f64 {
+        self.z
+    }
+}
+
+#[inline]
+fn index_positions_by_bucket_3d<T, F>(
     positions: &[(f64, f64, f64)],
     grid: UniformGrid3D,
     oversampled_shape: [usize; 3],
     kernel_width: usize,
-) -> Vec<IndexedPosition3D> {
+    mut project: F,
+) -> Vec<T>
+where
+    T: BucketIndexed3D,
+    F: FnMut(usize, f64, f64, f64, usize) -> T,
+{
     let (lx, ly, lz) = grid.lengths();
     let bx = bucket_count(oversampled_shape[0], kernel_width);
     let by = bucket_count(oversampled_shape[1], kernel_width);
@@ -159,24 +171,62 @@ fn sort_positions_3d(
             let ix = ((x_mod * sx).floor() as usize).min(bx - 1);
             let iy = ((y_mod * sy).floor() as usize).min(by - 1);
             let iz = ((z_mod * sz).floor() as usize).min(bz - 1);
-            IndexedPosition3D {
-                index,
-                x: x_mod,
-                y: y_mod,
-                z: z_mod,
-                bucket: (ix * by + iy) * bz + iz,
-            }
+            let bucket = (ix * by + iy) * bz + iz;
+            project(index, x_mod, y_mod, z_mod, bucket)
         })
         .collect();
 
     indexed.sort_unstable_by(|lhs, rhs| {
-        lhs.bucket
-            .cmp(&rhs.bucket)
-            .then_with(|| lhs.x.partial_cmp(&rhs.x).unwrap_or(Ordering::Equal))
-            .then_with(|| lhs.y.partial_cmp(&rhs.y).unwrap_or(Ordering::Equal))
-            .then_with(|| lhs.z.partial_cmp(&rhs.z).unwrap_or(Ordering::Equal))
+        lhs.bucket()
+            .cmp(&rhs.bucket())
+            .then_with(|| lhs.x().partial_cmp(&rhs.x()).unwrap_or(Ordering::Equal))
+            .then_with(|| lhs.y().partial_cmp(&rhs.y()).unwrap_or(Ordering::Equal))
+            .then_with(|| lhs.z().partial_cmp(&rhs.z()).unwrap_or(Ordering::Equal))
     });
     indexed
+}
+
+fn sort_points_3d(
+    positions: &[(f64, f64, f64)],
+    values: &[Complex64],
+    grid: UniformGrid3D,
+    oversampled_shape: [usize; 3],
+    kernel_width: usize,
+) -> Vec<IndexedPoint3D> {
+    index_positions_by_bucket_3d(
+        positions,
+        grid,
+        oversampled_shape,
+        kernel_width,
+        |index, x_mod, y_mod, z_mod, bucket| IndexedPoint3D {
+            x: x_mod,
+            y: y_mod,
+            z: z_mod,
+            value: values[index],
+            bucket,
+        },
+    )
+}
+
+fn sort_positions_3d(
+    positions: &[(f64, f64, f64)],
+    grid: UniformGrid3D,
+    oversampled_shape: [usize; 3],
+    kernel_width: usize,
+) -> Vec<IndexedPosition3D> {
+    index_positions_by_bucket_3d(
+        positions,
+        grid,
+        oversampled_shape,
+        kernel_width,
+        |index, x_mod, y_mod, z_mod, bucket| IndexedPosition3D {
+            index,
+            x: x_mod,
+            y: y_mod,
+            z: z_mod,
+            bucket,
+        },
+    )
 }
 
 fn array1_value(array: &leto::Array1<f64>, index: usize) -> f64 {
@@ -537,57 +587,15 @@ impl NufftPlan3D {
     }
 
     fn ifft_z_pass(&self, grid: &mut ArrayViewMut3<'_, Complex64>) {
-        FFT3D_LANE_SCRATCH.with(|pool| {
-            pool.with_scratch(self.mz, |lane| {
-                for ix in 0..self.mx {
-                    for iy in 0..self.my {
-                        for iz in 0..self.mz {
-                            lane[iz] = view3_mut_value(grid, [ix, iy, iz]);
-                        }
-                        self.fft_z.inverse_complex_slice_unnorm_inplace(lane);
-                        for iz in 0..self.mz {
-                            view3_write(grid, [ix, iy, iz], lane[iz]);
-                        }
-                    }
-                }
-            });
-        });
+        self.lane_fft_pass::<2, true>(grid, &self.fft_z, self.mz);
     }
 
     fn ifft_y_pass(&self, grid: &mut ArrayViewMut3<'_, Complex64>) {
-        FFT3D_LANE_SCRATCH.with(|pool| {
-            pool.with_scratch(self.my, |lane| {
-                for ix in 0..self.mx {
-                    for iz in 0..self.mz {
-                        for iy in 0..self.my {
-                            lane[iy] = view3_mut_value(grid, [ix, iy, iz]);
-                        }
-                        self.fft_y.inverse_complex_slice_unnorm_inplace(lane);
-                        for iy in 0..self.my {
-                            view3_write(grid, [ix, iy, iz], lane[iy]);
-                        }
-                    }
-                }
-            });
-        });
+        self.lane_fft_pass::<1, true>(grid, &self.fft_y, self.my);
     }
 
     fn ifft_x_pass(&self, grid: &mut ArrayViewMut3<'_, Complex64>) {
-        FFT3D_LANE_SCRATCH.with(|pool| {
-            pool.with_scratch(self.mx, |lane| {
-                for iy in 0..self.my {
-                    for iz in 0..self.mz {
-                        for ix in 0..self.mx {
-                            lane[ix] = view3_mut_value(grid, [ix, iy, iz]);
-                        }
-                        self.fft_x.inverse_complex_slice_unnorm_inplace(lane);
-                        for ix in 0..self.mx {
-                            view3_write(grid, [ix, iy, iz], lane[ix]);
-                        }
-                    }
-                }
-            });
-        });
+        self.lane_fft_pass::<0, true>(grid, &self.fft_x, self.mx);
     }
 
     /// Type-2 3D NUFFT: interpolate from uniform Fourier coefficients to non-uniform points.
@@ -851,55 +859,74 @@ impl NufftPlan3D {
     }
 
     fn fft_z_pass(&self, grid: &mut ArrayViewMut3<'_, Complex64>) {
-        FFT3D_LANE_SCRATCH.with(|pool| {
-            pool.with_scratch(self.mz, |lane| {
-                for ix in 0..self.mx {
-                    for iy in 0..self.my {
-                        for iz in 0..self.mz {
-                            lane[iz] = view3_mut_value(grid, [ix, iy, iz]);
-                        }
-                        self.fft_z.forward_complex_slice_inplace(lane);
-                        for iz in 0..self.mz {
-                            view3_write(grid, [ix, iy, iz], lane[iz]);
-                        }
-                    }
-                }
-            });
-        });
+        self.lane_fft_pass::<2, false>(grid, &self.fft_z, self.mz);
     }
 
     fn fft_y_pass(&self, grid: &mut ArrayViewMut3<'_, Complex64>) {
-        FFT3D_LANE_SCRATCH.with(|pool| {
-            pool.with_scratch(self.my, |lane| {
-                for ix in 0..self.mx {
-                    for iz in 0..self.mz {
-                        for iy in 0..self.my {
-                            lane[iy] = view3_mut_value(grid, [ix, iy, iz]);
-                        }
-                        self.fft_y.forward_complex_slice_inplace(lane);
-                        for iy in 0..self.my {
-                            view3_write(grid, [ix, iy, iz], lane[iy]);
-                        }
-                    }
-                }
-            });
-        });
+        self.lane_fft_pass::<1, false>(grid, &self.fft_y, self.my);
     }
 
     fn fft_x_pass(&self, grid: &mut ArrayViewMut3<'_, Complex64>) {
+        self.lane_fft_pass::<0, false>(grid, &self.fft_x, self.mx);
+    }
+
+    #[inline]
+    fn apply_fft_to_lane<const INVERSE: bool>(fft: &FftPlan1D<f64>, lane: &mut [Complex64]) {
+        if INVERSE {
+            fft.inverse_complex_slice_unnorm_inplace(lane);
+        } else {
+            fft.forward_complex_slice_inplace(lane);
+        }
+    }
+
+    fn lane_fft_pass<const AXIS: usize, const INVERSE: bool>(
+        &self,
+        grid: &mut ArrayViewMut3<'_, Complex64>,
+        fft: &FftPlan1D<f64>,
+        lane_len: usize,
+    ) {
         FFT3D_LANE_SCRATCH.with(|pool| {
-            pool.with_scratch(self.mx, |lane| {
-                for iy in 0..self.my {
-                    for iz in 0..self.mz {
-                        for ix in 0..self.mx {
-                            lane[ix] = view3_mut_value(grid, [ix, iy, iz]);
-                        }
-                        self.fft_x.forward_complex_slice_inplace(lane);
-                        for ix in 0..self.mx {
-                            view3_write(grid, [ix, iy, iz], lane[ix]);
+            pool.with_scratch(lane_len, |lane| match AXIS {
+                0 => {
+                    for iy in 0..self.my {
+                        for iz in 0..self.mz {
+                            for ix in 0..self.mx {
+                                lane[ix] = view3_mut_value(grid, [ix, iy, iz]);
+                            }
+                            Self::apply_fft_to_lane::<INVERSE>(fft, lane);
+                            for ix in 0..self.mx {
+                                view3_write(grid, [ix, iy, iz], lane[ix]);
+                            }
                         }
                     }
                 }
+                1 => {
+                    for ix in 0..self.mx {
+                        for iz in 0..self.mz {
+                            for iy in 0..self.my {
+                                lane[iy] = view3_mut_value(grid, [ix, iy, iz]);
+                            }
+                            Self::apply_fft_to_lane::<INVERSE>(fft, lane);
+                            for iy in 0..self.my {
+                                view3_write(grid, [ix, iy, iz], lane[iy]);
+                            }
+                        }
+                    }
+                }
+                2 => {
+                    for ix in 0..self.mx {
+                        for iy in 0..self.my {
+                            for iz in 0..self.mz {
+                                lane[iz] = view3_mut_value(grid, [ix, iy, iz]);
+                            }
+                            Self::apply_fft_to_lane::<INVERSE>(fft, lane);
+                            for iz in 0..self.mz {
+                                view3_write(grid, [ix, iy, iz], lane[iz]);
+                            }
+                        }
+                    }
+                }
+                _ => unreachable!("3D NUFFT axis must be one of 0, 1, or 2"),
             });
         });
     }
