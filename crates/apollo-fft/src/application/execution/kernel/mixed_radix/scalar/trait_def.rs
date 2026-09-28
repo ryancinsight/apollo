@@ -1,6 +1,7 @@
 use crate::application::execution::kernel::components::radix_composite::CompositeCache;
 use crate::application::execution::kernel::components::winograd::ShortWinogradScalar;
 use crate::application::execution::kernel::pot::{PoTStrategy, SizedPoT};
+use crate::application::execution::plan::fft::dimension_1d::owner::PlanOwner;
 use std::sync::Arc;
 
 pub(crate) mod private {
@@ -24,6 +25,7 @@ pub trait BluesteinStore {
 
 pub trait MixedRadixScalar:
     private::Sealed
+    + PlanOwner
     + Sized
     + Copy
     + 'static

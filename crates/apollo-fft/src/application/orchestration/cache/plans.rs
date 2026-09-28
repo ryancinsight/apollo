@@ -18,6 +18,7 @@
 //! stamp is written only when it moves, keeping threads that hit one plan
 //! off a shared cache line.
 
+use crate::application::execution::plan::fft::dimension_1d::owner::PlanOwner;
 use crate::application::execution::plan::fft::dimension_1d::FftPlan1D;
 use crate::application::execution::plan::fft::dimension_2d::FftPlan2D;
 use crate::application::execution::plan::fft::dimension_3d::FftPlan3D;
@@ -285,12 +286,19 @@ thread_local! {
         const { RefCell::new(LocalPlans::new()) };
 }
 
-impl PlanCacheProvider for f64 {
+impl PlanOwner for f64 {
     #[inline]
-    fn get_1d_plan(shape: Shape1D) -> Arc<FftPlan1D<Self::PlanScalar>> {
+    fn acquire_plan(shape: Shape1D) -> Arc<FftPlan1D<Self>> {
         lookup(&LOCAL_1D_PRECISE, &SHARED_1D_PRECISE, shape.n(), || {
             FftPlan1D::new(shape)
         })
+    }
+}
+
+impl PlanCacheProvider for f64 {
+    #[inline]
+    fn get_1d_plan(shape: Shape1D) -> Arc<FftPlan1D<Self::PlanScalar>> {
+        <Self as PlanOwner>::acquire_plan(shape)
     }
 
     #[inline]
@@ -312,12 +320,19 @@ impl PlanCacheProvider for f64 {
     }
 }
 
-impl PlanCacheProvider for f32 {
+impl PlanOwner for f32 {
     #[inline]
-    fn get_1d_plan(shape: Shape1D) -> Arc<FftPlan1D<Self::PlanScalar>> {
+    fn acquire_plan(shape: Shape1D) -> Arc<FftPlan1D<Self>> {
         lookup(&LOCAL_1D_REDUCED, &SHARED_1D_REDUCED, shape.n(), || {
             FftPlan1D::new(shape)
         })
+    }
+}
+
+impl PlanCacheProvider for f32 {
+    #[inline]
+    fn get_1d_plan(shape: Shape1D) -> Arc<FftPlan1D<Self::PlanScalar>> {
+        <Self as PlanOwner>::acquire_plan(shape)
     }
 
     #[inline]

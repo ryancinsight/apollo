@@ -5,7 +5,9 @@ use super::{
     clear_plan_caches, PlanCacheProvider, SharedPlans, LOCAL_CAPACITY, SHARED_1D_PRECISE,
     SHARED_CAPACITY,
 };
+use crate::application::execution::plan::fft::dimension_1d::StaticFftPlan1D;
 use crate::domain::metadata::shape::Shape1D;
+use eunomia::Complex64;
 use std::cell::Cell;
 use std::sync::{mpsc, Arc};
 
@@ -77,6 +79,28 @@ fn clearing_releases_plans_no_caller_holds() {
     assert!(
         !Arc::ptr_eq(&held, &rebuilt),
         "a held plan is not re-cached"
+    );
+}
+
+#[test]
+fn static_table_backed_execution_releases_its_bounded_owner() {
+    const N: usize = 4096;
+    clear_plan_caches();
+    let mut values = vec![Complex64::default(); N];
+    StaticFftPlan1D::<f64, N>::new().forward_complex_slice_inplace(&mut values);
+    assert!(
+        SHARED_1D_PRECISE.holds(N),
+        "the table-backed static route must acquire the bounded plan owner"
+    );
+    assert_eq!(values, vec![Complex64::default(); N]);
+
+    let owner = plan(N);
+    let released = Arc::downgrade(&owner);
+    drop(owner);
+    clear_plan_caches();
+    assert!(
+        released.upgrade().is_none(),
+        "clearing the cache must release the static route's owner"
     );
 }
 

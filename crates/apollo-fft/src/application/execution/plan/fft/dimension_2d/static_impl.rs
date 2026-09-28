@@ -13,9 +13,9 @@ use leto::{Array2, ArrayViewMut2};
 /// Zero-sized 2D FFT plan for compile-time-known shapes.
 ///
 /// Both axes are encoded as const generics. Row and column lane execution uses
-/// `StaticFftPlan1D`, so power-of-two and selected composite/Rader lengths
-/// route through monomorphized 1D kernels without storing twiddle fields or
-/// function pointers in the plan value.
+/// `StaticFftPlan1D`: table-free lanes use const-generic kernels and
+/// table-backed lanes borrow prepared state from the bounded 1D plan owner.
+/// The static 2D plan value stores no tables or function pointers.
 #[derive(Clone, Copy, Debug, Default)]
 pub struct StaticFftPlan2D<F: MixedRadixScalar, const NX: usize, const NY: usize> {
     precision: PhantomData<F>,

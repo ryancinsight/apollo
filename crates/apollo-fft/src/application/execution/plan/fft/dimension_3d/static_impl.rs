@@ -12,9 +12,10 @@ use leto::ArrayViewMut3;
 /// Zero-sized 3D FFT plan for compile-time-known shapes.
 ///
 /// All axes are encoded as const generics. Lane execution uses
-/// `StaticFftPlan1D`, so the plan stores no runtime shape, twiddle fields, or
-/// function pointers while preserving the existing scratch transpose layout for
-/// non-contiguous axes.
+/// `StaticFftPlan1D`: table-free lanes use const-generic kernels and
+/// table-backed lanes borrow prepared state from the bounded 1D plan owner.
+/// The plan stores no runtime shape, tables, or function pointers while
+/// preserving the scratch transpose layout for non-contiguous axes.
 #[derive(Clone, Copy, Debug, Default)]
 pub struct StaticFftPlan3D<F: MixedRadixScalar, const NX: usize, const NY: usize, const NZ: usize> {
     precision: PhantomData<F>,
