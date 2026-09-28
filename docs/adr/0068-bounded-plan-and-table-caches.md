@@ -71,6 +71,32 @@ Two slices, the plan level first.
    sub-transforms. Under `Weak` they would rebuild on every call, so slice 2
    starts with a spike that enumerates them and assigns each an owner.
 
+   The spike found the surface small and one-sided: `with_twiddle_*` has
+   seven real call sites and every one is plan-less. `dispatch_inplace`
+   already takes `Option<&[F::Complex]>`, plans pass `Some`, and only the
+   plan-less callers pass `None` and fall through to the thread-local caches
+   — so the `_RAW` pointer tier exists solely to make those callers fast, and
+   converting them removes its reason for existing rather than needing a
+   slower safe replacement. `FftPlan1D::new` is not among them: it stores the
+   `Arc` it fetches straight into its `PlanStrategy`, so plan-driven
+   execution is ready for `Weak` already.
+
+   Two of the seven are closed: Bluestein's `ChirpTables` holds the padded
+   length's twiddles for both directions and hands them to the inner
+   transforms of every execution.
+
+   Rader's three cannot close the same way, for a structural reason rather
+   than a matter of effort. Bundling the tables into the Rader-Bluestein
+   cache entry turns it from an anonymous `Arc<[C]>` into a named type, and
+   that type appears in `BluesteinStore`'s method signatures; `BluesteinStore`
+   is a supertrait of `MixedRadixScalar`, which `api/cfft.rs` bounds public
+   functions on. So the entry cannot carry its tables without either putting
+   an internal cache structure into the public API, or dropping the
+   supertrait — which compiles down to one unsatisfied bound, on
+   `RaderConvolutionBackend::convolve`, where two backends that never touch
+   Bluestein would then carry it. Those three, and the free `*_inplace` entry
+   points, need a plan threaded to them; they are not entry-bundling work.
+
 ## Alternatives
 
 - **A byte budget instead of an entry count.** This bounds memory directly,
