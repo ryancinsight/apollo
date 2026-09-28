@@ -1,6 +1,6 @@
 use super::{DwtLetoCoefficients, DwtPlan};
 use crate::domain::contracts::error::{WaveletError, WaveletResult};
-use crate::domain::spectrum::coefficients::DwtCoefficients;
+use crate::domain::spectrum::coefficients::{detail_level_bounds, DwtCoefficients};
 use crate::CwtPlan;
 use apollo_fft::PrecisionProfile;
 use leto::Array2;
@@ -29,14 +29,14 @@ pub(crate) fn dwt_typed_coefficients_to_leto<T: Copy>(
     len: usize,
     levels: usize,
     approximation: &[T],
-    details: &[Vec<T>],
+    details: &[T],
 ) -> WaveletResult<DwtLetoCoefficients<T>> {
     let approximation = apollo_leto_interop::try_array1_from_slice(approximation)
         .ok_or(WaveletError::CoefficientShapeMismatch)?;
-    let details = details
-        .iter()
-        .map(|detail| {
-            apollo_leto_interop::try_array1_from_slice(detail)
+    let details = (0..levels)
+        .map(|level| {
+            let (start, end) = detail_level_bounds(len, level);
+            apollo_leto_interop::try_array1_from_slice(&details[start..end])
                 .ok_or(WaveletError::CoefficientShapeMismatch)
         })
         .collect::<WaveletResult<Vec<_>>>()?;
@@ -83,21 +83,14 @@ pub(crate) fn validate_profile(
     }
 }
 
-pub(crate) fn validate_dwt_output_shapes<T>(
+pub(crate) fn validate_dwt_output_shapes(
     plan: &DwtPlan,
     approximation_len: usize,
-    details: &[Vec<T>],
+    details_len: usize,
 ) -> WaveletResult<()> {
     let expected_approximation_len = plan.len() >> plan.levels();
-    if approximation_len != expected_approximation_len || details.len() != plan.levels() {
-        return Err(WaveletError::CoefficientShapeMismatch);
-    }
-    if details
-        .iter()
-        .map(Vec::len)
-        .zip(plan.coefficient_shapes())
-        .any(|(actual, expected)| actual != expected)
-    {
+    let expected_details_len = plan.len() - expected_approximation_len;
+    if approximation_len != expected_approximation_len || details_len != expected_details_len {
         return Err(WaveletError::CoefficientShapeMismatch);
     }
     Ok(())

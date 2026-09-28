@@ -125,10 +125,4 @@ impl DwtPlan {
     pub const fn wavelet(self) -> DiscreteWavelet {
         self.wavelet
     }
-
-    pub(crate) fn coefficient_shapes(&self) -> impl Iterator<Item = usize> {
-        let len = self.len;
-        let levels = self.levels;
-        (0..levels).map(move |level| len >> (level + 1))
-    }
 }
