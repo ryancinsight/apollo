@@ -88,13 +88,20 @@ pub fn clear_plan_caches() {
     EPOCH.fetch_add(1, Ordering::Relaxed);
 }
 
+/// Thread-local ring of 2D plans, keyed like [`Local3dRing`] but for the
+/// 2D shape/plan pair — factored out so [`clear_plan_cache_tier`]'s
+/// signature stays within clippy's type-complexity budget.
+type Local2dRing<P> = LocalKey<RefCell<LocalPlans<(usize, usize), FftPlan2D<P>>>>;
+/// Thread-local ring of 3D plans; see [`Local2dRing`].
+type Local3dRing<P> = LocalKey<RefCell<LocalPlans<(usize, usize, usize), FftPlan3D<P>>>>;
+
 fn clear_plan_cache_tier<P: MixedRadixScalar>(
     shared_1d: &SharedPlans<usize, FftPlan1D<P>>,
     shared_2d: &SharedPlans<(usize, usize), FftPlan2D<P>>,
     shared_3d: &SharedPlans<(usize, usize, usize), FftPlan3D<P>>,
     local_1d: &'static LocalKey<RefCell<LocalPlans<usize, FftPlan1D<P>>>>,
-    local_2d: &'static LocalKey<RefCell<LocalPlans<(usize, usize), FftPlan2D<P>>>>,
-    local_3d: &'static LocalKey<RefCell<LocalPlans<(usize, usize, usize), FftPlan3D<P>>>>,
+    local_2d: &'static Local2dRing<P>,
+    local_3d: &'static Local3dRing<P>,
 ) {
     shared_1d.clear();
     shared_2d.clear();
