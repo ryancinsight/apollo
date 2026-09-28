@@ -1,4 +1,4 @@
-#![warn(missing_docs)]
+#![deny(missing_docs)]
 //! Graph Fourier transform plans and utilities for Apollo.
 //!
 //! `apollo-gft` owns graph-domain validation, combinatorial Laplacian

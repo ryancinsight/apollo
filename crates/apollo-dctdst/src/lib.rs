@@ -1,4 +1,4 @@
-#![warn(missing_docs)]
+#![deny(missing_docs)]
 //! DCT and DST real-to-real transform plans for Apollo.
 //!
 //! `apollo-dctdst` owns real-to-real cosine/sine transform metadata, direct

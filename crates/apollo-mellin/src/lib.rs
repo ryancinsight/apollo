@@ -1,4 +1,4 @@
-#![warn(missing_docs)]
+#![deny(missing_docs)]
 //! Mellin transform plans for Apollo.
 //!
 //! The Mellin transform maps a positive scale-domain signal `f(r)` to

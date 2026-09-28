@@ -1,4 +1,4 @@
-#![warn(missing_docs)]
+#![deny(missing_docs)]
 //! Quantum Fourier transform plans and utilities for Apollo.
 //!
 //! `apollo-qft` owns quantum state-dimension validation, reusable unitary QFT

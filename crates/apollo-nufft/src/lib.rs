@@ -1,4 +1,4 @@
-#![warn(missing_docs)]
+#![deny(missing_docs)]
 //! Non-uniform FFT utilities and reusable NUFFT plans.
 //!
 //! This crate owns NUFFT domain descriptors, Kaiser-Bessel infrastructure, and

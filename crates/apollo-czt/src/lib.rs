@@ -1,4 +1,4 @@
-#![warn(missing_docs)]
+#![deny(missing_docs)]
 //! Chirp z-transform utilities for Apollo.
 //!
 //! This crate implements the chirp z-transform as a reusable plan plus direct
