@@ -2,6 +2,8 @@
 
 - Status: Accepted
 - Date: 2026-09-18
+- Revised: 2026-09-28 — keep static plans zero-sized while table-backed routes
+  borrow prepared state from the bounded plan owner.
 - Items: `backlog.md#apollo-mem-cache-bounds`
 - Evidence: `output/apollo-memory-audit-2026-09-18.md#f4` (the finding and
   its growth measurements), `output/apollo-mem-cache-bounds-2026-09-18/`
@@ -70,6 +72,20 @@ Two slices, the plan level first.
    with no table, Bluestein's padded transforms, and the four-step
    sub-transforms. Under `Weak` they would rebuild on every call, so slice 2
    starts with a spike that enumerates them and assigns each an owner.
+
+   `StaticFftPlan1D` remains zero-sized. Its table-free const-generic
+   codelets execute directly; every other route acquires the existing bounded
+   strong 1-D plan owner through a plan-layer contract implemented by the
+   orchestration cache. Execution therefore borrows prepared state without a
+   dependency on orchestration or a second cache. A 65,536-point profile
+   measured the lookup route at 45.055/45.249 ms and a pre-acquired owner at
+   45.120/45.330 ms in two counterbalanced rounds.
+
+   Bluestein owns its complete padded `FftPlan1D`, not selected twiddle
+   tables. Partial ownership fails once the padded length selects FourStep or
+   another route with additional tables. Rader and the remaining plan-less
+   entries likewise receive complete operation owners before their caches
+   become weak; no internal cache type enters the public API.
 
 ## Alternatives
 
