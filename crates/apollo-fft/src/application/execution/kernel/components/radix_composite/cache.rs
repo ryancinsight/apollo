@@ -3,14 +3,19 @@ use crate::application::execution::kernel::components::winograd::WinogradScalar;
 use eunomia::Complex;
 use std::cell::RefCell;
 use std::sync::Arc;
+use std::thread::LocalKey;
 
 mod planar;
 
-#[derive(Clone)]
-pub struct CompositeTwiddleEntry<C> {
-    pub radices: Arc<[usize]>,
-    pub twiddles: Arc<[C]>,
-    pub offsets: Arc<[usize]>,
+/// Prepared stage tables for one composite radix sequence and direction.
+pub struct CompositeTables<C> {
+    pub(crate) radices: Box<[usize]>,
+    pub(crate) twiddles: Box<[C]>,
+    pub(crate) offsets: Box<[usize]>,
+}
+
+struct CompositeTwiddleEntry<C> {
+    tables: Arc<CompositeTables<C>>,
 }
 
 pub trait CompositeCache: WinogradScalar + ShortWinogradScalar + hermes_simd::LaneScalar {
@@ -27,9 +32,8 @@ pub trait CompositeCache: WinogradScalar + ShortWinogradScalar + hermes_simd::La
         data: &mut [Complex<Self>],
         scratch: &mut [Complex<Self>],
     ) -> bool;
-    fn cached_twiddles<const INVERSE: bool>(
-        radices: &[usize],
-    ) -> (Arc<[Complex<Self>]>, Arc<[usize]>);
+    fn cached_tables<const INVERSE: bool>(radices: &[usize])
+        -> Arc<CompositeTables<Complex<Self>>>;
 }
 
 thread_local! {
@@ -135,6 +139,37 @@ fn build_composite_twiddles<F: WinogradScalar, const INVERSE: bool>(
     (all_twiddles, stage_offsets)
 }
 
+fn cached_tables<
+    F: WinogradScalar + ShortWinogradScalar + hermes_simd::LaneScalar + 'static,
+    const INVERSE: bool,
+>(
+    radices: &[usize],
+    local: &'static LocalKey<RefCell<Vec<CompositeTwiddleEntry<Complex<F>>>>>,
+) -> Arc<CompositeTables<Complex<F>>> {
+    if let Some(tables) = local.with(|cache| {
+        cache
+            .borrow()
+            .iter()
+            .find(|entry| entry.tables.radices.as_ref() == radices)
+            .map(|entry| Arc::clone(&entry.tables))
+    }) {
+        return tables;
+    }
+
+    let (twiddles, offsets) = build_composite_twiddles::<F, INVERSE>(radices);
+    let tables = Arc::new(CompositeTables {
+        radices: radices.into(),
+        twiddles: twiddles.into_boxed_slice(),
+        offsets: offsets.into_boxed_slice(),
+    });
+    local.with(|cache| {
+        cache.borrow_mut().push(CompositeTwiddleEntry {
+            tables: Arc::clone(&tables),
+        });
+    });
+    tables
+}
+
 impl CompositeCache for f64 {
     #[inline]
     fn with_scratch<R>(n: usize, f: impl FnOnce(&mut [Complex<Self>]) -> R) -> R {
@@ -150,34 +185,15 @@ impl CompositeCache for f64 {
     }
 
     #[inline]
-    fn cached_twiddles<const INVERSE: bool>(
+    fn cached_tables<const INVERSE: bool>(
         radices: &[usize],
-    ) -> (Arc<[Complex<Self>]>, Arc<[usize]>) {
+    ) -> Arc<CompositeTables<Complex<Self>>> {
         let tl = if INVERSE {
             &TL_TWIDDLES_INV_64
         } else {
             &TL_TWIDDLES_FWD_64
         };
-        if let Some(cached) = tl.with(|cache| {
-            cache
-                .borrow()
-                .iter()
-                .find(|entry| entry.radices.as_ref() == radices)
-                .map(|entry| (Arc::clone(&entry.twiddles), Arc::clone(&entry.offsets)))
-        }) {
-            return cached;
-        }
-        let (tw, offsets) = build_composite_twiddles::<f64, INVERSE>(radices);
-        let tw = Arc::from(tw.into_boxed_slice());
-        let offsets = Arc::from(offsets.into_boxed_slice());
-        tl.with(|c| {
-            c.borrow_mut().push(CompositeTwiddleEntry {
-                radices: Arc::from(radices),
-                twiddles: Arc::clone(&tw),
-                offsets: Arc::clone(&offsets),
-            });
-        });
-        (tw, offsets)
+        cached_tables::<Self, INVERSE>(radices, tl)
     }
 }
 
@@ -196,33 +212,28 @@ impl CompositeCache for f32 {
     }
 
     #[inline]
-    fn cached_twiddles<const INVERSE: bool>(
+    fn cached_tables<const INVERSE: bool>(
         radices: &[usize],
-    ) -> (Arc<[Complex<Self>]>, Arc<[usize]>) {
+    ) -> Arc<CompositeTables<Complex<Self>>> {
         let tl = if INVERSE {
             &TL_TWIDDLES_INV_32
         } else {
             &TL_TWIDDLES_FWD_32
         };
-        if let Some(cached) = tl.with(|cache| {
-            cache
-                .borrow()
-                .iter()
-                .find(|entry| entry.radices.as_ref() == radices)
-                .map(|entry| (Arc::clone(&entry.twiddles), Arc::clone(&entry.offsets)))
-        }) {
-            return cached;
-        }
-        let (tw, offsets) = build_composite_twiddles::<f32, INVERSE>(radices);
-        let tw = Arc::from(tw.into_boxed_slice());
-        let offsets = Arc::from(offsets.into_boxed_slice());
-        tl.with(|c| {
-            c.borrow_mut().push(CompositeTwiddleEntry {
-                radices: Arc::from(radices),
-                twiddles: Arc::clone(&tw),
-                offsets: Arc::clone(&offsets),
-            });
-        });
-        (tw, offsets)
+        cached_tables::<Self, INVERSE>(radices, tl)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::CompositeCache;
+    use std::sync::Arc;
+
+    #[test]
+    fn table_index_reuses_prepared_state() {
+        const RADICES: &[usize] = &[4, 5, 5];
+        let first = <f64 as CompositeCache>::cached_tables::<false>(RADICES);
+        let again = <f64 as CompositeCache>::cached_tables::<false>(RADICES);
+        assert!(Arc::ptr_eq(&first, &again), "prepared state must be reused");
     }
 }

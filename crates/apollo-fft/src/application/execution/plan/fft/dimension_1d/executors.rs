@@ -669,25 +669,19 @@ pub(super) fn exec_composite_forward<F: MixedRadixScalar<Complex = Complex<F>>>(
     plan: &FftPlan1D<F>,
     slice: &mut [F::Complex],
 ) {
-    if let Some(radices) = &plan.radices {
-        F::composite_forward(slice, radices);
-    }
+    plan.composite_state().forward(slice);
 }
 pub(super) fn exec_composite_inverse<F: MixedRadixScalar<Complex = Complex<F>>>(
     plan: &FftPlan1D<F>,
     slice: &mut [F::Complex],
 ) {
-    if let Some(radices) = &plan.radices {
-        F::composite_inverse(slice, radices);
-    }
+    plan.composite_state().inverse(slice);
 }
 pub(super) fn exec_composite_inverse_unnorm<F: MixedRadixScalar<Complex = Complex<F>>>(
     plan: &FftPlan1D<F>,
     slice: &mut [F::Complex],
 ) {
-    if let Some(radices) = &plan.radices {
-        F::composite_inverse_unnorm(slice, radices);
-    }
+    plan.composite_state().inverse_unnorm(slice);
 }
 
 // 7. Rader
