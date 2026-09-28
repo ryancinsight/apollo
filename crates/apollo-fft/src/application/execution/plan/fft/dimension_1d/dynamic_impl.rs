@@ -71,7 +71,7 @@ pub struct FftPlan1D<F: MixedRadixScalar> {
     /// holds four complexes a register.
     pub(crate) column180: Option<Arc<State180<F>>>,
     /// The chirp-z tables for a length every shaped route declines.
-    pub(crate) bluestein: Option<Arc<BluesteinState<F::Complex>>>,
+    pub(crate) bluestein: Option<Arc<BluesteinState<F>>>,
 
     // Function pointers for execution routing, selected at construction for
     // this length on this host. The framed small power-of-two executors carry
@@ -181,7 +181,7 @@ impl<F: MixedRadixScalar<Complex = Complex<F>>> FftPlan1D<F> {
             .expect("invariant: base-128 executor requires its plan state")
     }
 
-    pub(super) fn bluestein_state(&self) -> &BluesteinState<F::Complex> {
+    pub(super) fn bluestein_state(&self) -> &BluesteinState<F> {
         self.bluestein
             .as_deref()
             .expect("invariant: the Bluestein executor requires its plan state")
