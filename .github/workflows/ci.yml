@@ -14,6 +14,7 @@ on:
       - checklist.md
       - gap_audit.md
       - docs/adr/**
+      - .githooks/**
   pull_request:
     # `ready_for_review` is not in the default event set, and the draft filter
     # below skips every job of a draft's pushes: without it a draft marked
@@ -35,9 +36,9 @@ concurrency:
 
 jobs:
   scope:
-    # What a pull request changes. One that touches only the board, the ADRs
-    # or the tooling scripts needs the script tests and none of the Rust
-    # pipeline, which on a hosted runner is most of an hour of minutes per
+    # What a pull request changes. One that touches only the board, the ADRs,
+    # the tooling scripts or the git hooks needs the script tests and none of
+    # the Rust pipeline, which on a hosted runner is most of an hour of minutes per
     # board record. A merge-queue run applies the same rule to the group's
     # whole delta over the queue base. Every other change, every push to
     # main, and any failure of this job leaves `code` other than `false`,
@@ -71,7 +72,7 @@ jobs:
           git diff --no-renames --name-only "$BASE...$HEAD" > changed.txt
           echo "changed files:"
           cat changed.txt
-          if grep -Evq '^(backlog\.md|checklist\.md|gap_audit\.md|docs/adr/.+|scripts/.+)$' changed.txt; then
+          if grep -Evq '^(backlog\.md|checklist\.md|gap_audit\.md|docs/adr/.+|scripts/.+|\.githooks/.+)$' changed.txt; then
             echo "code=true" >> "$GITHUB_OUTPUT"
           elif [ -s changed.txt ]; then
             echo "code=false" >> "$GITHUB_OUTPUT"
