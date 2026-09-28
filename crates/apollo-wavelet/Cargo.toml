@@ -40,5 +40,9 @@ apollo-bench = { path = "../apollo-bench" }
 name = "cwt_scale_rows"
 harness = false
 
+[[bench]]
+name = "dwt_typed_flat_details"
+harness = false
+
 [lints]
 workspace = true
