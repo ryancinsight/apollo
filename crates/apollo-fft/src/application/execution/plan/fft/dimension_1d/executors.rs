@@ -600,18 +600,14 @@ pub(super) fn exec_good_thomas_forward<F: MixedRadixScalar<Complex = Complex<F>>
     plan: &FftPlan1D<F>,
     slice: &mut [F::Complex],
 ) {
-    crate::application::execution::kernel::components::good_thomas::pfa_fft::<F, false>(
-        slice, plan.n1, plan.n2,
-    );
+    plan.pfa_state().execute::<false>(slice);
 }
 
 pub(super) fn exec_good_thomas_inverse<F: MixedRadixScalar<Complex = Complex<F>>>(
     plan: &FftPlan1D<F>,
     slice: &mut [F::Complex],
 ) {
-    crate::application::execution::kernel::components::good_thomas::pfa_fft::<F, true>(
-        slice, plan.n1, plan.n2,
-    );
+    plan.pfa_state().execute::<true>(slice);
     F::normalize(slice, plan.n);
 }
 
@@ -619,9 +615,7 @@ pub(super) fn exec_good_thomas_inverse_unnorm<F: MixedRadixScalar<Complex = Comp
     plan: &FftPlan1D<F>,
     slice: &mut [F::Complex],
 ) {
-    crate::application::execution::kernel::components::good_thomas::pfa_fft::<F, true>(
-        slice, plan.n1, plan.n2,
-    );
+    plan.pfa_state().execute::<true>(slice);
 }
 
 // 6. Composite

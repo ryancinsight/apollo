@@ -32,6 +32,7 @@ use super::strategy::{arc_to_cow, generic_four_step_applies, PlanStrategy};
 use crate::application::execution::kernel::components::batched::PlanarState;
 use crate::application::execution::kernel::components::bluestein::BluesteinState;
 use crate::application::execution::kernel::components::column_route::State180;
+use crate::application::execution::kernel::components::good_thomas::PfaState;
 use crate::application::execution::kernel::components::radix_composite::CompositeState;
 use crate::application::execution::kernel::mixed_radix::scalar::plan_scratch::PlanScratch;
 use crate::application::execution::plan::fft::layout::with_c_order_view;
@@ -45,6 +46,8 @@ pub struct FftPlan1D<F: MixedRadixScalar> {
     // Cached variables to completely bypass enum matching in the hot path:
     pub(crate) n1: usize,
     pub(crate) n2: usize,
+    /// Permutation tables retained by a reusable Good-Thomas route.
+    pub(crate) pfa: Option<Arc<PfaState<F>>>,
     /// Stage tables retained by a reusable composite radix route.
     pub(crate) composite: Option<Arc<CompositeState<F>>>,
     /// Complete forward table for Stockham or a split base route above 128.
@@ -95,6 +98,7 @@ impl<F: MixedRadixScalar> Clone for FftPlan1D<F> {
             strategy: self.strategy.clone(),
             n1: self.n1,
             n2: self.n2,
+            pfa: self.pfa.clone(),
             composite: self.composite.clone(),
             twiddle_fwd: self.twiddle_fwd.clone(),
             twiddle_inv: self.twiddle_inv.clone(),
@@ -197,6 +201,12 @@ impl<F: MixedRadixScalar<Complex = Complex<F>>> FftPlan1D<F> {
         self.composite
             .as_deref()
             .expect("invariant: a composite executor requires its plan state")
+    }
+
+    pub(super) fn pfa_state(&self) -> &PfaState<F> {
+        self.pfa
+            .as_deref()
+            .expect("invariant: a Good-Thomas executor requires its plan state")
     }
 
     pub(super) fn column180_state(&self) -> &State180<F> {
@@ -377,6 +387,7 @@ impl<F: MixedRadixScalar<Complex = Complex<F>>> FftPlan1D<F> {
         // Cache parameters and assign specialized function pointers
         let mut n1 = 0;
         let mut n2 = 0;
+        let mut pfa = None;
         let mut composite = None;
         let mut twiddle_fwd = None;
         // Lazy: no strategy populates the inverse table at construction.
@@ -600,6 +611,7 @@ impl<F: MixedRadixScalar<Complex = Complex<F>>> FftPlan1D<F> {
             } => {
                 n1 = factor1;
                 n2 = factor2;
+                pfa = Some(Arc::new(PfaState::new(factor1, factor2)));
                 forward_impl = exec_good_thomas_forward::<F>;
                 inverse_impl = exec_good_thomas_inverse::<F>;
                 inverse_unnorm_impl = exec_good_thomas_inverse_unnorm::<F>;
@@ -639,6 +651,7 @@ impl<F: MixedRadixScalar<Complex = Complex<F>>> FftPlan1D<F> {
             strategy,
             n1,
             n2,
+            pfa,
             composite,
             twiddle_fwd,
             twiddle_inv,

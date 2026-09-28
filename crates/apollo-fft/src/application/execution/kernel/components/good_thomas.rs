@@ -19,8 +19,11 @@
 use crate::application::execution::kernel::mixed_radix::MixedRadixScalar;
 
 mod fixed;
+mod state;
 mod three_by_prime;
 pub(crate) mod two_by_prime;
+
+pub(crate) use state::PfaState;
 
 // Cook-Toom-GT fused kernels for specific composite sizes
 mod cook_toom_gt;
@@ -54,12 +57,49 @@ pub(crate) fn pfa_fft<F: MixedRadixScalar<Complex = eunomia::Complex<F>>, const 
         return;
     }
 
+    let tables =
+        crate::application::execution::kernel::mixed_radix::caches::cached_pfa_perm(n1, n2);
+    pfa_fft_table_route::<F, INVERSE>(data, n1, n2, &tables);
+}
+
+pub(super) fn pfa_fft_with_owner<
+    F: MixedRadixScalar<Complex = eunomia::Complex<F>>,
+    const INVERSE: bool,
+>(
+    data: &mut [F::Complex],
+    n1: usize,
+    n2: usize,
+    owner: &std::sync::OnceLock<
+        std::sync::Arc<
+            crate::application::execution::kernel::mixed_radix::caches::pfa::PfaPermutation,
+        >,
+    >,
+) {
+    if two_by_prime::try_fft::<F, INVERSE>(data, n1, n2)
+        || three_by_prime::try_fft::<F, INVERSE>(data, n1, n2)
+        || cook_toom_gt::try_fft::<F, INVERSE>(data, n1, n2)
+        || fixed::try_fft::<F, INVERSE>(data, n1, n2)
+    {
+        return;
+    }
+    let tables = owner.get_or_init(|| {
+        crate::application::execution::kernel::mixed_radix::caches::cached_pfa_perm(n1, n2)
+    });
+    pfa_fft_table_route::<F, INVERSE>(data, n1, n2, tables);
+}
+
+fn pfa_fft_table_route<F: MixedRadixScalar<Complex = eunomia::Complex<F>>, const INVERSE: bool>(
+    data: &mut [F::Complex],
+    n1: usize,
+    n2: usize,
+    tables: &crate::application::execution::kernel::mixed_radix::caches::pfa::PfaPermutation,
+) {
     if let Some((generator, generator_inverse)) = ordered_rader_n1_config(n1) {
-        pfa_fft_ordered_rader_n1::<F, INVERSE>(data, n1, n2, generator, generator_inverse);
+        pfa_fft_ordered_rader_n1::<F, INVERSE>(data, n1, n2, generator, generator_inverse, tables);
         return;
     }
 
-    pfa_fft_natural_inplace::<F, INVERSE>(data, n1, n2);
+    pfa_fft_natural_inplace::<F, INVERSE>(data, n1, n2, tables);
 }
 
 /// Shared PFA preamble: 4-wide permutation gather into `matrix`, then
@@ -113,10 +153,11 @@ fn pfa_fft_natural_inplace<
     data: &mut [F::Complex],
     n1: usize,
     n2: usize,
+    tables: &crate::application::execution::kernel::mixed_radix::caches::pfa::PfaPermutation,
 ) {
     let n = n1 * n2;
-    let (input_perm, output_perm) =
-        crate::application::execution::kernel::mixed_radix::caches::cached_pfa_perm(n1, n2);
+    let input_perm = &tables.input;
+    let output_perm = &tables.output;
     // One predictable branch per call guards the table-driven unchecked
     // column extraction and scatter below; the tables' value range is
     // asserted where they are built.
@@ -128,7 +169,7 @@ fn pfa_fft_natural_inplace<
     F::with_pfa_scratch(n + n1, |scratch| {
         let (matrix, col_buf) = scratch.split_at_mut(n);
 
-        pfa_gather_and_transform_rows::<F, INVERSE>(data, &input_perm, n1, n2, matrix);
+        pfa_gather_and_transform_rows::<F, INVERSE>(data, input_perm, n1, n2, matrix);
 
         // Transform columns using col_buf, scatter directly to final positions in data
         for i2 in 0..n2 {
@@ -227,10 +268,11 @@ fn pfa_fft_ordered_rader_n1<
     n2: usize,
     generator: usize,
     generator_inverse: usize,
+    tables: &crate::application::execution::kernel::mixed_radix::caches::pfa::PfaPermutation,
 ) {
     let n = n1 * n2;
-    let (input_perm, output_perm) =
-        crate::application::execution::kernel::mixed_radix::caches::cached_pfa_perm(n1, n2);
+    let input_perm = &tables.input;
+    let output_perm = &tables.output;
     let input_order =
         crate::application::execution::kernel::components::rader::cached_generator_order(
             n1, generator,
@@ -249,7 +291,7 @@ fn pfa_fft_ordered_rader_n1<
     F::with_pfa_scratch(n + n1, |scratch| {
         let (matrix, col_buf) = scratch.split_at_mut(n);
 
-        pfa_gather_and_transform_rows::<F, INVERSE>(data, &input_perm, n1, n2, matrix);
+        pfa_gather_and_transform_rows::<F, INVERSE>(data, input_perm, n1, n2, matrix);
 
         // Transform cols from `scratch` (with Rader order), output directly to `data`
         for i2 in 0..n2 {
