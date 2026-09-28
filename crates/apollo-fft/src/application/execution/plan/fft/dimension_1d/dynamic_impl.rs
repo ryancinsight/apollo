@@ -33,6 +33,7 @@ use crate::application::execution::kernel::components::batched::PlanarState;
 use crate::application::execution::kernel::components::bluestein::BluesteinState;
 use crate::application::execution::kernel::components::column_route::State180;
 use crate::application::execution::kernel::components::good_thomas::PfaState;
+use crate::application::execution::kernel::components::rader::RaderState;
 use crate::application::execution::kernel::components::radix_composite::CompositeState;
 use crate::application::execution::kernel::mixed_radix::scalar::plan_scratch::PlanScratch;
 use crate::application::execution::plan::fft::layout::with_c_order_view;
@@ -50,6 +51,8 @@ pub struct FftPlan1D<F: MixedRadixScalar> {
     pub(crate) pfa: Option<Arc<PfaState<F>>>,
     /// Stage tables retained by a reusable composite radix route.
     pub(crate) composite: Option<Arc<CompositeState<F>>>,
+    /// Permutation and convolution tables retained by a reusable Rader route.
+    pub(crate) rader: Option<Arc<RaderState<F>>>,
     /// Complete forward table for Stockham or a split base route above 128.
     pub(crate) twiddle_fwd: Option<Arc<[F::Complex]>>,
     /// Inverse table, built on the first inverse execution rather than at
@@ -100,6 +103,7 @@ impl<F: MixedRadixScalar> Clone for FftPlan1D<F> {
             n2: self.n2,
             pfa: self.pfa.clone(),
             composite: self.composite.clone(),
+            rader: self.rader.clone(),
             twiddle_fwd: self.twiddle_fwd.clone(),
             twiddle_inv: self.twiddle_inv.clone(),
             base128: self.base128.clone(),
@@ -207,6 +211,12 @@ impl<F: MixedRadixScalar<Complex = Complex<F>>> FftPlan1D<F> {
         self.pfa
             .as_deref()
             .expect("invariant: a Good-Thomas executor requires its plan state")
+    }
+
+    pub(super) fn rader_state(&self) -> &RaderState<F> {
+        self.rader
+            .as_deref()
+            .expect("invariant: a Rader executor requires its plan state")
     }
 
     pub(super) fn column180_state(&self) -> &State180<F> {
@@ -389,6 +399,7 @@ impl<F: MixedRadixScalar<Complex = Complex<F>>> FftPlan1D<F> {
         let mut n2 = 0;
         let mut pfa = None;
         let mut composite = None;
+        let mut rader = None;
         let mut twiddle_fwd = None;
         // Lazy: no strategy populates the inverse table at construction.
         let twiddle_inv = std::sync::OnceLock::new();
@@ -633,6 +644,7 @@ impl<F: MixedRadixScalar<Complex = Complex<F>>> FftPlan1D<F> {
                 }
             }
             PlanStrategy::Rader => {
+                rader = Some(Arc::new(RaderState::new(n)));
                 forward_impl = exec_rader_forward::<F>;
                 inverse_impl = exec_rader_inverse::<F>;
                 inverse_unnorm_impl = exec_rader_inverse_unnorm::<F>;
@@ -653,6 +665,7 @@ impl<F: MixedRadixScalar<Complex = Complex<F>>> FftPlan1D<F> {
             n2,
             pfa,
             composite,
+            rader,
             twiddle_fwd,
             twiddle_inv,
             base128,

@@ -6,7 +6,10 @@ mod composition;
 pub(crate) mod convolution;
 pub(crate) mod generator;
 pub(crate) mod ordered;
+mod state;
 pub(crate) mod static_rader;
+
+pub(crate) use state::RaderState;
 
 use crate::application::execution::kernel::components::winograd::ShortWinogradScalar;
 use crate::application::execution::kernel::mixed_radix::MixedRadixScalar;
@@ -88,7 +91,7 @@ pub(crate) fn rader_fft<
         return;
     }
 
-    rader_runtime_impl::<F, INVERSE>(data, n);
+    RaderState::<F>::new(n).execute::<INVERSE>(data);
 }
 
 #[cfg(any(test, debug_assertions, feature = "kernel-strategy-bench"))]
@@ -102,23 +105,6 @@ pub(crate) fn rader_fft_with_convolution_backend<
     let n = data.len();
     debug_assert!(crate::application::execution::kernel::radix_shape::is_prime(n));
     rader_runtime_impl_with_backend::<F, INVERSE, B>(data, n);
-}
-
-#[inline]
-fn rader_runtime_impl<
-    F: MixedRadixScalar<Complex = eunomia::Complex<F>> + ShortWinogradScalar,
-    const INVERSE: bool,
->(
-    data: &mut [F::Complex],
-    n: usize,
-) {
-    if prefers_bluestein_for_rader(n) {
-        rader_runtime_impl_with_backend::<F, INVERSE, Bluestein>(data, n);
-    } else if prefers_half_cyclic_for_rader::<F>(n) {
-        rader_runtime_impl_with_backend::<F, INVERSE, HalfCyclicWinograd>(data, n);
-    } else {
-        rader_runtime_impl_with_backend::<F, INVERSE, FullCyclic>(data, n);
-    }
 }
 
 pub(crate) const BLUESTEIN_RADER_THRESHOLD: usize = 2048;

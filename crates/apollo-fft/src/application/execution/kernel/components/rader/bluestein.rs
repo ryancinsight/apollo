@@ -46,7 +46,7 @@ use std::sync::Arc;
 /// same pattern as all other Apollo FFT caches. The global write lock is
 /// acquired only on a miss after confirming the miss under the read lock,
 /// preventing self-deadlock.
-fn cached_bluestein_entry<F, const INVERSE: bool>(
+pub(super) fn cached_bluestein_entry<F, const INVERSE: bool>(
     n: usize,
     generator_inverse: usize,
 ) -> BluesteinEntry<F::Complex>
@@ -225,10 +225,20 @@ pub(super) fn rader_bluestein_convolve_inplace<
     n: usize,
     generator_inverse: usize,
 ) {
+    let kernel_fft = cached_bluestein_entry::<F, INVERSE>(n, generator_inverse);
+    rader_bluestein_convolve_with::<F>(padded, n, &kernel_fft);
+}
+
+pub(super) fn rader_bluestein_convolve_with<
+    F: MixedRadixScalar<Complex = Complex<F>> + BluesteinStore<Cpx = Complex<F>>,
+>(
+    padded: &mut [F::Complex],
+    n: usize,
+    kernel_fft: &[F::Complex],
+) {
     let m = padded.len();
     debug_assert_eq!(m, n - 1);
 
-    let kernel_fft = cached_bluestein_entry::<F, INVERSE>(n, generator_inverse);
     let p = kernel_fft.len();
     debug_assert!(is_7_smooth(p));
     // The fold below reads `data_buf[j + m]` for `j` up to `m - 2` unchecked, so the
@@ -271,7 +281,7 @@ pub(super) fn rader_bluestein_convolve_inplace<
         }
 
         // Pointwise multiply with precomputed kernel FFT.
-        F::pointwise_mul(data_buf, kernel_fft.as_ref());
+        F::pointwise_mul(data_buf, kernel_fft);
 
         // Inverse FFT (unnormalized)
         if p.is_power_of_two() && p >= 64 {
