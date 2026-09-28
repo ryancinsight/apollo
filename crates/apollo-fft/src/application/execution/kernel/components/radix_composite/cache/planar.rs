@@ -8,7 +8,8 @@ pub(super) fn try_four_step<T, const INVERSE: bool>(
     scratch: &mut [Complex<T>],
 ) -> bool
 where
-    T: batched::BatchedPlanCache,
+    T: batched::BatchedPlanCache
+        + crate::application::execution::kernel::mixed_radix::MixedRadixScalar<Complex = Complex<T>>,
 {
     let n = data.len();
     if batched::planar_applies(n) {
