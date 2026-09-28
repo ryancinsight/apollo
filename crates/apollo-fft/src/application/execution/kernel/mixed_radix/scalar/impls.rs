@@ -76,9 +76,7 @@ macro_rules! dispatch_pot_sized_by_log2 {
                 let n = 1usize << $log2;
                 Self::with_scratch(n, |scratch| {
                     if $inverse && $normalize {
-                        Self::stockham_forward_normalized_sized::<$log2>(
-                            $data, scratch, $twiddles,
-                        );
+                        Self::stockham_forward_normalized_sized::<$log2>($data, scratch, $twiddles);
                     } else {
                         Self::stockham_forward_sized::<$log2>($data, scratch, $twiddles);
                     }
@@ -640,4 +638,3 @@ impl MixedRadixScalar for f64 {
         )
     }
 }
-
