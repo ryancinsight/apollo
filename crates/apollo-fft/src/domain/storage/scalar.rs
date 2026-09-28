@@ -37,6 +37,40 @@ thread_local! {
     static COMPLEX64_OUTPUT_SCRATCH: ScratchPool<Complex64> = const { ScratchPool::new() };
 }
 
+macro_rules! impl_cpu_element {
+    ($ty:ty, $input:ident, $output:ident) => {
+        impl CpuElement for $ty {
+            fn scratch_capacities() -> (usize, usize) {
+                $input.with(|input| $output.with(|output| (input.capacity(), output.capacity())))
+            }
+
+            fn with_input_scratch<R>(len: usize, body: impl FnOnce(&mut [Self]) -> R) -> R {
+                $input.with(|pool| pool.with_scratch(len, body))
+            }
+
+            fn with_output_scratch<R>(len: usize, body: impl FnOnce(&mut [Self]) -> R) -> R {
+                $output.with(|pool| pool.with_scratch(len, body))
+            }
+        }
+    };
+}
+
+macro_rules! impl_identity_cpu_storage {
+    ($storage:ty, $element:ty, $profile:expr) => {
+        impl CpuStorage<$element> for $storage {
+            const PROFILE: PrecisionProfile = $profile;
+
+            fn to_cpu(self) -> $element {
+                self
+            }
+
+            fn from_cpu(value: $element) -> Self {
+                value
+            }
+        }
+    };
+}
+
 /// Owner arithmetic element of a CPU transform contract.
 ///
 /// Sealed to the element families the CPU plans compute in: `f64` and
@@ -68,37 +102,8 @@ pub trait CpuElement: Copy + Send + Sync + 'static + sealed::SealedElement {
     }
 }
 
-impl CpuElement for f64 {
-    fn scratch_capacities() -> (usize, usize) {
-        REAL64_INPUT_SCRATCH.with(|input| {
-            REAL64_OUTPUT_SCRATCH.with(|output| (input.capacity(), output.capacity()))
-        })
-    }
-
-    fn with_input_scratch<R>(len: usize, body: impl FnOnce(&mut [Self]) -> R) -> R {
-        REAL64_INPUT_SCRATCH.with(|pool| pool.with_scratch(len, body))
-    }
-
-    fn with_output_scratch<R>(len: usize, body: impl FnOnce(&mut [Self]) -> R) -> R {
-        REAL64_OUTPUT_SCRATCH.with(|pool| pool.with_scratch(len, body))
-    }
-}
-
-impl CpuElement for Complex64 {
-    fn scratch_capacities() -> (usize, usize) {
-        COMPLEX64_INPUT_SCRATCH.with(|input| {
-            COMPLEX64_OUTPUT_SCRATCH.with(|output| (input.capacity(), output.capacity()))
-        })
-    }
-
-    fn with_input_scratch<R>(len: usize, body: impl FnOnce(&mut [Self]) -> R) -> R {
-        COMPLEX64_INPUT_SCRATCH.with(|pool| pool.with_scratch(len, body))
-    }
-
-    fn with_output_scratch<R>(len: usize, body: impl FnOnce(&mut [Self]) -> R) -> R {
-        COMPLEX64_OUTPUT_SCRATCH.with(|pool| pool.with_scratch(len, body))
-    }
-}
+impl_cpu_element!(f64, REAL64_INPUT_SCRATCH, REAL64_OUTPUT_SCRATCH);
+impl_cpu_element!(Complex64, COMPLEX64_INPUT_SCRATCH, COMPLEX64_OUTPUT_SCRATCH);
 
 /// Host storage admitted by an element family's CPU typed paths.
 ///
@@ -119,17 +124,7 @@ pub trait CpuStorage<E: CpuElement = f64>:
     fn from_cpu(value: E) -> Self;
 }
 
-impl CpuStorage for f64 {
-    const PROFILE: PrecisionProfile = PrecisionProfile::HIGH_ACCURACY_F64;
-
-    fn to_cpu(self) -> f64 {
-        self
-    }
-
-    fn from_cpu(value: f64) -> Self {
-        value
-    }
-}
+impl_identity_cpu_storage!(f64, f64, PrecisionProfile::HIGH_ACCURACY_F64);
 
 impl CpuStorage for f32 {
     const PROFILE: PrecisionProfile = PrecisionProfile::LOW_PRECISION_F32;
@@ -155,17 +150,7 @@ impl CpuStorage for F16 {
     }
 }
 
-impl CpuStorage<Complex64> for Complex64 {
-    const PROFILE: PrecisionProfile = PrecisionProfile::HIGH_ACCURACY_F64;
-
-    fn to_cpu(self) -> Complex64 {
-        self
-    }
-
-    fn from_cpu(value: Complex64) -> Self {
-        value
-    }
-}
+impl_identity_cpu_storage!(Complex64, Complex64, PrecisionProfile::HIGH_ACCURACY_F64);
 
 impl CpuStorage<Complex64> for Complex32 {
     const PROFILE: PrecisionProfile = PrecisionProfile::LOW_PRECISION_F32;
