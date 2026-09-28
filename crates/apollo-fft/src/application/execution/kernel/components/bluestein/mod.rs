@@ -47,6 +47,7 @@
 //! ([`bluestein_fft`]) builds them per call.
 
 use eunomia::Complex;
+use std::sync::Arc;
 
 use crate::application::execution::kernel::mixed_radix::dispatch::dispatch_inplace;
 use crate::application::execution::kernel::mixed_radix::MixedRadixScalar;
@@ -61,6 +62,14 @@ pub(crate) struct ChirpTables<C> {
     chirp_out_normalized: Box<[C]>,
     /// The unnormalized forward transform of `conj(c)` padded to `p`.
     kernel_spectrum: Box<[C]>,
+    /// The padded length's twiddles, both directions, held for the two inner
+    /// transforms of every execution. Holding them here is what takes this
+    /// route off the process-wide caches: the tables are the cache's own
+    /// `Arc`s, so this costs a reference rather than a copy, and a plan that
+    /// owns these tables owns everything its Bluestein executions read
+    /// (ADR 0068, slice 2).
+    inner_fwd: Arc<[C]>,
+    inner_inv: Arc<[C]>,
 }
 
 impl<F: MixedRadixScalar<Complex = Complex<F>>> ChirpTables<Complex<F>> {
@@ -106,12 +115,16 @@ impl<F: MixedRadixScalar<Complex = Complex<F>>> ChirpTables<Complex<F>> {
                 kernel[p - m] = conj;
             }
         }
-        dispatch_inplace::<F, false, false>(&mut kernel, None);
+        let inner_fwd = F::cached_twiddle_fwd(p);
+        let inner_inv = F::cached_twiddle_inv(p);
+        dispatch_inplace::<F, false, false>(&mut kernel, Some(&inner_fwd));
         Self {
             chirp: chirp.into_boxed_slice(),
             chirp_out: chirp_out.into_boxed_slice(),
             chirp_out_normalized: chirp_out_normalized.into_boxed_slice(),
             kernel_spectrum: kernel.into_boxed_slice(),
+            inner_fwd,
+            inner_inv,
         }
     }
 }
@@ -191,9 +204,9 @@ pub(crate) fn bluestein_with<
         work[..n].copy_from_slice(data);
         work[n..].fill(F::complex(0.0, 0.0));
         F::pointwise_mul(&mut work[..n], &tables.chirp);
-        dispatch_inplace::<F, false, false>(work, None);
+        dispatch_inplace::<F, false, false>(work, Some(&tables.inner_fwd));
         F::pointwise_mul(work, &tables.kernel_spectrum);
-        dispatch_inplace::<F, true, false>(work, None);
+        dispatch_inplace::<F, true, false>(work, Some(&tables.inner_inv));
         F::pointwise_mul(&mut work[..n], chirp_out);
         data.copy_from_slice(&work[..n]);
     });
@@ -203,6 +216,35 @@ pub(crate) fn bluestein_with<
 mod tests {
     use super::*;
     use eunomia::Complex64;
+
+    /// The tables a plan holds for its inner transforms are the cache's own
+    /// allocations, not copies of them. That is what slice 2 needs: a plan
+    /// that owns a `BluesteinState` owns every table its executions read, so
+    /// the caches can later hold `Weak` without the inner transforms losing
+    /// their tables between calls (ADR 0068).
+    ///
+    /// Pointer equality is the assertion, not value equality — a copy would
+    /// compare equal and would own nothing.
+    #[test]
+    fn the_inner_tables_are_the_cached_allocations() {
+        for n in [5usize, 11, 97, 361] {
+            let padded = (2 * n - 1).next_power_of_two();
+            let tables = ChirpTables::<Complex64>::new::<false>(n);
+            assert!(
+                Arc::ptr_eq(&tables.inner_fwd, &f64::cached_twiddle_fwd(padded)),
+                "n {n}: the forward table is the cache's own allocation"
+            );
+            assert!(
+                Arc::ptr_eq(&tables.inner_inv, &f64::cached_twiddle_inv(padded)),
+                "n {n}: the inverse table is the cache's own allocation"
+            );
+            assert_eq!(
+                tables.kernel_spectrum.len(),
+                padded,
+                "n {n}: the tables are built for the padded length"
+            );
+        }
+    }
 
     /// The defining sum, shared with no part of the implementation.
     fn naive(x: &[Complex64], inverse: bool) -> Vec<Complex64> {
