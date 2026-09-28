@@ -269,8 +269,10 @@ export_revision() {
   local sha="$1" directory="$2" member_git objects
   member_git="$(git rev-parse --absolute-git-dir)" || return 1
   objects="$(git rev-parse --path-format=absolute --git-common-dir)/objects" || return 1
+  # `git init` creates the directory: the lock export runs before a PATH
+  # without an interpreter is refused, and such a PATH need not carry mkdir.
   if [ ! -d "$directory/.git" ]; then
-    mkdir -p "$directory" && outside_checkout git init -q "$directory" || return 1
+    outside_checkout git init -q "$directory" || return 1
   fi
   printf '%s\n' "$objects" > "$directory/.git/objects/info/alternates" \
     && outside_checkout git -C "$directory" config core.longpaths true \
