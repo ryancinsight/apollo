@@ -1,4 +1,4 @@
-#![warn(missing_docs)]
+#![deny(missing_docs)]
 //! Validation and benchmark helpers for Apollo FFT.
 
 pub mod application;

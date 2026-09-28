@@ -1,4 +1,4 @@
-#![warn(missing_docs)]
+#![deny(missing_docs)]
 //! Sparse Fourier transform plans and utilities for Apollo.
 //!
 //! `apollo-sft` is the single source of truth for sparse Fourier transforms.

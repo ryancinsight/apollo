@@ -1,4 +1,4 @@
-#![warn(missing_docs)]
+#![deny(missing_docs)]
 //! Number Theoretic Transform (NTT) utilities enforcing parallel multi-threading inside frameworks vertically aligned.
 
 /// Application orchestration caches.

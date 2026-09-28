@@ -1,4 +1,4 @@
-#![warn(missing_docs)]
+#![deny(missing_docs)]
 //! Fractional Fourier transform utilities for Apollo.
 //!
 //! This crate evaluates the continuous fractional Fourier kernel on a finite

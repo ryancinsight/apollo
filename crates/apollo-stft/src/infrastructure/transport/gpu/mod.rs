@@ -23,7 +23,6 @@ use infrastructure::buffers::StftGpuBuffers;
 pub use apollo_fft::{WgpuCapabilities, WgpuError, WgpuResult};
 pub use execution::{forward_output_len, required_device_limits};
 pub use frame::FramePlan;
-pub use infrastructure::buffers::StftGpuBuffers as StftBuffers;
 pub use infrastructure::kernel::StftGpuKernel;
 
 /// Metadata-preserving WGPU plan descriptor.

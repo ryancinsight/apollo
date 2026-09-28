@@ -37,6 +37,12 @@ where
     )
 }
 
+/// Reborrow a slice as a fixed-size array; `None` iff the length differs.
+#[inline]
+fn as_arr<T, const N: usize>(data: &mut [T]) -> Option<&mut [T; N]> {
+    data.try_into().ok()
+}
+
 /// Precision-generic auto-selecting FFT operations.
 ///
 /// Implementors delegate to the `mixed_radix` facade, which routes to:
@@ -97,18 +103,18 @@ macro_rules! fft_precision_impl {
                 let n = data.len();
                 match n {
                     2 => {
-                        let data_ref: &mut [$complex; 2] = data.try_into().unwrap();
+                        let Some(data_ref) = as_arr::<$complex, 2>(data) else { return };
                         let a = data_ref[0];
                         let b = data_ref[1];
                         data_ref[0] = a + b;
                         data_ref[1] = a - b;
                     }
                     4 => {
-                        let data_ref: &mut [$complex; 4] = data.try_into().unwrap();
+                        let Some(data_ref) = as_arr::<$complex, 4>(data) else { return };
                         dft4_array_impl::<$scalar, false, false>(data_ref);
                     }
                     8 => {
-                        let data_ref: &mut [$complex; 8] = data.try_into().unwrap();
+                        let Some(data_ref) = as_arr::<$complex, 8>(data) else { return };
                         dft8_array_impl::<$scalar, false, false>(data_ref);
                     }
                     $(
@@ -120,20 +126,20 @@ macro_rules! fft_precision_impl {
                     )*
                     $(
                         $fn_size => {
-                            let data_ref: &mut [$complex; $fn_size] = data.try_into().unwrap();
+                            let Some(data_ref) = as_arr::<$complex, $fn_size>(data) else { return };
                             $dft_fn::<$scalar, false>(data_ref);
                         }
                     )*
                     3 => {
-                        let data_ref: &mut [$complex; 3] = data.try_into().unwrap();
+                        let Some(data_ref) = as_arr::<$complex, 3>(data) else { return };
                         dft3_impl::<$scalar, false, false>(data_ref);
                     }
                     5 => {
-                        let data_ref: &mut [$complex; 5] = data.try_into().unwrap();
+                        let Some(data_ref) = as_arr::<$complex, 5>(data) else { return };
                         dft5_array_impl::<$scalar, false, false>(data_ref);
                     }
                     7 => {
-                        let data_ref: &mut [$complex; 7] = data.try_into().unwrap();
+                        let Some(data_ref) = as_arr::<$complex, 7>(data) else { return };
                         dft7_impl::<$scalar, false, false>(data_ref);
                     }
                     _ => {
@@ -147,7 +153,7 @@ macro_rules! fft_precision_impl {
                 let n = data.len();
                 match n {
                     2 => {
-                        let data_ref: &mut [$complex; 2] = data.try_into().unwrap();
+                        let Some(data_ref) = as_arr::<$complex, 2>(data) else { return };
                         let a = data_ref[0];
                         let b = data_ref[1];
                         data_ref[0] = <$complex>::new(
@@ -160,11 +166,11 @@ macro_rules! fft_precision_impl {
                         );
                     }
                     4 => {
-                        let data_ref: &mut [$complex; 4] = data.try_into().unwrap();
+                        let Some(data_ref) = as_arr::<$complex, 4>(data) else { return };
                         dft4_array_impl::<$scalar, true, true>(data_ref);
                     }
                     8 => {
-                        let data_ref: &mut [$complex; 8] = data.try_into().unwrap();
+                        let Some(data_ref) = as_arr::<$complex, 8>(data) else { return };
                         dft8_array_impl::<$scalar, true, true>(data_ref);
                     }
                     $(
@@ -176,7 +182,7 @@ macro_rules! fft_precision_impl {
                     )*
                     $(
                         $fn_size => {
-                            let data_ref: &mut [$complex; $fn_size] = data.try_into().unwrap();
+                            let Some(data_ref) = as_arr::<$complex, $fn_size>(data) else { return };
                             $dft_fn::<$scalar, true>(data_ref);
                             let scale = <$scalar as mixed_radix::MixedRadixScalar>::complex(
                                 1.0 / ($fn_size as f64),
@@ -188,15 +194,15 @@ macro_rules! fft_precision_impl {
                         }
                     )*
                     3 => {
-                        let data_ref: &mut [$complex; 3] = data.try_into().unwrap();
+                        let Some(data_ref) = as_arr::<$complex, 3>(data) else { return };
                         dft3_impl::<$scalar, true, true>(data_ref);
                     }
                     5 => {
-                        let data_ref: &mut [$complex; 5] = data.try_into().unwrap();
+                        let Some(data_ref) = as_arr::<$complex, 5>(data) else { return };
                         dft5_array_impl::<$scalar, true, true>(data_ref);
                     }
                     7 => {
-                        let data_ref: &mut [$complex; 7] = data.try_into().unwrap();
+                        let Some(data_ref) = as_arr::<$complex, 7>(data) else { return };
                         dft7_impl::<$scalar, true, true>(data_ref);
                     }
                     _ => {
@@ -210,18 +216,18 @@ macro_rules! fft_precision_impl {
                 let n = data.len();
                 match n {
                     2 => {
-                        let data_ref: &mut [$complex; 2] = data.try_into().unwrap();
+                        let Some(data_ref) = as_arr::<$complex, 2>(data) else { return };
                         let a = data_ref[0];
                         let b = data_ref[1];
                         data_ref[0] = a + b;
                         data_ref[1] = a - b;
                     }
                     4 => {
-                        let data_ref: &mut [$complex; 4] = data.try_into().unwrap();
+                        let Some(data_ref) = as_arr::<$complex, 4>(data) else { return };
                         dft4_array_impl::<$scalar, true, false>(data_ref);
                     }
                     8 => {
-                        let data_ref: &mut [$complex; 8] = data.try_into().unwrap();
+                        let Some(data_ref) = as_arr::<$complex, 8>(data) else { return };
                         dft8_array_impl::<$scalar, true, false>(data_ref);
                     }
                     $(
@@ -233,20 +239,20 @@ macro_rules! fft_precision_impl {
                     )*
                     $(
                         $fn_size => {
-                            let data_ref: &mut [$complex; $fn_size] = data.try_into().unwrap();
+                            let Some(data_ref) = as_arr::<$complex, $fn_size>(data) else { return };
                             $dft_fn::<$scalar, true>(data_ref);
                         }
                     )*
                     3 => {
-                        let data_ref: &mut [$complex; 3] = data.try_into().unwrap();
+                        let Some(data_ref) = as_arr::<$complex, 3>(data) else { return };
                         dft3_impl::<$scalar, true, false>(data_ref);
                     }
                     5 => {
-                        let data_ref: &mut [$complex; 5] = data.try_into().unwrap();
+                        let Some(data_ref) = as_arr::<$complex, 5>(data) else { return };
                         dft5_array_impl::<$scalar, true, false>(data_ref);
                     }
                     7 => {
-                        let data_ref: &mut [$complex; 7] = data.try_into().unwrap();
+                        let Some(data_ref) = as_arr::<$complex, 7>(data) else { return };
                         dft7_impl::<$scalar, true, false>(data_ref);
                     }
                     _ => {

@@ -1,4 +1,4 @@
-#![warn(missing_docs)]
+#![deny(missing_docs)]
 //! Discrete Radon transform and CT-style reconstruction plans for Apollo.
 //!
 //! The Radon transform maps a 2D image into projection lines indexed by angle

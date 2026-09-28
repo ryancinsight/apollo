@@ -1,4 +1,4 @@
-#![warn(missing_docs)]
+#![deny(missing_docs)]
 //! Sliding DFT streaming plans for Apollo.
 //!
 //! `apollo-sdft` owns streaming-window metadata, direct bin initialization,
