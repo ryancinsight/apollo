@@ -103,8 +103,8 @@ thread_local! {
     static FOLD_CACHE_F32: FoldTableCache<FourStepFold<f32>> = const { FoldTableCache::new() };
 }
 
-/// Scalars whose batched plans are cached per thread.
-pub(crate) trait BatchedPlanCache:
+/// Scalar seam for acquiring reusable batched plan tables.
+pub trait BatchedPlanCache:
     ShortWinogradScalar + LaneScalar + super::lane::Lane + eunomia::layout::Pod + Sized
 {
     fn cached_plan<const INVERSE: bool>(len: usize) -> Arc<BatchedPlan<Self>>;
