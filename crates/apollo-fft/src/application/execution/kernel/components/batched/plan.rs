@@ -9,7 +9,7 @@ use crate::application::execution::kernel::components::winograd::ShortWinogradSc
 /// Both stage sets read this one table. The time-decimated set walks its
 /// stages upward and the frequency-decimated set downward, over the same
 /// values.
-pub(crate) struct BatchedPlan<T> {
+pub struct BatchedPlan<T> {
     pub(super) len: usize,
     /// Stage-major twiddles: stage `s` (sub-transform length `2^(s+1)`) occupies
     /// `2^s` entries, so the table totals `len - 1`.

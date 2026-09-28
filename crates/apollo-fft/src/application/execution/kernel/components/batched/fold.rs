@@ -43,7 +43,7 @@ const COMPACT_FOLD_MIN_LEN: usize = 1 << 16;
 /// product carries the two factors' roundings and the multiply's own:
 /// within `4u` of the exact twiddle, against `u` for the full matrix, which
 /// the transform's `O(log N · u)` bound absorbs.
-pub(crate) struct FourStepFold<T> {
+pub struct FourStepFold<T> {
     /// Lanes per group, `F`: the fine table's row width.
     pub(crate) lanes: usize,
     /// `W_N^(p order(f))` for `f < F`, row-major by `p`.
