@@ -99,12 +99,15 @@ where
         assert_eq!(dynamic.twiddle_fwd.as_deref().map_or(0, <[_]>::len), 0);
     } else {
         assert!(matches!(dynamic.strategy, PlanStrategy::FourStep));
+        let dynamic_planar = dynamic.planar.as_ref().expect("four-step plan owns state");
         // Execution must not acquire a plan-owned stage table, including on
         // odd powers whose combining pass acquires its own global table.
         assert_eq!(dynamic.twiddle_fwd.as_deref().map_or(0, <[_]>::len), 0);
         assert_eq!(dynamic.twiddle_inv.get().map_or(0, |table| table.len()), 0);
         let cloned = dynamic.clone();
         assert!(matches!(cloned.strategy, PlanStrategy::FourStep));
+        let cloned_planar = cloned.planar.as_ref().expect("four-step clone owns state");
+        assert!(std::sync::Arc::ptr_eq(dynamic_planar, cloned_planar));
         assert_eq!(cloned.twiddle_fwd.as_deref().map_or(0, <[_]>::len), 0);
         assert_eq!(cloned.twiddle_inv.get().map_or(0, |table| table.len()), 0);
     }
@@ -126,6 +129,17 @@ where
     check_length::<F, 131_072>(unit_roundoff);
     check_length::<F, 262_144>(unit_roundoff);
     check_length::<F, 524_288>(unit_roundoff);
+}
+
+#[test]
+fn four_step_plan_past_planar_domain_keeps_generic_route() {
+    let plan =
+        FftPlan1D::<f64>::new(Shape1D::new(1 << 21).expect("the boundary length is non-zero"));
+    assert!(matches!(plan.strategy, PlanStrategy::FourStep));
+    assert!(
+        plan.planar.is_none(),
+        "the bounded planar state must not claim a length outside its domain"
+    );
 }
 
 #[test]

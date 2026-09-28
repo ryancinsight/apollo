@@ -29,6 +29,7 @@ use super::executors::{
     pot_executors_64, pot_executors_8, runtime_tiny_direct_dispatch,
 };
 use super::strategy::{arc_to_cow, generic_four_step_applies, PlanStrategy};
+use crate::application::execution::kernel::components::batched::PlanarState;
 use crate::application::execution::kernel::components::bluestein::BluesteinState;
 use crate::application::execution::kernel::components::column_route::State180;
 use crate::application::execution::kernel::mixed_radix::scalar::plan_scratch::PlanScratch;
@@ -72,6 +73,8 @@ pub struct FftPlan1D<F: MixedRadixScalar> {
     pub(crate) column180: Option<Arc<State180<F>>>,
     /// The chirp-z tables for a length every shaped route declines.
     pub(crate) bluestein: Option<Arc<BluesteinState<F>>>,
+    /// Tables retained by a reusable planar four-step route.
+    pub(crate) planar: Option<Arc<PlanarState<F>>>,
 
     // Function pointers for execution routing, selected at construction for
     // this length on this host. The framed small power-of-two executors carry
@@ -99,6 +102,7 @@ impl<F: MixedRadixScalar> Clone for FftPlan1D<F> {
             base64: self.base64.clone(),
             column180: self.column180.clone(),
             bluestein: self.bluestein.clone(),
+            planar: self.planar.clone(),
             // `OnceLock: Clone` clones the initialized state, so a clone of a
             // plan that has run an inverse keeps the table handle.
             forward_impl: self.forward_impl,
@@ -371,6 +375,9 @@ impl<F: MixedRadixScalar<Complex = Complex<F>>> FftPlan1D<F> {
         let twiddle_inv = std::sync::OnceLock::new();
 
         let mut bluestein = None;
+        let planar = (matches!(strategy, PlanStrategy::FourStep)
+            && crate::application::execution::kernel::components::batched::planar_applies(n))
+        .then(|| Arc::new(PlanarState::new(n)));
         let mut forward_impl: unsafe fn(&Self, &mut [F::Complex]) = exec_identity::<F>;
         let mut inverse_impl: unsafe fn(&Self, &mut [F::Complex]) = exec_identity::<F>;
         let mut inverse_unnorm_impl: unsafe fn(&Self, &mut [F::Complex]) = exec_identity::<F>;
@@ -633,6 +640,7 @@ impl<F: MixedRadixScalar<Complex = Complex<F>>> FftPlan1D<F> {
             base64,
             column180,
             bluestein,
+            planar,
             forward_impl,
             inverse_impl,
             inverse_unnorm_impl,

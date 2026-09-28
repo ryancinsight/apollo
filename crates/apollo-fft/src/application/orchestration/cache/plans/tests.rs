@@ -86,6 +86,8 @@ fn clearing_releases_plans_no_caller_holds() {
 fn static_table_backed_execution_releases_its_bounded_owner() {
     const N: usize = 4096;
     clear_plan_caches();
+    let retained_baseline =
+        crate::application::execution::kernel::components::batched::retained_bytes_f64();
     let mut values = vec![Complex64::default(); N];
     StaticFftPlan1D::<f64, N>::new().forward_complex_slice_inplace(&mut values);
     assert!(
@@ -93,6 +95,11 @@ fn static_table_backed_execution_releases_its_bounded_owner() {
         "the table-backed static route must acquire the bounded plan owner"
     );
     assert_eq!(values, vec![Complex64::default(); N]);
+    assert!(
+        crate::application::execution::kernel::components::batched::retained_bytes_f64()
+            > retained_baseline,
+        "the cached plan must retain its prepared planar tables"
+    );
 
     let owner = plan(N);
     let released = Arc::downgrade(&owner);
@@ -101,6 +108,11 @@ fn static_table_backed_execution_releases_its_bounded_owner() {
     assert!(
         released.upgrade().is_none(),
         "clearing the cache must release the static route's owner"
+    );
+    assert_eq!(
+        crate::application::execution::kernel::components::batched::retained_bytes_f64(),
+        retained_baseline,
+        "table retention must return to baseline after every owner drops"
     );
 }
 

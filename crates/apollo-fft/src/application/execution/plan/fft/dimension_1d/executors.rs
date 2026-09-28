@@ -558,10 +558,21 @@ pub(super) fn exec_four_step<
     const INVERSE: bool,
     const NORMALIZE: bool,
 >(
-    _plan: &FftPlan1D<F>,
+    plan: &FftPlan1D<F>,
     slice: &mut [F::Complex],
 ) {
-    FourStep::run::<F, INVERSE, NORMALIZE>(slice, &[]);
+    if let Some(state) = &plan.planar {
+        let required =
+            crate::application::execution::kernel::components::batched::scratch_len(slice.len());
+        <F as MixedRadixScalar>::with_scratch(required, |scratch| {
+            state.execute::<INVERSE>(slice, scratch);
+        });
+        if INVERSE && NORMALIZE {
+            F::normalize(slice, slice.len());
+        }
+    } else {
+        FourStep::run::<F, INVERSE, NORMALIZE>(slice, &[]);
+    }
 }
 
 // 4. PowerOfTwo generic sizes (using cached twiddles)
