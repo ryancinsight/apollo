@@ -84,7 +84,9 @@ fn clearing_releases_plans_no_caller_holds() {
 
 #[test]
 fn static_table_backed_execution_releases_its_bounded_owner() {
-    const N: usize = 4096;
+    // 4,096 selects the base-512 route under ADR 0061 and cannot witness
+    // planar retention; 65,536 selects the generic planar FourStep route.
+    const N: usize = 1 << 16;
     clear_plan_caches();
     let retained_baseline =
         crate::application::execution::kernel::components::batched::retained_bytes_f64();

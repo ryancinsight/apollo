@@ -3,7 +3,8 @@
 - Status: Accepted
 - Date: 2026-09-18
 - Revised: 2026-09-28 — keep static plans zero-sized while table-backed routes
-  borrow prepared state from the bounded plan owner.
+  borrow prepared state from the bounded plan owner; exercise planar retention
+  at 65,536 because 4,096 selects the base-512 route under ADR 0061.
 - Items: `backlog.md#apollo-mem-cache-bounds`
 - Evidence: `output/apollo-memory-audit-2026-09-18.md#f4` (the finding and
   its growth measurements), `output/apollo-mem-cache-bounds-2026-09-18/`
