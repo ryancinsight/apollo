@@ -1,7 +1,7 @@
 //! Per-length batched-transform plan: the stage-major twiddle table both
 //! stage sets read.
 
-use crate::application::execution::kernel::mixed_radix::MixedRadixScalar;
+use crate::application::execution::kernel::components::winograd::ShortWinogradScalar;
 
 /// Per-length batched-transform plan: the stage-major twiddle table, a
 /// build-time cost.
@@ -16,7 +16,7 @@ pub(crate) struct BatchedPlan<T> {
     pub(super) tw: Vec<(T, T)>,
 }
 
-impl<T: MixedRadixScalar> BatchedPlan<T> {
+impl<T: ShortWinogradScalar> BatchedPlan<T> {
     pub(super) fn new<const INVERSE: bool>(len: usize) -> Self {
         assert!(
             len.is_power_of_two(),

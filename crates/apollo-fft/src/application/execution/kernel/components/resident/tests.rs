@@ -103,7 +103,7 @@ fn matches_the_batched_route_when_width_is_supported() {
 
     let mut theirs = src.clone();
     let mut scratch = vec![Complex64::default(); batched::scratch_len(1024)];
-    batched::four_step_batched::<f64, false>(&mut theirs, &mut scratch);
+    batched::PlanarState::<f64>::new(1024).execute::<false>(&mut theirs, &mut scratch);
 
     let bound = 2.0 * tolerance(&src);
     let err = worst(&ours, &theirs);

@@ -1,3 +1,4 @@
+use crate::application::execution::kernel::components::batched::BatchedPlanCache;
 use crate::application::execution::kernel::components::radix_composite::CompositeCache;
 use crate::application::execution::kernel::components::winograd::ShortWinogradScalar;
 use crate::application::execution::kernel::pot::{PoTStrategy, SizedPoT};
@@ -31,6 +32,7 @@ pub trait MixedRadixScalar:
     + 'static
     + leto_ops::ComplexLayout
     + ShortWinogradScalar
+    + BatchedPlanCache
     + CompositeCache
     + BluesteinStore<Cpx = Self::Complex>
 {

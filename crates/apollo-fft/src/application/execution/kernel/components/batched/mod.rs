@@ -70,11 +70,12 @@ mod radix;
 mod register;
 mod seams;
 mod sink;
+mod state;
 mod sweep;
 
 pub(crate) use cache::BatchedPlanCache;
-pub(crate) use driver::four_step_batched;
 pub(crate) use plane::{planar_applies, scratch_len};
+pub(crate) use state::PlanarState;
 
 #[cfg(all(test, windows, target_arch = "x86_64"))]
 pub(crate) mod sections;

@@ -11,7 +11,7 @@
 //! one table per length in place of two.
 
 use super::lane_order::LaneOrder;
-use crate::application::execution::kernel::mixed_radix::MixedRadixScalar;
+use crate::application::execution::kernel::components::winograd::ShortWinogradScalar;
 
 /// Shortest transform whose fold table is two-level.
 ///
@@ -54,7 +54,7 @@ pub(crate) struct FourStepFold<T> {
     pub(crate) coarse_im: Box<[T]>,
 }
 
-impl<T: MixedRadixScalar> FourStepFold<T> {
+impl<T: ShortWinogradScalar> FourStepFold<T> {
     /// Builds the forward table (`sign = -1`); the caller conjugates it in
     /// the pass for the inverse direction rather than requesting a second
     /// table (see the module doc).
