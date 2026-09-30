@@ -147,4 +147,7 @@ fn resident_plans_are_shared_across_threads() {
         "each thread built its own resident plan for N = {}",
         super::ROW * super::ROW
     );
+    let released = std::sync::Arc::downgrade(&plans[0]);
+    drop(plans);
+    assert!(released.upgrade().is_none());
 }
