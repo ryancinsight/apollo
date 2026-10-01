@@ -89,7 +89,7 @@ csv = "1.4.0"
 eunomia = { version = "0.8.0", git = "https://github.com/ryancinsight/eunomia", default-features = false, features = ["std"] }
 # Mnemosyne PR #128 is merged; Cargo.lock records the reviewed default source.
 mnemosyne = { package = "mnemosyne-memory", version = "0.7.0", git = "https://github.com/ryancinsight/Mnemosyne.git", features = ["eunomia"] }
-melinoe = { version = "0.9.0", git = "https://github.com/ryancinsight/melinoe.git", default-features = false, features = ["alloc"] }
+melinoe = { version = "0.10.0", git = "https://github.com/ryancinsight/melinoe.git", default-features = false, features = ["alloc"] }
 # Hermes PR #156 and Leto PR #168 are merged; Cargo.lock records their reviewed
 # default sources.
 hermes-simd = { version = "0.7.0", git = "https://github.com/ryancinsight/hermes.git" }
@@ -124,7 +124,7 @@ syn = { version = "2.0.118", features = ["full"] }
 # themis owns CPU topology across the stack: NUMA nodes, cache levels, and the
 # per-processor efficiency class the pinned measurement instruments select on
 # (ADR 0043). `std` supplies the platform detection backends.
-themis = { package = "themis-topology", version = "0.10.1", git = "https://github.com/ryancinsight/themis", default-features = false, features = ["std"] }
+themis = { package = "themis-topology", version = "0.11.0", git = "https://github.com/ryancinsight/themis", default-features = false, features = ["std"] }
 thiserror = "2.0.18"
 # Hephaestus 0.15 owns Apollo's WGPU 30 device contract.
 
