@@ -1,5 +1,15 @@
 # Apollo Backlog
 
+<a id="apollo-rescue-queue"></a>
+## APOLLO-RESCUE-QUEUE — Complete or close the unclaimed rescue PRs [patch] — todo
+- **priority:** correctness. **needs:** none.
+- **Outcome:** each listed rescue PR is completed onto current main (ported, verified, merged) or closed once its diff resolves empty against main.
+- **Scope:** `ryancinsight/apollo` rescue PR head refs only; a claimant opens a new item branch from the fetched default and ports the work there.
+- **Rescues:**
+  - `ryancinsight/apollo#596` (`rescue/apollo-mem-planar-owner`, draft): unverified wip commit plus 15 commits of a stale lane for [APOLLO-MEM-CACHE-BOUNDS](#apollo-mem-cache-bounds) slice 2 (planar and Bluestein tables owned by plans, [ADR 0068](docs/adr/0068-bounded-plan-and-table-caches.md)). 60 files, +1852 -1512; code in `crates/apollo-fft`, one ADR; gate not run, lane `Cargo.lock` change excluded.
+- **Acceptance:** no open `rescue/` PR for this repository remains unaccounted for.
+- **Next step:** claim #596 through the APOLLO-MEM-CACHE-BOUNDS integrator, diff its head against the fetched default, port the unlanded hunks, run the gate.
+
 <a id="apollo-dht-verification-split"></a>
 ## APOLLO-DHT-VERIFICATION-SPLIT — Restore the DHT source-size ratchet [patch]
 - **Integrator:** Codex `/root/apollo_verification_split`; branch `refactor/apollo-dht-verification-split`.
