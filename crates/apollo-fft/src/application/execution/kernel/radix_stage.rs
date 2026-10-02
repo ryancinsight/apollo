@@ -102,7 +102,7 @@ where
 #[cfg(test)]
 mod tests {
     use super::normalize_inplace;
-    use eunomia::{CastFrom, Complex, FloatElement, Pod, F16};
+    use eunomia::{Complex, FloatElement, Pod, F16};
 
     /// The dispatched pass is one multiply per component, so every lane and
     /// every tail element must equal the element's own `z * scale` bit for
@@ -111,7 +111,6 @@ mod tests {
     fn matches_per_element_scale<F>()
     where
         F: FloatElement + Pod,
-        f64: CastFrom<F>,
     {
         let scale = F::from_f64(0.1);
         for len in [0_usize, 1, 2, 3, 4, 5, 8, 9, 17, 64] {
@@ -128,8 +127,8 @@ mod tests {
             for (index, (&got, &z)) in data.iter().zip(&input).enumerate() {
                 let want = z * scale;
                 assert_eq!(
-                    (f64::cast_from(got.re), f64::cast_from(got.im)),
-                    (f64::cast_from(want.re), f64::cast_from(want.im)),
+                    (got.re.to_f64(), got.im.to_f64()),
+                    (want.re.to_f64(), want.im.to_f64()),
                     "length {len}, element {index}"
                 );
             }

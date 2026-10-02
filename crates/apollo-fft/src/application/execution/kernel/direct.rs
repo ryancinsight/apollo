@@ -42,7 +42,7 @@
 //! can be replaced by a faster recursive kernel without changing the public
 //! contract.
 
-use eunomia::{CastFrom, Complex, FloatElement};
+use eunomia::{Complex, FloatElement};
 
 /// Scalar interface required by the Apollo FFT kernel.
 pub trait KernelScalar: Copy + Clone + Default {
@@ -73,11 +73,11 @@ pub trait KernelScalar: Copy + Clone + Default {
 /// The arithmetic runs in `T` itself; only the angle and the inverse's
 /// accumulator are held in `f64`, which is the reference precision the trait
 /// contract names. `from_precise` narrows through [`FloatElement::from_f64`]
-/// and `precise_re`/`precise_im` widen exactly through [`CastFrom`].
+/// and `precise_re`/`precise_im` widen exactly through
+/// [`eunomia::NumericElement::to_f64`].
 impl<T> KernelScalar for Complex<T>
 where
     T: FloatElement,
-    f64: CastFrom<T>,
 {
     #[inline]
     fn complex(re: Self, im: Self) -> Self {
@@ -106,12 +106,12 @@ where
 
     #[inline]
     fn precise_re(value: Self) -> f64 {
-        f64::cast_from(value.re)
+        value.re.to_f64()
     }
 
     #[inline]
     fn precise_im(value: Self) -> f64 {
-        f64::cast_from(value.im)
+        value.im.to_f64()
     }
 }
 
@@ -173,7 +173,7 @@ pub fn dft_inverse<T: KernelScalar>(input: &[T]) -> Vec<T> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use eunomia::F16;
+    use eunomia::{NumericElement, F16};
 
     /// Worst-component error bound for a length-`n` direct transform of `x`.
     ///
@@ -187,7 +187,6 @@ mod tests {
     fn bound<T>(input: &[Complex<T>], epsilon: f64) -> f64
     where
         T: FloatElement,
-        f64: CastFrom<T>,
     {
         let norm: f64 = input
             .iter()
@@ -203,7 +202,6 @@ mod tests {
     fn assert_close<T>(actual: &[Complex<T>], expected: &[(f64, f64)], tolerance: f64)
     where
         T: FloatElement,
-        f64: CastFrom<T>,
     {
         assert_eq!(actual.len(), expected.len());
         for (index, (&value, &(re, im))) in actual.iter().zip(expected).enumerate() {
@@ -228,7 +226,6 @@ mod tests {
     fn forward_two_point<T>(epsilon: f64)
     where
         T: FloatElement,
-        f64: CastFrom<T>,
     {
         let input = signal::<T>(&[(1.0, 0.0), (2.0, 0.0)]);
         let tolerance = bound(&input, epsilon);
@@ -238,7 +235,6 @@ mod tests {
     fn round_trip<T>(values: &[(f64, f64)], epsilon: f64)
     where
         T: FloatElement,
-        f64: CastFrom<T>,
     {
         let input = signal::<T>(values);
         let tolerance = bound(&input, epsilon);
@@ -256,20 +252,20 @@ mod tests {
     fn forward_matches_known_two_point_transform() {
         forward_two_point::<f64>(f64::EPSILON);
         forward_two_point::<f32>(f64::from(f32::EPSILON));
-        forward_two_point::<F16>(f64::cast_from(F16::EPSILON));
+        forward_two_point::<F16>(F16::EPSILON.to_f64());
     }
 
     #[test]
     fn inverse_recovers_input() {
         round_trip::<f64>(&COMPLEX_SIGNAL, f64::EPSILON);
         round_trip::<f32>(&COMPLEX_SIGNAL, f64::from(f32::EPSILON));
-        round_trip::<F16>(&COMPLEX_SIGNAL, f64::cast_from(F16::EPSILON));
+        round_trip::<F16>(&COMPLEX_SIGNAL, F16::EPSILON.to_f64());
     }
 
     #[test]
     fn forward_inverse_is_identity_on_real_signal() {
         round_trip::<f64>(&REAL_SIGNAL, f64::EPSILON);
         round_trip::<f32>(&REAL_SIGNAL, f64::from(f32::EPSILON));
-        round_trip::<F16>(&REAL_SIGNAL, f64::cast_from(F16::EPSILON));
+        round_trip::<F16>(&REAL_SIGNAL, F16::EPSILON.to_f64());
     }
 }
