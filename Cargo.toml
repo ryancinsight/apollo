@@ -88,7 +88,7 @@ csv = "1.4.0"
 # Eunomia PR #87 is merged; Cargo.lock records the reviewed default source.
 eunomia = { version = "0.8.0", git = "https://github.com/ryancinsight/eunomia", default-features = false, features = ["std"] }
 # Mnemosyne PR #128 is merged; Cargo.lock records the reviewed default source.
-mnemosyne = { package = "mnemosyne-memory", version = "0.7.0", git = "https://github.com/ryancinsight/Mnemosyne.git", features = ["eunomia"] }
+mnemosyne = { package = "mnemosyne-memory", version = "0.8.0", git = "https://github.com/ryancinsight/Mnemosyne.git", features = ["eunomia"] }
 melinoe = { version = "0.10.0", git = "https://github.com/ryancinsight/melinoe.git", default-features = false, features = ["alloc"] }
 # Hermes PR #156 and Leto PR #168 are merged; Cargo.lock records their reviewed
 # default sources.
