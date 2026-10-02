@@ -1,5 +1,13 @@
 # Apollo Backlog
 
+<a id="apollo-castfrom-migrate"></a>
+## APOLLO-CASTFROM-MIGRATE — Retire eunomia `CastFrom` from apollo [patch] — todo
+- **priority:** architecture. **needs:** none. Consumer slice of [EUNOMIA-CASTFROM-RETIRE](../eunomia/backlog.md#eunomia-castfrom-retire).
+- **Outcome:** no `cast_from`, `cast_to`, `CastFrom` or `CastTo` in apollo; the 16 sites in `apollo-fft` `kernel/direct.rs` and `kernel/radix_stage.rs` widen through `NumericElement::to_f64`, and the `f64: CastFrom<T>` bounds drop.
+- **Scope:** `crates/apollo-fft/src/application/execution/kernel/{direct,radix_stage}.rs`; no other member.
+- **Acceptance:** `git grep -E '\b(cast_from|cast_to|CastFrom|CastTo)\b' -- '*.rs'` is empty; the two modules' tests pass unchanged in value.
+- **Next step:** none beyond the delivering PR.
+
 <a id="apollo-rescue-queue"></a>
 ## APOLLO-RESCUE-QUEUE — Complete or close the unclaimed rescue PRs [patch] — todo
 - **priority:** correctness. **needs:** none.
