@@ -60,4 +60,4 @@ pub(super) mod worker_quiescence;
 // ── Re-exports (public API) ──────────────────────────────────────────────────
 
 pub use auto_dispatch::{fft_forward, fft_inverse, fft_inverse_unnorm, FftPrecision};
-pub use direct::{dft_forward, dft_inverse, KernelScalar};
+pub use direct::{dft_forward, dft_inverse};
