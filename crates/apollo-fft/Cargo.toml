@@ -12,8 +12,8 @@ description = "Reusable FFT planning, execution, and cache abstractions for Apol
 hephaestus-wgpu = { workspace = true, optional = true }
 hephaestus-core = { workspace = true, optional = true }
 hephaestus-cuda = { workspace = true, optional = true }
-apollo-fft-macros = { version = "0.2.0", path = "../apollo-fft-macros" }
-apollo-leto-interop = { version = "0.18.0", path = "../apollo-leto-interop" }
+apollo-fft-macros = { version = "0.3.0", path = "../apollo-fft-macros" }
+apollo-leto-interop = { version = "0.19.0", path = "../apollo-leto-interop" }
 hermes-simd = { workspace = true }
 leto = { workspace = true }
 leto-ops = { workspace = true }
