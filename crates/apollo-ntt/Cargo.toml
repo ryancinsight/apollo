@@ -1,6 +1,6 @@
 [package]
 name = "apollo-ntt"
-version = "0.9.0"
+version = "0.10.0"
 rust-version.workspace = true
 edition = "2021"
 license = "MIT"
@@ -25,7 +25,7 @@ proptest_gpu = []
 apollo-fft = { version = "0.27.0", path = "../apollo-fft", default-features = false, optional = true }
 hephaestus-core = { workspace = true, optional = true }
 hephaestus-wgpu = { workspace = true, optional = true }
-apollo-leto-interop = { version = "0.18.0", path = "../apollo-leto-interop" }
+apollo-leto-interop = { version = "0.19.0", path = "../apollo-leto-interop" }
 hermes-simd = { workspace = true }
 leto = { workspace = true }
 eunomia = { workspace = true, features = ["serde"] }

@@ -1,6 +1,6 @@
 [package]
 name = "apollo-gft"
-version = "0.10.0"
+version = "0.11.0"
 rust-version.workspace = true
 edition = "2021"
 license = "MIT"
@@ -24,7 +24,7 @@ eunomia = { workspace = true }
 hephaestus-core = { workspace = true, optional = true }
 hephaestus-wgpu = { workspace = true, optional = true }
 apollo-fft = { version = "0.27.0", path = "../apollo-fft" }
-apollo-leto-interop = { version = "0.18.0", path = "../apollo-leto-interop" }
+apollo-leto-interop = { version = "0.19.0", path = "../apollo-leto-interop" }
 hermes-simd = { workspace = true }
 leto = { workspace = true }
 leto-ops = { workspace = true }
