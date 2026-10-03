@@ -42,11 +42,10 @@ use std::sync::Arc;
 
 /// Fetch or build the Bluestein cache entry (kernel FFT).
 ///
-/// The two-level cache (thread-local first, then global `RwLock`) follows the
-/// same pattern as all other Apollo FFT caches. The global write lock is
-/// acquired only on a miss after confirming the miss under the read lock,
-/// preventing self-deadlock.
-fn cached_bluestein_entry<F, const INVERSE: bool>(
+/// Both indexes retain weak references; the calling plan or operation owns the
+/// returned spectrum. The global write lock is acquired only on a miss after
+/// confirming the miss under the read lock, preventing self-deadlock.
+pub(super) fn cached_bluestein_entry<F, const INVERSE: bool>(
     n: usize,
     generator_inverse: usize,
 ) -> BluesteinEntry<F::Complex>
@@ -56,22 +55,30 @@ where
     let m = n - 1;
     let key: BluesteinKey = (m, INVERSE, generator_inverse);
 
-    if let Some(v) = F::tl_get(key) {
+    if let Some(v) = F::tl_get(key).and_then(|entry| entry.upgrade()) {
         return v;
     }
 
-    let cached = F::global().read().get(&key).cloned();
+    let cached = F::global()
+        .read()
+        .get(&key)
+        .and_then(std::sync::Weak::upgrade);
     if let Some(v) = cached {
-        F::tl_insert(key, v.clone());
+        F::tl_insert(key, Arc::downgrade(&v));
         return v;
     }
 
     let entry = build_bluestein_entry::<F, INVERSE>(n, m, generator_inverse);
     let v = {
         let mut write_guard = F::global().write();
-        write_guard.entry(key).or_insert(entry).clone()
+        if let Some(value) = write_guard.get(&key).and_then(std::sync::Weak::upgrade) {
+            value
+        } else {
+            write_guard.insert(key, Arc::downgrade(&entry));
+            entry
+        }
     };
-    F::tl_insert(key, v.clone());
+    F::tl_insert(key, Arc::downgrade(&v));
     v
 }
 
@@ -225,10 +232,20 @@ pub(super) fn rader_bluestein_convolve_inplace<
     n: usize,
     generator_inverse: usize,
 ) {
+    let kernel_fft = cached_bluestein_entry::<F, INVERSE>(n, generator_inverse);
+    rader_bluestein_convolve_with::<F>(padded, n, &kernel_fft);
+}
+
+pub(super) fn rader_bluestein_convolve_with<
+    F: MixedRadixScalar<Complex = Complex<F>> + BluesteinStore<Cpx = Complex<F>>,
+>(
+    padded: &mut [F::Complex],
+    n: usize,
+    kernel_fft: &[F::Complex],
+) {
     let m = padded.len();
     debug_assert_eq!(m, n - 1);
 
-    let kernel_fft = cached_bluestein_entry::<F, INVERSE>(n, generator_inverse);
     let p = kernel_fft.len();
     debug_assert!(is_7_smooth(p));
     // The fold below reads `data_buf[j + m]` for `j` up to `m - 2` unchecked, so the
@@ -271,7 +288,7 @@ pub(super) fn rader_bluestein_convolve_inplace<
         }
 
         // Pointwise multiply with precomputed kernel FFT.
-        F::pointwise_mul(data_buf, kernel_fft.as_ref());
+        F::pointwise_mul(data_buf, kernel_fft);
 
         // Inverse FFT (unnormalized)
         if p.is_power_of_two() && p >= 64 {

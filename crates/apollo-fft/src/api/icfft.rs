@@ -23,8 +23,8 @@ where
 
 /// Inverse complex 1D FFT in-place for a compile-time-known length and scalar profile.
 ///
-/// `T` selects the concrete scalar implementation at compile time, so no
-/// runtime plan lookup or dynamic dispatch is introduced.
+/// `T` selects the concrete scalar implementation at compile time. Table-free
+/// codelets dispatch directly; other lengths reuse the bounded plan owner.
 pub fn ifft_1d_complex_static_inplace<T, const N: usize>(data: &mut Array1<Complex<T>>)
 where
     T: MixedRadixScalar<Complex = Complex<T>>,

@@ -63,7 +63,7 @@ use hermes_simd::{ComplexReg, LaneKernel, LaneScalar, Simd, SimdArch, SimdKernel
 use parking_lot::RwLock;
 use std::cell::RefCell;
 use std::collections::HashMap;
-use std::sync::{Arc, LazyLock};
+use std::sync::{Arc, LazyLock, Weak};
 
 /// Row length: 32 complex samples, sixteen two-sample registers.
 const ROW: usize = 32;
@@ -160,7 +160,7 @@ impl<T: MixedRadixScalar> ResidentPlan<T> {
     }
 }
 
-type ResidentCache<T> = RefCell<HashMap<(usize, bool), Arc<ResidentPlan<T>>>>;
+type ResidentCache<T> = RefCell<HashMap<(usize, bool), Weak<ResidentPlan<T>>>>;
 
 /// Process-wide resident-plan storage behind the per-thread caches.
 ///
@@ -168,7 +168,7 @@ type ResidentCache<T> = RefCell<HashMap<(usize, bool), Arc<ResidentPlan<T>>>>;
 /// that built a private copy multiplied retention by the worker count of
 /// whatever executor drives the transform. The thread-local map stays the
 /// lock-free fast path; a miss now takes the shared plan.
-type GlobalResidentCache<T> = LazyLock<RwLock<HashMap<(usize, bool), Arc<ResidentPlan<T>>>>>;
+type GlobalResidentCache<T> = LazyLock<RwLock<HashMap<(usize, bool), Weak<ResidentPlan<T>>>>>;
 
 static RESIDENT_GLOBAL_F64: GlobalResidentCache<f64> =
     LazyLock::new(|| RwLock::new(HashMap::new()));
@@ -202,25 +202,27 @@ macro_rules! impl_resident_cache {
                     // Drop the read guard before the write path: a guard held in
                     // an `if let` scrutinee outlives the `else` arm, and this lock
                     // is not reentrant.
-                    let shared = $global.read().get(&key).cloned();
+                    let shared = $global.read().get(&key).and_then(Weak::upgrade);
                     if let Some(plan) = shared {
                         return plan;
                     }
                     let mut guard = $global.write();
-                    Arc::clone(
-                        guard
-                            .entry(key)
-                            .or_insert_with(|| Arc::new(ResidentPlan::<$t>::new::<INVERSE>(n))),
-                    )
+                    if let Some(plan) = guard.get(&key).and_then(Weak::upgrade) {
+                        return plan;
+                    }
+                    guard.retain(|_, plan| plan.strong_count() != 0);
+                    let plan = Arc::new(ResidentPlan::<$t>::new::<INVERSE>(n));
+                    guard.insert(key, Arc::downgrade(&plan));
+                    plan
                 }
 
                 $cache.with(|c| {
                     let key = (n, INVERSE);
-                    if let Some(plan) = c.borrow().get(&key) {
-                        return Arc::clone(plan);
+                    if let Some(plan) = c.borrow().get(&key).and_then(Weak::upgrade) {
+                        return plan;
                     }
                     let plan = miss::<INVERSE>(key, n);
-                    c.borrow_mut().insert(key, Arc::clone(&plan));
+                    c.borrow_mut().insert(key, Arc::downgrade(&plan));
                     plan
                 })
             }

@@ -23,8 +23,9 @@ const CONTROLS: &[usize] = &[97, 113, 151];
 #[derive(Clone)]
 struct CompositionInput {
     padded: Vec<Complex32>,
-    cyclic_spectrum: Arc<[Complex32]>,
-    negacyclic_spectrum: Arc<[Complex32]>,
+    spectra: crate::application::execution::kernel::mixed_radix::caches::rader::NegacyclicEntry<
+        Complex32,
+    >,
     twiddles: Arc<[Complex32]>,
 }
 
@@ -52,12 +53,11 @@ fn signal(len: usize) -> Vec<Complex32> {
 fn composition_input(n: usize) -> CompositionInput {
     let m = (n - 1) / 2;
     let (_, generator_inverse) = generator::primitive_root_and_inverse(n);
-    let (cyclic_spectrum, negacyclic_spectrum) =
+    let spectra =
         <f32 as MixedRadixScalar>::cached_rader_negacyclic_spectra::<false>(n, generator_inverse);
     CompositionInput {
         padded: signal(2 * m),
-        cyclic_spectrum,
-        negacyclic_spectrum,
+        spectra,
         twiddles: <f32 as MixedRadixScalar>::cached_rader_neg_twiddles(m),
     }
 }
@@ -76,8 +76,8 @@ fn phase_input(n: usize) -> PhaseInput {
 fn run_composition(input: &mut CompositionInput) {
     {
         let padded = std::hint::black_box(input.padded.as_mut_slice());
-        let cyclic_spectrum = std::hint::black_box(input.cyclic_spectrum.as_ref());
-        let negacyclic_spectrum = std::hint::black_box(input.negacyclic_spectrum.as_ref());
+        let cyclic_spectrum = std::hint::black_box(input.spectra.0.as_ref());
+        let negacyclic_spectrum = std::hint::black_box(input.spectra.1.as_ref());
         let twiddles = std::hint::black_box(input.twiddles.as_ref());
         rader_negacyclic_convolve_inplace::<f32>(
             padded,
@@ -329,7 +329,7 @@ fn half_cyclic_composition_attribution_by_core_type() {
             || half.first.clone(),
             |work| {
                 let padded = std::hint::black_box(work.as_mut_slice());
-                let spectrum = std::hint::black_box(conv.cyclic_spectrum.as_ref());
+                let spectrum = std::hint::black_box(conv.spectra.0.as_ref());
                 super::convolution::rader_convolve_inplace::<f32>(padded, spectrum);
                 std::hint::black_box(work.as_slice());
             },
@@ -339,7 +339,7 @@ fn half_cyclic_composition_attribution_by_core_type() {
             || half.second.clone(),
             |work| {
                 let padded = std::hint::black_box(work.as_mut_slice());
-                let spectrum = std::hint::black_box(conv.negacyclic_spectrum.as_ref());
+                let spectrum = std::hint::black_box(conv.spectra.1.as_ref());
                 super::convolution::rader_convolve_inplace::<f32>(padded, spectrum);
                 std::hint::black_box(work.as_slice());
             },

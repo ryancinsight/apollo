@@ -8,11 +8,10 @@
 use crate::application::execution::kernel::mixed_radix::scalar::simd::avx::vector_frame_available;
 use crate::application::execution::kernel::mixed_radix::traits::ShortDft;
 use crate::application::execution::kernel::mixed_radix::MixedRadixScalar;
-use crate::application::execution::kernel::pot::{FourStep, PotRoute, StockhamAutosort};
+use crate::application::execution::kernel::pot::StockhamAutosort;
 use crate::with_pot_zst;
 use eunomia::Complex;
 
-use super::strategy::generic_four_step_applies;
 use super::FftPlan1D;
 use crate::application::execution::kernel::components::base128::instance_major::transform_64;
 use crate::application::execution::kernel::components::base128::{
@@ -45,62 +44,26 @@ pub(super) fn static_fft_dispatch<
         return;
     }
 
-    if N.is_power_of_two() {
-        static_pot_dispatch::<F, N, INVERSE, NORMALIZE>(slice);
-    } else if N == 385 {
-        static_composite_dispatch::<F, INVERSE, NORMALIZE>(slice, &[11, 5, 7]);
-    } else if N == 180 {
-        static_composite_dispatch::<F, INVERSE, NORMALIZE>(slice, &[5, 3, 3, 4]);
-    } else if N == 144 {
-        static_composite_dispatch::<F, INVERSE, NORMALIZE>(slice, &[4, 4, 3, 3]);
-    } else if N == 176 {
-        static_composite_dispatch::<F, INVERSE, NORMALIZE>(slice, &[11, 4, 4]);
-    } else if N == 200 {
-        static_composite_dispatch::<F, INVERSE, NORMALIZE>(slice, F::COMPOSITE_RADICES_200);
-    } else if F::use_generated_codelet_plan(N) {
-        F::short_winograd::<INVERSE, NORMALIZE>(slice);
-    } else if N == 72 && !F::FORCE_COMPOSITE_72 {
-        static_good_thomas_dispatch::<F, N, INVERSE, NORMALIZE>(slice, 9, 8);
-    } else if N == 511 {
-        static_good_thomas_dispatch::<F, N, INVERSE, NORMALIZE>(slice, 73, 7);
-    } else if N == 36 {
-        static_composite_dispatch::<F, INVERSE, NORMALIZE>(slice, &[4, 3, 3]);
-    } else if N == 48 {
-        static_composite_dispatch::<F, INVERSE, NORMALIZE>(slice, &[4, 4, 3]);
-    } else if N == 63 && F::FORCE_COMPOSITE_63 {
-        static_composite_dispatch::<F, INVERSE, NORMALIZE>(slice, &[3, 3, 7]);
-    } else if N == 72 && F::FORCE_COMPOSITE_72 {
-        static_composite_dispatch::<F, INVERSE, NORMALIZE>(slice, &[4, 2, 3, 3]);
-    } else if N == 72 {
-        static_good_thomas_dispatch::<F, N, INVERSE, NORMALIZE>(slice, 9, 8);
-    } else if N == 90 {
-        static_composite_dispatch::<F, INVERSE, NORMALIZE>(slice, &[2, 3, 3, 5]);
-    } else if N == 198 {
-        static_composite_dispatch::<F, INVERSE, NORMALIZE>(slice, &[2, 3, 3, 11]);
-    } else if crate::application::execution::kernel::mixed_radix::traits::is_short_winograd_size(N)
-        && (N <= 64 || F::use_generated_codelet_plan(N))
+    if F::use_generated_codelet_plan(N)
+        || (crate::application::execution::kernel::mixed_radix::traits::is_short_winograd_size(N)
+            && N <= 64)
     {
         F::short_winograd::<INVERSE, NORMALIZE>(slice);
-    } else if let Some(radices) =
-        crate::application::execution::kernel::mixed_radix::caches::cached_prime23_radices(N)
-    {
-        static_composite_dispatch::<F, INVERSE, NORMALIZE>(slice, radices.as_ref());
-    } else if let Some((n1, n2)) =
-        crate::application::execution::kernel::mixed_radix::caches::cached_coprime_factors(N)
-            .filter(|&(n1, n2)| {
-                crate::application::execution::kernel::components::good_thomas::has_static_coprime_codelet(n1, n2)
-            })
-    {
-        static_good_thomas_dispatch::<F, N, INVERSE, NORMALIZE>(slice, n1, n2);
-    } else if let Some((n1, n2)) =
-        crate::application::execution::kernel::mixed_radix::caches::cached_coprime_factors(N)
-    {
-        static_good_thomas_dispatch::<F, N, INVERSE, NORMALIZE>(slice, n1, n2);
-    } else {
-        crate::application::execution::kernel::components::rader::rader_fft::<F, INVERSE>(slice);
-        if INVERSE && NORMALIZE {
-            F::normalize(slice, N);
+        return;
+    }
+
+    let plan = F::acquire_plan(
+        crate::domain::metadata::shape::Shape1D::new(N)
+            .expect("invariant: non-identity static transforms have non-zero length"),
+    );
+    if INVERSE {
+        if NORMALIZE {
+            plan.inverse_complex_slice_inplace(slice);
+        } else {
+            plan.inverse_complex_slice_unnorm_inplace(slice);
         }
+    } else {
+        plan.forward_complex_slice_inplace(slice);
     }
 }
 
@@ -175,98 +138,6 @@ fn static_small_pot_dispatch<
         _ => return false,
     }
     true
-}
-
-#[inline]
-fn static_pot_dispatch<
-    F: MixedRadixScalar<Complex = Complex<F>>,
-    const N: usize,
-    const INVERSE: bool,
-    const NORMALIZE: bool,
->(
-    slice: &mut [F::Complex],
-) {
-    if generic_four_step_applies(N) {
-        FourStep::run::<F, INVERSE, NORMALIZE>(slice, &[]);
-        return;
-    }
-
-    let twiddles = if INVERSE {
-        F::cached_twiddle_inv(N)
-    } else {
-        F::cached_twiddle_fwd(N)
-    };
-
-    match N {
-        128 => with_pot_zst!(7, s, {
-            F::pot_inplace_sized::<INVERSE, NORMALIZE, StockhamAutosort, 7>(
-                slice,
-                twiddles.as_ref(),
-                s,
-            );
-        }),
-        256 => with_pot_zst!(8, s, {
-            F::pot_inplace_sized::<INVERSE, NORMALIZE, StockhamAutosort, 8>(
-                slice,
-                twiddles.as_ref(),
-                s,
-            );
-        }),
-        512 => with_pot_zst!(9, s, {
-            F::pot_inplace_sized::<INVERSE, NORMALIZE, StockhamAutosort, 9>(
-                slice,
-                twiddles.as_ref(),
-                s,
-            );
-        }),
-        1024 => with_pot_zst!(10, s, {
-            F::pot_inplace_sized::<INVERSE, NORMALIZE, StockhamAutosort, 10>(
-                slice,
-                twiddles.as_ref(),
-                s,
-            );
-        }),
-        _ => F::pot_inplace::<INVERSE, NORMALIZE>(slice, twiddles.as_ref()),
-    }
-}
-
-#[inline]
-fn static_good_thomas_dispatch<
-    F: MixedRadixScalar<Complex = Complex<F>>,
-    const N: usize,
-    const INVERSE: bool,
-    const NORMALIZE: bool,
->(
-    slice: &mut [F::Complex],
-    n1: usize,
-    n2: usize,
-) {
-    crate::application::execution::kernel::components::good_thomas::pfa_fft::<F, INVERSE>(
-        slice, n1, n2,
-    );
-    if INVERSE && NORMALIZE {
-        F::normalize(slice, N);
-    }
-}
-
-#[inline]
-fn static_composite_dispatch<
-    F: MixedRadixScalar<Complex = Complex<F>>,
-    const INVERSE: bool,
-    const NORMALIZE: bool,
->(
-    slice: &mut [F::Complex],
-    radices: &[usize],
-) {
-    if INVERSE {
-        if NORMALIZE {
-            F::composite_inverse(slice, radices);
-        } else {
-            F::composite_inverse_unnorm(slice, radices);
-        }
-    } else {
-        F::composite_forward(slice, radices);
-    }
 }
 
 // ── Runtime executors (fn-pointer targets for FftPlan1D) ────────────────────
@@ -687,10 +558,19 @@ pub(super) fn exec_four_step<
     const INVERSE: bool,
     const NORMALIZE: bool,
 >(
-    _plan: &FftPlan1D<F>,
+    plan: &FftPlan1D<F>,
     slice: &mut [F::Complex],
 ) {
-    FourStep::run::<F, INVERSE, NORMALIZE>(slice, &[]);
+    let state = plan
+        .four_step
+        .as_deref()
+        .expect("invariant: a four-step executor requires its plan state");
+    let required =
+        crate::application::execution::kernel::components::four_step::scratch_len(slice.len())
+            .expect("invariant: a four-step plan has a representable workspace");
+    <F as MixedRadixScalar>::with_scratch(required, |scratch| {
+        state.execute::<INVERSE, NORMALIZE>(slice, scratch);
+    });
 }
 
 // 4. PowerOfTwo generic sizes (using cached twiddles)
@@ -718,18 +598,14 @@ pub(super) fn exec_good_thomas_forward<F: MixedRadixScalar<Complex = Complex<F>>
     plan: &FftPlan1D<F>,
     slice: &mut [F::Complex],
 ) {
-    crate::application::execution::kernel::components::good_thomas::pfa_fft::<F, false>(
-        slice, plan.n1, plan.n2,
-    );
+    plan.pfa_state().execute::<false>(slice);
 }
 
 pub(super) fn exec_good_thomas_inverse<F: MixedRadixScalar<Complex = Complex<F>>>(
     plan: &FftPlan1D<F>,
     slice: &mut [F::Complex],
 ) {
-    crate::application::execution::kernel::components::good_thomas::pfa_fft::<F, true>(
-        slice, plan.n1, plan.n2,
-    );
+    plan.pfa_state().execute::<true>(slice);
     F::normalize(slice, plan.n);
 }
 
@@ -737,9 +613,7 @@ pub(super) fn exec_good_thomas_inverse_unnorm<F: MixedRadixScalar<Complex = Comp
     plan: &FftPlan1D<F>,
     slice: &mut [F::Complex],
 ) {
-    crate::application::execution::kernel::components::good_thomas::pfa_fft::<F, true>(
-        slice, plan.n1, plan.n2,
-    );
+    plan.pfa_state().execute::<true>(slice);
 }
 
 // 6. Composite
@@ -787,48 +661,42 @@ pub(super) fn exec_composite_forward<F: MixedRadixScalar<Complex = Complex<F>>>(
     plan: &FftPlan1D<F>,
     slice: &mut [F::Complex],
 ) {
-    if let Some(radices) = &plan.radices {
-        F::composite_forward(slice, radices);
-    }
+    plan.composite_state().forward(slice);
 }
 pub(super) fn exec_composite_inverse<F: MixedRadixScalar<Complex = Complex<F>>>(
     plan: &FftPlan1D<F>,
     slice: &mut [F::Complex],
 ) {
-    if let Some(radices) = &plan.radices {
-        F::composite_inverse(slice, radices);
-    }
+    plan.composite_state().inverse(slice);
 }
 pub(super) fn exec_composite_inverse_unnorm<F: MixedRadixScalar<Complex = Complex<F>>>(
     plan: &FftPlan1D<F>,
     slice: &mut [F::Complex],
 ) {
-    if let Some(radices) = &plan.radices {
-        F::composite_inverse_unnorm(slice, radices);
-    }
+    plan.composite_state().inverse_unnorm(slice);
 }
 
 // 7. Rader
 pub(super) fn exec_rader_forward<F: MixedRadixScalar<Complex = Complex<F>>>(
-    _: &FftPlan1D<F>,
+    plan: &FftPlan1D<F>,
     slice: &mut [F::Complex],
 ) {
-    crate::application::execution::kernel::components::rader::rader_fft::<F, false>(slice);
+    plan.rader_state().execute::<false>(slice);
 }
 
 pub(super) fn exec_rader_inverse<F: MixedRadixScalar<Complex = Complex<F>>>(
     plan: &FftPlan1D<F>,
     slice: &mut [F::Complex],
 ) {
-    crate::application::execution::kernel::components::rader::rader_fft::<F, true>(slice);
+    plan.rader_state().execute::<true>(slice);
     F::normalize(slice, plan.n);
 }
 
 pub(super) fn exec_rader_inverse_unnorm<F: MixedRadixScalar<Complex = Complex<F>>>(
-    _: &FftPlan1D<F>,
+    plan: &FftPlan1D<F>,
     slice: &mut [F::Complex],
 ) {
-    crate::application::execution::kernel::components::rader::rader_fft::<F, true>(slice);
+    plan.rader_state().execute::<true>(slice);
 }
 
 pub(super) fn exec_bluestein_forward<F: MixedRadixScalar<Complex = Complex<F>>>(

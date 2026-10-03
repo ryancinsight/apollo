@@ -131,6 +131,7 @@ pub(super) fn execute<F, D: Direction>(
         each(active, lane_len, |_, lane| direct(lane));
         return;
     };
+    let state = four_step::FourStepState::<F>::new(lane_len);
     assert!(companion.len() >= active.len());
     // A group is an integral number of lanes; both factors are bounded by
     // the companion length, which is a valid allocated complex slice.
@@ -150,12 +151,12 @@ pub(super) fn execute<F, D: Direction>(
             #[cfg(all(test, not(miri)))]
             crate::application::execution::kernel::worker_quiescence::record_worker();
             for lane in group.chunks_exact_mut(lane_len) {
-                transform::<F, D>(lane, scratch);
+                transform::<F, D>(&state, lane, scratch);
             }
         },
     );
     for lane in remainder.chunks_exact_mut(lane_len) {
-        transform::<F, D>(lane, &mut companion[..required]);
+        transform::<F, D>(&state, lane, &mut companion[..required]);
     }
 }
 
@@ -189,6 +190,7 @@ pub(super) fn execute_from<F, D: Direction>(
         });
         return;
     };
+    let state = four_step::FourStepState::<F>::new(lane_len);
     let group_len = required.div_ceil(lane_len) * lane_len;
     let prefix_len = target.len() / group_len * group_len;
     let (prefix, remainder) = target.split_at_mut(prefix_len);
@@ -203,12 +205,12 @@ pub(super) fn execute_from<F, D: Direction>(
         crate::application::execution::kernel::worker_quiescence::record_worker();
         group.copy_from_slice(staged);
         for lane in group.chunks_exact_mut(lane_len) {
-            transform::<F, D>(lane, staged);
+            transform::<F, D>(&state, lane, staged);
         }
     });
     remainder.copy_from_slice(source_remainder);
     for lane in remainder.chunks_exact_mut(lane_len) {
-        transform::<F, D>(lane, &mut source[..required]);
+        transform::<F, D>(&state, lane, &mut source[..required]);
     }
 }
 
@@ -306,8 +308,11 @@ pub(super) fn units<A: Send>(
     );
 }
 
-fn transform<F, D: Direction>(lane: &mut [F::Complex], scratch: &mut [F::Complex])
-where
+fn transform<F, D: Direction>(
+    state: &four_step::FourStepState<F>,
+    lane: &mut [F::Complex],
+    scratch: &mut [F::Complex],
+) where
     F: MixedRadixScalar<Complex = Complex<F>>,
 {
     // `{ !D::FORWARD }`/`{ D::NORMALIZE }` as inline const-generic arguments
@@ -316,11 +321,11 @@ where
     // instead. Every branch is a compile-time fact of the concrete `D`, so
     // this still monomorphizes to one straight-line call per strategy.
     if D::FORWARD {
-        four_step::four_step_fft::<F, false, false>(lane, scratch);
+        state.execute::<false, false>(lane, scratch);
     } else if D::NORMALIZE {
-        four_step::four_step_fft::<F, true, true>(lane, scratch);
+        state.execute::<true, true>(lane, scratch);
     } else {
-        four_step::four_step_fft::<F, true, false>(lane, scratch);
+        state.execute::<true, false>(lane, scratch);
     }
 }
 

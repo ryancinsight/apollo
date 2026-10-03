@@ -1,7 +1,9 @@
+use crate::application::execution::kernel::components::batched::BatchedPlanCache;
 use crate::application::execution::kernel::components::radix_composite::CompositeCache;
 use crate::application::execution::kernel::components::winograd::ShortWinogradScalar;
 use crate::application::execution::kernel::pot::{PoTStrategy, SizedPoT};
-use std::sync::Arc;
+use crate::application::execution::plan::fft::dimension_1d::owner::PlanOwner;
+use std::sync::{Arc, Weak};
 
 pub(crate) mod private {
     pub trait Sealed {}
@@ -13,22 +15,25 @@ pub(crate) mod private {
 pub(crate) type BluesteinKey = (usize, bool, usize);
 
 pub(crate) type BluesteinEntry<C> = Arc<[C]>;
+pub(crate) type BluesteinIndex<C> = Weak<[C]>;
 
 pub trait BluesteinStore {
     type Cpx: Copy + Send + Sync + 'static;
-    fn tl_get(key: BluesteinKey) -> Option<BluesteinEntry<Self::Cpx>>;
-    fn tl_insert(key: BluesteinKey, val: BluesteinEntry<Self::Cpx>);
+    fn tl_get(key: BluesteinKey) -> Option<BluesteinIndex<Self::Cpx>>;
+    fn tl_insert(key: BluesteinKey, val: BluesteinIndex<Self::Cpx>);
     fn global(
-    ) -> &'static parking_lot::RwLock<rustc_hash::FxHashMap<BluesteinKey, BluesteinEntry<Self::Cpx>>>;
+    ) -> &'static parking_lot::RwLock<rustc_hash::FxHashMap<BluesteinKey, BluesteinIndex<Self::Cpx>>>;
 }
 
 pub trait MixedRadixScalar:
     private::Sealed
+    + PlanOwner
     + Sized
     + Copy
     + 'static
     + leto_ops::ComplexLayout
     + ShortWinogradScalar
+    + BatchedPlanCache
     + CompositeCache
     + BluesteinStore<Cpx = Self::Complex>
 {

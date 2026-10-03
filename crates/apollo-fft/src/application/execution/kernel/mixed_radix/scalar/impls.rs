@@ -153,7 +153,8 @@ impl MixedRadixScalar for f32 {
     fn cached_rader_negacyclic_spectra<const INVERSE: bool>(
         n: usize,
         generator_inverse: usize,
-    ) -> (Arc<[Complex32]>, Arc<[Complex32]>) {
+    ) -> crate::application::execution::kernel::mixed_radix::caches::rader::NegacyclicEntry<Complex32>
+    {
         let key = (n, INVERSE as usize, generator_inverse);
         cached_rader_negacyclic_spectra(key, |_| {
             build_rader_negacyclic_spectra::<f32, INVERSE>(n, generator_inverse)
@@ -421,7 +422,8 @@ impl MixedRadixScalar for f64 {
     fn cached_rader_negacyclic_spectra<const INVERSE: bool>(
         n: usize,
         generator_inverse: usize,
-    ) -> (Arc<[Complex64]>, Arc<[Complex64]>) {
+    ) -> crate::application::execution::kernel::mixed_radix::caches::rader::NegacyclicEntry<Complex64>
+    {
         let key = (n, INVERSE as usize, generator_inverse);
         cached_rader_negacyclic_spectra(key, |_| {
             build_rader_negacyclic_spectra::<f64, INVERSE>(n, generator_inverse)
