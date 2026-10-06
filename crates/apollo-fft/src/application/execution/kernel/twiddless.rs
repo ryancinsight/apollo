@@ -67,7 +67,7 @@ mod schedule;
 #[cfg(test)]
 mod tests;
 
-use eunomia::{Complex, Complex32, Complex64, NumericElement};
+use eunomia::{Complex, Complex32, Complex64, FloatElement, NumericElement};
 
 use super::twiddle_table::{twiddle_components, TwiddleOutput};
 
@@ -86,7 +86,7 @@ mod private {
 ///
 /// Compact `F16` storage reaches the CPU kernels through the `f32` bridge, so
 /// it has no separate instantiation here either.
-pub trait TwiddlessScalar: NumericElement + private::Sealed {
+pub trait TwiddlessScalar: NumericElement + FloatElement + private::Sealed {
     /// `cos + i·sin` narrowed from the `f64` evaluation, the same narrowing the
     /// production twiddle tables apply.
     fn unit(cos: f64, sin: f64) -> Complex<Self>;
