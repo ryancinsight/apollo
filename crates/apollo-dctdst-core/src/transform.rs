@@ -56,12 +56,8 @@ fn angle<T: RealField>(length: T, position: usize, frequency: usize) -> T {
     <T as FloatElement>::cos(angle)
 }
 
-#[expect(
-    clippy::cast_precision_loss,
-    reason = "transform indices enter the selected floating-point domain to define its grid"
-)]
 fn scalar<T: RealField>(value: usize) -> T {
-    T::from_f64(value as f64)
+    T::from_count(value)
 }
 
 #[cfg(test)]
