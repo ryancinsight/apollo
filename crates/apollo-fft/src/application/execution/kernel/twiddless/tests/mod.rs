@@ -38,7 +38,7 @@ fn admitted_lengths(max_k: u32) -> Vec<usize> {
 }
 
 /// Deterministic complex signal with no structure a transform could exploit.
-fn signal<F: TwiddlessScalar + FloatElement>(len: usize) -> Vec<Complex<F>> {
+fn signal<F: TwiddlessScalar>(len: usize) -> Vec<Complex<F>> {
     (0..len)
         .map(|index| {
             let x = index as f64;
@@ -50,7 +50,7 @@ fn signal<F: TwiddlessScalar + FloatElement>(len: usize) -> Vec<Complex<F>> {
         .collect()
 }
 
-fn widen<F: TwiddlessScalar + FloatElement>(values: &[Complex<F>]) -> Vec<Complex64> {
+fn widen<F: TwiddlessScalar>(values: &[Complex<F>]) -> Vec<Complex64> {
     values
         .iter()
         .map(|z| Complex64::new(z.re.to_f64(), z.im.to_f64()))
@@ -67,7 +67,7 @@ fn run<F: TwiddlessScalar, S: Schedule>(
     output
 }
 
-fn schedules_agree_bitwise<F: TwiddlessScalar + FloatElement>(max_k: u32) {
+fn schedules_agree_bitwise<F: TwiddlessScalar>(max_k: u32) {
     for len in admitted_lengths(max_k) {
         let plan = TwiddlessPlan::<F>::new(len).expect("admitted length");
         let input = signal::<F>(len);
@@ -93,7 +93,7 @@ fn schedules_agree_bitwise_at_every_admitted_length() {
     schedules_agree_bitwise::<f64>(12);
 }
 
-fn matches_oracle_within_bound<F: TwiddlessScalar + FloatElement>(max_k: u32, u: f64) {
+fn matches_oracle_within_bound<F: TwiddlessScalar>(max_k: u32, u: f64) {
     for len in admitted_lengths(max_k) {
         let plan = TwiddlessPlan::<F>::new(len).expect("admitted length");
         let input = signal::<F>(len);
@@ -119,7 +119,7 @@ fn forward_error_stays_within_derived_bound() {
 
 fn agrees_with_production_plan<F, P>(max_k: u32, u: f64, production: P)
 where
-    F: TwiddlessScalar + FloatElement,
+    F: TwiddlessScalar,
     P: Fn(&mut [Complex<F>]),
 {
     for len in admitted_lengths(max_k) {
@@ -156,7 +156,7 @@ fn agrees_with_production_plan_within_summed_bounds() {
     });
 }
 
-fn analytic_spectra<F: TwiddlessScalar + FloatElement>(u: f64) {
+fn analytic_spectra<F: TwiddlessScalar>(u: f64) {
     for len in admitted_lengths(7) {
         let plan = TwiddlessPlan::<F>::new(len).expect("admitted length");
         let n = len as f64;
@@ -263,7 +263,7 @@ fn forward_rejects_mismatched_output_length() {
     plan.forward::<CompressedHalves>(&input, &mut output, &mut scratch);
 }
 
-fn parseval_holds<F: TwiddlessScalar + FloatElement>(
+fn parseval_holds<F: TwiddlessScalar>(
     len: usize,
     re: &[f64],
     im: &[f64],

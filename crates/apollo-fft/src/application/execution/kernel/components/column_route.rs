@@ -89,8 +89,8 @@ impl<F: MixedRadixScalar + LaneScalar> State180<F> {
     /// Builds the state where the route runs: the vector frame present and
     /// the scalar's frame register holding four or two complexes.
     pub(crate) fn new_if_supported() -> Option<Self> {
-        (matches!(F::FRAME_LANES, 4 | 8) && vector_frame_available()).then(|| {
-            let complexes = F::FRAME_LANES / 2;
+        (matches!(<F as LaneScalar>::FRAME_LANES, 4 | 8) && vector_frame_available()).then(|| {
+            let complexes = <F as LaneScalar>::FRAME_LANES / 2;
             Self {
                 forward: Box::new(CacheLineAligned(Tables180::new(false, complexes))),
                 inverse: Box::new(CacheLineAligned(Tables180::new(true, complexes))),
@@ -151,7 +151,7 @@ where
         let complexes = complexes_per_register::<F, A>();
         debug_assert_eq!(
             <A as SimdStorage<F>>::LANE_COUNT,
-            F::FRAME_LANES,
+            <F as LaneScalar>::FRAME_LANES,
             "invariant: the route runs on the frame backend its tables were built for"
         );
         let chunks = 36 / complexes;
