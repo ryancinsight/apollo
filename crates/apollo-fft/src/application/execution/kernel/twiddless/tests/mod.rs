@@ -312,4 +312,3 @@ proptest! {
         parseval_holds::<f64>(len, &re, &im, U64)?;
     }
 }
-

@@ -219,4 +219,3 @@ fn main() -> Result<(), BenchmarkError> {
     );
     Ok(())
 }
-

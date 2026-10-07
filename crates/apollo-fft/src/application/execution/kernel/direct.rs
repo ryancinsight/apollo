@@ -45,20 +45,17 @@
 use eunomia::{Complex, FloatElement};
 
 /// Scalar interface required by the Apollo FFT kernel.
-pub trait KernelScalar: Copy + Clone + Default {
+///
+/// `zero` (`Default`), `add` (`+`), and `mul` (`*`) are covered by the
+/// `Default + Add + Mul` supertraits so `KernelScalar` declares only the
+/// four complex-structure operations that cannot be expressed generically.
+pub trait KernelScalar:
+    Copy + Clone + Default + std::ops::Add<Output = Self> + std::ops::Mul<Output = Self>
+{
     /// Construct a complex value from real and imaginary parts.
     fn complex(re: Self, im: Self) -> Self;
 
-    /// Add two complex values.
-    fn add(lhs: Self, rhs: Self) -> Self;
-
-    /// Multiply two complex values.
-    fn mul(lhs: Self, rhs: Self) -> Self;
-
-    /// Return zero.
-    fn zero() -> Self;
-
-    /// Convert a reference-precision component value to the scalar type.
+    /// Convert a reference-precision component value to this complex scalar.
     fn from_precise(value: f64) -> Self;
 
     /// Extract the real part at reference precision.
@@ -85,21 +82,6 @@ where
     }
 
     #[inline]
-    fn add(lhs: Self, rhs: Self) -> Self {
-        lhs + rhs
-    }
-
-    #[inline]
-    fn mul(lhs: Self, rhs: Self) -> Self {
-        lhs * rhs
-    }
-
-    #[inline]
-    fn zero() -> Self {
-        Self::new(T::ZERO, T::ZERO)
-    }
-
-    #[inline]
     fn from_precise(value: f64) -> Self {
         Self::new(T::from_f64(value), T::ZERO)
     }
@@ -120,17 +102,17 @@ where
 pub fn dft_forward<T: KernelScalar>(input: &[T]) -> Vec<T> {
     let n = input.len();
     assert!(n > 0, "DFT length must be non-zero");
-    let mut output = vec![T::zero(); n];
+    let mut output = vec![T::default(); n];
     let tau = std::f64::consts::TAU;
     let n_f64 = n as f64;
 
     for (k, slot) in output.iter_mut().enumerate() {
         let k_f64 = k as f64;
-        let mut sum = T::zero();
+        let mut sum = T::default();
         for (n_idx, &value) in input.iter().enumerate() {
             let angle = -tau * k_f64 * (n_idx as f64) / n_f64;
             let twiddle = T::complex(T::from_precise(angle.cos()), T::from_precise(angle.sin()));
-            sum = T::add(sum, T::mul(value, twiddle));
+            sum = sum + value * twiddle;
         }
         *slot = sum;
     }
@@ -143,7 +125,7 @@ pub fn dft_forward<T: KernelScalar>(input: &[T]) -> Vec<T> {
 pub fn dft_inverse<T: KernelScalar>(input: &[T]) -> Vec<T> {
     let n = input.len();
     assert!(n > 0, "DFT length must be non-zero");
-    let mut output = vec![T::zero(); n];
+    let mut output = vec![T::default(); n];
     let tau = std::f64::consts::TAU;
     let scale = 1.0 / n as f64;
     let n_f64 = n as f64;
