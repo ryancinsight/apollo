@@ -114,12 +114,10 @@ fn batched_against_the_references_across_the_ladder() {
             // (route selection, the cache lookups, the scratch borrow).
             let driver_ns = super::planar_applies(n).then(|| {
                 let mut scratch = vec![Complex64::default(); super::scratch_len(n)];
+                let state = super::PlanarState::<f64>::new(n);
                 best_block(calls, || {
                     work.copy_from_slice(&src);
-                    super::four_step_batched::<f64, false>(
-                        std::hint::black_box(&mut work),
-                        &mut scratch,
-                    );
+                    state.execute::<false>(std::hint::black_box(&mut work), &mut scratch);
                 })
             });
             let (mut re, mut im) = (re_src.clone(), im_src.clone());

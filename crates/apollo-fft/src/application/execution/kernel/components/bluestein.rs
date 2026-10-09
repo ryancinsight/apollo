@@ -46,24 +46,31 @@
 //! thread's Bluestein scratch role), while the free-function route
 //! ([`bluestein_fft`]) builds them per call.
 
+use crate::application::execution::kernel::mixed_radix::MixedRadixScalar;
+use crate::application::execution::plan::fft::dimension_1d::FftPlan1D;
+use crate::domain::metadata::shape::Shape1D;
 use eunomia::Complex;
 
-use crate::application::execution::kernel::mixed_radix::dispatch::dispatch_inplace;
-use crate::application::execution::kernel::mixed_radix::MixedRadixScalar;
-
 /// The chirp-z tables for one length and direction.
-pub(crate) struct ChirpTables<C> {
+pub(crate) struct ChirpTables<F: MixedRadixScalar> {
     /// `c(m)`, `m < n`.
-    chirp: Box<[C]>,
+    chirp: Box<[F::Complex]>,
     /// `c(m) / p`: the output chirp with the inverse transform's `1/p`.
-    chirp_out: Box<[C]>,
+    chirp_out: Box<[F::Complex]>,
     /// `c(m) / (p n)`: the normalized inverse's output chirp; empty forward.
-    chirp_out_normalized: Box<[C]>,
+    chirp_out_normalized: Box<[F::Complex]>,
     /// The unnormalized forward transform of `conj(c)` padded to `p`.
-    kernel_spectrum: Box<[C]>,
+    kernel_spectrum: Box<[F::Complex]>,
+    /// The padded transform plan owns every table its selected route reads.
+    ///
+    /// A pair of stage tables is insufficient once the padded length selects
+    /// FourStep: that route also reads its sub-transform and matrix tables.
+    /// Keeping the complete plan makes those dependencies explicit and keeps
+    /// the warm execution path allocation-free after kernel caches weaken.
+    inner: Box<FftPlan1D<F>>,
 }
 
-impl<F: MixedRadixScalar<Complex = Complex<F>>> ChirpTables<Complex<F>> {
+impl<F: MixedRadixScalar<Complex = Complex<F>>> ChirpTables<F> {
     /// The tables for `n > 1` in direction `INVERSE`.
     pub(crate) fn new<const INVERSE: bool>(n: usize) -> Self {
         debug_assert!(n > 1);
@@ -106,24 +113,28 @@ impl<F: MixedRadixScalar<Complex = Complex<F>>> ChirpTables<Complex<F>> {
                 kernel[p - m] = conj;
             }
         }
-        dispatch_inplace::<F, false, false>(&mut kernel, None);
+        let inner = Box::new(FftPlan1D::new(
+            Shape1D::new(p).expect("invariant: a Bluestein padded length is non-zero"),
+        ));
+        inner.forward_complex_slice_inplace(&mut kernel);
         Self {
             chirp: chirp.into_boxed_slice(),
             chirp_out: chirp_out.into_boxed_slice(),
             chirp_out_normalized: chirp_out_normalized.into_boxed_slice(),
             kernel_spectrum: kernel.into_boxed_slice(),
+            inner,
         }
     }
 }
 
 /// A plan's chirp-z tables: forward at construction, inverse on the first
 /// inverse execution, as the plan's inverse twiddles are.
-pub(crate) struct BluesteinState<C> {
-    forward: ChirpTables<C>,
-    inverse: std::sync::OnceLock<ChirpTables<C>>,
+pub(crate) struct BluesteinState<F: MixedRadixScalar> {
+    forward: ChirpTables<F>,
+    inverse: std::sync::OnceLock<ChirpTables<F>>,
 }
 
-impl<F: MixedRadixScalar<Complex = Complex<F>>> BluesteinState<Complex<F>> {
+impl<F: MixedRadixScalar<Complex = Complex<F>>> BluesteinState<F> {
     /// The state for `n > 1`, forward tables built.
     pub(crate) fn new(n: usize) -> Self {
         Self {
@@ -133,7 +144,7 @@ impl<F: MixedRadixScalar<Complex = Complex<F>>> BluesteinState<Complex<F>> {
     }
 
     /// The tables for direction `INVERSE`, the inverse built on first use.
-    pub(crate) fn tables<const INVERSE: bool>(&self, n: usize) -> &ChirpTables<Complex<F>> {
+    pub(crate) fn tables<const INVERSE: bool>(&self, n: usize) -> &ChirpTables<F> {
         if INVERSE {
             self.inverse.get_or_init(|| ChirpTables::new::<true>(n))
         } else {
@@ -157,7 +168,7 @@ pub(crate) fn bluestein_fft<
     if data.len() <= 1 {
         return;
     }
-    let tables = ChirpTables::<Complex<F>>::new::<INVERSE>(data.len());
+    let tables = ChirpTables::<F>::new::<INVERSE>(data.len());
     bluestein_with::<F, INVERSE, NORMALIZE>(data, &tables);
 }
 
@@ -170,7 +181,7 @@ pub(crate) fn bluestein_with<
     const NORMALIZE: bool,
 >(
     data: &mut [F::Complex],
-    tables: &ChirpTables<F::Complex>,
+    tables: &ChirpTables<F>,
 ) {
     let n = data.len();
     if n <= 1 {
@@ -191,9 +202,9 @@ pub(crate) fn bluestein_with<
         work[..n].copy_from_slice(data);
         work[n..].fill(F::complex(0.0, 0.0));
         F::pointwise_mul(&mut work[..n], &tables.chirp);
-        dispatch_inplace::<F, false, false>(work, None);
+        tables.inner.forward_complex_slice_inplace(work);
         F::pointwise_mul(work, &tables.kernel_spectrum);
-        dispatch_inplace::<F, true, false>(work, None);
+        tables.inner.inverse_complex_slice_unnorm_inplace(work);
         F::pointwise_mul(&mut work[..n], chirp_out);
         data.copy_from_slice(&work[..n]);
     });
@@ -203,6 +214,26 @@ pub(crate) fn bluestein_with<
 mod tests {
     use super::*;
     use eunomia::Complex64;
+
+    /// A padded transform owns the complete selected route, including every
+    /// table FourStep needs beyond its top-level stage table.
+    #[test]
+    fn the_padded_route_is_owned_by_the_chirp_tables() {
+        for n in [5usize, 11, 97, 361, 20_000] {
+            let padded = (2 * n - 1).next_power_of_two();
+            let tables = ChirpTables::<f64>::new::<false>(n);
+            assert_eq!(
+                tables.kernel_spectrum.len(),
+                padded,
+                "n {n}: the tables are built for the padded length"
+            );
+            assert_eq!(
+                tables.inner.len(),
+                padded,
+                "n {n}: the owned plan serves the padded length"
+            );
+        }
+    }
 
     /// The defining sum, shared with no part of the implementation.
     fn naive(x: &[Complex64], inverse: bool) -> Vec<Complex64> {
@@ -257,7 +288,9 @@ mod tests {
 
     #[test]
     fn normalized_inverse_undoes_the_forward() {
-        for n in [361usize, 841, 961, 1153] {
+        // 2209 pads to 8192, beyond the direct stage-table path that exposed
+        // the missing FourStep ownership.
+        for n in [361usize, 841, 961, 1153, 2209] {
             let x = signal(n);
             let mut round = x.clone();
             bluestein_fft::<f64, false, false>(&mut round);

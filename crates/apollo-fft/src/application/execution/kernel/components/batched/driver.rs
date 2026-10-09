@@ -8,7 +8,8 @@ use super::plane::{
     transpose_planes_into, PlaneView, ROW_PAD,
 };
 use super::seams::FoldDirection;
-use super::{boundary, sweep, BatchedPlanCache};
+use super::{boundary, sweep, BatchedPlanCache, PlanarState};
+use crate::application::execution::kernel::mixed_radix::MixedRadixScalar;
 use eunomia::Complex;
 
 /// Four-step FFT over the padded planar layout.
@@ -25,13 +26,19 @@ use eunomia::Complex;
 ///
 /// Panics if `data.len()` is not a length [`planar_applies`] admits, or if
 /// `scratch` is shorter than [`scratch_len`].
-pub(crate) fn four_step_batched<T, const INVERSE: bool>(
+pub(super) fn execute_planar<T, const INVERSE: bool>(
+    state: &PlanarState<T>,
     data: &mut [Complex<T>],
     scratch: &mut [Complex<T>],
 ) where
-    T: BatchedPlanCache<Complex = Complex<T>>,
+    T: BatchedPlanCache + MixedRadixScalar<Complex = Complex<T>>,
 {
     let n = data.len();
+    assert_eq!(
+        n,
+        state.transform_len(),
+        "planar state length must match its input"
+    );
     assert!(planar_applies(n), "requires a planar power of two");
     let (n1, n2) = plane_geometry(n);
     let (stride_a, stride_b) = (n2 + ROW_PAD, n1 + ROW_PAD);
@@ -57,9 +64,9 @@ pub(crate) fn four_step_batched<T, const INVERSE: bool>(
     // 1. `n2` transforms of length `n1` along the first axis; the caller's
     //    rows are batch-major for this direction, so the first pass reads
     //    them in place and no transpose is needed.
-    let plan = T::cached_plan::<INVERSE>(n1);
+    let (first_plan, second_plan) = state.plans::<INVERSE>();
     sect!("stages1", {
-        run_batched(a_re, a_im, plan.as_ref(), Some(&*data), n2, stride_a)
+        run_batched(a_re, a_im, first_plan, Some(&*data), n2, stride_a)
     });
 
     // 2. Transpose so the second axis becomes batch-major. Pure exchange:
@@ -119,15 +126,10 @@ pub(crate) fn four_step_batched<T, const INVERSE: bool>(
     //    absorbs by writing plane row `p` to row `rev(p)` — the mirror of
     //    the source's free permutation. Output `k1 + n1 k2` lands at row
     //    `k2`, column `k1`.
-    let plan = if n1 == n2 {
-        plan
-    } else {
-        T::cached_plan::<INVERSE>(n2)
-    };
     // The fold table is always the forward twiddle; the inverse direction
     // conjugates it in the pass instead of taking a second, separately
     // cached table (`APOLLO-MEM-INVERSE-CONJUGATE`).
-    let fold = T::cached_four_step_fold(n, n2, n1);
+    let fold = state.fold();
     let direction = if INVERSE {
         FoldDirection::Conjugate
     } else {
@@ -137,8 +139,8 @@ pub(crate) fn four_step_batched<T, const INVERSE: bool>(
         run_batched_dif(
             re,
             im,
-            plan.as_ref(),
-            Some((fold.as_ref(), direction)),
+            second_plan,
+            Some((fold, direction)),
             Some(data),
             staging,
             n1,
