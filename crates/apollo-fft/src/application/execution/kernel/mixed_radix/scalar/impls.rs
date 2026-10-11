@@ -92,7 +92,6 @@ impl MixedRadixScalar for f32 {
     const FORCE_COMPOSITE_63: bool = true;
     const FORCE_COMPOSITE_72: bool = true;
     const BLUESTEIN_PAD_POWER_OF_TWO: bool = true;
-    const BLUESTEIN_NATIVE_PHASE_TRIG: bool = true;
 
     type Complex = Complex32;
 
@@ -360,7 +359,6 @@ impl MixedRadixScalar for f64 {
     const FORCE_COMPOSITE_63: bool = false;
     const FORCE_COMPOSITE_72: bool = false;
     const BLUESTEIN_PAD_POWER_OF_TWO: bool = true;
-    const BLUESTEIN_NATIVE_PHASE_TRIG: bool = false;
 
     type Complex = Complex64;
 
