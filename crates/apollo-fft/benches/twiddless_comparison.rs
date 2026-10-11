@@ -121,7 +121,7 @@ fn bench_precision<F, P>(
     len: usize,
     production: P,
 ) where
-    F: TwiddlessScalar + FloatElement + FftNum,
+    F: TwiddlessScalar + FftNum,
     P: Fn(&mut [Complex<F>]),
 {
     let source = signal::<F>(len);
