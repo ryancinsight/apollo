@@ -304,7 +304,6 @@ impl ShortWinogradScalar for f32 {
 
     impl_short_winograd_prime_pair!(
         f32,
-        (dft11, 11, 5),
         (dft13, 13, 6),
         (dft17, 17, 8),
         (dft37, 37, 18),
@@ -313,4 +312,17 @@ impl ShortWinogradScalar for f32 {
         (dft47, 47, 23),
         (dft53, 53, 26),
     );
+
+    // f32 dft11 runs the runtime-dispatched AVX2/FMA leaf: the end-to-end
+    // N = 121 gate measured 238ns dispatched against 379ns narrow
+    // (rustfft 89ns), so the leaf earns its own route. Other targets and
+    // non-AVX2 hosts fall back to the narrow pair form inside the dispatch.
+    #[inline]
+    fn dft11<const INVERSE: bool>(data: &mut [Complex32; 11]) {
+        super::radix::odd_prime_pair_simd::dft11_dispatched::<INVERSE>(
+            data,
+            <f32 as PrimePairTable<11, 5>>::cos_table(),
+            <f32 as PrimePairTable<11, 5>>::sin_table(),
+        );
+    }
 }
