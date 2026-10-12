@@ -2,6 +2,7 @@
 use super::traits::WinogradScalar;
 
 pub(crate) mod odd_prime_pair;
+pub(crate) mod odd_prime_pair_chunked;
 pub(crate) mod odd_prime_pair_simd;
 
 // Re-export canonical implementations from butterflies::dft (SSOT for all small DFT kernels).
