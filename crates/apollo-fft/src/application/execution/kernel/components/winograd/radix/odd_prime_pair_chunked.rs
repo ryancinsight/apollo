@@ -1,56 +1,15 @@
-//! Separated-stream 11-point DFTs and the chunked N = 121 driver (f32).
+//! The chunked N = 121 driver (f32).
 //!
-//! [`super::odd_prime_pair_simd`] vectorizes one 11-point DFT across its
-//! five k lanes. N = 121 needs 22 such calls, and each call reloads the
-//! pair tables, re-broadcasts every sum, and pays a full scalar
-//! prologue/epilogue. The separated-stream form instead runs 11 DFTs
-//! together: one scalar prologue per stream gathers sums/idiffs into a
-//! stream-major working set, the k dots vectorize across 8 streams plus a
-//! 3-lane scalar tail, and one scalar epilogue per stream scatters the
-//! results. Table traffic drops 11x and the broadcasts become contiguous
-//! vector loads.
-//!
-//! [`dft121_chunked`] drives N = 121 as two chunked-11 calls (columns,
-//! then rows) around an AVX2 complex twiddle stage, so the whole transform
-//! issues 2 leaf dispatches instead of 22. Each stream keeps the scalar
-//! m-ascending summation order; only multiply-add rounding changes (one
-//! FMA rounding instead of two), within the same f32 tolerance the
-//! single-call leaf documents.
+//! [`try_dft121_chunked`] drives N = 121 as two
+//! [`super::odd_prime_pair_streams`] calls (columns, then rows) around an
+//! AVX2 complex twiddle stage, so the whole transform issues 2 leaf
+//! dispatches instead of 22. The rows call writes the CT-transposed
+//! output directly.
 
 use eunomia::Complex32;
 
-use super::odd_prime_pair::PrimePairTable;
-
-/// Test hook running 11 strided 11-point DFTs through one AVX2/FMA dispatch.
-///
-/// Stream `s` reads `in_starts[s] + i * in_step` and writes
-/// `out_starts[s] + i * out_step` for `i` in `0..11`; all 121 input slots
-/// must be in bounds and pairwise disjoint, and likewise the outputs.
-/// Returns `false` without touching `base` when the host lacks AVX2+FMA
-/// (or off x86-64). Production callers go through [`try_dft121_chunked`],
-/// which probes once for the whole transform.
-#[cfg(test)]
-#[inline]
-pub(crate) fn try_dft11_streams<const INVERSE: bool>(
-    base: &mut [Complex32],
-    in_starts: &[usize; 11],
-    in_step: usize,
-    out_starts: &[usize; 11],
-    out_step: usize,
-) -> bool {
-    #[cfg(target_arch = "x86_64")]
-    if std::arch::is_x86_feature_detected!("avx2") && std::arch::is_x86_feature_detected!("fma") {
-        // SAFETY: AVX2+FMA were just probed on this thread; the caller
-        // guarantees the 121 input and 121 output slots as documented.
-        unsafe {
-            dft11_streams_simd::<INVERSE>(base, in_starts, in_step, out_starts, out_step);
-        }
-        return true;
-    }
-    #[cfg(not(target_arch = "x86_64"))]
-    let _ = (base, in_starts, in_step, out_starts, out_step);
-    false
-}
+#[cfg(target_arch = "x86_64")]
+use super::odd_prime_pair_streams::dft11_streams_simd;
 
 /// Run the N = 121 transform through the separated-stream formulation.
 ///
@@ -70,166 +29,6 @@ pub(crate) fn try_dft121_chunked<const INVERSE: bool>(data: &mut [Complex32; 121
     #[cfg(not(target_arch = "x86_64"))]
     let _ = data;
     false
-}
-
-/// Pair tables in (m, k) orientation for stream-major dots: `cos_mk[m][k]`
-/// is `cos_table[k][m]`, so the inner k loop walks one contiguous row.
-struct PairTablesMk {
-    cos_mk: [[f32; 5]; 5],
-    sin_mk: [[f32; 5]; 5],
-}
-
-static PAIR11_MK: std::sync::LazyLock<PairTablesMk> = std::sync::LazyLock::new(|| {
-    let cos = <f32 as PrimePairTable<11, 5>>::cos_table();
-    let sin = <f32 as PrimePairTable<11, 5>>::sin_table();
-    let mut t = PairTablesMk {
-        cos_mk: [[0.0; 5]; 5],
-        sin_mk: [[0.0; 5]; 5],
-    };
-    for m in 0..5 {
-        for k in 0..5 {
-            t.cos_mk[m][k] = cos[k][m];
-            t.sin_mk[m][k] = sin[k][m];
-        }
-    }
-    t
-});
-
-/// 11 stream-major pair-basis DFTs with AVX2/FMA k dots.
-///
-/// # Safety
-///
-/// The caller must have established AVX2 and FMA support and must
-/// guarantee the 121 input and 121 output slots documented on
-/// [`try_dft11_streams`]. All reads complete before any write, so
-/// differing input/output layouts are safe in place.
-#[cfg(target_arch = "x86_64")]
-#[target_feature(enable = "avx2,fma")]
-unsafe fn dft11_streams_simd<const INVERSE: bool>(
-    base: &mut [Complex32],
-    in_starts: &[usize; 11],
-    in_step: usize,
-    out_starts: &[usize; 11],
-    out_step: usize,
-) {
-    use core::arch::x86_64::{
-        _mm256_fmadd_ps, _mm256_loadu_ps, _mm256_set1_ps, _mm256_setzero_ps, _mm256_storeu_ps,
-    };
-
-    let sign = if INVERSE { 1.0f32 } else { -1.0f32 };
-    // Stream-major working set: sums_re[m][s] is stream s, pair m.
-    let mut sums_re = [[0.0f32; 11]; 5];
-    let mut sums_im = [[0.0f32; 11]; 5];
-    let mut idiffs_re = [[0.0f32; 11]; 5];
-    let mut idiffs_im = [[0.0f32; 11]; 5];
-    let mut x0 = [Complex32::new(0.0, 0.0); 11];
-    let mut y0 = [Complex32::new(0.0, 0.0); 11];
-
-    // Scalar prologue per stream, identical to `dft_pair_impl` at N = 11.
-    // Reads only; every write below lands in the working set.
-    // SAFETY: the caller guarantees all 121 stream slots in bounds, and
-    // the (m + 1) / (10 - m) indices stay below 11.
-    unsafe {
-        for s in 0..11 {
-            let start = in_starts[s];
-            let c0 = *base.get_unchecked(start);
-            x0[s] = c0;
-            let mut y0_re = c0.re;
-            let mut y0_im = c0.im;
-            for m in 0..5 {
-                let a = *base.get_unchecked(start + (m + 1) * in_step);
-                let b = *base.get_unchecked(start + (10 - m) * in_step);
-                let sum_re = a.re + b.re;
-                let sum_im = a.im + b.im;
-                y0_re += sum_re;
-                y0_im += sum_im;
-                sums_re[m][s] = sum_re;
-                sums_im[m][s] = sum_im;
-                idiffs_re[m][s] = -(a.im - b.im) * sign;
-                idiffs_im[m][s] = (a.re - b.re) * sign;
-            }
-            y0[s] = Complex32::new(y0_re, y0_im);
-        }
-    }
-
-    // Scalar tail accumulators for streams 8..11.
-    let mut tail_bre = [[0.0f32; 3]; 5];
-    let mut tail_bim = [[0.0f32; 3]; 5];
-    let mut tail_dre = [[0.0f32; 3]; 5];
-    let mut tail_dim = [[0.0f32; 3]; 5];
-    let mut bre = [[0.0f32; 8]; 5];
-    let mut bim = [[0.0f32; 8]; 5];
-    let mut dre = [[0.0f32; 8]; 5];
-    let mut dim = [[0.0f32; 8]; 5];
-
-    // SAFETY: AVX2+FMA are established by the caller; every load/store
-    // below names typed in-bounds lanes of the working set, and the `u`
-    // intrinsics permit unaligned addresses. The k-outer order keeps 10
-    // live vector registers (4 accumulators, 4 stream loads, 2 table
-    // broadcasts), spill-free on AVX2; each stream still sums m-ascending.
-    unsafe {
-        let t = &*PAIR11_MK;
-        for k in 0..5 {
-            let mut acc_bre = _mm256_setzero_ps();
-            let mut acc_bim = _mm256_setzero_ps();
-            let mut acc_dre = _mm256_setzero_ps();
-            let mut acc_dim = _mm256_setzero_ps();
-            for m in 0..5 {
-                // Contiguous 8-wide stream loads; the tail stays scalar.
-                let sre = _mm256_loadu_ps(sums_re[m].as_ptr());
-                let sim = _mm256_loadu_ps(sums_im[m].as_ptr());
-                let dre = _mm256_loadu_ps(idiffs_re[m].as_ptr());
-                let dim = _mm256_loadu_ps(idiffs_im[m].as_ptr());
-                let tc = _mm256_set1_ps(t.cos_mk[m][k]);
-                let ts = _mm256_set1_ps(t.sin_mk[m][k]);
-                acc_bre = _mm256_fmadd_ps(sre, tc, acc_bre);
-                acc_bim = _mm256_fmadd_ps(sim, tc, acc_bim);
-                acc_dre = _mm256_fmadd_ps(dre, ts, acc_dre);
-                acc_dim = _mm256_fmadd_ps(dim, ts, acc_dim);
-                let ck = t.cos_mk[m][k];
-                let sk = t.sin_mk[m][k];
-                for s in 0..3 {
-                    tail_bre[k][s] += sums_re[m][8 + s] * ck;
-                    tail_bim[k][s] += sums_im[m][8 + s] * ck;
-                    tail_dre[k][s] += idiffs_re[m][8 + s] * sk;
-                    tail_dim[k][s] += idiffs_im[m][8 + s] * sk;
-                }
-            }
-            _mm256_storeu_ps(bre[k].as_mut_ptr(), acc_bre);
-            _mm256_storeu_ps(bim[k].as_mut_ptr(), acc_bim);
-            _mm256_storeu_ps(dre[k].as_mut_ptr(), acc_dre);
-            _mm256_storeu_ps(dim[k].as_mut_ptr(), acc_dim);
-        }
-    }
-
-    // Scalar epilogue per stream; the only writes to `base`.
-    // SAFETY: the caller guarantees all 121 output slots in bounds, and
-    // the (k + 1) / (10 - k) indices stay below 11.
-    unsafe {
-        for s in 0..11 {
-            let start = out_starts[s];
-            let c0 = x0[s];
-            *base.get_unchecked_mut(start) = y0[s];
-            for k in 0..5 {
-                let (bre_k, bim_k, dre_k, dim_k) = if s < 8 {
-                    (bre[k][s], bim[k][s], dre[k][s], dim[k][s])
-                } else {
-                    (
-                        tail_bre[k][s - 8],
-                        tail_bim[k][s - 8],
-                        tail_dre[k][s - 8],
-                        tail_dim[k][s - 8],
-                    )
-                };
-                let base_re = c0.re + bre_k;
-                let base_im = c0.im + bim_k;
-                *base.get_unchecked_mut(start + (k + 1) * out_step) =
-                    Complex32::new(base_re + dre_k, base_im + dim_k);
-                *base.get_unchecked_mut(start + (10 - k) * out_step) =
-                    Complex32::new(base_re - dre_k, base_im - dim_k);
-            }
-        }
-    }
 }
 
 /// Forward Cooley-Tukey twiddles `W_121^{k1 * j}` in (k1, j) order.
@@ -325,7 +124,8 @@ unsafe fn dft121_chunked_simd<const INVERSE: bool>(data: &mut [Complex32; 121]) 
 
 #[cfg(test)]
 mod tests {
-    use super::{try_dft11_streams, try_dft121_chunked};
+    use super::super::odd_prime_pair_streams::try_dft11_streams;
+    use super::try_dft121_chunked;
     use crate::application::execution::kernel::direct::{dft_forward, dft_inverse};
     use eunomia::{Complex32, Complex64};
 
@@ -404,6 +204,64 @@ mod tests {
                 err_inv < 1e-5,
                 "streams inverse kind={kind} max_err={err_inv:.2e}"
             );
+        }
+    }
+
+    fn layout_bits<const INVERSE: bool>(
+        streams: &[[Complex32; 11]; 11],
+        in_starts: &[usize; 11],
+        in_step: usize,
+        out_starts: &[usize; 11],
+        out_step: usize,
+    ) -> Vec<(u32, u32)> {
+        let mut base = [Complex32::new(0.0, 0.0); 121];
+        for s in 0..11 {
+            for i in 0..11 {
+                base[in_starts[s] + i * in_step] = streams[s][i];
+            }
+        }
+        assert!(
+            try_dft11_streams::<INVERSE>(&mut base, in_starts, in_step, out_starts, out_step),
+            "chunked streams require AVX2+FMA on this host"
+        );
+        let mut bits = Vec::with_capacity(121);
+        for s in 0..11 {
+            for i in 0..11 {
+                let x = base[out_starts[s] + i * out_step];
+                bits.push((x.re.to_bits(), x.im.to_bits()));
+            }
+        }
+        bits
+    }
+
+    #[test]
+    fn chunked_streams_layouts_are_bitwise_identical() {
+        // Scalar stages run every layout; the vector stages run step 11
+        // with consecutive starts. All four stage combos must compute
+        // each lane identically, bit for bit.
+        let scalar: [usize; 11] = core::array::from_fn(|s| s * 11);
+        let vector: [usize; 11] = core::array::from_fn(|s| s);
+        for kind in 0..6 {
+            let mut streams = [[Complex32::new(0.0, 0.0); 11]; 11];
+            for (s, stream) in streams.iter_mut().enumerate() {
+                *stream = input_11((kind + s) % 6);
+            }
+            for inverse in [false, true] {
+                let run = |i: &[usize; 11], is: usize, o: &[usize; 11], os: usize| {
+                    if inverse {
+                        layout_bits::<true>(&streams, i, is, o, os)
+                    } else {
+                        layout_bits::<false>(&streams, i, is, o, os)
+                    }
+                };
+                let ss = run(&scalar, 1, &scalar, 1);
+                let vv = run(&vector, 11, &vector, 11);
+                let vs = run(&vector, 11, &scalar, 1);
+                let sv = run(&scalar, 1, &vector, 11);
+                assert_eq!(vv, ss, "vec/vec vs scalar kind={kind} inverse={inverse}");
+                assert_eq!(vs, ss, "vec/scalar vs scalar kind={kind} inverse={inverse}");
+                assert_eq!(sv, ss, "scalar/vec vs scalar kind={kind} inverse={inverse}");
+            }
         }
     }
 
