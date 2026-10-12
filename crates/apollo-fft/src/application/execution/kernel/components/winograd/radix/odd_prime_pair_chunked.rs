@@ -127,27 +127,29 @@ unsafe fn dft11_streams_simd<const INVERSE: bool>(
 
     // Scalar prologue per stream, identical to `dft_pair_impl` at N = 11.
     // Reads only; every write below lands in the working set.
-    for s in 0..11 {
-        let start = in_starts[s];
-        // SAFETY: the caller guarantees all 121 stream slots in bounds.
-        let c0 = unsafe { *base.get_unchecked(start) };
-        x0[s] = c0;
-        let mut y0_re = c0.re;
-        let mut y0_im = c0.im;
-        for m in 0..5 {
-            // SAFETY: same guarantee, indices (m + 1) and (10 - m) below 11.
-            let a = unsafe { *base.get_unchecked(start + (m + 1) * in_step) };
-            let b = unsafe { *base.get_unchecked(start + (10 - m) * in_step) };
-            let sum_re = a.re + b.re;
-            let sum_im = a.im + b.im;
-            y0_re += sum_re;
-            y0_im += sum_im;
-            sums_re[m][s] = sum_re;
-            sums_im[m][s] = sum_im;
-            idiffs_re[m][s] = -(a.im - b.im) * sign;
-            idiffs_im[m][s] = (a.re - b.re) * sign;
+    // SAFETY: the caller guarantees all 121 stream slots in bounds, and
+    // the (m + 1) / (10 - m) indices stay below 11.
+    unsafe {
+        for s in 0..11 {
+            let start = in_starts[s];
+            let c0 = *base.get_unchecked(start);
+            x0[s] = c0;
+            let mut y0_re = c0.re;
+            let mut y0_im = c0.im;
+            for m in 0..5 {
+                let a = *base.get_unchecked(start + (m + 1) * in_step);
+                let b = *base.get_unchecked(start + (10 - m) * in_step);
+                let sum_re = a.re + b.re;
+                let sum_im = a.im + b.im;
+                y0_re += sum_re;
+                y0_im += sum_im;
+                sums_re[m][s] = sum_re;
+                sums_im[m][s] = sum_im;
+                idiffs_re[m][s] = -(a.im - b.im) * sign;
+                idiffs_im[m][s] = (a.re - b.re) * sign;
+            }
+            y0[s] = Complex32::new(y0_re, y0_im);
         }
-        y0[s] = Complex32::new(y0_re, y0_im);
     }
 
     // Scalar tail accumulators for streams 8..11.
