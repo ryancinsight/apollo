@@ -81,7 +81,7 @@ fn typed_type1_3d_supports_complex64_complex32_and_f16_storage() {
         &mut wy,
         &mut wz,
         &mut output32,
-        PrecisionProfile::LOW_PRECISION_F32,
+        PrecisionProfile::F32_STORAGE_F64_COMPUTE,
     )
     .expect("typed complex32 3d type1");
     let mut max_rel_err_f32 = 0.0_f64;
@@ -115,7 +115,7 @@ fn typed_type1_3d_supports_complex64_complex32_and_f16_storage() {
         &mut wy,
         &mut wz,
         &mut output16,
-        PrecisionProfile::MIXED_PRECISION_F16_F32,
+        PrecisionProfile::F16_STORAGE_F64_COMPUTE,
     )
     .expect("typed F16 3d type1");
     for (actual, expected) in output16.iter().zip(expected16.iter()) {
@@ -207,7 +207,7 @@ fn typed_type2_3d_supports_complex64_complex32_and_f16_storage() {
         &positions,
         &coeffs32,
         &mut output32,
-        PrecisionProfile::LOW_PRECISION_F32,
+        PrecisionProfile::F32_STORAGE_F64_COMPUTE,
     )
     .expect("typed complex32 3d type2");
     let mut max_rel_err_f32 = 0.0_f64;
@@ -232,7 +232,7 @@ fn typed_type2_3d_supports_complex64_complex32_and_f16_storage() {
         &positions,
         &coeffs16,
         &mut output16,
-        PrecisionProfile::MIXED_PRECISION_F16_F32,
+        PrecisionProfile::F16_STORAGE_F64_COMPUTE,
     )
     .expect("typed F16 3d type2");
     for (actual, expected) in output16.iter().zip(expected16.iter()) {

@@ -107,8 +107,8 @@ fn typed_real_forward_supports_f64_f32_and_mixed_f16_storage() {
     plan.forward_real_typed_into(
         &samples32,
         &mut out32,
-        PrecisionProfile::LOW_PRECISION_F32,
-        PrecisionProfile::LOW_PRECISION_F32,
+        PrecisionProfile::F32_STORAGE_F64_COMPUTE,
+        PrecisionProfile::F32_STORAGE_F64_COMPUTE,
     )
     .expect("typed f32 real forward");
     for (actual, expected) in out32.iter().zip(expected32.values().iter()) {
@@ -125,8 +125,8 @@ fn typed_real_forward_supports_f64_f32_and_mixed_f16_storage() {
     plan.forward_real_typed_into(
         &samples16,
         &mut out16,
-        PrecisionProfile::MIXED_PRECISION_F16_F32,
-        PrecisionProfile::MIXED_PRECISION_F16_F32,
+        PrecisionProfile::F16_STORAGE_F64_COMPUTE,
+        PrecisionProfile::F16_STORAGE_F64_COMPUTE,
     )
     .expect("typed F16 real forward");
     for (actual, expected) in out16.iter().zip(expected16.values().iter()) {
@@ -268,16 +268,16 @@ fn typed_leto_forward_and_inverse_match_leto_reference() {
     plan.forward_real_typed_into(
         &samples,
         &mut expected_coefficients,
-        PrecisionProfile::LOW_PRECISION_F32,
-        PrecisionProfile::LOW_PRECISION_F32,
+        PrecisionProfile::F32_STORAGE_F64_COMPUTE,
+        PrecisionProfile::F32_STORAGE_F64_COMPUTE,
     )
     .expect("typed leto forward");
 
     let actual_coefficients = plan
         .forward_real_leto_typed::<f32, Complex32>(
             input.view(),
-            PrecisionProfile::LOW_PRECISION_F32,
-            PrecisionProfile::LOW_PRECISION_F32,
+            PrecisionProfile::F32_STORAGE_F64_COMPUTE,
+            PrecisionProfile::F32_STORAGE_F64_COMPUTE,
         )
         .expect("typed leto forward");
     let actual_coefficients_view = actual_coefficients.view();
@@ -302,15 +302,15 @@ fn typed_leto_forward_and_inverse_match_leto_reference() {
     plan.inverse_real_typed_into(
         &expected_coefficients,
         &mut expected_samples,
-        PrecisionProfile::LOW_PRECISION_F32,
-        PrecisionProfile::LOW_PRECISION_F32,
+        PrecisionProfile::F32_STORAGE_F64_COMPUTE,
+        PrecisionProfile::F32_STORAGE_F64_COMPUTE,
     )
     .expect("typed leto inverse");
     let actual_samples = plan
         .inverse_real_leto_typed::<Complex32, f32>(
             coefficients.view(),
-            PrecisionProfile::LOW_PRECISION_F32,
-            PrecisionProfile::LOW_PRECISION_F32,
+            PrecisionProfile::F32_STORAGE_F64_COMPUTE,
+            PrecisionProfile::F32_STORAGE_F64_COMPUTE,
         )
         .expect("typed leto inverse");
     let actual_samples_view = actual_samples.view();
@@ -336,8 +336,8 @@ fn typed_complex_forward_and_inverse_support_complex32_storage() {
     plan.forward_complex_typed_into(
         &samples32,
         &mut coefficients32,
-        PrecisionProfile::LOW_PRECISION_F32,
-        PrecisionProfile::LOW_PRECISION_F32,
+        PrecisionProfile::F32_STORAGE_F64_COMPUTE,
+        PrecisionProfile::F32_STORAGE_F64_COMPUTE,
     )
     .expect("typed complex32 forward");
     for (actual, expected) in coefficients32.iter().zip(expected.values().iter()) {
@@ -350,8 +350,8 @@ fn typed_complex_forward_and_inverse_support_complex32_storage() {
     plan.inverse_complex_typed_into(
         &coefficients32,
         &mut recovered32,
-        PrecisionProfile::LOW_PRECISION_F32,
-        PrecisionProfile::LOW_PRECISION_F32,
+        PrecisionProfile::F32_STORAGE_F64_COMPUTE,
+        PrecisionProfile::F32_STORAGE_F64_COMPUTE,
     )
     .expect("typed complex32 inverse");
     for (actual, expected) in recovered32.iter().zip(samples32.iter()) {
@@ -374,8 +374,8 @@ fn typed_real_inverse_and_mismatch_rejections_are_value_semantic() {
     plan.inverse_real_typed_into(
         &coefficients32,
         &mut samples32,
-        PrecisionProfile::LOW_PRECISION_F32,
-        PrecisionProfile::LOW_PRECISION_F32,
+        PrecisionProfile::F32_STORAGE_F64_COMPUTE,
+        PrecisionProfile::F32_STORAGE_F64_COMPUTE,
     )
     .expect("typed real inverse");
     let expected = plan.inverse_real(&coefficients).expect("inverse");
@@ -388,7 +388,7 @@ fn typed_real_inverse_and_mismatch_rejections_are_value_semantic() {
             &coefficients32,
             &mut samples32,
             PrecisionProfile::HIGH_ACCURACY_F64,
-            PrecisionProfile::LOW_PRECISION_F32,
+            PrecisionProfile::F32_STORAGE_F64_COMPUTE,
         )
         .expect_err("profile mismatch");
     assert_eq!(err, ShtError::PrecisionMismatch);
@@ -399,8 +399,8 @@ fn typed_real_inverse_and_mismatch_rejections_are_value_semantic() {
         .inverse_real_typed_into(
             &bad_coefficients,
             &mut samples32,
-            PrecisionProfile::LOW_PRECISION_F32,
-            PrecisionProfile::LOW_PRECISION_F32,
+            PrecisionProfile::F32_STORAGE_F64_COMPUTE,
+            PrecisionProfile::F32_STORAGE_F64_COMPUTE,
         )
         .expect_err("shape mismatch");
     assert_eq!(err, ShtError::CoefficientShapeMismatch);

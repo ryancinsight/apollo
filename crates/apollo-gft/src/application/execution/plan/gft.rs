@@ -234,7 +234,7 @@ pub trait GftStorage: CpuStorage {
         output: &mut Array1<Self>,
         profile: PrecisionProfile,
     ) -> GftResult<()> {
-        validate_profile(profile, Self::PROFILE)?;
+        profile.ensure_matches(Self::PROFILE, || GftError::PrecisionMismatch)?;
         if signal.size() != plan.n || output.size() != plan.n {
             return Err(GftError::LengthMismatch);
         }
@@ -262,7 +262,7 @@ pub trait GftStorage: CpuStorage {
         output: &mut Array1<Self>,
         profile: PrecisionProfile,
     ) -> GftResult<()> {
-        validate_profile(profile, Self::PROFILE)?;
+        profile.ensure_matches(Self::PROFILE, || GftError::PrecisionMismatch)?;
         if spectrum.size() != plan.n || output.size() != plan.n {
             return Err(GftError::LengthMismatch);
         }
@@ -291,7 +291,7 @@ impl GftStorage for f64 {
         output: &mut Array1<Self>,
         profile: PrecisionProfile,
     ) -> GftResult<()> {
-        validate_profile(profile, Self::PROFILE)?;
+        profile.ensure_matches(Self::PROFILE, || GftError::PrecisionMismatch)?;
         plan.forward_into(signal, output)
     }
 
@@ -301,7 +301,7 @@ impl GftStorage for f64 {
         output: &mut Array1<Self>,
         profile: PrecisionProfile,
     ) -> GftResult<()> {
-        validate_profile(profile, Self::PROFILE)?;
+        profile.ensure_matches(Self::PROFILE, || GftError::PrecisionMismatch)?;
         plan.inverse_into(spectrum, output)
     }
 }
@@ -309,14 +309,6 @@ impl GftStorage for f64 {
 impl GftStorage for f32 {}
 
 impl GftStorage for F16 {}
-
-fn validate_profile(actual: PrecisionProfile, expected: PrecisionProfile) -> GftResult<()> {
-    if actual.matches_storage_and_compute(expected) {
-        Ok(())
-    } else {
-        Err(GftError::PrecisionMismatch)
-    }
-}
 
 fn with_f64_workspaces<R>(n: usize, f: impl FnOnce(&mut [f64], &mut [f64]) -> R) -> R {
     TYPED_INPUT64_SCRATCH.with(|in_pool| {
@@ -387,8 +379,12 @@ mod tests {
 
         let signal32 = signal64.mapv(|value| value as f32);
         let mut out32 = Array1::<f32>::zeros([plan.len()]);
-        plan.forward_typed_into(&signal32, &mut out32, PrecisionProfile::LOW_PRECISION_F32)
-            .expect("typed f32 forward");
+        plan.forward_typed_into(
+            &signal32,
+            &mut out32,
+            PrecisionProfile::F32_STORAGE_F64_COMPUTE,
+        )
+        .expect("typed f32 forward");
         for (actual, expected) in out32.iter().zip(expected.iter()) {
             assert!((f64::from(*actual) - *expected).abs() < 1.0e-5);
         }
@@ -407,7 +403,7 @@ mod tests {
         plan.forward_typed_into(
             &signal16,
             &mut out16,
-            PrecisionProfile::MIXED_PRECISION_F16_F32,
+            PrecisionProfile::F16_STORAGE_F64_COMPUTE,
         )
         .expect("typed mixed F16 forward");
         for (actual, expected) in out16.iter().zip(expected16.iter()) {
@@ -419,7 +415,7 @@ mod tests {
         plan.inverse_typed_into(
             &out32,
             &mut recovered32,
-            PrecisionProfile::LOW_PRECISION_F32,
+            PrecisionProfile::F32_STORAGE_F64_COMPUTE,
         )
         .expect("typed f32 inverse");
         for (actual, expected) in recovered32.iter().zip(signal32.iter()) {
@@ -439,14 +435,14 @@ mod tests {
         plan.forward_typed_into(
             &signal,
             &mut first_spectrum,
-            PrecisionProfile::LOW_PRECISION_F32,
+            PrecisionProfile::F32_STORAGE_F64_COMPUTE,
         )
         .expect("first typed f32 forward");
         let forward_caps = typed_scratch_capacities();
         plan.forward_typed_into(
             &signal,
             &mut second_spectrum,
-            PrecisionProfile::LOW_PRECISION_F32,
+            PrecisionProfile::F32_STORAGE_F64_COMPUTE,
         )
         .expect("second typed f32 forward");
 
@@ -460,14 +456,14 @@ mod tests {
         plan.inverse_typed_into(
             &first_spectrum,
             &mut first_recovered,
-            PrecisionProfile::LOW_PRECISION_F32,
+            PrecisionProfile::F32_STORAGE_F64_COMPUTE,
         )
         .expect("first typed f32 inverse");
         let inverse_caps = typed_scratch_capacities();
         plan.inverse_typed_into(
             &first_spectrum,
             &mut second_recovered,
-            PrecisionProfile::LOW_PRECISION_F32,
+            PrecisionProfile::F32_STORAGE_F64_COMPUTE,
         )
         .expect("second typed f32 inverse");
 

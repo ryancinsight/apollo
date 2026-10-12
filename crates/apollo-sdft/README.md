@@ -18,9 +18,9 @@ the current window, tracked bins, and update count.
 Typed direct-bin execution uses Apollo's shared precision profile contract:
 
 - `HIGH_ACCURACY_F64`: `f64` window storage and `Complex64` bin storage.
-- `LOW_PRECISION_F32`: `f32` window storage and `Complex32` bin storage,
+- `F32_STORAGE_F64_COMPUTE`: `f32` window storage and `Complex32` bin storage,
   converted through the owner path and quantized once into caller-owned output.
-- `MIXED_PRECISION_F16_F32`: `f16` window storage and `[f16; 2]` bin storage,
+- `F16_STORAGE_F64_COMPUTE`: `f16` window storage and `[f16; 2]` bin storage,
   converted through the owner path and quantized once into caller-owned output.
 
 Profile/storage mismatches return `SdftError::PrecisionMismatch`.

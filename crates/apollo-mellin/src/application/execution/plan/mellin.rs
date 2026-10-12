@@ -338,7 +338,7 @@ pub trait MellinStorage: CpuStorage {
         output: &mut [Self],
         profile: PrecisionProfile,
     ) -> MellinResult<()> {
-        validate_profile(profile, Self::PROFILE)?;
+        profile.ensure_matches(Self::PROFILE, || MellinError::PrecisionMismatch)?;
         validate_signal_domain_typed(signal, signal_min, signal_max)?;
         validate_output_len(output.len(), plan.config.samples())?;
         let input64: Vec<f64> = signal.iter().copied().map(CpuStorage::to_cpu).collect();
@@ -359,7 +359,7 @@ pub trait MellinStorage: CpuStorage {
         exponent: f64,
         profile: PrecisionProfile,
     ) -> MellinResult<f64> {
-        validate_profile(profile, Self::PROFILE)?;
+        profile.ensure_matches(Self::PROFILE, || MellinError::PrecisionMismatch)?;
         validate_signal_domain_typed(signal, signal_min, signal_max)?;
         let input64: Vec<f64> = signal.iter().copied().map(CpuStorage::to_cpu).collect();
         plan.moment(&input64, signal_min, signal_max, exponent)
@@ -373,7 +373,7 @@ pub trait MellinStorage: CpuStorage {
         signal_max: f64,
         profile: PrecisionProfile,
     ) -> MellinResult<MellinSpectrum> {
-        validate_profile(profile, Self::PROFILE)?;
+        profile.ensure_matches(Self::PROFILE, || MellinError::PrecisionMismatch)?;
         validate_signal_domain_typed(signal, signal_min, signal_max)?;
         let input64: Vec<f64> = signal.iter().copied().map(CpuStorage::to_cpu).collect();
         plan.forward_spectrum(&input64, signal_min, signal_max)
@@ -389,7 +389,7 @@ impl MellinStorage for f64 {
         output: &mut [Self],
         profile: PrecisionProfile,
     ) -> MellinResult<()> {
-        validate_profile(profile, Self::PROFILE)?;
+        profile.ensure_matches(Self::PROFILE, || MellinError::PrecisionMismatch)?;
         plan.forward_resample(signal, signal_min, signal_max, output)
     }
 
@@ -401,7 +401,7 @@ impl MellinStorage for f64 {
         exponent: f64,
         profile: PrecisionProfile,
     ) -> MellinResult<f64> {
-        validate_profile(profile, Self::PROFILE)?;
+        profile.ensure_matches(Self::PROFILE, || MellinError::PrecisionMismatch)?;
         plan.moment(signal, signal_min, signal_max, exponent)
     }
 
@@ -412,7 +412,7 @@ impl MellinStorage for f64 {
         signal_max: f64,
         profile: PrecisionProfile,
     ) -> MellinResult<MellinSpectrum> {
-        validate_profile(profile, Self::PROFILE)?;
+        profile.ensure_matches(Self::PROFILE, || MellinError::PrecisionMismatch)?;
         plan.forward_spectrum(signal, signal_min, signal_max)
     }
 }
@@ -507,14 +507,6 @@ fn validate_signal_domain_typed<T>(
     Ok(())
 }
 
-fn validate_profile(actual: PrecisionProfile, expected: PrecisionProfile) -> MellinResult<()> {
-    if actual.matches_storage_and_compute(expected) {
-        Ok(())
-    } else {
-        Err(MellinError::PrecisionMismatch)
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -552,7 +544,7 @@ mod tests {
             1.0,
             4.0,
             &mut out32,
-            PrecisionProfile::LOW_PRECISION_F32,
+            PrecisionProfile::F32_STORAGE_F64_COMPUTE,
         )
         .expect("typed f32 resample");
         for (actual, expected) in out32.iter().zip(expected32.iter()) {
@@ -573,7 +565,7 @@ mod tests {
             1.0,
             4.0,
             &mut out16,
-            PrecisionProfile::MIXED_PRECISION_F16_F32,
+            PrecisionProfile::F16_STORAGE_F64_COMPUTE,
         )
         .expect("typed F16 resample");
         for (actual, expected) in out16.iter().zip(expected16.iter()) {
@@ -594,7 +586,7 @@ mod tests {
                 1.0,
                 4.0,
                 1.0,
-                PrecisionProfile::LOW_PRECISION_F32,
+                PrecisionProfile::F32_STORAGE_F64_COMPUTE,
             )
             .expect("typed moment");
         assert_abs_diff_eq!(actual_moment, expected_moment, epsilon = 1.0e-12);
@@ -603,7 +595,12 @@ mod tests {
             .forward_spectrum(&represented, 1.0, 4.0)
             .expect("spectrum");
         let actual_spectrum = plan
-            .forward_spectrum_typed(&signal32, 1.0, 4.0, PrecisionProfile::LOW_PRECISION_F32)
+            .forward_spectrum_typed(
+                &signal32,
+                1.0,
+                4.0,
+                PrecisionProfile::F32_STORAGE_F64_COMPUTE,
+            )
             .expect("typed spectrum");
         for (actual, expected) in actual_spectrum
             .values()
@@ -685,7 +682,7 @@ mod tests {
             1.0,
             4.0,
             &mut expected,
-            PrecisionProfile::LOW_PRECISION_F32,
+            PrecisionProfile::F32_STORAGE_F64_COMPUTE,
         )
         .expect("typed slice resample");
 
@@ -694,7 +691,7 @@ mod tests {
                 input.view(),
                 1.0,
                 4.0,
-                PrecisionProfile::LOW_PRECISION_F32,
+                PrecisionProfile::F32_STORAGE_F64_COMPUTE,
             )
             .expect("typed leto resample");
         let actual = actual.view();

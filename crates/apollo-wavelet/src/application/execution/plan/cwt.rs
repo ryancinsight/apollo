@@ -192,8 +192,12 @@ mod tests {
         let represented32 = signal32.map(f64::from);
         let expected32 = plan.transform(&represented32).expect("represented f32 CWT");
         let mut out32 = Array2::<f32>::zeros([2, 4]);
-        plan.transform_typed_into(&signal32, &mut out32, PrecisionProfile::LOW_PRECISION_F32)
-            .expect("typed f32 CWT");
+        plan.transform_typed_into(
+            &signal32,
+            &mut out32,
+            PrecisionProfile::F32_STORAGE_F64_COMPUTE,
+        )
+        .expect("typed f32 CWT");
         for (actual, expected) in out32.iter().zip(expected32.values().iter()) {
             assert!((f64::from(*actual) - *expected).abs() < 1.0e-5);
         }
@@ -205,7 +209,7 @@ mod tests {
         plan.transform_typed_into(
             &signal16,
             &mut out16,
-            PrecisionProfile::MIXED_PRECISION_F16_F32,
+            PrecisionProfile::F16_STORAGE_F64_COMPUTE,
         )
         .expect("typed F16 CWT");
         for (actual, expected) in out16.iter().zip(expected16.values().iter()) {
@@ -265,11 +269,18 @@ mod tests {
         let leto_signal =
             leto::Array1::from_shape_vec([signal.len()], signal.to_vec()).expect("leto signal");
         let mut expected = Array2::<f32>::zeros([2, 4]);
-        plan.transform_typed_into(&signal, &mut expected, PrecisionProfile::LOW_PRECISION_F32)
-            .expect("typed slice CWT");
+        plan.transform_typed_into(
+            &signal,
+            &mut expected,
+            PrecisionProfile::F32_STORAGE_F64_COMPUTE,
+        )
+        .expect("typed slice CWT");
 
         let actual = plan
-            .transform_leto_typed(leto_signal.view(), PrecisionProfile::LOW_PRECISION_F32)
+            .transform_leto_typed(
+                leto_signal.view(),
+                PrecisionProfile::F32_STORAGE_F64_COMPUTE,
+            )
             .expect("typed leto CWT");
         let actual_view = actual.view();
         let actual = actual_view.as_slice().expect("contiguous leto output");
@@ -362,7 +373,7 @@ mod tests {
             plan.transform_typed_into(
                 &signal,
                 &mut wrong_shape,
-                PrecisionProfile::LOW_PRECISION_F32
+                PrecisionProfile::F32_STORAGE_F64_COMPUTE
             ),
             Err(WaveletError::CoefficientShapeMismatch)
         ));

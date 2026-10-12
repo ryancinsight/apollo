@@ -36,10 +36,10 @@ Typed execution uses Apollo's shared precision profile contract:
 
 - `HIGH_ACCURACY_F64`: `f64` input and quadrature storage with owner `f64`
   analytic masking.
-- `LOW_PRECISION_F32`: `f32` input and quadrature storage converted through the
+- `F32_STORAGE_F64_COMPUTE`: `f32` input and quadrature storage converted through the
   owner path using per-thread bridge workspaces and quantized once into the
   caller-owned output.
-- `MIXED_PRECISION_F16_F32`: `f16` input and quadrature storage converted
+- `F16_STORAGE_F64_COMPUTE`: `f16` input and quadrature storage converted
   through the owner path using per-thread bridge workspaces and quantized once
   into the caller-owned output.
 

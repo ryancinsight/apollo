@@ -242,8 +242,12 @@ mod general_czt_tests {
 
         let input32 = input64.mapv(|value| Complex32::new(value.re as f32, value.im as f32));
         let mut out32 = Array1::<Complex32>::zeros([plan.output_len()]);
-        plan.forward_typed_into(&input32, &mut out32, PrecisionProfile::LOW_PRECISION_F32)
-            .expect("complex32 typed");
+        plan.forward_typed_into(
+            &input32,
+            &mut out32,
+            PrecisionProfile::F32_STORAGE_F64_COMPUTE,
+        )
+        .expect("complex32 typed");
         for (actual, expected) in out32.iter().zip(expected.iter()) {
             assert!((f64::from(actual.re) - expected.re).abs() < 1.0e-5);
             assert!((f64::from(actual.im) - expected.im).abs() < 1.0e-5);
@@ -259,7 +263,7 @@ mod general_czt_tests {
         plan.forward_typed_into(
             &input16,
             &mut out16,
-            PrecisionProfile::MIXED_PRECISION_F16_F32,
+            PrecisionProfile::F16_STORAGE_F64_COMPUTE,
         )
         .expect("mixed F16 typed");
         for (actual, expected) in out16.iter().zip(expected.iter()) {
@@ -309,14 +313,14 @@ mod general_czt_tests {
         plan.forward_typed_into(
             &input32,
             &mut first_spectrum,
-            PrecisionProfile::LOW_PRECISION_F32,
+            PrecisionProfile::F32_STORAGE_F64_COMPUTE,
         )
         .expect("first typed forward");
         let forward_caps = typed_scratch_capacities();
         plan.forward_typed_into(
             &input32,
             &mut second_spectrum,
-            PrecisionProfile::LOW_PRECISION_F32,
+            PrecisionProfile::F32_STORAGE_F64_COMPUTE,
         )
         .expect("second typed forward");
         assert_eq!(typed_scratch_capacities(), forward_caps);
@@ -324,14 +328,14 @@ mod general_czt_tests {
         plan.inverse_typed_into(
             &first_spectrum,
             &mut first_recovered,
-            PrecisionProfile::LOW_PRECISION_F32,
+            PrecisionProfile::F32_STORAGE_F64_COMPUTE,
         )
         .expect("first typed inverse");
         let inverse_caps = typed_scratch_capacities();
         plan.inverse_typed_into(
             &first_spectrum,
             &mut second_recovered,
-            PrecisionProfile::LOW_PRECISION_F32,
+            PrecisionProfile::F32_STORAGE_F64_COMPUTE,
         )
         .expect("second typed inverse");
         assert_eq!(typed_scratch_capacities(), inverse_caps);

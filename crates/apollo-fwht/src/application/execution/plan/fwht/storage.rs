@@ -3,7 +3,7 @@
 use crate::application::execution::kernel::direct::wht_inplace;
 use crate::application::execution::plan::fwht::dimension_1d::FwhtPlan;
 use crate::domain::contracts::error::FwhtError;
-use apollo_fft::{CpuStorage, PrecisionProfile, F16};
+use apollo_fft::{ensure_input_output_len, CpuStorage, PrecisionProfile, F16};
 use leto::Array1;
 
 thread_local! {
@@ -21,8 +21,10 @@ pub trait FwhtStorage: CpuStorage {
         output: &mut [Self],
         profile: PrecisionProfile,
     ) -> Result<(), FwhtError> {
-        validate_profile(profile, Self::PROFILE)?;
-        validate_lengths(plan, input.len(), output.len())?;
+        profile.ensure_matches(Self::PROFILE, || FwhtError::PrecisionMismatch)?;
+        ensure_input_output_len(plan.len(), input.len(), output.len(), || {
+            FwhtError::LengthMismatch
+        })?;
         with_f64_workspaces(plan.len(), |input64, output64| {
             for (slot, value) in input64.iter_mut().zip(input.iter().copied()) {
                 *slot = value.to_cpu();
@@ -57,8 +59,10 @@ pub trait FwhtStorage: CpuStorage {
         output: &mut [Self],
         profile: PrecisionProfile,
     ) -> Result<(), FwhtError> {
-        validate_profile(profile, Self::PROFILE)?;
-        validate_lengths(plan, input.len(), output.len())?;
+        profile.ensure_matches(Self::PROFILE, || FwhtError::PrecisionMismatch)?;
+        ensure_input_output_len(plan.len(), input.len(), output.len(), || {
+            FwhtError::LengthMismatch
+        })?;
         with_f64_workspaces(plan.len(), |input64, output64| {
             for (slot, value) in input64.iter_mut().zip(input.iter().copied()) {
                 *slot = value.to_cpu();
@@ -94,7 +98,7 @@ impl FwhtStorage for f64 {
         output: &mut [Self],
         profile: PrecisionProfile,
     ) -> Result<(), FwhtError> {
-        validate_profile(profile, Self::PROFILE)?;
+        profile.ensure_matches(Self::PROFILE, || FwhtError::PrecisionMismatch)?;
         plan.forward_f64_slice_into(input, output)
     }
 
@@ -104,7 +108,7 @@ impl FwhtStorage for f64 {
         output: &mut [Self],
         profile: PrecisionProfile,
     ) -> Result<(), FwhtError> {
-        validate_profile(profile, Self::PROFILE)?;
+        profile.ensure_matches(Self::PROFILE, || FwhtError::PrecisionMismatch)?;
         plan.inverse_f64_slice_into(input, output)
     }
 }
@@ -116,8 +120,14 @@ impl FwhtStorage for f32 {
         output: &mut [Self],
         profile: PrecisionProfile,
     ) -> Result<(), FwhtError> {
-        validate_profile(profile, Self::PROFILE)?;
-        validate_lengths(plan, input.len(), output.len())?;
+        // Native `f32` arithmetic: the widening `CpuStorage` profile does not
+        // apply here.
+        profile.ensure_matches(PrecisionProfile::LOW_PRECISION_F32, || {
+            FwhtError::PrecisionMismatch
+        })?;
+        ensure_input_output_len(plan.len(), input.len(), output.len(), || {
+            FwhtError::LengthMismatch
+        })?;
         output.copy_from_slice(input);
         wht_inplace(output);
         Ok(())
@@ -145,8 +155,14 @@ impl FwhtStorage for F16 {
         output: &mut [Self],
         profile: PrecisionProfile,
     ) -> Result<(), FwhtError> {
-        validate_profile(profile, Self::PROFILE)?;
-        validate_lengths(plan, input.len(), output.len())?;
+        // Native `f32` arithmetic over `F16` storage: the widening
+        // `CpuStorage` profile does not apply here.
+        profile.ensure_matches(PrecisionProfile::MIXED_PRECISION_F16_F32, || {
+            FwhtError::PrecisionMismatch
+        })?;
+        ensure_input_output_len(plan.len(), input.len(), output.len(), || {
+            FwhtError::LengthMismatch
+        })?;
         with_f32_workspace(plan.len(), |compute| {
             for (slot, value) in compute.iter_mut().zip(input.iter()) {
                 *slot = value.to_f32();
@@ -165,8 +181,14 @@ impl FwhtStorage for F16 {
         output: &mut [Self],
         profile: PrecisionProfile,
     ) -> Result<(), FwhtError> {
-        validate_profile(profile, Self::PROFILE)?;
-        validate_lengths(plan, input.len(), output.len())?;
+        // Native `f32` arithmetic over `F16` storage: the widening
+        // `CpuStorage` profile does not apply here.
+        profile.ensure_matches(PrecisionProfile::MIXED_PRECISION_F16_F32, || {
+            FwhtError::PrecisionMismatch
+        })?;
+        ensure_input_output_len(plan.len(), input.len(), output.len(), || {
+            FwhtError::LengthMismatch
+        })?;
         with_f32_workspace(plan.len(), |compute| {
             for (slot, value) in compute.iter_mut().zip(input.iter()) {
                 *slot = value.to_f32();
@@ -178,22 +200,6 @@ impl FwhtStorage for F16 {
             }
             Ok(())
         })
-    }
-}
-
-fn validate_lengths(plan: &FwhtPlan, input: usize, output: usize) -> Result<(), FwhtError> {
-    if input == plan.len() && output == plan.len() {
-        Ok(())
-    } else {
-        Err(FwhtError::LengthMismatch)
-    }
-}
-
-fn validate_profile(actual: PrecisionProfile, expected: PrecisionProfile) -> Result<(), FwhtError> {
-    if actual.matches_storage_and_compute(expected) {
-        Ok(())
-    } else {
-        Err(FwhtError::PrecisionMismatch)
     }
 }
 

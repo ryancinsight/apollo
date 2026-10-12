@@ -42,6 +42,24 @@ impl Shape1D {
     }
 }
 
+/// Fail with `mismatch()` unless `input` and `output` both equal `plan_len`.
+///
+/// The error is generic so every transform crate calls this directly instead
+/// of cloning a per-crate lengths validator.
+#[inline]
+pub fn ensure_input_output_len<E>(
+    plan_len: usize,
+    input: usize,
+    output: usize,
+    mismatch: impl FnOnce() -> E,
+) -> Result<(), E> {
+    if input == plan_len && output == plan_len {
+        Ok(())
+    } else {
+        Err(mismatch())
+    }
+}
+
 /// Shape descriptor for 2D plans: non-zero lengths along x and y.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(try_from = "Shape2DRepr", into = "Shape2DRepr")]

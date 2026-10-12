@@ -97,10 +97,14 @@ fn leto_typed_complex32_matches_leto_typed_path() {
         leto::Array1::from_shape_vec([n], input.iter().copied().collect()).expect("leto input");
 
     let mut expected = Array1::<Complex32>::zeros([n]);
-    plan.forward_typed_into(&input, &mut expected, PrecisionProfile::LOW_PRECISION_F32)
-        .expect("leto typed forward");
+    plan.forward_typed_into(
+        &input,
+        &mut expected,
+        PrecisionProfile::F32_STORAGE_F64_COMPUTE,
+    )
+    .expect("leto typed forward");
     let actual = plan
-        .forward_leto_typed(leto_input.view(), PrecisionProfile::LOW_PRECISION_F32)
+        .forward_leto_typed(leto_input.view(), PrecisionProfile::F32_STORAGE_F64_COMPUTE)
         .expect("leto typed forward");
 
     for (actual, expected) in actual.storage().as_slice().iter().zip(expected.iter()) {
@@ -137,11 +141,11 @@ fn leto_typed_strided_f16_matches_leto_typed_path() {
     plan.forward_typed_into(
         &logical,
         &mut expected,
-        PrecisionProfile::MIXED_PRECISION_F16_F32,
+        PrecisionProfile::F16_STORAGE_F64_COMPUTE,
     )
     .expect("leto typed forward");
     let actual = plan
-        .forward_leto_typed(strided, PrecisionProfile::MIXED_PRECISION_F16_F32)
+        .forward_leto_typed(strided, PrecisionProfile::F16_STORAGE_F64_COMPUTE)
         .expect("leto typed forward");
 
     for (actual, expected) in actual.storage().as_slice().iter().zip(expected.iter()) {
@@ -214,8 +218,12 @@ fn typed_paths_support_complex64_complex32_and_mixed_f16_storage() {
 
     let input32 = input64.mapv(|value| Complex32::new(value.re as f32, value.im as f32));
     let mut out32 = Array1::<Complex32>::zeros([n]);
-    plan.forward_typed_into(&input32, &mut out32, PrecisionProfile::LOW_PRECISION_F32)
-        .expect("complex32 forward");
+    plan.forward_typed_into(
+        &input32,
+        &mut out32,
+        PrecisionProfile::F32_STORAGE_F64_COMPUTE,
+    )
+    .expect("complex32 forward");
     for (actual, expected) in out32.iter().zip(expected.iter()) {
         assert!((f64::from(actual.re) - expected.re).abs() < 1.0e-5);
         assert!((f64::from(actual.im) - expected.im).abs() < 1.0e-5);
@@ -234,7 +242,7 @@ fn typed_paths_support_complex64_complex32_and_mixed_f16_storage() {
     plan.forward_typed_into(
         &input16,
         &mut out16,
-        PrecisionProfile::MIXED_PRECISION_F16_F32,
+        PrecisionProfile::F16_STORAGE_F64_COMPUTE,
     )
     .expect("mixed F16 forward");
     for (actual, expected) in out16.iter().zip(expected16.iter()) {
@@ -248,7 +256,7 @@ fn typed_paths_support_complex64_complex32_and_mixed_f16_storage() {
     plan.inverse_typed_into(
         &out32,
         &mut recovered32,
-        PrecisionProfile::LOW_PRECISION_F32,
+        PrecisionProfile::F32_STORAGE_F64_COMPUTE,
     )
     .expect("complex32 inverse");
     let out32_reference =
@@ -270,11 +278,19 @@ fn typed_complex32_path_reuses_complex64_workspaces() {
     let mut first = Array1::<Complex32>::zeros([n]);
     let mut second = Array1::<Complex32>::zeros([n]);
 
-    plan.forward_typed_into(&input, &mut first, PrecisionProfile::LOW_PRECISION_F32)
-        .expect("first typed forward");
+    plan.forward_typed_into(
+        &input,
+        &mut first,
+        PrecisionProfile::F32_STORAGE_F64_COMPUTE,
+    )
+    .expect("first typed forward");
     let first_caps = crate::application::execution::plan::frft::storage::typed_scratch_capacities();
-    plan.forward_typed_into(&input, &mut second, PrecisionProfile::LOW_PRECISION_F32)
-        .expect("second typed forward");
+    plan.forward_typed_into(
+        &input,
+        &mut second,
+        PrecisionProfile::F32_STORAGE_F64_COMPUTE,
+    )
+    .expect("second typed forward");
     let second_caps =
         crate::application::execution::plan::frft::storage::typed_scratch_capacities();
 

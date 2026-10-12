@@ -20,13 +20,18 @@ fn probe_wgpu_device() -> PyResult<Option<WgpuDevice>> {
 }
 
 /// Return the backend names that are genuinely usable from Python on this host.
+///
+/// Only CPU dispatch exists behind the Python bindings today: no binding
+/// accepts a backend selector or executes on a GPU device, so accelerators
+/// are never listed even when acquirable. [`backend_capabilities`] reports
+/// per-backend device presence separately.
 #[pyfunction]
+#[expect(
+    clippy::unnecessary_wraps,
+    reason = "pyo3 functions must return PyResult for the Python ABI"
+)]
 pub(crate) fn available_backends() -> PyResult<Vec<String>> {
-    let mut backends = vec!["cpu".to_string()];
-    if probe_wgpu_device()?.is_some() {
-        backends.push("wgpu".to_string());
-    }
-    Ok(backends)
+    Ok(vec!["cpu".to_string()])
 }
 
 /// Return backend capability metadata for Python callers.

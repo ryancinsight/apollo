@@ -140,14 +140,14 @@ fn leto_typed_complex32_forward_matches_contiguous_reference() {
     plan.forward_typed_into(
         &contiguous_input,
         &mut expected,
-        PrecisionProfile::LOW_PRECISION_F32,
+        PrecisionProfile::F32_STORAGE_F64_COMPUTE,
     )
     .expect("contiguous typed forward");
 
     let leto_input =
         leto::Array1::from_shape_vec([input32.len()], input32).expect("leto typed input");
     let actual = plan
-        .forward_leto_typed(leto_input.view(), PrecisionProfile::LOW_PRECISION_F32)
+        .forward_leto_typed(leto_input.view(), PrecisionProfile::F32_STORAGE_F64_COMPUTE)
         .expect("leto typed forward");
 
     for (actual, expected) in actual.storage().as_slice().iter().zip(expected.iter()) {

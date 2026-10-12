@@ -127,7 +127,7 @@ pub trait CpuStorage<E: CpuElement = f64>:
 impl_identity_cpu_storage!(f64, f64, PrecisionProfile::HIGH_ACCURACY_F64);
 
 impl CpuStorage for f32 {
-    const PROFILE: PrecisionProfile = PrecisionProfile::LOW_PRECISION_F32;
+    const PROFILE: PrecisionProfile = PrecisionProfile::F32_STORAGE_F64_COMPUTE;
 
     fn to_cpu(self) -> f64 {
         f64::from(self)
@@ -139,7 +139,7 @@ impl CpuStorage for f32 {
 }
 
 impl CpuStorage for F16 {
-    const PROFILE: PrecisionProfile = PrecisionProfile::MIXED_PRECISION_F16_F32;
+    const PROFILE: PrecisionProfile = PrecisionProfile::F16_STORAGE_F64_COMPUTE;
 
     fn to_cpu(self) -> f64 {
         f64::from(self.to_f32())
@@ -153,7 +153,7 @@ impl CpuStorage for F16 {
 impl_identity_cpu_storage!(Complex64, Complex64, PrecisionProfile::HIGH_ACCURACY_F64);
 
 impl CpuStorage<Complex64> for Complex32 {
-    const PROFILE: PrecisionProfile = PrecisionProfile::LOW_PRECISION_F32;
+    const PROFILE: PrecisionProfile = PrecisionProfile::F32_STORAGE_F64_COMPUTE;
 
     fn to_cpu(self) -> Complex64 {
         Complex64::new(f64::from(self.re), f64::from(self.im))
@@ -165,7 +165,7 @@ impl CpuStorage<Complex64> for Complex32 {
 }
 
 impl CpuStorage<Complex64> for [F16; 2] {
-    const PROFILE: PrecisionProfile = PrecisionProfile::MIXED_PRECISION_F16_F32;
+    const PROFILE: PrecisionProfile = PrecisionProfile::F16_STORAGE_F64_COMPUTE;
 
     fn to_cpu(self) -> Complex64 {
         Complex64::new(f64::from(self[0].to_f32()), f64::from(self[1].to_f32()))

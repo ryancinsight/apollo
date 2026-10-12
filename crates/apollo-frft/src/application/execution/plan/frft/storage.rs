@@ -2,7 +2,7 @@
 
 use crate::application::execution::plan::frft::dimension_1d::FrftPlan;
 use crate::domain::contracts::error::FrftError;
-use apollo_fft::{CpuStorage, PrecisionProfile, F16};
+use apollo_fft::{ensure_input_output_len, CpuStorage, PrecisionProfile, F16};
 use eunomia::{Complex32, Complex64};
 use leto::Array1;
 use mnemosyne::scratch::ScratchPool;
@@ -21,8 +21,13 @@ pub trait FrftStorage: CpuStorage<Complex64> {
         output: &mut [Self],
         profile: PrecisionProfile,
     ) -> Result<(), FrftError> {
-        validate_profile(profile, Self::PROFILE)?;
-        validate_lengths(plan, input.len(), output.len())?;
+        profile.ensure_matches(Self::PROFILE, || FrftError::PrecisionMismatch)?;
+        ensure_input_output_len(plan.len(), input.len(), output.len(), || {
+            FrftError::LengthMismatch {
+                input: input.len().max(output.len()),
+                plan: plan.len(),
+            }
+        })?;
         with_complex64_workspaces(plan.len(), |input64, output64| {
             for (slot, value) in input64.iter_mut().zip(input.iter().copied()) {
                 *slot = value.to_cpu();
@@ -57,8 +62,13 @@ pub trait FrftStorage: CpuStorage<Complex64> {
         output: &mut [Self],
         profile: PrecisionProfile,
     ) -> Result<(), FrftError> {
-        validate_profile(profile, Self::PROFILE)?;
-        validate_lengths(plan, input.len(), output.len())?;
+        profile.ensure_matches(Self::PROFILE, || FrftError::PrecisionMismatch)?;
+        ensure_input_output_len(plan.len(), input.len(), output.len(), || {
+            FrftError::LengthMismatch {
+                input: input.len().max(output.len()),
+                plan: plan.len(),
+            }
+        })?;
         with_complex64_workspaces(plan.len(), |input64, output64| {
             for (slot, value) in input64.iter_mut().zip(input.iter().copied()) {
                 *slot = value.to_cpu();
@@ -94,7 +104,7 @@ impl FrftStorage for Complex64 {
         output: &mut [Self],
         profile: PrecisionProfile,
     ) -> Result<(), FrftError> {
-        validate_profile(profile, Self::PROFILE)?;
+        profile.ensure_matches(Self::PROFILE, || FrftError::PrecisionMismatch)?;
         plan.forward_complex64_slice_into(input, output)
     }
 
@@ -104,7 +114,7 @@ impl FrftStorage for Complex64 {
         output: &mut Array1<Self>,
         profile: PrecisionProfile,
     ) -> Result<(), FrftError> {
-        validate_profile(profile, Self::PROFILE)?;
+        profile.ensure_matches(Self::PROFILE, || FrftError::PrecisionMismatch)?;
         plan.forward_into(input, output)
     }
 
@@ -114,7 +124,7 @@ impl FrftStorage for Complex64 {
         output: &mut [Self],
         profile: PrecisionProfile,
     ) -> Result<(), FrftError> {
-        validate_profile(profile, Self::PROFILE)?;
+        profile.ensure_matches(Self::PROFILE, || FrftError::PrecisionMismatch)?;
         plan.inverse_complex64_slice_into(input, output)
     }
 
@@ -124,7 +134,7 @@ impl FrftStorage for Complex64 {
         output: &mut Array1<Self>,
         profile: PrecisionProfile,
     ) -> Result<(), FrftError> {
-        validate_profile(profile, Self::PROFILE)?;
+        profile.ensure_matches(Self::PROFILE, || FrftError::PrecisionMismatch)?;
         plan.inverse_into(input, output)
     }
 }
@@ -132,25 +142,6 @@ impl FrftStorage for Complex64 {
 impl FrftStorage for Complex32 {}
 
 impl FrftStorage for [F16; 2] {}
-
-fn validate_lengths(plan: &FrftPlan, input: usize, output: usize) -> Result<(), FrftError> {
-    if input != plan.len() || output != plan.len() {
-        Err(FrftError::LengthMismatch {
-            input: input.max(output),
-            plan: plan.len(),
-        })
-    } else {
-        Ok(())
-    }
-}
-
-fn validate_profile(actual: PrecisionProfile, expected: PrecisionProfile) -> Result<(), FrftError> {
-    if actual.matches_storage_and_compute(expected) {
-        Ok(())
-    } else {
-        Err(FrftError::PrecisionMismatch)
-    }
-}
 
 fn with_complex64_workspaces<R>(
     n: usize,

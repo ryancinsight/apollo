@@ -23,14 +23,22 @@ fn typed_paths_support_f64_f32_and_mixed_f16_storage() {
 
     let signal32 = signal64.map(|value| value as f32);
     let mut out32 = [0.0_f32; 8];
-    plan.forward_typed_into(&signal32, &mut out32, PrecisionProfile::LOW_PRECISION_F32)
-        .expect("typed f32 forward");
+    plan.forward_typed_into(
+        &signal32,
+        &mut out32,
+        PrecisionProfile::F32_STORAGE_F64_COMPUTE,
+    )
+    .expect("typed f32 forward");
     for (actual, expected) in out32.iter().zip(expected.values()) {
         assert!((f64::from(*actual) - *expected).abs() < 1.0e-5);
     }
     let mut inv32 = [0.0_f32; 8];
-    plan.inverse_typed_into(&out32, &mut inv32, PrecisionProfile::LOW_PRECISION_F32)
-        .expect("typed f32 inverse");
+    plan.inverse_typed_into(
+        &out32,
+        &mut inv32,
+        PrecisionProfile::F32_STORAGE_F64_COMPUTE,
+    )
+    .expect("typed f32 inverse");
     for (actual, expected) in inv32.iter().zip(expected_inverse.iter()) {
         assert!((f64::from(*actual) - *expected).abs() < 1.0e-5);
     }
@@ -40,7 +48,7 @@ fn typed_paths_support_f64_f32_and_mixed_f16_storage() {
     plan.forward_typed_into(
         &signal16,
         &mut out16,
-        PrecisionProfile::MIXED_PRECISION_F16_F32,
+        PrecisionProfile::F16_STORAGE_F64_COMPUTE,
     )
     .expect("typed mixed F16 forward");
     for (actual, expected) in out16.iter().zip(expected.values()) {

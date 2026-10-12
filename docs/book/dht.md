@@ -21,12 +21,8 @@ where `cas(θ) = cos(θ) + sin(θ)`.
 
 ## API
 
-```rust,ignore
-use apollo_dht::{DhtPlan, dht_forward, dht_inverse};
-
-let plan = DhtPlan::new(length)?;
-let hartley = dht_forward(&signal, &plan)?;  // [N] -> [N] real
-let original = dht_inverse(&hartley, &plan)?;
+```rust
+{{#include ../../crates/apollo-dht/examples/book_dht_roundtrip.rs}}
 ```
 
 ## Uses

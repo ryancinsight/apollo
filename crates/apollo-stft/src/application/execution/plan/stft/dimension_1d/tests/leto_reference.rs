@@ -89,14 +89,14 @@ fn typed_leto_forward_and_inverse_match_leto_reference() {
     plan.forward_typed_into(
         &signal,
         &mut expected_spectrum,
-        PrecisionProfile::LOW_PRECISION_F32,
+        PrecisionProfile::F32_STORAGE_F64_COMPUTE,
     )
     .expect("typed leto forward");
 
     let actual_spectrum = plan
         .forward_leto_typed::<f32, Complex32>(
             leto_signal.view(),
-            PrecisionProfile::LOW_PRECISION_F32,
+            PrecisionProfile::F32_STORAGE_F64_COMPUTE,
         )
         .expect("typed leto forward");
     let actual_spectrum_view = actual_spectrum.view();
@@ -121,7 +121,7 @@ fn typed_leto_forward_and_inverse_match_leto_reference() {
         &expected_spectrum,
         signal.size(),
         &mut expected_signal,
-        PrecisionProfile::LOW_PRECISION_F32,
+        PrecisionProfile::F32_STORAGE_F64_COMPUTE,
     )
     .expect("typed leto inverse");
 
@@ -129,7 +129,7 @@ fn typed_leto_forward_and_inverse_match_leto_reference() {
         .inverse_leto_typed::<Complex32, f32>(
             leto_spectrum.view(),
             signal.size(),
-            PrecisionProfile::LOW_PRECISION_F32,
+            PrecisionProfile::F32_STORAGE_F64_COMPUTE,
         )
         .expect("typed leto inverse");
     let actual_signal_view = actual_signal.view();

@@ -234,7 +234,7 @@ pub trait HilbertStorage: CpuStorage {
         signal: &[Self],
         profile: PrecisionProfile,
     ) -> HilbertResult<AnalyticSignal> {
-        validate_profile(profile, Self::PROFILE)?;
+        profile.ensure_matches(Self::PROFILE, || HilbertError::PrecisionMismatch)?;
         if signal.len() != plan.len() {
             return Err(HilbertError::LengthMismatch);
         }
@@ -253,7 +253,7 @@ pub trait HilbertStorage: CpuStorage {
         output: &mut [Self],
         profile: PrecisionProfile,
     ) -> HilbertResult<()> {
-        validate_profile(profile, Self::PROFILE)?;
+        profile.ensure_matches(Self::PROFILE, || HilbertError::PrecisionMismatch)?;
         if signal.len() != plan.len() || output.len() != plan.len() {
             return Err(HilbertError::LengthMismatch);
         }
@@ -276,7 +276,7 @@ impl HilbertStorage for f64 {
         signal: &[Self],
         profile: PrecisionProfile,
     ) -> HilbertResult<AnalyticSignal> {
-        validate_profile(profile, Self::PROFILE)?;
+        profile.ensure_matches(Self::PROFILE, || HilbertError::PrecisionMismatch)?;
         plan.analytic_signal(signal)
     }
 
@@ -286,7 +286,7 @@ impl HilbertStorage for f64 {
         output: &mut [Self],
         profile: PrecisionProfile,
     ) -> HilbertResult<()> {
-        validate_profile(profile, Self::PROFILE)?;
+        profile.ensure_matches(Self::PROFILE, || HilbertError::PrecisionMismatch)?;
         plan.transform_into(signal, output)
     }
 }
@@ -294,14 +294,6 @@ impl HilbertStorage for f64 {
 impl HilbertStorage for f32 {}
 
 impl HilbertStorage for F16 {}
-
-fn validate_profile(actual: PrecisionProfile, expected: PrecisionProfile) -> HilbertResult<()> {
-    if actual.matches_storage_and_compute(expected) {
-        Ok(())
-    } else {
-        Err(HilbertError::PrecisionMismatch)
-    }
-}
 
 #[cfg(test)]
 mod tests {
@@ -399,8 +391,12 @@ mod tests {
         let expected32_input: Vec<f64> = signal32.iter().map(|value| f64::from(*value)).collect();
         let expected32 = plan.transform(&expected32_input).expect("f32 represented");
         let mut out32 = vec![0.0_f32; len];
-        plan.transform_typed_into(&signal32, &mut out32, PrecisionProfile::LOW_PRECISION_F32)
-            .expect("typed f32 transform");
+        plan.transform_typed_into(
+            &signal32,
+            &mut out32,
+            PrecisionProfile::F32_STORAGE_F64_COMPUTE,
+        )
+        .expect("typed f32 transform");
         for (actual, expected) in out32.iter().zip(expected32.iter()) {
             assert!((f64::from(*actual) - *expected).abs() < 1.0e-5);
         }
@@ -418,7 +414,7 @@ mod tests {
         plan.transform_typed_into(
             &signal16,
             &mut out16,
-            PrecisionProfile::MIXED_PRECISION_F16_F32,
+            PrecisionProfile::F16_STORAGE_F64_COMPUTE,
         )
         .expect("typed F16 transform");
         for (actual, expected) in out16.iter().zip(expected16.iter()) {
@@ -437,14 +433,22 @@ mod tests {
         let mut first = vec![0.0_f32; len];
         let mut second = vec![0.0_f32; len];
 
-        plan.transform_typed_into(&signal, &mut first, PrecisionProfile::LOW_PRECISION_F32)
-            .expect("first typed transform");
+        plan.transform_typed_into(
+            &signal,
+            &mut first,
+            PrecisionProfile::F32_STORAGE_F64_COMPUTE,
+        )
+        .expect("first typed transform");
         let after_first = typed_workspace_capacities();
         assert!(after_first.0 >= len);
         assert!(after_first.1 >= len);
 
-        plan.transform_typed_into(&signal, &mut second, PrecisionProfile::LOW_PRECISION_F32)
-            .expect("second typed transform");
+        plan.transform_typed_into(
+            &signal,
+            &mut second,
+            PrecisionProfile::F32_STORAGE_F64_COMPUTE,
+        )
+        .expect("second typed transform");
         let after_second = typed_workspace_capacities();
         assert_eq!(after_second, after_first);
 
@@ -538,11 +542,15 @@ mod tests {
         let input = leto::Array1::from_shape_vec([len], signal.clone()).expect("leto input");
         let plan = HilbertPlan::new(len).expect("plan");
         let mut expected = vec![0.0_f32; len];
-        plan.transform_typed_into(&signal, &mut expected, PrecisionProfile::LOW_PRECISION_F32)
-            .expect("typed slice transform");
+        plan.transform_typed_into(
+            &signal,
+            &mut expected,
+            PrecisionProfile::F32_STORAGE_F64_COMPUTE,
+        )
+        .expect("typed slice transform");
 
         let actual = plan
-            .transform_leto_typed(input.view(), PrecisionProfile::LOW_PRECISION_F32)
+            .transform_leto_typed(input.view(), PrecisionProfile::F32_STORAGE_F64_COMPUTE)
             .expect("typed leto transform");
         let actual = actual.view();
         let actual = actual.as_slice().expect("contiguous leto output");

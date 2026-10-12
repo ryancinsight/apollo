@@ -83,19 +83,22 @@ impl BackendCapabilities {
     };
 
     /// Hephaestus WGPU dense-FFT capabilities as a compile-time constant.
+    ///
+    /// No `FftBackend` implementation exists for WGPU (FFT has CPU and CUDA-1D
+    /// plans only), so every support flag is false. This mirrors
+    /// `WgpuCapabilities::detected()`: the device may be acquirable, but no
+    /// FFT dimensionality is implemented on it. Flip these flags only
+    /// alongside a landing `FftBackend` implementation.
     pub const WGPU: Self = Self {
         kind: BackendKind::Wgpu,
         normalization: Normalization::FftwCompatible,
-        supports_1d: true,
-        supports_2d: true,
-        supports_3d: true,
+        supports_1d: false,
+        supports_2d: false,
+        supports_3d: false,
         supports_real_to_complex: false,
-        supports_mixed_precision: true,
+        supports_mixed_precision: false,
         default_precision_profile: PrecisionProfile::LOW_PRECISION_F32,
-        supported_precision_profiles: &[
-            PrecisionProfile::LOW_PRECISION_F32,
-            PrecisionProfile::MIXED_PRECISION_F16_F32,
-        ],
+        supported_precision_profiles: &[],
     };
 
     /// CUDA backend capabilities as a compile-time constant.

@@ -1,7 +1,7 @@
 use super::DctDstPlan;
 use crate::domain::contracts::error::DctDstError;
 use crate::domain::metadata::kind::RealTransformKind;
-use apollo_fft::{PrecisionProfile, F16};
+use apollo_fft::{ComputePrecision, PrecisionProfile, StoragePrecision, F16};
 use eunomia::assert_abs_diff_eq;
 use leto::{Array2, Array3};
 use leto::{SliceArg, Storage};
@@ -21,8 +21,12 @@ fn typed_paths_support_f64_f32_and_mixed_f16_storage() {
 
     let signal32 = signal64.map(|value| value as f32);
     let mut out32 = [0.0_f32; 8];
-    plan.forward_typed_into(&signal32, &mut out32, PrecisionProfile::LOW_PRECISION_F32)
-        .expect("typed f32 forward");
+    plan.forward_typed_into(
+        &signal32,
+        &mut out32,
+        PrecisionProfile::F32_STORAGE_F64_COMPUTE,
+    )
+    .expect("typed f32 forward");
     for (actual, expected) in out32.iter().zip(expected.iter()) {
         assert!((f64::from(*actual) - *expected).abs() < 1.0e-5);
     }
@@ -32,7 +36,7 @@ fn typed_paths_support_f64_f32_and_mixed_f16_storage() {
     plan.forward_typed_into(
         &signal16,
         &mut out16,
-        PrecisionProfile::MIXED_PRECISION_F16_F32,
+        PrecisionProfile::F16_STORAGE_F64_COMPUTE,
     )
     .expect("typed mixed F16 forward");
     for (actual, expected) in out16.iter().zip(expected.iter()) {
@@ -47,6 +51,38 @@ fn typed_path_rejects_profile_storage_mismatch() {
     let mut output = [0.0_f32; 4];
     assert!(matches!(
         plan.forward_typed_into(&signal, &mut output, PrecisionProfile::HIGH_ACCURACY_F64),
+        Err(DctDstError::PrecisionMismatch)
+    ));
+}
+
+#[test]
+fn typed_paths_reject_native_compute_profiles() {
+    // The CPU typed paths widen through the owner f64 arithmetic, so the
+    // native-compute profiles are a mismatch here: f32/F16 storage must
+    // present the widening profiles, which report the f64 compute they
+    // actually execute.
+    let widen32 = PrecisionProfile::F32_STORAGE_F64_COMPUTE;
+    assert_eq!(widen32.storage, StoragePrecision::F32);
+    assert_eq!(widen32.compute, ComputePrecision::F64);
+    let widen16 = PrecisionProfile::F16_STORAGE_F64_COMPUTE;
+    assert_eq!(widen16.storage, StoragePrecision::F16);
+    assert_eq!(widen16.compute, ComputePrecision::F64);
+
+    let plan = DctDstPlan::new(4, RealTransformKind::DctII).expect("valid plan");
+    let signal = [1.0_f32, 2.0, 3.0, 4.0];
+    let mut output = [0.0_f32; 4];
+    assert!(matches!(
+        plan.forward_typed_into(&signal, &mut output, PrecisionProfile::LOW_PRECISION_F32),
+        Err(DctDstError::PrecisionMismatch)
+    ));
+    let signal16 = signal.map(F16::from_f32);
+    let mut output16 = signal16;
+    assert!(matches!(
+        plan.forward_typed_into(
+            &signal16,
+            &mut output16,
+            PrecisionProfile::MIXED_PRECISION_F16_F32
+        ),
         Err(DctDstError::PrecisionMismatch)
     ));
 }
@@ -107,13 +143,20 @@ fn leto_typed_forward_matches_typed_slice_reference() {
     let plan = DctDstPlan::new(8, RealTransformKind::DctII).expect("valid plan");
     let signal = vec![1.0_f32, -2.0, 0.5, 2.25, -4.0, 1.5, 0.0, -0.75];
     let mut expected = vec![0.0_f32; signal.len()];
-    plan.forward_typed_into(&signal, &mut expected, PrecisionProfile::LOW_PRECISION_F32)
-        .expect("typed slice forward");
+    plan.forward_typed_into(
+        &signal,
+        &mut expected,
+        PrecisionProfile::F32_STORAGE_F64_COMPUTE,
+    )
+    .expect("typed slice forward");
     let leto_signal =
         leto::Array1::from_shape_vec([signal.len()], signal).expect("typed leto input");
 
     let actual = plan
-        .forward_leto_typed(leto_signal.view(), PrecisionProfile::LOW_PRECISION_F32)
+        .forward_leto_typed(
+            leto_signal.view(),
+            PrecisionProfile::F32_STORAGE_F64_COMPUTE,
+        )
         .expect("typed leto forward");
 
     for (actual, expected) in actual.storage().as_slice().iter().zip(expected.iter()) {

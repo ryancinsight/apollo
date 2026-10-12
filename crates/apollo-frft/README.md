@@ -51,8 +51,8 @@ discrete coordinates.
 Typed execution uses Apollo's shared `PrecisionProfile` contract:
 
 - `HIGH_ACCURACY_F64`: `Complex64` storage.
-- `LOW_PRECISION_F32`: `Complex32` storage.
-- `MIXED_PRECISION_F16_F32`: `[f16; 2]` storage, with lane 0 as real and lane
+- `F32_STORAGE_F64_COMPUTE`: `Complex32` storage.
+- `F16_STORAGE_F64_COMPUTE`: `[f16; 2]` storage, with lane 0 as real and lane
   1 as imaginary.
 
 Lower storage profiles reuse the authoritative `Complex64` FrFT plan and

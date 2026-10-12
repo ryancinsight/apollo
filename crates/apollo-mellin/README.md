@@ -29,9 +29,9 @@ Typed execution uses Apollo's shared precision profile contract:
 
 - `HIGH_ACCURACY_F64`: `f64` input and output storage with owner `f64`
   log-resampling, moment, and spectrum kernels.
-- `LOW_PRECISION_F32`: `f32` input and output storage converted through the
+- `F32_STORAGE_F64_COMPUTE`: `f32` input and output storage converted through the
   owner path and quantized once into caller-owned real outputs.
-- `MIXED_PRECISION_F16_F32`: `f16` input and output storage converted through
+- `F16_STORAGE_F64_COMPUTE`: `f16` input and output storage converted through
   the owner path and quantized once into caller-owned real outputs.
 
 Profile/storage mismatches return `MellinError::PrecisionMismatch`.

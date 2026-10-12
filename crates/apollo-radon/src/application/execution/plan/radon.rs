@@ -245,7 +245,7 @@ pub trait RadonStorage: CpuStorage {
         output: &mut Array2<Self>,
         profile: PrecisionProfile,
     ) -> RadonResult<()> {
-        validate_profile(profile, Self::PROFILE)?;
+        profile.ensure_matches(Self::PROFILE, || RadonError::PrecisionMismatch)?;
         if image.shape() != [plan.geometry.rows(), plan.geometry.cols()] {
             return Err(RadonError::ImageShapeMismatch);
         }
@@ -274,7 +274,7 @@ pub trait RadonStorage: CpuStorage {
         output: &mut Array2<Self>,
         profile: PrecisionProfile,
     ) -> RadonResult<()> {
-        validate_profile(profile, Self::PROFILE)?;
+        profile.ensure_matches(Self::PROFILE, || RadonError::PrecisionMismatch)?;
         if sinogram.shape() != [plan.geometry.angle_count(), plan.geometry.detector_count()] {
             return Err(RadonError::SinogramShapeMismatch);
         }
@@ -304,7 +304,7 @@ impl RadonStorage for f64 {
         output: &mut Array2<Self>,
         profile: PrecisionProfile,
     ) -> RadonResult<()> {
-        validate_profile(profile, Self::PROFILE)?;
+        profile.ensure_matches(Self::PROFILE, || RadonError::PrecisionMismatch)?;
         plan.forward_into(image, output)
     }
 
@@ -314,7 +314,7 @@ impl RadonStorage for f64 {
         output: &mut Array2<Self>,
         profile: PrecisionProfile,
     ) -> RadonResult<()> {
-        validate_profile(profile, Self::PROFILE)?;
+        profile.ensure_matches(Self::PROFILE, || RadonError::PrecisionMismatch)?;
         if sinogram.shape() != [plan.geometry.angle_count(), plan.geometry.detector_count()] {
             return Err(RadonError::SinogramShapeMismatch);
         }
@@ -329,14 +329,6 @@ impl RadonStorage for f64 {
 impl RadonStorage for f32 {}
 
 impl RadonStorage for F16 {}
-
-fn validate_profile(actual: PrecisionProfile, expected: PrecisionProfile) -> RadonResult<()> {
-    if actual.matches_storage_and_compute(expected) {
-        Ok(())
-    } else {
-        Err(RadonError::PrecisionMismatch)
-    }
-}
 
 fn array2_from_leto_view<T: Copy>(view: leto::ArrayView2<'_, T>) -> Array2<T> {
     view.to_contiguous()
@@ -399,8 +391,12 @@ mod tests {
             .expect("represented f32 forward");
         let mut out32 =
             Array2::<f32>::zeros([plan.geometry.angle_count(), plan.geometry.detector_count()]);
-        plan.forward_typed_into(&image32, &mut out32, PrecisionProfile::LOW_PRECISION_F32)
-            .expect("typed f32 forward");
+        plan.forward_typed_into(
+            &image32,
+            &mut out32,
+            PrecisionProfile::F32_STORAGE_F64_COMPUTE,
+        )
+        .expect("typed f32 forward");
         for (actual, expected) in out32.iter().zip(expected32.values().iter()) {
             assert!((f64::from(*actual) - *expected).abs() < 1.0e-5);
         }
@@ -409,7 +405,7 @@ mod tests {
         plan.backproject_typed_into(
             &out32,
             &mut recovered32,
-            PrecisionProfile::LOW_PRECISION_F32,
+            PrecisionProfile::F32_STORAGE_F64_COMPUTE,
         )
         .expect("typed f32 backproject");
         let expected_backproject = plan
@@ -431,7 +427,7 @@ mod tests {
         plan.forward_typed_into(
             &image16,
             &mut out16,
-            PrecisionProfile::MIXED_PRECISION_F16_F32,
+            PrecisionProfile::F16_STORAGE_F64_COMPUTE,
         )
         .expect("typed F16 forward");
         for (actual, expected) in out16.iter().zip(expected16.values().iter()) {
@@ -505,12 +501,12 @@ mod tests {
         plan.forward_typed_into(
             &image,
             &mut expected_forward,
-            PrecisionProfile::LOW_PRECISION_F32,
+            PrecisionProfile::F32_STORAGE_F64_COMPUTE,
         )
         .expect("typed leto forward");
 
         let actual_forward = plan
-            .forward_leto_typed::<f32>(input.view(), PrecisionProfile::LOW_PRECISION_F32)
+            .forward_leto_typed::<f32>(input.view(), PrecisionProfile::F32_STORAGE_F64_COMPUTE)
             .expect("typed leto forward");
         let actual_forward_view = actual_forward.view();
         let actual_forward_slice = actual_forward_view
@@ -525,7 +521,7 @@ mod tests {
         plan.backproject_typed_into(
             &expected_forward,
             &mut expected_backproject,
-            PrecisionProfile::LOW_PRECISION_F32,
+            PrecisionProfile::F32_STORAGE_F64_COMPUTE,
         )
         .expect("typed leto backproject");
         let values = leto::Array2::from_shape_vec(
@@ -535,7 +531,7 @@ mod tests {
         .expect("leto sinogram");
 
         let actual_backproject = plan
-            .backproject_leto_typed::<f32>(values.view(), PrecisionProfile::LOW_PRECISION_F32)
+            .backproject_leto_typed::<f32>(values.view(), PrecisionProfile::F32_STORAGE_F64_COMPUTE)
             .expect("typed leto backproject");
         let actual_backproject_view = actual_backproject.view();
         let actual_backproject_slice = actual_backproject_view

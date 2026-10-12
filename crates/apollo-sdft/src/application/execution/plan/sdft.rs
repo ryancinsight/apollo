@@ -164,8 +164,8 @@ impl SdftPlan {
         output: &mut [O],
         profile: PrecisionProfile,
     ) -> SdftResult<()> {
-        validate_profile(profile, T::PROFILE)?;
-        validate_profile(profile, O::PROFILE)?;
+        profile.ensure_matches(T::PROFILE, || SdftError::PrecisionMismatch)?;
+        profile.ensure_matches(O::PROFILE, || SdftError::PrecisionMismatch)?;
         if window.len() != self.window_len() {
             return Err(SdftError::InitialWindowLengthMismatch);
         }
@@ -214,14 +214,6 @@ fn typed_direct_workspace_capacities() -> (usize, usize) {
         f64::scratch_capacities().0,
         Complex64::scratch_capacities().1,
     )
-}
-
-fn validate_profile(actual: PrecisionProfile, expected: PrecisionProfile) -> SdftResult<()> {
-    if actual.matches_storage_and_compute(expected) {
-        Ok(())
-    } else {
-        Err(SdftError::PrecisionMismatch)
-    }
 }
 
 /// Stateful sliding DFT stream.
@@ -344,8 +336,12 @@ mod tests {
         let represented32: Vec<f64> = window32.iter().map(|value| f64::from(*value)).collect();
         let expected32 = plan.direct_bins(&represented32).expect("represented f32");
         let mut out32 = vec![Complex32::new(0.0, 0.0); plan.bin_count()];
-        plan.direct_bins_typed_into(&window32, &mut out32, PrecisionProfile::LOW_PRECISION_F32)
-            .expect("typed f32 direct");
+        plan.direct_bins_typed_into(
+            &window32,
+            &mut out32,
+            PrecisionProfile::F32_STORAGE_F64_COMPUTE,
+        )
+        .expect("typed f32 direct");
         for (actual, expected) in out32.iter().zip(expected32.iter()) {
             assert!((f64::from(actual.re) - expected.re).abs() < 1.0e-5);
             assert!((f64::from(actual.im) - expected.im).abs() < 1.0e-5);
@@ -361,7 +357,7 @@ mod tests {
         plan.direct_bins_typed_into(
             &window16,
             &mut out16,
-            PrecisionProfile::MIXED_PRECISION_F16_F32,
+            PrecisionProfile::F16_STORAGE_F64_COMPUTE,
         )
         .expect("typed F16 direct");
         for (actual, expected) in out16.iter().zip(expected16.iter()) {
@@ -379,14 +375,22 @@ mod tests {
         let mut first = vec![Complex32::new(0.0, 0.0); plan.bin_count()];
         let mut second = vec![Complex32::new(0.0, 0.0); plan.bin_count()];
 
-        plan.direct_bins_typed_into(&window, &mut first, PrecisionProfile::LOW_PRECISION_F32)
-            .expect("first typed direct");
+        plan.direct_bins_typed_into(
+            &window,
+            &mut first,
+            PrecisionProfile::F32_STORAGE_F64_COMPUTE,
+        )
+        .expect("first typed direct");
         let after_first = typed_direct_workspace_capacities();
         assert!(after_first.0 >= plan.window_len());
         assert!(after_first.1 >= plan.bin_count());
 
-        plan.direct_bins_typed_into(&window, &mut second, PrecisionProfile::LOW_PRECISION_F32)
-            .expect("second typed direct");
+        plan.direct_bins_typed_into(
+            &window,
+            &mut second,
+            PrecisionProfile::F32_STORAGE_F64_COMPUTE,
+        )
+        .expect("second typed direct");
         assert_eq!(typed_direct_workspace_capacities(), after_first);
         for (first, second) in first.iter().zip(second.iter()) {
             assert_eq!(first.re.to_bits(), second.re.to_bits());
@@ -460,13 +464,17 @@ mod tests {
         let window = vec![1.0_f32, -2.0, 0.5, 3.0];
         let input = leto::Array1::from_shape_vec([4], window.clone()).expect("leto input");
         let mut expected = vec![Complex32::new(0.0, 0.0); plan.bin_count()];
-        plan.direct_bins_typed_into(&window, &mut expected, PrecisionProfile::LOW_PRECISION_F32)
-            .expect("typed slice direct");
+        plan.direct_bins_typed_into(
+            &window,
+            &mut expected,
+            PrecisionProfile::F32_STORAGE_F64_COMPUTE,
+        )
+        .expect("typed slice direct");
 
         let actual = plan
             .direct_bins_leto_typed::<f32, Complex32>(
                 input.view(),
-                PrecisionProfile::LOW_PRECISION_F32,
+                PrecisionProfile::F32_STORAGE_F64_COMPUTE,
             )
             .expect("typed leto direct");
         let actual = actual.view();

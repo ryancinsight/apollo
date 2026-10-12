@@ -54,7 +54,9 @@ pub use domain::contracts::error::{ApolloError, ApolloResult};
 pub use domain::metadata::precision::{
     BackendKind, ComputePrecision, Normalization, PrecisionMode, PrecisionProfile, StoragePrecision,
 };
-pub use domain::metadata::shape::{HalfSpectrum3D, Shape1D, Shape2D, Shape3D};
+pub use domain::metadata::shape::{
+    ensure_input_output_len, HalfSpectrum3D, Shape1D, Shape2D, Shape3D,
+};
 pub use domain::storage::scalar::{CpuElement, CpuStorage};
 pub use eunomia::F16;
 pub use infrastructure::transport::cpu::CpuBackend;

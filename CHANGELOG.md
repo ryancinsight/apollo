@@ -10,6 +10,16 @@ Change-class tags: [patch] backward-compatible fix, [minor] additive non-breakin
 
 ### Breaking
 
+- [major] `apollo-fft`: `BackendCapabilities::WGPU` no longer claims FFT
+  support it has no implementation for. No `FftBackend` implementation and
+  no `GpuTransformPlanner` exist for FFT (plans are CPU plus CUDA-1D), so
+  `supports_1d`/`supports_2d`/`supports_3d`/`supports_mixed_precision` are
+  now false and `supported_precision_profiles` is empty, mirroring
+  `WgpuCapabilities::detected()`. `apollo-python`'s `available_backends()`
+  likewise lists only `cpu`: no Python binding accepts a backend selector
+  or executes on a GPU device. `backend_capabilities()["wgpu"]` still
+  reports device presence; only the FFT support flags change.
+
 - [major] `apollo-gft`: `GftPlan::from_adjacency` and `from_graph` return
   `GftError::SpectralDecomposition(SpectralFailure)` when the leto
   eigensolver rejects the Laplacian, instead of panicking. Validation cannot

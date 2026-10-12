@@ -57,7 +57,7 @@ fn typed_dwt_paths_support_f64_f32_and_mixed_f16_storage() {
         &signal32,
         &mut approx32,
         &mut details32,
-        PrecisionProfile::LOW_PRECISION_F32,
+        PrecisionProfile::F32_STORAGE_F64_COMPUTE,
     )
     .expect("typed f32 forward");
     let expected32 = plan
@@ -72,7 +72,7 @@ fn typed_dwt_paths_support_f64_f32_and_mixed_f16_storage() {
         &approx32,
         &details32,
         &mut recovered32,
-        PrecisionProfile::LOW_PRECISION_F32,
+        PrecisionProfile::F32_STORAGE_F64_COMPUTE,
     )
     .expect("typed f32 inverse");
     for (actual, expected) in recovered32.iter().zip(signal32.iter()) {
@@ -90,7 +90,7 @@ fn typed_dwt_paths_support_f64_f32_and_mixed_f16_storage() {
         &signal16,
         &mut approx16,
         &mut details16,
-        PrecisionProfile::MIXED_PRECISION_F16_F32,
+        PrecisionProfile::F16_STORAGE_F64_COMPUTE,
     )
     .expect("typed F16 forward");
     for (actual, expected) in approx16.iter().zip(expected16.approximation()) {
@@ -182,12 +182,15 @@ fn typed_leto_forward_and_inverse_match_slice_reference() {
         &signal,
         &mut expected_approximation,
         &mut expected_details,
-        PrecisionProfile::LOW_PRECISION_F32,
+        PrecisionProfile::F32_STORAGE_F64_COMPUTE,
     )
     .expect("typed slice forward");
 
     let actual = plan
-        .forward_leto_typed(leto_signal.view(), PrecisionProfile::LOW_PRECISION_F32)
+        .forward_leto_typed(
+            leto_signal.view(),
+            PrecisionProfile::F32_STORAGE_F64_COMPUTE,
+        )
         .expect("typed leto forward");
     let actual_approximation = actual.approximation().view();
     let actual_approximation = actual_approximation
@@ -216,11 +219,11 @@ fn typed_leto_forward_and_inverse_match_slice_reference() {
         &expected_approximation,
         &expected_details,
         &mut expected_inverse,
-        PrecisionProfile::LOW_PRECISION_F32,
+        PrecisionProfile::F32_STORAGE_F64_COMPUTE,
     )
     .expect("typed slice inverse");
     let actual_inverse = plan
-        .inverse_leto_typed(&actual, PrecisionProfile::LOW_PRECISION_F32)
+        .inverse_leto_typed(&actual, PrecisionProfile::F32_STORAGE_F64_COMPUTE)
         .expect("typed leto inverse");
     let actual_inverse_view = actual_inverse.view();
     let actual_inverse = actual_inverse_view
@@ -253,7 +256,7 @@ fn typed_dwt_rejects_profile_and_shape_mismatch() {
             &signal,
             &mut approximation,
             &mut details,
-            PrecisionProfile::LOW_PRECISION_F32
+            PrecisionProfile::F32_STORAGE_F64_COMPUTE
         ),
         Err(WaveletError::CoefficientShapeMismatch)
     ));

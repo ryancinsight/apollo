@@ -14,7 +14,9 @@
 
 use crate::domain::contracts::error::{QftError, QftResult};
 use crate::domain::state::dimension::QuantumStateDimension;
-use apollo_fft::{CpuElement, CpuStorage, FftPlan1D, PrecisionProfile, Shape1D, F16};
+use apollo_fft::{
+    ensure_input_output_len, CpuElement, CpuStorage, FftPlan1D, PrecisionProfile, Shape1D, F16,
+};
 use eunomia::{Complex32, Complex64};
 use leto::Array1;
 use serde::de::Error as _;
@@ -352,8 +354,10 @@ pub trait QftStorage: CpuStorage<Complex64> {
         output: &mut [Self],
         profile: PrecisionProfile,
     ) -> QftResult<()> {
-        validate_profile(profile, Self::PROFILE)?;
-        validate_lengths(plan, input.len(), output.len())?;
+        profile.ensure_matches(Self::PROFILE, || QftError::PrecisionMismatch)?;
+        ensure_input_output_len(plan.len(), input.len(), output.len(), || {
+            QftError::LengthMismatch
+        })?;
         Complex64::with_scratch(plan.len(), plan.len(), |input64, output64| {
             for (slot, value) in input64.iter_mut().zip(input.iter().copied()) {
                 *slot = value.to_cpu();
@@ -390,8 +394,10 @@ pub trait QftStorage: CpuStorage<Complex64> {
         output: &mut [Self],
         profile: PrecisionProfile,
     ) -> QftResult<()> {
-        validate_profile(profile, Self::PROFILE)?;
-        validate_lengths(plan, input.len(), output.len())?;
+        profile.ensure_matches(Self::PROFILE, || QftError::PrecisionMismatch)?;
+        ensure_input_output_len(plan.len(), input.len(), output.len(), || {
+            QftError::LengthMismatch
+        })?;
         Complex64::with_scratch(plan.len(), plan.len(), |input64, output64| {
             for (slot, value) in input64.iter_mut().zip(input.iter().copied()) {
                 *slot = value.to_cpu();
@@ -429,7 +435,7 @@ impl QftStorage for Complex64 {
         output: &mut [Self],
         profile: PrecisionProfile,
     ) -> QftResult<()> {
-        validate_profile(profile, Self::PROFILE)?;
+        profile.ensure_matches(Self::PROFILE, || QftError::PrecisionMismatch)?;
         plan.forward_complex64_slice_into(input, output)
     }
 
@@ -439,7 +445,7 @@ impl QftStorage for Complex64 {
         output: &mut [Self],
         profile: PrecisionProfile,
     ) -> QftResult<()> {
-        validate_profile(profile, Self::PROFILE)?;
+        profile.ensure_matches(Self::PROFILE, || QftError::PrecisionMismatch)?;
         plan.inverse_complex64_slice_into(input, output)
     }
 }
@@ -447,22 +453,6 @@ impl QftStorage for Complex64 {
 impl QftStorage for Complex32 {}
 
 impl QftStorage for [F16; 2] {}
-
-fn validate_profile(actual: PrecisionProfile, expected: PrecisionProfile) -> QftResult<()> {
-    if actual.matches_storage_and_compute(expected) {
-        Ok(())
-    } else {
-        Err(QftError::PrecisionMismatch)
-    }
-}
-
-fn validate_lengths(plan: &QftPlan, input: usize, output: usize) -> QftResult<()> {
-    if input == plan.len() && output == plan.len() {
-        Ok(())
-    } else {
-        Err(QftError::LengthMismatch)
-    }
-}
 
 /// Convenience wrapper for forward QFT.
 pub fn qft(input: &Array1<Complex64>) -> QftResult<Array1<Complex64>> {
@@ -716,11 +706,15 @@ mod tests {
             leto::Array1::from_shape_vec([plan.len()], input.iter().copied().collect())
                 .expect("leto input");
         let mut expected = Array1::<Complex32>::zeros([plan.len()]);
-        plan.forward_typed_into(&input, &mut expected, PrecisionProfile::LOW_PRECISION_F32)
-            .expect("leto typed forward");
+        plan.forward_typed_into(
+            &input,
+            &mut expected,
+            PrecisionProfile::F32_STORAGE_F64_COMPUTE,
+        )
+        .expect("leto typed forward");
 
         let actual = plan
-            .forward_leto_typed(leto_input.view(), PrecisionProfile::LOW_PRECISION_F32)
+            .forward_leto_typed(leto_input.view(), PrecisionProfile::F32_STORAGE_F64_COMPUTE)
             .expect("leto typed forward");
         for (actual, expected) in actual.storage().as_slice().iter().zip(expected.iter()) {
             assert_relative_eq!(actual.re, expected.re, epsilon = 0.0);
@@ -753,12 +747,12 @@ mod tests {
         plan.forward_typed_into(
             &input,
             &mut expected,
-            PrecisionProfile::MIXED_PRECISION_F16_F32,
+            PrecisionProfile::F16_STORAGE_F64_COMPUTE,
         )
         .expect("leto typed forward");
 
         let actual = plan
-            .forward_leto_typed(strided, PrecisionProfile::MIXED_PRECISION_F16_F32)
+            .forward_leto_typed(strided, PrecisionProfile::F16_STORAGE_F64_COMPUTE)
             .expect("leto typed forward");
         for (actual, expected) in actual.storage().as_slice().iter().zip(expected.iter()) {
             assert_relative_eq!(actual[0].to_f32(), expected[0].to_f32(), epsilon = 0.0);
@@ -787,8 +781,12 @@ mod tests {
             .forward(&represented32)
             .expect("represented f32 forward");
         let mut out32 = Array1::<Complex32>::zeros([plan.len()]);
-        plan.forward_typed_into(&input32, &mut out32, PrecisionProfile::LOW_PRECISION_F32)
-            .expect("typed complex32 forward");
+        plan.forward_typed_into(
+            &input32,
+            &mut out32,
+            PrecisionProfile::F32_STORAGE_F64_COMPUTE,
+        )
+        .expect("typed complex32 forward");
         for (actual, expected) in out32.iter().zip(expected32.iter()) {
             assert!((f64::from(actual.re) - expected.re).abs() < 1.0e-5);
             assert!((f64::from(actual.im) - expected.im).abs() < 1.0e-5);
@@ -809,7 +807,7 @@ mod tests {
         plan.forward_typed_into(
             &input16,
             &mut out16,
-            PrecisionProfile::MIXED_PRECISION_F16_F32,
+            PrecisionProfile::F16_STORAGE_F64_COMPUTE,
         )
         .expect("typed mixed F16 forward");
         for (actual, expected) in out16.iter().zip(expected16.iter()) {
@@ -823,7 +821,7 @@ mod tests {
         plan.inverse_typed_into(
             &out32,
             &mut recovered32,
-            PrecisionProfile::LOW_PRECISION_F32,
+            PrecisionProfile::F32_STORAGE_F64_COMPUTE,
         )
         .expect("typed complex32 inverse");
         for (actual, expected) in recovered32.iter().zip(input32.iter()) {
@@ -844,14 +842,14 @@ mod tests {
         plan.forward_typed_into(
             &input,
             &mut first_spectrum,
-            PrecisionProfile::LOW_PRECISION_F32,
+            PrecisionProfile::F32_STORAGE_F64_COMPUTE,
         )
         .expect("first typed complex32 forward");
         let forward_caps = Complex64::scratch_capacities();
         plan.forward_typed_into(
             &input,
             &mut second_spectrum,
-            PrecisionProfile::LOW_PRECISION_F32,
+            PrecisionProfile::F32_STORAGE_F64_COMPUTE,
         )
         .expect("second typed complex32 forward");
 
@@ -866,14 +864,14 @@ mod tests {
         plan.inverse_typed_into(
             &first_spectrum,
             &mut first_recovered,
-            PrecisionProfile::LOW_PRECISION_F32,
+            PrecisionProfile::F32_STORAGE_F64_COMPUTE,
         )
         .expect("first typed complex32 inverse");
         let inverse_caps = Complex64::scratch_capacities();
         plan.inverse_typed_into(
             &first_spectrum,
             &mut second_recovered,
-            PrecisionProfile::LOW_PRECISION_F32,
+            PrecisionProfile::F32_STORAGE_F64_COMPUTE,
         )
         .expect("second typed complex32 inverse");
 

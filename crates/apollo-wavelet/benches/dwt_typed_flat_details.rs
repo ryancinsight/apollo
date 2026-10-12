@@ -35,14 +35,14 @@ fn bench_typed_round_trip(suite: &mut BenchmarkSuite, config: BenchmarkConfig) {
                     black_box(&signal),
                     &mut approximation,
                     &mut details,
-                    PrecisionProfile::LOW_PRECISION_F32,
+                    PrecisionProfile::F32_STORAGE_F64_COMPUTE,
                 )
                 .expect("forward");
                 plan.inverse_typed_into(
                     &approximation,
                     &details,
                     &mut recovered,
-                    PrecisionProfile::LOW_PRECISION_F32,
+                    PrecisionProfile::F32_STORAGE_F64_COMPUTE,
                 )
                 .expect("inverse");
                 black_box(&recovered);

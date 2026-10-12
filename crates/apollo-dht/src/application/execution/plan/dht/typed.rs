@@ -17,7 +17,7 @@ pub trait HartleyStorage: CpuStorage {
         output: &mut [Self],
         profile: PrecisionProfile,
     ) -> DhtResult<()> {
-        validate_profile(profile, Self::PROFILE)?;
+        profile.ensure_matches(Self::PROFILE, || DhtError::PrecisionMismatch)?;
         if signal.len() != plan.len() || output.len() != plan.len() {
             return Err(DhtError::LengthMismatch);
         }
@@ -41,7 +41,7 @@ pub trait HartleyStorage: CpuStorage {
         output: &mut [Self],
         profile: PrecisionProfile,
     ) -> DhtResult<()> {
-        validate_profile(profile, Self::PROFILE)?;
+        profile.ensure_matches(Self::PROFILE, || DhtError::PrecisionMismatch)?;
         if spectrum.len() != plan.len() || output.len() != plan.len() {
             return Err(DhtError::LengthMismatch);
         }
@@ -66,7 +66,7 @@ impl HartleyStorage for f64 {
         output: &mut [Self],
         profile: PrecisionProfile,
     ) -> DhtResult<()> {
-        validate_profile(profile, Self::PROFILE)?;
+        profile.ensure_matches(Self::PROFILE, || DhtError::PrecisionMismatch)?;
         plan.forward_into(signal, output)
     }
 
@@ -76,7 +76,7 @@ impl HartleyStorage for f64 {
         output: &mut [Self],
         profile: PrecisionProfile,
     ) -> DhtResult<()> {
-        validate_profile(profile, Self::PROFILE)?;
+        profile.ensure_matches(Self::PROFILE, || DhtError::PrecisionMismatch)?;
         plan.inverse_into(spectrum, output)
     }
 }
@@ -84,11 +84,3 @@ impl HartleyStorage for f64 {
 impl HartleyStorage for f32 {}
 
 impl HartleyStorage for F16 {}
-#[inline]
-fn validate_profile(actual: PrecisionProfile, expected: PrecisionProfile) -> DhtResult<()> {
-    if actual.matches_storage_and_compute(expected) {
-        Ok(())
-    } else {
-        Err(DhtError::PrecisionMismatch)
-    }
-}

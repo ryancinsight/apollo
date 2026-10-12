@@ -1,5 +1,6 @@
 //! Error contracts for Apollo FFT.
 
+use crate::domain::metadata::precision::PrecisionProfile;
 use thiserror::Error;
 
 /// Result type used throughout Apollo FFT.
@@ -59,5 +60,21 @@ impl ApolloError {
             value: value.into(),
             constraint: constraint.into(),
         }
+    }
+
+    /// Construct the precision-profile mismatch both NUFFT and SFT validators reported.
+    #[must_use]
+    pub fn precision_profile_mismatch(
+        actual: PrecisionProfile,
+        expected: PrecisionProfile,
+    ) -> Self {
+        Self::validation(
+            "precision_profile",
+            format!("{actual:?}"),
+            format!(
+                "storage {:?} with compute {:?}",
+                expected.storage, expected.compute
+            ),
+        )
     }
 }

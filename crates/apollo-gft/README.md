@@ -19,9 +19,9 @@ eigenvector basis as the transform matrix.
 Typed execution uses Apollo's shared precision profile contract:
 
 - `HIGH_ACCURACY_F64`: `f64` storage and owner `f64` graph-basis multiply.
-- `LOW_PRECISION_F32`: `f32` storage converted through the owner path and
+- `F32_STORAGE_F64_COMPUTE`: `f32` storage converted through the owner path and
   quantized once into the caller-owned output.
-- `MIXED_PRECISION_F16_F32`: `f16` storage converted through the owner path and
+- `F16_STORAGE_F64_COMPUTE`: `f16` storage converted through the owner path and
   quantized once into the caller-owned output.
 
 Profile/storage mismatches return `GftError::PrecisionMismatch`.

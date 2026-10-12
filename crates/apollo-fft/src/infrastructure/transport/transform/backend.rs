@@ -149,15 +149,10 @@ impl<X: GpuTransformPlanner> WgpuTransformBackend<X> {
     ///
     /// Transform extensions should call this helper before validating their
     /// additional operands so every backend reports the canonical invalid-plan
-    /// error for an empty descriptor.
+    /// error for an empty descriptor. The check itself lives on the plan
+    /// descriptor; this helper exists so extension surfaces keep one call site.
     pub fn validate_plan(plan: &WgpuTransformPlan<X>) -> WgpuResult<()> {
-        let len = plan.len();
-        if len == 0 {
-            return Err(WgpuError::InvalidPlan {
-                message: format!("invalid length {len}: length must be greater than zero"),
-            });
-        }
-        X::validate(plan.payload())
+        plan.validate()
     }
 
     /// Require an operand length to match a shared plan dimension.
@@ -466,19 +461,6 @@ where
         Ok(output)
     }
 
-    fn validate_profiles(
-        precision: PrecisionProfile,
-        input_profile: PrecisionProfile,
-        output_profile: PrecisionProfile,
-    ) -> WgpuResult<()> {
-        for expected in [input_profile, output_profile] {
-            if precision.storage != expected.storage || precision.compute != expected.compute {
-                return Err(WgpuError::InvalidPrecisionProfile);
-            }
-        }
-        Ok(())
-    }
-
     fn validate_typed<I, O>(
         plan: &WgpuTransformPlan<X>,
         precision: PrecisionProfile,
@@ -489,7 +471,8 @@ where
         I: GpuStorage<X::Sample>,
         O: GpuStorage<X::Bin>,
     {
-        Self::validate_profiles(precision, I::PROFILE, O::PROFILE)?;
+        precision.ensure_matches(I::PROFILE, || WgpuError::InvalidPrecisionProfile)?;
+        precision.ensure_matches(O::PROFILE, || WgpuError::InvalidPrecisionProfile)?;
         Self::validate_plan(plan)?;
         Self::require_len("typed input", input_len, plan.len())?;
         Self::require_len("typed output", output_len, plan.output_len())?;
@@ -506,7 +489,8 @@ where
         I: GpuStorage<X::Bin>,
         O: GpuStorage<X::Sample>,
     {
-        Self::validate_profiles(precision, I::PROFILE, O::PROFILE)?;
+        precision.ensure_matches(I::PROFILE, || WgpuError::InvalidPrecisionProfile)?;
+        precision.ensure_matches(O::PROFILE, || WgpuError::InvalidPrecisionProfile)?;
         Self::validate_plan(plan)?;
         Self::require_len("typed inverse input", input_len, plan.output_len())?;
         Self::require_len("typed inverse output", output_len, plan.len())?;

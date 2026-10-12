@@ -26,8 +26,12 @@ fn typed_paths_support_f64_f32_and_mixed_f16_storage() {
         .forward(&represented32)
         .expect("represented f32 forward");
     let mut out32 = Array1::<Complex32>::zeros([expected32.size()]);
-    plan.forward_typed_into(&signal32, &mut out32, PrecisionProfile::LOW_PRECISION_F32)
-        .expect("typed f32 forward");
+    plan.forward_typed_into(
+        &signal32,
+        &mut out32,
+        PrecisionProfile::F32_STORAGE_F64_COMPUTE,
+    )
+    .expect("typed f32 forward");
     for (actual, expected) in out32.iter().zip(expected32.iter()) {
         assert!((f64::from(actual.re) - expected.re).abs() < 1.0e-5);
         assert!((f64::from(actual.im) - expected.im).abs() < 1.0e-5);
@@ -38,7 +42,7 @@ fn typed_paths_support_f64_f32_and_mixed_f16_storage() {
         &out32,
         signal32.size(),
         &mut recovered32,
-        PrecisionProfile::LOW_PRECISION_F32,
+        PrecisionProfile::F32_STORAGE_F64_COMPUTE,
     )
     .expect("typed f32 inverse");
     for (actual, expected) in recovered32.iter().zip(signal32.iter()) {
@@ -54,7 +58,7 @@ fn typed_paths_support_f64_f32_and_mixed_f16_storage() {
     plan.forward_typed_into(
         &signal16,
         &mut out16,
-        PrecisionProfile::MIXED_PRECISION_F16_F32,
+        PrecisionProfile::F16_STORAGE_F64_COMPUTE,
     )
     .expect("typed F16 forward");
     for (actual, expected) in out16.iter().zip(expected16.iter()) {
@@ -76,7 +80,7 @@ fn typed_paths_reuse_bridge_workspace_capacity() {
     plan.forward_typed_into(
         &signal,
         &mut first_spectrum,
-        PrecisionProfile::LOW_PRECISION_F32,
+        PrecisionProfile::F32_STORAGE_F64_COMPUTE,
     )
     .expect("first typed forward");
     let after_first_forward = typed_workspace_capacities();
@@ -86,7 +90,7 @@ fn typed_paths_reuse_bridge_workspace_capacity() {
     plan.forward_typed_into(
         &signal,
         &mut second_spectrum,
-        PrecisionProfile::LOW_PRECISION_F32,
+        PrecisionProfile::F32_STORAGE_F64_COMPUTE,
     )
     .expect("second typed forward");
     assert_eq!(typed_workspace_capacities(), after_first_forward);
@@ -101,7 +105,7 @@ fn typed_paths_reuse_bridge_workspace_capacity() {
         &first_spectrum,
         signal.size(),
         &mut first_recovered,
-        PrecisionProfile::LOW_PRECISION_F32,
+        PrecisionProfile::F32_STORAGE_F64_COMPUTE,
     )
     .expect("first typed inverse");
     let after_first_inverse = typed_workspace_capacities();
@@ -112,7 +116,7 @@ fn typed_paths_reuse_bridge_workspace_capacity() {
         &first_spectrum,
         signal.size(),
         &mut second_recovered,
-        PrecisionProfile::LOW_PRECISION_F32,
+        PrecisionProfile::F32_STORAGE_F64_COMPUTE,
     )
     .expect("second typed inverse");
     assert_eq!(typed_workspace_capacities(), after_first_inverse);

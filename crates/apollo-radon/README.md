@@ -20,9 +20,9 @@ Typed execution uses Apollo's shared precision profile contract:
 
 - `HIGH_ACCURACY_F64`: `f64` image/sinogram storage with owner `f64`
   projection and adjoint kernels.
-- `LOW_PRECISION_F32`: `f32` image/sinogram storage converted through the owner
+- `F32_STORAGE_F64_COMPUTE`: `f32` image/sinogram storage converted through the owner
   path and quantized once into caller-owned outputs.
-- `MIXED_PRECISION_F16_F32`: `f16` image/sinogram storage converted through the
+- `F16_STORAGE_F64_COMPUTE`: `f16` image/sinogram storage converted through the
   owner path and quantized once into caller-owned outputs.
 
 Profile/storage mismatches return `RadonError::PrecisionMismatch`.

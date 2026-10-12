@@ -27,8 +27,8 @@ synchronization, and transfers; `apollo-czt` has no direct WGPU dependency.
 `forward_typed_into` supports:
 
 - `HIGH_ACCURACY_F64`: `Complex64` storage.
-- `LOW_PRECISION_F32`: `Complex32` storage.
-- `MIXED_PRECISION_F16_F32`: `[f16; 2]` storage, where lane 0 is the real
+- `F32_STORAGE_F64_COMPUTE`: `Complex32` storage.
+- `F16_STORAGE_F64_COMPUTE`: `[f16; 2]` storage, where lane 0 is the real
   component and lane 1 is the imaginary component.
 
 All typed paths reuse the authoritative `Complex64` Bluestein path and quantize

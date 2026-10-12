@@ -76,6 +76,20 @@ impl PrecisionProfile {
         self.storage == expected.storage && self.compute == expected.compute
     }
 
+    /// Fail with `mismatch()` unless storage and arithmetic precision match `expected`.
+    ///
+    /// Mode intent is ignored, matching [`matches_storage_and_compute`](Self::matches_storage_and_compute).
+    /// The error is generic so every transform crate calls this directly instead
+    /// of cloning a per-crate validator.
+    #[inline]
+    pub fn ensure_matches<E>(self, expected: Self, mismatch: impl FnOnce() -> E) -> Result<(), E> {
+        if self.matches_storage_and_compute(expected) {
+            Ok(())
+        } else {
+            Err(mismatch())
+        }
+    }
+
     /// CPU-style high-accuracy profile.
     pub const HIGH_ACCURACY_F64: Self = Self {
         mode: PrecisionMode::HighAccuracy,
@@ -95,5 +109,29 @@ impl PrecisionProfile {
         mode: PrecisionMode::MixedPrecision,
         storage: StoragePrecision::F16,
         compute: ComputePrecision::MixedF16F32,
+    };
+
+    /// Low-precision-intent profile with `f32` storage and `f64` compute.
+    ///
+    /// This is the truthful descriptor for the CPU typed paths that widen
+    /// `f32`/`Complex32` storage through the owner `f64`/`Complex64`
+    /// arithmetic (`CpuStorage`): the mode records the caller's intent,
+    /// the compute field the arithmetic actually executed. Native `f32`
+    /// paths (FFT, FWHT, GPU) keep `LOW_PRECISION_F32` and reject this.
+    pub const F32_STORAGE_F64_COMPUTE: Self = Self {
+        mode: PrecisionMode::LowPrecision,
+        storage: StoragePrecision::F32,
+        compute: ComputePrecision::F64,
+    };
+
+    /// Mixed-precision-intent profile with `F16` storage and `f64` compute.
+    ///
+    /// The `F16`/`[F16; 2]` counterpart of `F32_STORAGE_F64_COMPUTE` for
+    /// the same widening CPU typed paths. Native mixed paths keep
+    /// `MIXED_PRECISION_F16_F32` and reject this.
+    pub const F16_STORAGE_F64_COMPUTE: Self = Self {
+        mode: PrecisionMode::MixedPrecision,
+        storage: StoragePrecision::F16,
+        compute: ComputePrecision::F64,
     };
 }
