@@ -36,6 +36,27 @@ impl BenchmarkSuite {
         self.records.push(BenchmarkRecord::new(case, summary));
     }
 
+    /// Measures two closures as an interleaved pair sharing one window.
+    ///
+    /// Sequential per-arm windows alias with package-turbo oscillation,
+    /// so cross-arm ratios swing with turbo state instead of code (#639).
+    /// The pair warms up together and alternates timed sample blocks, so
+    /// both records' samples draw from the same turbo trajectory and
+    /// their medians are directly comparable. Records push in (a, b)
+    /// order; the pairing is a sampling property, not a schema change.
+    pub fn run_paired_with_config(
+        &mut self,
+        config: BenchmarkConfig,
+        case_a: BenchmarkCase,
+        operation_a: impl FnMut(),
+        case_b: BenchmarkCase,
+        operation_b: impl FnMut(),
+    ) {
+        let (summary_a, summary_b) = measurement::measure_paired(config, operation_a, operation_b);
+        self.records.push(BenchmarkRecord::new(case_a, summary_a));
+        self.records.push(BenchmarkRecord::new(case_b, summary_b));
+    }
+
     /// Measures one closure over inputs prepared outside the timed region.
     ///
     /// Use this wherever the operation is in-place and each iteration needs a
@@ -145,6 +166,77 @@ mod tests {
                     .join(";")
             )
         );
+    }
+
+    #[test]
+    fn paired_run_alternates_arms_with_a_counterbalanced_lead() {
+        use std::cell::RefCell;
+        let config =
+            BenchmarkConfig::try_with_budgets(Duration::from_nanos(1), Duration::from_nanos(1))
+                .expect("invariant: non-zero literal durations");
+        let log = RefCell::new(Vec::new());
+        let mut suite = BenchmarkSuite::new(config);
+        suite.run_paired_with_config(
+            config,
+            BenchmarkCase::new("suite", "arm_a", 1),
+            || log.borrow_mut().push(0_u8),
+            BenchmarkCase::new("suite", "arm_b", 1),
+            || log.borrow_mut().push(1_u8),
+        );
+
+        assert_eq!(suite.records().len(), 2, "one pair yields two records");
+        for record in suite.records() {
+            assert_eq!(record.sample_count(), 100);
+            assert_eq!(record.iterations_per_sample(), 1);
+        }
+        let log = log.borrow();
+        let mut count_a = 0usize;
+        for &mark in log.iter() {
+            if mark == 0 {
+                count_a += 1;
+            }
+        }
+        let count_b = log.len() - count_a;
+        assert_eq!(
+            count_a, count_b,
+            "warm-up pairs plus one block per arm per sample keep the arms equal"
+        );
+        // Warm-up length is timing-dependent, but the 100 timed samples at
+        // one iteration per block are exactly 200 trailing marks in A,B,B,A
+        // counterbalanced order.
+        let tail = &log[log.len() - 200..];
+        let expected: Vec<u8> = (0..100)
+            .flat_map(|index| {
+                if index % 2 == 0 {
+                    [0_u8, 1_u8]
+                } else {
+                    [1_u8, 0_u8]
+                }
+            })
+            .collect();
+        assert_eq!(tail, expected.as_slice());
+    }
+
+    #[test]
+    fn paired_smoke_executes_each_arm_once() {
+        let config = BenchmarkMode::Smoke.apply(BenchmarkConfig::standard());
+        let executions_a = Cell::new(0_u32);
+        let executions_b = Cell::new(0_u32);
+        let mut suite = BenchmarkSuite::new(config);
+        suite.run_paired_with_config(
+            config,
+            BenchmarkCase::new("suite", "smoke_a", 1),
+            || executions_a.set(executions_a.get() + 1),
+            BenchmarkCase::new("suite", "smoke_b", 1),
+            || executions_b.set(executions_b.get() + 1),
+        );
+
+        assert_eq!(suite.records().len(), 2);
+        assert_eq!(executions_a.get(), 1);
+        assert_eq!(executions_b.get(), 1);
+        for record in suite.records() {
+            assert_eq!(record.sample_count(), 1);
+        }
     }
 
     #[test]

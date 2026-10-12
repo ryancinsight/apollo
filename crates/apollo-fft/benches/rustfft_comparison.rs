@@ -21,15 +21,19 @@
 //!
 //! ## Runtime budget
 //!
+//! Each size runs two interleaved pairs (Apollo/RustFFT at f64, then at
+//! f32): sequential per-engine windows alias with package-turbo
+//! oscillation (#639), so both arms of a pair share one warm-up and
+//! alternate timed sample blocks within one window.
+//!
 //! ```text
-//! per case  = WARM_UP_MS + MEASUREMENT_MS         = 20 ms + 80 ms = 100 ms (base)
-//!             sizes at and above 1024 scale the measurement window by
-//!             len / 512, so a 1024-point case gets 20 + 160 = 180 ms,
-//!             a 2048 gets 20 + 320 = 340 ms, etc., stabilizing the
-//!             100-sample median against scheduler noise.
-//! cases     = 4 per size (Apollo/RustFFT x f64/f32)
-//! default   = 26 sizes x 4 x ~120 ms (avg)        ~ 12 s
-//! full      = 500 sizes x 4 x 100 ms              ~ 200 s   (opt-in)
+//! per pair  = WARM_UP_MS + 2 x MEASUREMENT_MS     = 20 ms + 160 ms = 180 ms (base)
+//!             sizes at and above 1024 scale each arm's measurement window
+//!             by len / 512, so a 1024-point pair gets 20 + 2 x 160 ms,
+//!             stabilizing the 100-sample medians against scheduler noise.
+//! pairs     = 2 per size (f64, f32)
+//! default   = 26 sizes x 2 x ~200 ms (avg)        ~ 11 s
+//! full      = 500 sizes x 2 x 180 ms              ~ 180 s   (opt-in)
 //! ```
 //!
 //! The default sweep is budgeted to sit inside the 30 s bound that every Apollo
@@ -183,16 +187,19 @@ fn bench_size(
     let mut rust_scratch64 = vec![RustComplex::new(0.0, 0.0); rust64.get_inplace_scratch_len()];
     let mut rust_scratch32 = vec![RustComplex::new(0.0, 0.0); rust32.get_inplace_scratch_len()];
 
+    // Paired per precision: sequential per-engine windows alias with
+    // package-turbo oscillation (#639), so each pair shares one window
+    // and the medians are directly comparable.
     let mut work64 = source64.clone();
-    suite.run_with_config(config, BenchmarkCase::new(GROUP, "apollo_f64", len), || {
-        work64.copy_from_slice(&source64);
-        apollo64.forward_complex_slice_inplace(black_box(&mut work64));
-        black_box(&work64);
-    });
-
     let mut rust_work64 = rust_source64.clone();
-    suite.run_with_config(
+    suite.run_paired_with_config(
         config,
+        BenchmarkCase::new(GROUP, "apollo_f64", len),
+        || {
+            work64.copy_from_slice(&source64);
+            apollo64.forward_complex_slice_inplace(black_box(&mut work64));
+            black_box(&work64);
+        },
         BenchmarkCase::new(GROUP, "rustfft_f64", len),
         || {
             rust_work64.copy_from_slice(&rust_source64);
@@ -203,15 +210,15 @@ fn bench_size(
     );
 
     let mut work32 = source32.clone();
-    suite.run_with_config(config, BenchmarkCase::new(GROUP, "apollo_f32", len), || {
-        work32.copy_from_slice(&source32);
-        apollo32.forward_complex_slice_inplace(black_box(&mut work32));
-        black_box(&work32);
-    });
-
     let mut rust_work32 = rust_source32.clone();
-    suite.run_with_config(
+    suite.run_paired_with_config(
         config,
+        BenchmarkCase::new(GROUP, "apollo_f32", len),
+        || {
+            work32.copy_from_slice(&source32);
+            apollo32.forward_complex_slice_inplace(black_box(&mut work32));
+            black_box(&work32);
+        },
         BenchmarkCase::new(GROUP, "rustfft_f32", len),
         || {
             rust_work32.copy_from_slice(&rust_source32);
