@@ -1,0 +1,16 @@
+{
+  "processor": 1,
+  "affinity": [
+    1
+  ],
+  "platform": "Linux-6.17.0-1022-azure-x86_64-with-glibc2.39",
+  "binary_sha256": {
+    "baseline": "62baa30a22235eb7722d0c6e89ff70de8b07252e54e75fce814c03e362613542",
+    "candidate": "bb6b2e53fcc46ac8a89199b96a82971054081c75d43bf6d036f42e28af920054"
+  },
+  "mode": "measurement",
+  "orders": [
+    "ABBA",
+    "BAAB"
+  ]
+}

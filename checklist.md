@@ -2,12 +2,12 @@
 
 ## FFT121 row-prologue evaluation — target apollo-fft 0.28.1 [patch]
 
-- [x] [patch] Freeze main `aa5adba1` after PR #649; preserve benchmark sources and dependency graph.
-- [x] [patch] Implement step-one pair tiles with unchanged summation, sign operations, scalar tail, and fallback.
-- [x] [patch] Extend forward/inverse bitwise coverage to 25 layout combinations and untouched guards; add finite-component scratch property checks.
-- [ ] [patch] Pass native AVX2 debug/release tests and diagnostics in CI.
-- [ ] [patch] Revalidate main/RustFFT and candidate/RustFFT in lane-controlled ABBA/BAAB runs; retain the production path only on supported improvement with stable controls.
-- [ ] [patch] Record the measured verdict and audit whether a different 11-point formulation addresses the remaining bound.
+- [x] [patch] Freeze main after PR #649; preserve benchmark sources, profiles, toolchain, and dependency graph.
+- [x] [patch] Implement eight-row and four-stream prologues with unchanged summation/sign operations, pair five, scalar tail, and fallback.
+- [x] [patch] Pass 25-layout forward/inverse equivalence, offset/gap guards, finite scratch properties, independent direct DFTs, and native debug/release diagnostics.
+- [x] [patch] Execute four complete ABBA/BAAB campaigns: 32 recorded reports, 104 cases per report, 100 samples per case; discard all warm runs.
+- [x] [patch] Reject broad retention because unrelated controls regress; restore production kernel files to main and remove all experimental helpers.
+- [x] [patch] Preserve complete evidence, strengthen retained tests, record the formulation audit and next increment.
 
 ## claude/fable — current execution
 - [ ] [Lane order inverse](backlog.md#apollo-planar-lane-order-inverse): PR enqueued; merged; PR 363 rebased and re-verified.

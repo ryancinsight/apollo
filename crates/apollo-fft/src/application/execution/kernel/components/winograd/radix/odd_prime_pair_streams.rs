@@ -20,9 +20,6 @@ use super::odd_prime_pair::PrimePairTable;
 #[cfg(target_arch = "x86_64")]
 use super::odd_prime_pair_interleave::{deinterleave8, store_interleaved8};
 
-#[cfg(target_arch = "x86_64")]
-mod rows;
-
 /// Test hook running 11 strided 11-point DFTs through one AVX2/FMA dispatch.
 ///
 /// Stream `s` reads `in_starts[s] + i * in_step` and writes
@@ -393,9 +390,8 @@ impl StreamsScratch {
 
 /// 11 stream-major pair-basis DFTs with AVX2/FMA k dots.
 ///
-/// Column layouts (step 11 with consecutive starts) run the vector
-/// prologue/epilogue; row inputs (step 1) run the vector row prologue.
-/// Other input layouts and non-column outputs keep the scalar stages. All
+/// Column-major layouts (step 11 with consecutive starts) run the vector
+/// prologue/epilogue; every other layout keeps the scalar stages. Both
 /// paths compute each lane identically, so the choice is invisible in
 /// the output bits.
 ///
@@ -420,8 +416,6 @@ pub(crate) unsafe fn dft11_streams_simd<const INVERSE: bool>(
         let mut scratch = StreamsScratch::zeroed();
         if in_step == 11 && starts_consecutive(in_starts) {
             scratch.prologue_vec::<INVERSE>(base, in_starts, in_starts[0]);
-        } else if in_step == 1 {
-            scratch.prologue_rows::<INVERSE>(base, in_starts);
         } else {
             scratch.prologue_scalar::<INVERSE, 0, 11>(base, in_starts, in_step);
         }

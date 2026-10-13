@@ -9,31 +9,6 @@
 #[cfg(target_arch = "x86_64")]
 use core::arch::x86_64::__m256;
 
-/// Transpose four interleaved-pair rows. Result 2*m holds real components
-/// for pair m in its low half and pair m+2 in its high half; result 2*m+1
-/// holds the corresponding imaginary components, for m in 0..2. Only
-/// unpack and in-half shuffle operations occur; no arithmetic is performed.
-///
-/// # Safety
-///
-/// The caller must have established AVX2 support.
-#[cfg(target_arch = "x86_64")]
-#[target_feature(enable = "avx2")]
-#[inline]
-pub(crate) unsafe fn transpose_pairs(rows: [__m256; 4]) -> [__m256; 4] {
-    use core::arch::x86_64::{_mm256_shuffle_ps, _mm256_unpackhi_ps, _mm256_unpacklo_ps};
-    let lo01 = _mm256_unpacklo_ps(rows[0], rows[1]);
-    let hi01 = _mm256_unpackhi_ps(rows[0], rows[1]);
-    let lo23 = _mm256_unpacklo_ps(rows[2], rows[3]);
-    let hi23 = _mm256_unpackhi_ps(rows[2], rows[3]);
-    [
-        _mm256_shuffle_ps::<0x44>(lo01, lo23),
-        _mm256_shuffle_ps::<0xEE>(lo01, lo23),
-        _mm256_shuffle_ps::<0x44>(hi01, hi23),
-        _mm256_shuffle_ps::<0xEE>(hi01, hi23),
-    ]
-}
-
 /// Cross-lane 64-bit permute (`vpermq`) on packed floats.
 ///
 /// stdarch exposes this only as `_mm256_permute4x64_epi64`; the casts
@@ -45,7 +20,7 @@ pub(crate) unsafe fn transpose_pairs(rows: [__m256; 4]) -> [__m256; 4] {
 #[cfg(target_arch = "x86_64")]
 #[target_feature(enable = "avx2")]
 #[inline]
-pub(crate) unsafe fn permute_qwords<const IMM8: i32>(v: __m256) -> __m256 {
+unsafe fn permute_qwords<const IMM8: i32>(v: __m256) -> __m256 {
     use core::arch::x86_64::{_mm256_castps_si256, _mm256_castsi256_ps, _mm256_permute4x64_epi64};
 
     // Pure register shuffle; the `unsafe fn` marker carries the caller's

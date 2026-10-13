@@ -8,20 +8,24 @@ Change-class tags: [patch] backward-compatible fix, [minor] additive non-breakin
 
 ## [0.28.1] - Unreleased (apollo-fft)
 
-### Changed
-
-- [patch] Evaluate an AVX2 step-one row prologue for the separated-stream
-  N=121 transform. Pair formation uses vector loads and a register transpose;
-  summation order, sign operations, pair five, scalar stream tails, and
-  unsupported-layout fallback remain unchanged. Production retention awaits
-  native lane-controlled measurement against main `aa5adba1` and RustFFT.
-
 ### Added
 
-- [patch] Forward/inverse bitwise layout verification across 25 arrangements,
-  offset/gap guards, finite-component scratch property checks, and no-mutation
-  dispatch rejection checks. A scoped CI campaign preserves release binaries'
-  identities and full ABBA/BAAB raw samples using the unchanged PR #649 harness.
+- [patch] N=121 forward/inverse bitwise equivalence across 25 layouts with
+  offset/gap guards and no-mutation dispatch declines. Direct-DFT comparisons
+  reject non-finite values before error reduction.
+- [patch] Native CI evaluation and source-verified measurement replication:
+  unchanged PR #649 address lanes, exact release profiles, full 26-size,
+  100-sample sweeps, matching processor selectors and launch paths, and
+  complete counterbalanced evidence.
+
+### Changed
+
+- [patch] Evaluate eight-row and four-stream AVX2 row prologues. Both pass
+  native debug/release numerical verification; the four-stream target gains
+  6.97% and 5.70% on two AMD runner models. Unrelated control regressions
+  leave the broad retention gate unresolved, so both production prototypes
+  are removed and the kernel remains source-identical to main `aa5adba1`.
+  See `docs/experiments/fft121-row-prologue/README.md` for limits and evidence.
 
 ## [Unreleased]
 
