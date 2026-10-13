@@ -5,8 +5,6 @@ on:
     branches: [codex/apollo-row-prologue-642]
     paths:
       - crates/apollo-fft/**
-      - scripts/fft121_evaluate.py
-      - .github/workflows/fft121-evaluation.yml
   workflow_dispatch:
     inputs:
       baseline:

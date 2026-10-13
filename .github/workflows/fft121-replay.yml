@@ -1,0 +1,72 @@
+name: FFT121 measurement replication
+
+on:
+  push:
+    branches: [codex/apollo-row-prologue-642]
+    paths: [.github/workflows/fft121-replay.yml]
+  workflow_dispatch:
+    inputs:
+      source_run:
+        description: Successful native evaluation containing the validated binaries
+        default: '38457429306'
+        required: true
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  replicate:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    env:
+      GH_TOKEN: ${{ github.token }}
+      SOURCE_RUN: ${{ inputs.source_run || '38457429306' }}
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803
+        with:
+          fetch-depth: 0
+          path: candidate
+      - name: Obtain validated images and verify source and image identities
+        run: |
+          set -euo pipefail
+          artifact=$(gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${SOURCE_RUN}/artifacts" --jq '[.artifacts[] | select(.name | startswith("fft121-evaluation-"))] | if length == 1 then .[0].name else error("expected one native evidence artifact") end')
+          gh run download "$SOURCE_RUN" --repo "$GITHUB_REPOSITORY" --name "$artifact" --dir prior
+          mkdir -p evidence/bin
+          lscpu > evidence/cpu.txt
+          python3 - <<'PY'
+          import hashlib, json, os, platform, shutil, subprocess
+          from pathlib import Path
+          assert platform.machine() == "x86_64"
+          flags = Path("/proc/cpuinfo").read_text().split("flags", 1)[1].splitlines()[0].split()
+          assert {"avx2", "fma"} <= set(flags)
+          identity = json.loads(Path("prior/execution.json").read_text())
+          candidate = Path("prior/candidate.sha").read_text().strip()
+          baseline = Path("prior/baseline.sha").read_text().strip()
+          # Reuse compiled code only if every native source and build input
+          # equals the already-tested revision; no native tests are bypassed.
+          roots = ["crates", "Cargo.toml", "Cargo.lock", "rust-toolchain.toml", ".cargo"]
+          subprocess.run(["git", "diff", "--exit-code", candidate, "HEAD", "--", *roots], cwd="candidate", check=True)
+          assert baseline == "aa5adba1df3f318d47cb5e41770dff9d01099603"
+          for role in ("baseline", "candidate"):
+              image = Path("prior/bin") / role
+              assert hashlib.sha256(image.read_bytes()).hexdigest() == identity["binary_sha256"][role]
+              shutil.copy2(image, Path("evidence/bin") / role)
+              (Path("evidence/bin") / role).chmod(0o755)
+          shutil.copy2("prior/bin/compare", "evidence/bin/compare")
+          Path("evidence/bin/compare").chmod(0o755)
+          for name in ("candidate.sha", "baseline.sha"):
+              shutil.copy2(Path("prior") / name, Path("evidence") / name)
+          Path("evidence/source_run.txt").write_text(os.environ["SOURCE_RUN"] + "\n")
+          PY
+      - name: Execute fresh ABBA and BAAB samples with identical launch paths
+        run: |
+          timeout 360 python3 candidate/scripts/fft121_evaluate.py evidence
+          cat evidence/summary.md >> "$GITHUB_STEP_SUMMARY"
+      - name: Preserve complete replicated evidence
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: fft121-replication-${{ github.run_id }}
+          path: evidence
+          retention-days: 7

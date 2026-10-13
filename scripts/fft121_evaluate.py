@@ -15,6 +15,7 @@ import hashlib
 import json
 import os
 import platform
+import shutil
 import subprocess
 import sys
 from pathlib import Path
@@ -34,11 +35,17 @@ CAMPAIGN = (
 
 def measure(executable: Path, directory: Path, environment: dict[str, str]) -> None:
     directory.mkdir()
+    # Equalize argv[0] and AT_EXECFN as well as the environment. Different
+    # executable path lengths change the initial stack layout before main.
+    # Copy verified images to one path; all timing observations remain fresh.
+    launch = directory.parent / "bin" / "rustfft_comparison"
+    shutil.copy2(executable, launch)
+    assert hashlib.sha256(launch.read_bytes()).digest() == hashlib.sha256(executable.read_bytes()).digest()
     with (directory / "rustfft_comparison.csv").open("w") as report, (
         directory / "measurement.log"
     ).open("w") as log:
         subprocess.run(
-            [str(executable)], env=environment, stdout=report, stderr=log,
+            [str(launch)], env=environment, stdout=report, stderr=log,
             check=True, timeout=45,
         )
     with (directory / "rustfft_comparison.csv").open() as report:
@@ -100,6 +107,7 @@ def main(evidence: Path) -> None:
         "processor": processor, "affinity": sorted(os.sched_getaffinity(0)),
         "platform": platform.platform(), "binary_sha256": identities,
         "mode": "measurement", "orders": ["ABBA", "BAAB"],
+        "launch_path": str(evidence / "bin/rustfft_comparison"),
     }, indent=2) + "\n")
     for role, executable in binaries.items():
         measure(executable, evidence / f"discarded-warm-{role}", environment)
