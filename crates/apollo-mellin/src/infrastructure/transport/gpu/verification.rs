@@ -3,12 +3,11 @@
 #[cfg(test)]
 mod tests {
     use crate::MellinPlan;
-    use apollo_fft::{PrecisionProfile, F16};
+    use apollo_fft::{PrecisionProfile, WgpuCapabilities, WgpuError, F16};
     use leto::{SliceArg, Storage};
 
     use crate::infrastructure::transport::gpu::{
-        MellinWgpuBackend, MellinWgpuPlan, ResampledExecution, ScalePlan, WgpuCapabilities,
-        WgpuError,
+        MellinWgpuBackend, MellinWgpuPlan, ResampledExecution, ScalePlan,
     };
 
     #[test]

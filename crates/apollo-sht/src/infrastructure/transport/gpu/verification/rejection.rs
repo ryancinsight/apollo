@@ -1,6 +1,8 @@
-use crate::infrastructure::transport::gpu::{ShtWgpuPlan, WgpuError};
+use apollo_fft::WgpuError;
 use eunomia::Complex32;
 use leto::Array2;
+
+use crate::infrastructure::transport::gpu::ShtWgpuPlan;
 
 use super::support::backend;
 use crate::infrastructure::transport::gpu::{HarmonicExecution, SphericalPlan};

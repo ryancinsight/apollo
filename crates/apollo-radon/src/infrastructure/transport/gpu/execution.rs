@@ -1,8 +1,8 @@
-use apollo_fft::{GpuElement, GpuStorage, PrecisionProfile};
+use apollo_fft::{GpuElement, GpuStorage, PrecisionProfile, WgpuError, WgpuResult};
 use leto::Array2;
 
 use super::infrastructure::kernel::RadonGpuKernel as Kernel;
-use super::{RadonWgpuBackend, RadonWgpuPlan, WgpuError, WgpuResult};
+use super::{RadonWgpuBackend, RadonWgpuPlan};
 
 /// Projection surface of the Radon backend.
 ///

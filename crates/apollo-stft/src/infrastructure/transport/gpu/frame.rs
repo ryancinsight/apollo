@@ -1,4 +1,4 @@
-use super::{WgpuError, WgpuResult};
+use apollo_fft::{WgpuError, WgpuResult};
 
 /// Plan payload for the short-time Fourier transform: frame and hop
 /// lengths.

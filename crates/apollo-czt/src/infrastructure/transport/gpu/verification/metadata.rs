@@ -1,8 +1,9 @@
 //! Value-semantic CZT GPU metadata contracts.
 
 use apollo_fft::Complex32 as GpuComplex32;
+use apollo_fft::WgpuCapabilities;
 
-use crate::infrastructure::transport::gpu::{ChirpPlan, CztWgpuPlan, WgpuCapabilities};
+use crate::infrastructure::transport::gpu::{ChirpPlan, CztWgpuPlan};
 
 use super::support::backend;
 

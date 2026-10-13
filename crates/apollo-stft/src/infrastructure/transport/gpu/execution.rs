@@ -1,10 +1,10 @@
-use apollo_fft::{Complex32, GpuElement, GpuStorage, PrecisionProfile};
+use apollo_fft::{Complex32, GpuElement, GpuStorage, PrecisionProfile, WgpuError, WgpuResult};
 use hephaestus_core::DeviceLimits;
 use hephaestus_wgpu::WgpuDevice;
 
 use super::infrastructure::buffers::StftGpuBuffers;
 use super::infrastructure::kernel::StftGpuKernel as Kernel;
-use super::{FramedExecution, StftWgpuBackend, StftWgpuPlan, WgpuError, WgpuResult};
+use super::{FramedExecution, StftWgpuBackend, StftWgpuPlan};
 
 /// Return the Hephaestus limits required by STFT dispatch.
 #[must_use]

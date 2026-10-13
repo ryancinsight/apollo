@@ -16,11 +16,10 @@ pub mod infrastructure;
 #[cfg(test)]
 pub(crate) mod verification;
 
-use apollo_fft::{Complex32, GpuStorage, PrecisionProfile};
+use apollo_fft::{Complex32, GpuStorage, PrecisionProfile, WgpuResult};
 
 use infrastructure::buffers::StftGpuBuffers;
 
-pub use apollo_fft::{WgpuCapabilities, WgpuError, WgpuResult};
 pub use execution::{forward_output_len, required_device_limits};
 pub use frame::FramePlan;
 pub use infrastructure::kernel::StftGpuKernel;

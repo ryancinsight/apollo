@@ -8,8 +8,10 @@
     )
 )]
 
-use crate::{infrastructure::transport::gpu::WgpuError, RadonPlan};
+use apollo_fft::WgpuError;
 use leto::Array2;
+
+use crate::RadonPlan;
 
 use super::support::backend;
 use crate::infrastructure::transport::gpu::{GeometryPlan, ProjectionExecution};

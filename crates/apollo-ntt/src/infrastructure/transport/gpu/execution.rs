@@ -1,8 +1,9 @@
 //! NTT GPU execution backends.
 
+use apollo_fft::{WgpuError, WgpuResult};
+
 use super::infrastructure::kernel::{NttGpuBuffers, NttGpuKernel as Kernel, NttMode};
 use super::residue::{ModularExecution, NttWgpuBackend, NttWgpuPlan};
-use super::{WgpuError, WgpuResult};
 
 impl ModularExecution for NttWgpuBackend {
     fn create_buffers(&self, plan: &NttWgpuPlan) -> WgpuResult<NttGpuBuffers> {

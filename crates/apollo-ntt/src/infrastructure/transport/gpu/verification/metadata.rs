@@ -1,7 +1,7 @@
+use apollo_fft::{WgpuCapabilities, WgpuError};
+
 use crate::infrastructure::transport::gpu::ResiduePlan;
-use crate::infrastructure::transport::gpu::{
-    NttWgpuBackend, NttWgpuPlan, WgpuCapabilities, WgpuError,
-};
+use crate::infrastructure::transport::gpu::{NttWgpuBackend, NttWgpuPlan};
 use crate::{DEFAULT_MODULUS, DEFAULT_PRIMITIVE_ROOT};
 
 #[test]

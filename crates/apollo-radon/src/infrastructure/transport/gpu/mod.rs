@@ -14,7 +14,6 @@ pub mod infrastructure;
 #[cfg(test)]
 pub(crate) mod verification;
 
-pub use apollo_fft::{WgpuCapabilities, WgpuError, WgpuResult};
 pub use execution::ProjectionExecution;
 pub use geometry::GeometryPlan;
 pub use infrastructure::kernel::RadonGpuKernel;

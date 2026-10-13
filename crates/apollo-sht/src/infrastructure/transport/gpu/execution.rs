@@ -1,4 +1,4 @@
-use apollo_fft::{Complex32, GpuElement, GpuStorage, PrecisionProfile};
+use apollo_fft::{Complex32, GpuElement, GpuStorage, PrecisionProfile, WgpuError, WgpuResult};
 use eunomia::Complex64;
 use leto::Array2;
 
@@ -9,7 +9,7 @@ use super::infrastructure::conversion::{
     validate_sample_shape, validate_typed_input, validate_typed_output,
 };
 use super::infrastructure::kernel::ShtGpuKernel as Kernel;
-use super::{ShtWgpuBackend, ShtWgpuPlan, WgpuError, WgpuResult};
+use super::{ShtWgpuBackend, ShtWgpuPlan};
 use crate::SphericalHarmonicCoefficients;
 
 /// Harmonic surface of the SHT backend.

@@ -1,7 +1,8 @@
 //! NTT residue number theory plan.
 
+use apollo_fft::{WgpuError, WgpuResult};
+
 use super::infrastructure::kernel::{NttGpuBuffers, NttGpuKernel};
-use super::{WgpuError, WgpuResult};
 use crate::{DEFAULT_MODULUS, DEFAULT_PRIMITIVE_ROOT};
 
 /// Plan payload for the number-theoretic transform: logical length and

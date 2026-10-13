@@ -1,6 +1,8 @@
 //! Value-semantic Radon GPU metadata and availability contracts.
 
-use crate::infrastructure::transport::gpu::{RadonWgpuPlan, WgpuCapabilities, WgpuError};
+use apollo_fft::{WgpuCapabilities, WgpuError};
+
+use crate::infrastructure::transport::gpu::RadonWgpuPlan;
 
 use super::support::backend;
 use crate::infrastructure::transport::gpu::GeometryPlan;

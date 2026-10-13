@@ -1,6 +1,8 @@
 //! Value-semantic Hilbert GPU metadata and rejection contracts.
 
-use crate::infrastructure::transport::gpu::{HilbertWgpuPlan, WgpuCapabilities, WgpuError};
+use apollo_fft::{WgpuCapabilities, WgpuError};
+
+use crate::infrastructure::transport::gpu::HilbertWgpuPlan;
 
 use super::support::backend;
 

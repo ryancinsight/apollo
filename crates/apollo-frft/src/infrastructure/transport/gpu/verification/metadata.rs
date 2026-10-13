@@ -1,6 +1,6 @@
-use apollo_fft::PrecisionProfile;
+use apollo_fft::{PrecisionProfile, WgpuCapabilities, WgpuError};
 
-use crate::infrastructure::transport::gpu::{FrftWgpuPlan, WgpuCapabilities, WgpuError};
+use crate::infrastructure::transport::gpu::FrftWgpuPlan;
 
 use super::support::backend;
 use crate::infrastructure::transport::gpu::OrderPlan;

@@ -9,7 +9,6 @@ pub mod infrastructure;
 #[cfg(test)]
 pub(crate) mod verification;
 
-pub use apollo_fft::{WgpuCapabilities, WgpuError, WgpuResult};
 pub use infrastructure::kernel::DhtGpuKernel;
 
 /// Metadata-preserving WGPU plan descriptor.

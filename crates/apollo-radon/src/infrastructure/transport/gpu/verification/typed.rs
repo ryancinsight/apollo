@@ -1,9 +1,7 @@
 //! Value-semantic Radon GPU represented-storage contracts.
 
-use apollo_fft::{PrecisionProfile, F16};
+use apollo_fft::{PrecisionProfile, WgpuError, F16};
 use leto::{Array2, Storage};
-
-use crate::infrastructure::transport::gpu::WgpuError;
 
 use super::support::backend;
 use crate::infrastructure::transport::gpu::{GeometryPlan, ProjectionExecution};

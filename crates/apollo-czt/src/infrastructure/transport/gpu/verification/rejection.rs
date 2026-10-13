@@ -1,8 +1,9 @@
 //! Value-semantic CZT GPU pre-dispatch rejection contracts.
 
+use apollo_fft::WgpuError;
 use eunomia::Complex32;
 
-use crate::infrastructure::transport::gpu::{CztWgpuPlan, WgpuError};
+use crate::infrastructure::transport::gpu::CztWgpuPlan;
 
 use super::support::backend;
 use crate::infrastructure::transport::gpu::ChirpPlan;

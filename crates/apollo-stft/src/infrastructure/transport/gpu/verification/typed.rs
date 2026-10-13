@@ -1,8 +1,9 @@
 //! Value-semantic STFT GPU verification for one bounded contract.
 
-use crate::infrastructure::transport::gpu::{StftWgpuPlan, WgpuError};
-use apollo_fft::{PrecisionProfile, F16};
+use apollo_fft::{PrecisionProfile, WgpuError, F16};
 use leto::{SliceArg, Storage};
+
+use crate::infrastructure::transport::gpu::StftWgpuPlan;
 
 use super::support::backend;
 use crate::infrastructure::transport::gpu::{FramePlan, FramedExecution};

@@ -1,8 +1,9 @@
 //! Value-semantic Wavelet GPU represented-storage contracts.
 
+use apollo_fft::WgpuError;
 use leto::Storage;
 
-use crate::infrastructure::transport::gpu::{HaarDwtPlan, WaveletWgpuPlan, WgpuError};
+use crate::infrastructure::transport::gpu::{HaarDwtPlan, WaveletWgpuPlan};
 
 use super::support::backend;
 

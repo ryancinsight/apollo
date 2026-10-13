@@ -3,11 +3,9 @@
 #[cfg(test)]
 mod tests {
     use crate::infrastructure::transport::gpu::WindowPlan;
-    use crate::infrastructure::transport::gpu::{
-        SdftWgpuBackend, SdftWgpuPlan, WgpuCapabilities, WgpuError,
-    };
+    use crate::infrastructure::transport::gpu::{SdftWgpuBackend, SdftWgpuPlan};
     use crate::SdftPlan;
-    use apollo_fft::{PrecisionProfile, F16};
+    use apollo_fft::{PrecisionProfile, WgpuCapabilities, WgpuError, F16};
     use eunomia::Complex32;
     use leto::{SliceArg, Storage};
 

@@ -1,7 +1,9 @@
 //! Value-semantic SFT GPU metadata and rejection contracts.
 
-use crate::infrastructure::transport::gpu::{SftWgpuPlan, WgpuCapabilities, WgpuError};
+use apollo_fft::{WgpuCapabilities, WgpuError};
 use eunomia::Complex32;
+
+use crate::infrastructure::transport::gpu::SftWgpuPlan;
 
 use super::support::backend;
 use crate::infrastructure::transport::gpu::{SparseExecution, SparsityPlan};

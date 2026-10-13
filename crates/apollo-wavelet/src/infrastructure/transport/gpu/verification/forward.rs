@@ -1,9 +1,8 @@
 //! Value-semantic Wavelet GPU forward and validation contracts.
 
-use crate::{
-    infrastructure::transport::gpu::{WaveletWgpuPlan, WgpuError},
-    DiscreteWavelet, DwtPlan,
-};
+use apollo_fft::WgpuError;
+
+use crate::{infrastructure::transport::gpu::WaveletWgpuPlan, DiscreteWavelet, DwtPlan};
 
 use super::support::backend;
 use crate::infrastructure::transport::gpu::HaarDwtPlan;

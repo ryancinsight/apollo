@@ -1,7 +1,7 @@
-use apollo_fft::{PrecisionProfile, F16};
+use apollo_fft::{PrecisionProfile, WgpuError, F16};
 use eunomia::Complex32;
 
-use crate::infrastructure::transport::gpu::{QftWgpuPlan, WgpuError};
+use crate::infrastructure::transport::gpu::QftWgpuPlan;
 
 use super::support::backend;
 

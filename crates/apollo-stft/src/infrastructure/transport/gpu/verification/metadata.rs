@@ -1,6 +1,8 @@
 //! Value-semantic STFT GPU verification for one bounded contract.
 
-use crate::infrastructure::transport::gpu::{StftWgpuPlan, WgpuCapabilities, WgpuError};
+use apollo_fft::{WgpuCapabilities, WgpuError};
+
+use crate::infrastructure::transport::gpu::StftWgpuPlan;
 
 use super::support::backend;
 use crate::infrastructure::transport::gpu::{FramePlan, FramedExecution};
