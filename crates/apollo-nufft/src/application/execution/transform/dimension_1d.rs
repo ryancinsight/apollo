@@ -407,7 +407,7 @@ impl NufftPlan1D {
         output: &mut [T],
         profile: PrecisionProfile,
     ) -> ApolloResult<()> {
-        validate_profile(profile, T::PROFILE)?;
+        validate_profile(profile, T::DEVICE_PROFILE)?;
         if positions.len() != values.len() {
             return Err(ApolloError::ShapeMismatch {
                 expected: positions.len().to_string(),
@@ -470,7 +470,7 @@ impl NufftPlan1D {
         output: &mut [T],
         profile: PrecisionProfile,
     ) -> ApolloResult<()> {
-        validate_profile(profile, T::PROFILE)?;
+        validate_profile(profile, T::DEVICE_PROFILE)?;
         if fourier_coeffs.len() != self.n_out
             || scratch_spread.len() != self.m
             || output.len() != positions.len()
@@ -534,11 +534,22 @@ impl NufftPlan1D {
 
 /// Complex storage admitted by typed NUFFT paths.
 ///
-/// The conversion ladder and precision profile come from the shared
-/// [`CpuStorage`] vocabulary; this trait adds only the reinterpret
-/// views the device conversion helpers use to skip a copy when the
-/// host layout already matches an accelerator element.
+/// The conversion ladder comes from the shared [`CpuStorage`] vocabulary, and
+/// this trait adds only the reinterpret views the device conversion helpers
+/// use to skip a copy when the host layout already matches an accelerator
+/// element. One storage type carries two truthful profiles, one per tier:
+/// [`CpuStorage::PROFILE`] describes the widening arithmetic the CPU plans
+/// execute, and [`Self::DEVICE_PROFILE`] describes the native arithmetic the
+/// accelerator typed paths execute over `Complex32` device buffers.
 pub trait NufftComplexStorage: CpuStorage<Complex64> {
+    /// Precision profile the accelerator typed paths advertise.
+    ///
+    /// The device element is `Complex32`, so the compute precision is the
+    /// native one for each storage type: `f32` for `Complex32` and
+    /// `[F16; 2]` (which widen from `F16`), and `f32` for `Complex64`
+    /// (which narrows to `Complex32`).
+    const DEVICE_PROFILE: PrecisionProfile;
+
     /// View slice as `Complex32` if layout is identical.
     #[inline]
     fn as_c32_slice(slice: &[Self]) -> Option<&[Complex32]> {
@@ -569,6 +580,8 @@ pub trait NufftComplexStorage: CpuStorage<Complex64> {
 }
 
 impl NufftComplexStorage for Complex64 {
+    const DEVICE_PROFILE: PrecisionProfile = PrecisionProfile::F64_STORAGE_F32_COMPUTE;
+
     #[inline]
     fn as_c64_slice(slice: &[Self]) -> Option<&[Complex64]> {
         Some(slice)
@@ -581,6 +594,8 @@ impl NufftComplexStorage for Complex64 {
 }
 
 impl NufftComplexStorage for Complex32 {
+    const DEVICE_PROFILE: PrecisionProfile = PrecisionProfile::LOW_PRECISION_F32;
+
     #[inline]
     fn as_c32_slice(slice: &[Self]) -> Option<&[Complex32]> {
         Some(slice)
@@ -592,7 +607,9 @@ impl NufftComplexStorage for Complex32 {
     }
 }
 
-impl NufftComplexStorage for [F16; 2] {}
+impl NufftComplexStorage for [F16; 2] {
+    const DEVICE_PROFILE: PrecisionProfile = PrecisionProfile::MIXED_PRECISION_F16_F32;
+}
 
 pub(crate) fn validate_profile(
     actual: PrecisionProfile,
@@ -794,7 +811,80 @@ pub fn nufft_type2_1d_fast(
 mod tests {
     use super::*;
     use crate::DEFAULT_NUFFT_KERNEL_WIDTH;
+    use apollo_fft::{ComputePrecision, StoragePrecision};
     use eunomia::assert_abs_diff_eq;
+
+    /// The two tiers must disagree where the arithmetic disagrees.
+    ///
+    /// `CpuStorage::PROFILE` describes the widening arithmetic the CPU
+    /// typed plans execute; `DEVICE_PROFILE` describes the native
+    /// arithmetic the accelerator typed paths execute over `Complex32`
+    /// device buffers. Conflating them rejects every caller whose profile
+    /// matches the device, which only a host with an adapter observes.
+    #[test]
+    fn device_profiles_record_native_arithmetic_not_cpu_widening() {
+        assert_eq!(
+            <[F16; 2] as NufftComplexStorage>::DEVICE_PROFILE,
+            PrecisionProfile::MIXED_PRECISION_F16_F32
+        );
+        assert_eq!(
+            <Complex32 as NufftComplexStorage>::DEVICE_PROFILE,
+            PrecisionProfile::LOW_PRECISION_F32
+        );
+        assert_eq!(
+            <Complex64 as NufftComplexStorage>::DEVICE_PROFILE,
+            PrecisionProfile::F64_STORAGE_F32_COMPUTE
+        );
+
+        // The CPU tier widens into the owner `Complex64` arithmetic; the
+        // device tier does not.
+        assert_eq!(
+            <[F16; 2] as CpuStorage<Complex64>>::PROFILE,
+            PrecisionProfile::F16_STORAGE_F64_COMPUTE
+        );
+        assert_eq!(
+            <Complex32 as CpuStorage<Complex64>>::PROFILE,
+            PrecisionProfile::F32_STORAGE_F64_COMPUTE
+        );
+    }
+
+    /// The narrow device profile carries the narrowing the typed path performs.
+    #[test]
+    fn narrow_device_profile_declares_f64_storage_over_f32_compute() {
+        let profile = PrecisionProfile::F64_STORAGE_F32_COMPUTE;
+        assert_eq!(profile.storage, StoragePrecision::F64);
+        assert_eq!(profile.compute, ComputePrecision::F32);
+    }
+
+    /// The typed paths accept the device profile and reject the widening one.
+    #[test]
+    fn typed_paths_accept_the_device_profile_and_reject_the_widening_one() {
+        let plan = NufftPlan1D::new(UniformDomain1D::new(8, 0.125).unwrap(), 2, 4);
+        let positions = [0.0_f64, 0.125, 0.25, 0.375];
+        let values = [
+            [F16::from_f32(1.0), F16::from_f32(0.0)],
+            [F16::from_f32(0.5), F16::from_f32(-0.25)],
+            [F16::from_f32(-0.75), F16::from_f32(0.5)],
+            [F16::from_f32(0.25), F16::from_f32(0.75)],
+        ];
+        let mut output = vec![[F16::from_f32(0.0), F16::from_f32(0.0)]; plan.len()];
+
+        plan.type1_typed_into(
+            &positions,
+            &values,
+            &mut output,
+            <[F16; 2] as NufftComplexStorage>::DEVICE_PROFILE,
+        )
+        .expect("the device profile the accelerator advertises");
+
+        let widening = <[F16; 2] as CpuStorage<Complex64>>::PROFILE;
+        assert!(
+            plan.type1_typed_into(&positions, &values, &mut output, widening)
+                .is_err(),
+            "the widening descriptor must not pass the typed path"
+        );
+    }
+
     /// DC mode invariant: f_0 = sum(c_j) because exp(-2pi*i * 0 * x_j / L) = 1 for all j.
     ///
     /// With values [1.0, 0.5-0.25i, -0.5+0.75i, 0.25+0.1i]:
