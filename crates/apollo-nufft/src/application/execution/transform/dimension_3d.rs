@@ -55,6 +55,36 @@ thread_local! {
     static FFT3D_LANE_SCRATCH: ScratchPool<Complex64> = const { ScratchPool::new() };
 }
 
+/// Release this module's seven thread-local scratch pools on the calling
+/// thread: capacities return to their recorded provisions (zero unless a
+/// bounded provision was recorded). Called by the crate-level release;
+/// the fifth slice of APOLLO-MEM-SIBLING-THREAD-SCRATCH.
+pub fn release_dimension_3d_scratch() {
+    GRID3D_SCRATCH.with(|pool| pool.release());
+    MODES3D_SCRATCH.with(|pool| pool.release());
+    OUTPUT3D_SCRATCH.with(|pool| pool.release());
+    WEIGHT3D_SCRATCH_X.with(|pool| pool.release());
+    WEIGHT3D_SCRATCH_Y.with(|pool| pool.release());
+    WEIGHT3D_SCRATCH_Z.with(|pool| pool.release());
+    FFT3D_LANE_SCRATCH.with(|pool| pool.release());
+}
+
+/// Release every thread-local scratch pool this crate's transform modules
+/// own on the calling thread. The fifth slice of
+/// APOLLO-MEM-SIBLING-THREAD-SCRATCH, following the apollo-fwht,
+/// apollo-gft, apollo-dctdst, and apollo-czt precedents.
+pub fn release_scratch() {
+    super::dimension_1d::release_dimension_1d_scratch();
+    release_dimension_3d_scratch();
+}
+
+#[cfg(test)]
+pub(crate) fn dimension_3d_scratch_capacities() -> (usize, usize) {
+    GRID3D_SCRATCH.with(|grid_pool| {
+        MODES3D_SCRATCH.with(|modes_pool| (grid_pool.capacity(), modes_pool.capacity()))
+    })
+}
+
 use crate::application::execution::transform::dimension_1d::{
     write_typed_output, NufftComplexStorage,
 };
@@ -1052,6 +1082,67 @@ mod tests {
     use super::*;
     use crate::DEFAULT_NUFFT_KERNEL_WIDTH;
     use crate::DEFAULT_NUFFT_OVERSAMPLING;
+
+    #[test]
+    fn release_scratch_returns_grid_pool_to_baseline_and_serves_again() {
+        use apollo_fft::PrecisionProfile;
+        use eunomia::Complex32;
+        use leto::Array3;
+        let grid = UniformGrid3D::new(4, 4, 4, 0.1, 0.1, 0.1).unwrap();
+        let plan = NufftPlan3D::new(grid, DEFAULT_NUFFT_OVERSAMPLING, DEFAULT_NUFFT_KERNEL_WIDTH);
+        let positions = vec![(0.0, 0.0, 0.0), (0.1, 0.2, 0.3), (0.25, 0.15, 0.05)];
+        let values = vec![
+            Complex32::new(1.0, 0.0),
+            Complex32::new(0.5, -0.25),
+            Complex32::new(-0.2, 0.75),
+        ];
+        let mut scratch_grid = Array3::<Complex64>::zeros([plan.mx, plan.my, plan.mz]);
+        let mut scratch_wx = vec![0.0_f64; 2 * plan.w + 1];
+        let mut scratch_wy = vec![0.0_f64; 2 * plan.w + 1];
+        let mut scratch_wz = vec![0.0_f64; 2 * plan.w + 1];
+        let mut first = Array3::<Complex32>::zeros([4, 4, 4]);
+        plan.type1_typed_into(
+            &positions,
+            &values,
+            &mut scratch_grid,
+            &mut scratch_wx,
+            &mut scratch_wy,
+            &mut scratch_wz,
+            &mut first,
+            PrecisionProfile::LOW_PRECISION_F32,
+        )
+        .expect("typed type-1 grows the pools");
+        assert!(
+            super::dimension_3d_scratch_capacities().1 > 0,
+            "the typed 3-D type-1 must retain a workspace"
+        );
+        super::release_scratch();
+        assert_eq!(
+            super::dimension_3d_scratch_capacities(),
+            (0, 0),
+            "release must return the pools to baseline"
+        );
+        let mut second = Array3::<Complex32>::zeros([4, 4, 4]);
+        plan.type1_typed_into(
+            &positions,
+            &values,
+            &mut scratch_grid,
+            &mut scratch_wx,
+            &mut scratch_wy,
+            &mut scratch_wz,
+            &mut second,
+            PrecisionProfile::LOW_PRECISION_F32,
+        )
+        .expect("typed type-1 after release");
+        assert!(
+            super::dimension_3d_scratch_capacities().1 > 0,
+            "the pools must serve after release"
+        );
+        assert_eq!(first.shape(), second.shape());
+        for (actual, expected) in second.iter().zip(first.iter()) {
+            assert_eq!(actual, expected, "post-release output must match");
+        }
+    }
 
     /// DC mode invariant: f_{0,0,0} = sum(c_j) because exp(0) = 1 for all points.
     ///

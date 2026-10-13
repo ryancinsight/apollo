@@ -55,6 +55,21 @@ thread_local! {
     static DIRECT_WEIGHT_LANE_SCRATCH: ScratchPool<f64> = const { ScratchPool::new() };
 }
 
+/// Release this module's two thread-local scratch pools on the calling thread.
+/// The fifth slice (dimension 1) of APOLLO-MEM-SIBLING-THREAD-SCRATCH.
+pub fn release_dimension_1d_scratch() {
+    COMPLEX_SCRATCH_POOL.with(|pool| pool.release());
+    DIRECT_WEIGHT_LANE_SCRATCH.with(|pool| pool.release());
+}
+
+#[cfg(test)]
+pub(crate) fn dimension_1d_scratch_capacities() -> (usize, usize) {
+    COMPLEX_SCRATCH_POOL.with(|complex_pool| {
+        DIRECT_WEIGHT_LANE_SCRATCH
+            .with(|weight_pool| (complex_pool.capacity(), weight_pool.capacity()))
+    })
+}
+
 /// Below this operation count, serial loops avoid parallel scheduling overhead.
 const DIRECT_PAR_OP_THRESHOLD: usize = 16_384;
 
@@ -797,6 +812,58 @@ mod tests {
     use super::*;
     use crate::DEFAULT_NUFFT_KERNEL_WIDTH;
     use eunomia::assert_abs_diff_eq;
+    #[test]
+    fn release_scratch_returns_pools_to_baseline_and_serves_again() {
+        use apollo_fft::PrecisionProfile;
+        let domain = UniformDomain1D::new(8, 0.125).unwrap();
+        let plan = NufftPlan1D::new(
+            domain,
+            DEFAULT_NUFFT_OVERSAMPLING,
+            DEFAULT_NUFFT_KERNEL_WIDTH,
+        );
+        let positions = vec![0.0, 0.09, 0.21, 0.47];
+        let values = vec![
+            Complex32::new(1.0, 0.25),
+            Complex32::new(-0.5, 0.75),
+            Complex32::new(0.25, -0.1),
+            Complex32::new(0.125, 0.5),
+        ];
+        let mut scratch = vec![Complex64::new(0.0, 0.0); plan.m];
+        let mut first = vec![Complex32::new(0.0, 0.0); plan.n_out];
+        plan.type1_typed_into(
+            &positions,
+            &values,
+            &mut scratch,
+            &mut first,
+            PrecisionProfile::LOW_PRECISION_F32,
+        )
+        .expect("typed type-1 grows the pools");
+        assert!(
+            super::dimension_1d_scratch_capacities() != (0, 0),
+            "the typed type-1 must retain a workspace"
+        );
+        super::release_dimension_1d_scratch();
+        assert_eq!(
+            super::dimension_1d_scratch_capacities(),
+            (0, 0),
+            "release must return every 1-D pool to baseline"
+        );
+        let mut second = vec![Complex32::new(0.0, 0.0); plan.n_out];
+        plan.type1_typed_into(
+            &positions,
+            &values,
+            &mut scratch,
+            &mut second,
+            PrecisionProfile::LOW_PRECISION_F32,
+        )
+        .expect("typed type-1 after release");
+        assert!(
+            super::dimension_1d_scratch_capacities() != (0, 0),
+            "the pools must serve after release"
+        );
+        assert_eq!(first, second, "post-release output must match");
+    }
+
     /// DC mode invariant: f_0 = sum(c_j) because exp(-2pi*i * 0 * x_j / L) = 1 for all j.
     ///
     /// With values [1.0, 0.5-0.25i, -0.5+0.75i, 0.25+0.1i]:
