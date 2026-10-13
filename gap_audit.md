@@ -5,6 +5,13 @@ and the session notes cite, one anchored section each. Compacted by
 `scripts/compact_gap_audit.py`: a section keeps its heading, its lead and its
 re-open lines; the narrative behind a finding is the commit that recorded it.
 
+## Library tests mutate and observe process-global state (2026-10-13) <a id="apollo-fft-test-isolation"></a>
+
+- **Finding:** [Apollo #644](https://github.com/ryancinsight/apollo/issues/644) reproduces on clean `main` `aa5adba1`: exhaustion consumes Moirai's permanent hook slots after Apollo has cached registration; worker-idle submissions share allocation windows and observations; cache tests share tables, retained owners, and the invalidation epoch.
+- **Resolution:** test-only exact-name child execution gives those assertions fresh process state under libtest and Nextest. Parent-hook survival verifies that child exhaustion cannot refuse the parent's registration; an unmatched filter fails instead of accepting zero executed tests. Production registration remains unchanged.
+- **Verification:** 22/22 focused tests pass in parallel libtest, serialized libtest, and Nextest; the ignored worker-idle probe passes. The 18 isolated test bodies and three production hook bodies remain byte-identical. Full AArch64 suites pass 599 and fail the same eight native-base/AVX2 capability or route-table tests, compared with 16 parallel and 10 serialized failures on main. Strict Clippy's diagnostic inventory matches main; format, locked resolution, and the safety ratchet pass. [PR #654](https://github.com/ryancinsight/apollo/pull/654) retains both all-feature library execution modes in Linux CI; hosted results remain pending.
+- **Re-open:** any affected test mutates parent-process state, loses an original assertion, admits an empty child selection, or fails either CI library execution mode.
+
 ## Per-thread scratch holds its high-water mark for the thread's life (2026-09-02, corrected 2026-09-03) <a id="scratch-pool-retention"></a>
 Every transform crate reaches `mnemosyne::scratch::ScratchPool` through a
 `thread_local!`. The pool holds `MAX_POOL_SLOTS` = 4 `AlignedVec` slots and

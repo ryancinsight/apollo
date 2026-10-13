@@ -70,10 +70,16 @@ mod tests {
     use crate::{FftPlan1D, Shape1D};
     use eunomia::Complex;
 
-    /// Under nextest every test is its own process, so the registry this test
-    /// fills is the one Apollo then finds full.
+    /// Exhaustion runs in a fresh process: libtest shares permanent registry
+    /// slots and Apollo's OnceLock with every other test in its executable.
     #[test]
     fn a_full_registry_refuses_the_hook_and_transforms_still_run() {
+        if crate::lib_tests::process::isolate(concat!(
+            module_path!(),
+            "::a_full_registry_refuses_the_hook_and_transforms_still_run"
+        )) {
+            return;
+        }
         fn occupant() {}
         let mut taken = 0;
         while moirai::register_idle_hook(occupant).is_ok() {
@@ -94,5 +100,12 @@ mod tests {
         release_thread_local_scratch();
         assert_eq!(release_count(), 1);
         assert!(!thread_local_scratch_hook_registered());
+    }
+
+    #[test]
+    fn exhausting_a_child_registry_preserves_the_parent_hook() {
+        assert!(thread_local_scratch_hook_registered());
+        a_full_registry_refuses_the_hook_and_transforms_still_run();
+        assert!(thread_local_scratch_hook_registered());
     }
 }

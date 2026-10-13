@@ -181,6 +181,16 @@ jobs:
       - name: Tests
         if: needs.scope.outputs.code != 'false'
         run: cargo nextest run --locked --profile ci --workspace --all-features --exclude apollo-python
+      - name: FFT library test isolation
+        if: needs.scope.outputs.code != 'false'
+        # Budgets cover test execution only (the --no-run build warms the
+        # cache first): CI-measured parallel execution is ~41s (120s budget),
+        # and serial execution is ~42s on a 24-core desktop, estimated 65-85s
+        # on a slower CI core (300s budget). Both carry multi-fold headroom.
+        run: |
+          cargo test --locked -p apollo-fft --lib --all-features --no-run
+          timeout 120s cargo test --locked -p apollo-fft --lib --all-features
+          timeout 300s cargo test --locked -p apollo-fft --lib --all-features -- --test-threads=1
       - name: Build benchmark smoke
         if: needs.scope.outputs.code != 'false'
         run: >-

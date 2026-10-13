@@ -1,5 +1,16 @@
 # Apollo Checklist
 
+Active increment target: `apollo-fft` 0.28.1 [patch].
+
+## Apollo #644 — process-global test isolation [patch]
+
+- [x] [patch] Reproduce the unchanged-main failures and audit hook registration, allocation windows, cache ownership, and plan-cache epochs.
+- [x] [patch] Confine destructive and state-sensitive test bodies to exact-name child processes while preserving production code and original assertions.
+- [x] [patch] Add parent-hook survival and empty-selection rejection regressions; retain parallel and serialized libtest in CI.
+- [x] [patch] Verify 22/22 focused cases in parallel libtest, serialized libtest, and Nextest; verify the worker-idle probe and record the eight independent AArch64 baseline failures.
+- [x] [patch] Synchronize `apollo-fft` 0.28.1, locked resolution, changelog, and audit; confirm 18 unchanged test bodies, three unchanged production hook bodies, and no added Clippy diagnostics.
+- [x] [patch] Publish [PR #654](https://github.com/ryancinsight/apollo/pull/654); Linux CI retains both all-feature library execution modes as merge verification, with hosted results pending.
+
 ## claude/fable — current execution
 - [ ] [Lane order inverse](backlog.md#apollo-planar-lane-order-inverse): PR enqueued; merged; PR 363 rebased and re-verified.
 - [ ] [Rectangular odd powers](backlog.md#apollo-planar-rectangular-odd-powers): ADR 0060 Accepted; PR enqueued; merged, lease discharged.

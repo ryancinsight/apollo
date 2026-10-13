@@ -1,4 +1,7 @@
 //! Caller-owned workspace reuse across independently submitted transforms.
+//!
+//! Each test runs in a fresh process so permanent idle-hook slots, allocation
+//! windows, and worker-quiescence observations belong to this workload alone.
 
 use super::{window, MnemosyneHooks, GLOBAL_ALLOCATIONS, MNEMOSYNE_ALLOCATIONS};
 use crate::application::execution::kernel::mixed_radix::scalar::plan_scratch::PlanScratch;
@@ -208,24 +211,48 @@ where
 
 #[test]
 fn dynamic_matrix_reuses_workspace_after_worker_idle() {
+    if crate::lib_tests::process::isolate(concat!(
+        module_path!(),
+        "::dynamic_matrix_reuses_workspace_after_worker_idle"
+    )) {
+        return;
+    }
     check_matrix::<f32>(Planning::Dynamic, f64::from(f32::EPSILON) / 2.0);
     check_matrix::<f64>(Planning::Dynamic, f64::EPSILON / 2.0);
 }
 
 #[test]
 fn static_matrix_reuses_workspace_after_worker_idle() {
+    if crate::lib_tests::process::isolate(concat!(
+        module_path!(),
+        "::static_matrix_reuses_workspace_after_worker_idle"
+    )) {
+        return;
+    }
     check_matrix::<f32>(Planning::Static, f64::from(f32::EPSILON) / 2.0);
     check_matrix::<f64>(Planning::Static, f64::EPSILON / 2.0);
 }
 
 #[test]
 fn dynamic_volume_reuses_workspace_after_worker_idle() {
+    if crate::lib_tests::process::isolate(concat!(
+        module_path!(),
+        "::dynamic_volume_reuses_workspace_after_worker_idle"
+    )) {
+        return;
+    }
     check_volume::<f32>(Planning::Dynamic, f64::from(f32::EPSILON) / 2.0);
     check_volume::<f64>(Planning::Dynamic, f64::EPSILON / 2.0);
 }
 
 #[test]
 fn static_volume_reuses_workspace_after_worker_idle() {
+    if crate::lib_tests::process::isolate(concat!(
+        module_path!(),
+        "::static_volume_reuses_workspace_after_worker_idle"
+    )) {
+        return;
+    }
     check_volume::<f32>(Planning::Static, f64::from(f32::EPSILON) / 2.0);
     check_volume::<f64>(Planning::Static, f64::EPSILON / 2.0);
 }
