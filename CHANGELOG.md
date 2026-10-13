@@ -1445,6 +1445,19 @@ Change-class tags: [patch] backward-compatible fix, [minor] additive non-breakin
   owns scratch/result storage. The crate no longer depends directly on `wgpu`,
   `pollster`, or `apollo-wgpu-helpers`.
 
+## [apollo-fft 0.28.1] - 2026-10-13
+
+### Fixed
+
+- [patch] Apollo #644: registry exhaustion, worker-idle allocation submissions,
+  and process-global cache assertions execute in fresh test processes under
+  libtest and Nextest. Existing transform, reclamation, allocation, and cache
+  assertions remain intact; production hook registration is unchanged.
+- [patch] Regressions verify that child registry exhaustion preserves parent
+  registration and that an unmatched child filter cannot pass without running
+  its test. CI executes the FFT library suite with parallel and serialized
+  libtest runners.
+
 ## [0.15.0] - 2026-07-13
 
 ### Breaking

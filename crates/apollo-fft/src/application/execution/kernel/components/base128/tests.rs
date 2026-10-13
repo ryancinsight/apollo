@@ -1204,10 +1204,16 @@ fn gather_matches_the_strided_reference_at_both_widths() {
 /// A base-route plan keeps its sink and chain tables and nothing of the
 /// stage-major table it relays them from: building and running the plan in
 /// both directions leaves no table for `n` in the process-wide twiddle cache
-/// (the memory audit's F2). nextest runs each test in its own process, so an
-/// entry here could only come from this test.
+/// (the memory audit's F2). A fresh child process excludes tables populated
+/// by other tests under both libtest and nextest.
 #[test]
 fn base_route_plans_leave_no_stage_major_table_cached() {
+    if crate::lib_tests::process::isolate(concat!(
+        module_path!(),
+        "::base_route_plans_leave_no_stage_major_table_cached"
+    )) {
+        return;
+    }
     use crate::application::execution::kernel::mixed_radix::caches::twiddle::{
         TwiddleFwdStore, TwiddleInvStore,
     };

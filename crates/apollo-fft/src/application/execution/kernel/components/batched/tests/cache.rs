@@ -21,6 +21,12 @@ fn plans_are_cached_per_length_and_direction() {
 
 #[test]
 fn caches_release_tables_when_operation_owners_drop() {
+    if crate::lib_tests::process::isolate(concat!(
+        module_path!(),
+        "::caches_release_tables_when_operation_owners_drop"
+    )) {
+        return;
+    }
     let plan = <f64 as BatchedPlanCache>::cached_plan::<false>(64);
     let released_plan = std::sync::Arc::downgrade(&plan);
     drop(plan);

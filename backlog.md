@@ -1,5 +1,15 @@
 # Apollo Backlog
 
+<a id="apollo-fft-test-isolation"></a>
+## APOLLO-FFT-TEST-ISOLATION — Isolate process-global test state [patch]
+- **Target:** `apollo-fft` 0.28.1; [issue #644](https://github.com/ryancinsight/apollo/issues/644).
+- **Contract:** a registry-exhaustion test consumes slots only in its child process; production hook admission and every existing assertion remain unchanged.
+- **Scope:** the exhaustion test, worker-idle allocation submissions, and tests that measure shared cache ownership or invalidate the shared plan epoch.
+- **Decision:** rerun each affected test by its exact name in the same test executable; propagate child failure and reject an empty selection. A mutex cannot release permanent hook slots or exclude unrelated transforms from process-wide allocation windows.
+- **Acceptance:** parent registration survives child exhaustion; affected tests pass with parallel libtest, serialized libtest, and Nextest; CI retains both library execution modes.
+- **Verification:** 22/22 focused tests pass with parallel libtest, serialized libtest, and Nextest; the worker-idle probe passes. All 18 isolated bodies and three production hook bodies compare byte-for-byte with main after removing test dispatch. Format, locked resolution, and the safety ratchet pass.
+- **Residual:** AArch64 full suites each pass 599 tests and retain the same eight independent baseline failures (parallel main: 16 failures; serialized main: 10). Strict Clippy has the same diagnostic inventory as main. Linux CI verifies both all-feature library execution modes before merge.
+
 <a id="apollo-121-f32-simd-leaf"></a>
 ## APOLLO-121-F32-SIMD-LEAF — Close the N=121 f32 gap with a dispatched SIMD dft11 [patch] [perf] — todo
 - **priority:** tightening. **needs:** none.

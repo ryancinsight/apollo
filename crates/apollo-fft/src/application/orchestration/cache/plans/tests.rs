@@ -1,5 +1,6 @@
-//! The plan caches' bounds and clearing (ADR 0068). nextest runs each test
-//! in its own process, so the process-wide tables start empty in each.
+//! The plan caches' bounds and clearing (ADR 0068). Tests that observe shared
+//! tables or invalidate the process-wide epoch run in fresh child processes;
+//! tests of a caller-owned SharedPlans instance need no process isolation.
 
 use super::{
     clear_plan_caches, PlanCacheProvider, SharedPlans, LOCAL_CAPACITY, SHARED_1D_PRECISE,
@@ -17,6 +18,12 @@ fn plan(n: usize) -> Arc<crate::FftPlan1D<f64>> {
 
 #[test]
 fn a_repeated_shape_returns_the_same_plan() {
+    if crate::lib_tests::process::isolate(concat!(
+        module_path!(),
+        "::a_repeated_shape_returns_the_same_plan"
+    )) {
+        return;
+    }
     let first = plan(96);
     let _other = plan(97);
     assert!(Arc::ptr_eq(&first, &plan(96)), "ring hit");
@@ -31,6 +38,12 @@ fn a_repeated_shape_returns_the_same_plan() {
 
 #[test]
 fn the_shared_table_holds_at_most_its_capacity() {
+    if crate::lib_tests::process::isolate(concat!(
+        module_path!(),
+        "::the_shared_table_holds_at_most_its_capacity"
+    )) {
+        return;
+    }
     for n in 1..=4 * SHARED_CAPACITY {
         let _ = plan(n);
     }
@@ -66,6 +79,12 @@ fn the_least_recently_used_plan_is_the_one_evicted() {
 
 #[test]
 fn clearing_releases_plans_no_caller_holds() {
+    if crate::lib_tests::process::isolate(concat!(
+        module_path!(),
+        "::clearing_releases_plans_no_caller_holds"
+    )) {
+        return;
+    }
     let held = plan(1000);
     let released = Arc::downgrade(&plan(1024));
     assert!(
@@ -84,6 +103,12 @@ fn clearing_releases_plans_no_caller_holds() {
 
 #[test]
 fn static_table_backed_execution_releases_its_bounded_owner() {
+    if crate::lib_tests::process::isolate(concat!(
+        module_path!(),
+        "::static_table_backed_execution_releases_its_bounded_owner"
+    )) {
+        return;
+    }
     // 4,096 selects the base-512 route under ADR 0061 and cannot witness
     // planar retention; 65,536 selects the generic planar FourStep route.
     const N: usize = 1 << 16;
@@ -120,6 +145,12 @@ fn static_table_backed_execution_releases_its_bounded_owner() {
 
 #[test]
 fn another_threads_ring_empties_on_its_next_lookup() {
+    if crate::lib_tests::process::isolate(concat!(
+        module_path!(),
+        "::another_threads_ring_empties_on_its_next_lookup"
+    )) {
+        return;
+    }
     let (to_worker, worker_inbox) = mpsc::sync_channel::<()>(0);
     let (to_main, main_inbox) =
         mpsc::sync_channel::<Option<std::sync::Weak<crate::FftPlan1D<f64>>>>(0);
@@ -174,6 +205,12 @@ fn counted(key: usize, builds: &std::sync::atomic::AtomicUsize) -> Arc<usize> {
 
 #[test]
 fn a_ring_hit_does_not_consult_the_shared_table() {
+    if crate::lib_tests::process::isolate(concat!(
+        module_path!(),
+        "::a_ring_hit_does_not_consult_the_shared_table"
+    )) {
+        return;
+    }
     let builds = std::sync::atomic::AtomicUsize::new(0);
     let first = counted(7, &builds);
     // Emptying the table without an epoch bump leaves only the ring able to
@@ -188,6 +225,12 @@ fn a_ring_hit_does_not_consult_the_shared_table() {
 
 #[test]
 fn a_ring_hit_moves_to_the_front() {
+    if crate::lib_tests::process::isolate(concat!(
+        module_path!(),
+        "::a_ring_hit_moves_to_the_front"
+    )) {
+        return;
+    }
     let builds = std::sync::atomic::AtomicUsize::new(0);
     let a = counted(1, &builds);
     for key in 2..=LOCAL_CAPACITY {
@@ -212,6 +255,12 @@ fn a_ring_hit_moves_to_the_front() {
 
 #[test]
 fn ring_hits_keep_a_plan_recent_in_the_shared_table() {
+    if crate::lib_tests::process::isolate(concat!(
+        module_path!(),
+        "::ring_hits_keep_a_plan_recent_in_the_shared_table"
+    )) {
+        return;
+    }
     let builds = std::sync::atomic::AtomicUsize::new(0);
     let hot = counted(0, &builds);
     // Every shape after 0 is a miss, and 0 is used from the ring between
@@ -235,6 +284,12 @@ fn ring_hits_keep_a_plan_recent_in_the_shared_table() {
 
 #[test]
 fn a_ring_held_plan_survives_a_tie_with_plans_no_ring_holds() {
+    if crate::lib_tests::process::isolate(concat!(
+        module_path!(),
+        "::a_ring_held_plan_survives_a_tie_with_plans_no_ring_holds"
+    )) {
+        return;
+    }
     let builds = std::sync::atomic::AtomicUsize::new(0);
     // Fill the table. Each build advances the tick, so the stamps differ.
     for key in 0..SHARED_CAPACITY {
@@ -299,6 +354,12 @@ fn concurrent_misses_build_a_shape_once() {
 
 #[test]
 fn clearing_from_a_thread_local_destructor_does_not_abort() {
+    if crate::lib_tests::process::isolate(concat!(
+        module_path!(),
+        "::clearing_from_a_thread_local_destructor_does_not_abort"
+    )) {
+        return;
+    }
     struct ClearsOnDrop;
     impl Drop for ClearsOnDrop {
         fn drop(&mut self) {

@@ -181,6 +181,11 @@ jobs:
       - name: Tests
         if: needs.scope.outputs.code != 'false'
         run: cargo nextest run --locked --profile ci --workspace --all-features --exclude apollo-python
+      - name: FFT library test isolation
+        if: needs.scope.outputs.code != 'false'
+        run: |
+          timeout 60s cargo test --locked -p apollo-fft --lib --all-features
+          timeout 60s cargo test --locked -p apollo-fft --lib --all-features -- --test-threads=1
       - name: Build benchmark smoke
         if: needs.scope.outputs.code != 'false'
         run: >-

@@ -755,6 +755,9 @@ fn cross_thread_plan_retention() {
 #[test]
 #[ignore = "measurement probe for worker scratch retention"]
 fn worker_scratch_retention() {
+    if crate::lib_tests::process::isolate(concat!(module_path!(), "::worker_scratch_retention")) {
+        return;
+    }
     // What [`cross_thread_plan_retention`] cannot measure. That probe spawns
     // transient threads under `std::thread::scope`, which joins them inside the
     // measurement window; `ScratchPool` lives in a `thread_local!` and
