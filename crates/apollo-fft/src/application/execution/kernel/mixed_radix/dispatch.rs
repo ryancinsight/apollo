@@ -18,8 +18,10 @@ use super::scalar::MixedRadixScalar;
 use crate::application::execution::kernel::pot::StockhamAutosort;
 use crate::with_pot_zst;
 
-/// Test-only table: production dispatch reads [`cached_coprime_factors`].
-#[cfg(test)]
+/// Probe-only table: production dispatch reads [`cached_coprime_factors`].
+/// The gate matches its sole user's (`pinned_probe::codelet_selection`),
+/// which needs Windows x86-64 processor binding and TSC counters.
+#[cfg(all(test, windows, target_arch = "x86_64"))]
 #[inline]
 pub(crate) fn static_coprime_factors(n: usize) -> Option<(usize, usize)> {
     match n {
