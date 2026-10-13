@@ -9,6 +9,7 @@
 - **Acceptance:** parent registration survives child exhaustion; affected tests pass with parallel libtest, serialized libtest, and Nextest; CI retains both library execution modes.
 - **Verification:** 22/22 focused tests pass with parallel libtest, serialized libtest, and Nextest; the worker-idle probe passes. All 18 isolated bodies and three production hook bodies compare byte-for-byte with main after removing test dispatch. Format, locked resolution, and the safety ratchet pass.
 - **Residual:** AArch64 full suites each pass 599 tests and retain the same eight independent baseline failures (parallel main: 16 failures; serialized main: 10). Strict Clippy has the same diagnostic inventory as main. Linux CI verifies both all-feature library execution modes before merge.
+- **Delivery:** [PR #654](https://github.com/ryancinsight/apollo/pull/654), `codex/apollo-644-test-isolation`; implementation and local verification complete, hosted CI pending.
 
 <a id="apollo-121-f32-simd-leaf"></a>
 ## APOLLO-121-F32-SIMD-LEAF — Close the N=121 f32 gap with a dispatched SIMD dft11 [patch] [perf] — todo
