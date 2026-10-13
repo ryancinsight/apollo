@@ -19,6 +19,7 @@
 //! off a shared cache line.
 
 use crate::application::execution::kernel::mixed_radix::MixedRadixScalar;
+use crate::application::execution::plan::fft::dimension_1d::owner::PlanOwner;
 use crate::application::execution::plan::fft::dimension_1d::FftPlan1D;
 use crate::application::execution::plan::fft::dimension_2d::FftPlan2D;
 use crate::application::execution::plan::fft::dimension_3d::FftPlan3D;
@@ -319,10 +320,17 @@ macro_rules! impl_plan_cache_provider {
         $shared_1d:ident, $shared_2d:ident, $shared_3d:ident;
         $local_1d:ident, $local_2d:ident, $local_3d:ident
     ) => {
+        impl PlanOwner for $storage {
+            #[inline]
+            fn acquire_plan(shape: Shape1D) -> Arc<FftPlan1D<Self>> {
+                lookup(&$local_1d, &$shared_1d, shape.n(), || FftPlan1D::new(shape))
+            }
+        }
+
         impl PlanCacheProvider for $storage {
             #[inline]
             fn get_1d_plan(shape: Shape1D) -> Arc<FftPlan1D<Self::PlanScalar>> {
-                lookup(&$local_1d, &$shared_1d, shape.n(), || FftPlan1D::new(shape))
+                <Self as PlanOwner>::acquire_plan(shape)
             }
 
             #[inline]

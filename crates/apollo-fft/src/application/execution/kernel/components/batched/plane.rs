@@ -20,7 +20,7 @@ use eunomia::Complex;
 /// stride.
 pub(crate) const ROW_PAD: usize = 8;
 
-/// Scratch length, in complex elements, that [`super::driver::four_step_batched`] requires
+/// Scratch length, in complex elements, that [`super::PlanarState::execute`] requires
 /// for a transform of length `n`: the padded plane pair of the first stage
 /// set, the second pair an odd power transposes into, and the seam staging
 /// block.
@@ -66,7 +66,7 @@ pub(crate) const PLANE_ALIGN_SLACK: usize = 64 / 8;
 /// either direction.
 pub(crate) const PLANAR_MAX_LEN: usize = 1 << 20;
 
-/// Whether [`super::driver::four_step_batched`] covers a transform of length `n`.
+/// Whether [`super::PlanarState::execute`] covers a transform of length `n`.
 ///
 /// The single definition of the planar route's domain: an even power of two
 /// from 4 up to [`PLANAR_MAX_LEN`], run as a square, or an odd power of two

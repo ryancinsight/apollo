@@ -5,8 +5,10 @@ pub(crate) mod bluestein;
 mod composition;
 pub(crate) mod convolution;
 pub(crate) mod generator;
-pub(crate) mod ordered;
+mod state;
 pub(crate) mod static_rader;
+
+pub(crate) use state::RaderState;
 
 use crate::application::execution::kernel::components::winograd::ShortWinogradScalar;
 use crate::application::execution::kernel::mixed_radix::MixedRadixScalar;
@@ -51,16 +53,10 @@ impl RaderConvolutionBackend for HalfCyclicWinograd {
     {
         debug_assert_eq!(data.len() % 2, 0);
         let m = data.len() / 2;
-        let (kernel_cyc, kernel_neg) =
-            F::cached_rader_negacyclic_spectra::<INVERSE>(n, generator_inverse);
+        let spectra = F::cached_rader_negacyclic_spectra::<INVERSE>(n, generator_inverse);
         let twiddles = F::cached_rader_neg_twiddles(m);
 
-        rader_negacyclic_convolve_inplace::<F>(
-            data,
-            kernel_cyc.as_ref(),
-            kernel_neg.as_ref(),
-            twiddles.as_ref(),
-        );
+        rader_negacyclic_convolve_inplace::<F>(data, &spectra.0, &spectra.1, twiddles.as_ref());
     }
 }
 
@@ -88,7 +84,7 @@ pub(crate) fn rader_fft<
         return;
     }
 
-    rader_runtime_impl::<F, INVERSE>(data, n);
+    RaderState::<F>::new(n).execute::<INVERSE>(data);
 }
 
 #[cfg(any(test, debug_assertions, feature = "kernel-strategy-bench"))]
@@ -102,23 +98,6 @@ pub(crate) fn rader_fft_with_convolution_backend<
     let n = data.len();
     debug_assert!(crate::application::execution::kernel::radix_shape::is_prime(n));
     rader_runtime_impl_with_backend::<F, INVERSE, B>(data, n);
-}
-
-#[inline]
-fn rader_runtime_impl<
-    F: MixedRadixScalar<Complex = eunomia::Complex<F>> + ShortWinogradScalar,
-    const INVERSE: bool,
->(
-    data: &mut [F::Complex],
-    n: usize,
-) {
-    if prefers_bluestein_for_rader(n) {
-        rader_runtime_impl_with_backend::<F, INVERSE, Bluestein>(data, n);
-    } else if prefers_half_cyclic_for_rader::<F>(n) {
-        rader_runtime_impl_with_backend::<F, INVERSE, HalfCyclicWinograd>(data, n);
-    } else {
-        rader_runtime_impl_with_backend::<F, INVERSE, FullCyclic>(data, n);
-    }
 }
 
 pub(crate) const BLUESTEIN_RADER_THRESHOLD: usize = 2048;

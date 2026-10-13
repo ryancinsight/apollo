@@ -41,10 +41,6 @@ pub struct Profiler {
     pub twiddle_fwd_precise: CacheStats,
     pub twiddle_inv_precise: CacheStats,
 
-    // Rader caches
-    pub rader_negacyclic_precise: CacheStats,
-    pub rader_order: CacheStats,
-
     // Bluestein caches
     pub bluestein_precise: CacheStats,
     pub bluestein_reduced: CacheStats,
@@ -52,7 +48,6 @@ pub struct Profiler {
     // Factorization caches
     pub prime23_radix: CacheStats,
     pub coprime_factors: CacheStats,
-    pub is_prime: CacheStats,
     pub pfa_perm: CacheStats,
 }
 

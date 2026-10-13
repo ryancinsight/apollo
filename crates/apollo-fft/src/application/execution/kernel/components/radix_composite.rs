@@ -5,11 +5,13 @@ pub(crate) mod arity;
 mod cache;
 mod core;
 mod flat_pass;
+mod state;
 
 use crate::application::execution::kernel::components::winograd::ShortWinogradScalar;
 use crate::application::execution::kernel::radix_stage::normalize_scalar;
 use crate::application::execution::kernel::tuning::RADIX_PARALLEL_CHUNK_THRESHOLD;
-pub use cache::CompositeCache;
+pub(crate) use cache::{CompositeCache, CompositeTables};
+pub(crate) use state::CompositeState;
 
 pub(crate) fn release_thread_local_scratch() {
     cache::release_thread_local_scratch();
@@ -53,11 +55,20 @@ pub fn forward_inplace_with_radices<F: CompositeCache + ShortWinogradScalar + 's
     data: &mut [Complex<F>],
     radices: &[usize],
 ) {
+    let tables = F::cached_tables::<false>(radices);
+    forward_inplace_with_tables(data, radices, &tables);
+}
+
+pub(crate) fn forward_inplace_with_tables<F: CompositeCache + ShortWinogradScalar + 'static>(
+    data: &mut [Complex<F>],
+    radices: &[usize],
+    tables: &CompositeTables<Complex<F>>,
+) {
     core::composite_core_with_radices::<
         moirai::AdaptiveWithThreshold<RADIX_PARALLEL_CHUNK_THRESHOLD>,
         F,
         false,
-    >(data, radices, None);
+    >(data, radices, tables, None);
 }
 
 #[inline]
@@ -66,11 +77,12 @@ pub fn forward_inplace_with_pointwise<F: CompositeCache + ShortWinogradScalar + 
     radices: &[usize],
     pointwise_spectrum: &[Complex<F>],
 ) {
+    let tables = F::cached_tables::<false>(radices);
     core::composite_core_with_radices::<
         moirai::AdaptiveWithThreshold<RADIX_PARALLEL_CHUNK_THRESHOLD>,
         F,
         false,
-    >(data, radices, Some(pointwise_spectrum));
+    >(data, radices, &tables, Some(pointwise_spectrum));
 }
 
 #[inline]
@@ -78,11 +90,22 @@ pub fn inverse_inplace_unnorm_with_radices<F: CompositeCache + ShortWinogradScal
     data: &mut [Complex<F>],
     radices: &[usize],
 ) {
+    let tables = F::cached_tables::<true>(radices);
+    inverse_inplace_unnorm_with_tables(data, radices, &tables);
+}
+
+pub(crate) fn inverse_inplace_unnorm_with_tables<
+    F: CompositeCache + ShortWinogradScalar + 'static,
+>(
+    data: &mut [Complex<F>],
+    radices: &[usize],
+    tables: &CompositeTables<Complex<F>>,
+) {
     core::composite_core_with_radices::<
         moirai::AdaptiveWithThreshold<RADIX_PARALLEL_CHUNK_THRESHOLD>,
         F,
         true,
-    >(data, radices, None);
+    >(data, radices, tables, None);
 }
 
 #[inline]
@@ -90,11 +113,20 @@ pub fn inverse_inplace_with_radices<F: CompositeCache + ShortWinogradScalar + 's
     data: &mut [Complex<F>],
     radices: &[usize],
 ) {
+    let tables = F::cached_tables::<true>(radices);
+    inverse_inplace_with_tables(data, radices, &tables);
+}
+
+pub(crate) fn inverse_inplace_with_tables<F: CompositeCache + ShortWinogradScalar + 'static>(
+    data: &mut [Complex<F>],
+    radices: &[usize],
+    tables: &CompositeTables<Complex<F>>,
+) {
     core::composite_core_with_radices::<
         moirai::AdaptiveWithThreshold<RADIX_PARALLEL_CHUNK_THRESHOLD>,
         F,
         true,
-    >(data, radices, None);
+    >(data, radices, tables, None);
     normalize_scalar(data, F::from_precise(1.0 / data.len() as f64));
 }
 

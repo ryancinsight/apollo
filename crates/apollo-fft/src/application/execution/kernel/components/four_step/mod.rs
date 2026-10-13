@@ -19,13 +19,16 @@
 
 mod execution;
 mod selection;
+mod state;
 mod workspace;
 
 #[cfg(test)]
 mod profile;
 
 pub(crate) use execution::four_step_fft;
+#[cfg(test)]
 pub(crate) use selection::try_four_step;
+pub(crate) use state::FourStepState;
 pub(crate) use workspace::{scratch_len, PARALLEL_ROW_THRESHOLD};
 
 #[cfg(test)]

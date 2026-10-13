@@ -11,6 +11,9 @@ pub(crate) const RADIX_PARALLEL_CHUNK_THRESHOLD: usize = 32_768;
 /// sub-problems win for lane-transform callers of the general dispatcher.
 /// Standalone 1-D plans use the separately measured
 /// [`ONE_DIMENSIONAL_FOUR_STEP_THRESHOLD`].
+///
+/// Test-only: production routing reads the lane gate and the 1-D threshold.
+#[cfg(test)]
 pub(crate) const FOUR_STEP_THRESHOLD: usize = 1 << 12;
 
 /// Measured crossover for standalone one-dimensional power-of-two plans.

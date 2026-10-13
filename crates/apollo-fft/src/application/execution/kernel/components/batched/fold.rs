@@ -11,7 +11,7 @@
 //! one table per length in place of two.
 
 use super::lane_order::LaneOrder;
-use crate::application::execution::kernel::mixed_radix::MixedRadixScalar;
+use crate::application::execution::kernel::components::winograd::ShortWinogradScalar;
 
 /// Shortest transform whose fold table is two-level.
 ///
@@ -43,7 +43,7 @@ const COMPACT_FOLD_MIN_LEN: usize = 1 << 16;
 /// product carries the two factors' roundings and the multiply's own:
 /// within `4u` of the exact twiddle, against `u` for the full matrix, which
 /// the transform's `O(log N · u)` bound absorbs.
-pub(crate) struct FourStepFold<T> {
+pub struct FourStepFold<T> {
     /// Lanes per group, `F`: the fine table's row width.
     pub(crate) lanes: usize,
     /// `W_N^(p order(f))` for `f < F`, row-major by `p`.
@@ -54,7 +54,7 @@ pub(crate) struct FourStepFold<T> {
     pub(crate) coarse_im: Box<[T]>,
 }
 
-impl<T: MixedRadixScalar> FourStepFold<T> {
+impl<T: ShortWinogradScalar> FourStepFold<T> {
     /// Builds the forward table (`sign = -1`); the caller conjugates it in
     /// the pass for the inverse direction rather than requesting a second
     /// table (see the module doc).
@@ -91,5 +91,12 @@ impl<T: MixedRadixScalar> FourStepFold<T> {
             coarse_re: coarse_re.into_boxed_slice(),
             coarse_im: coarse_im.into_boxed_slice(),
         }
+    }
+
+    #[cfg(test)]
+    pub(super) fn retained_bytes(&self) -> usize {
+        let entries =
+            self.fine_re.len() + self.fine_im.len() + self.coarse_re.len() + self.coarse_im.len();
+        core::mem::size_of::<Self>() + entries * core::mem::size_of::<T>()
     }
 }

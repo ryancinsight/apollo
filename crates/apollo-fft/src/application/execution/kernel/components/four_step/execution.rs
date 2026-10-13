@@ -1,3 +1,4 @@
+use super::state::{Decomposition, FourStepState};
 use super::PARALLEL_ROW_THRESHOLD;
 use crate::application::execution::kernel::mixed_radix::MixedRadixScalar;
 use crate::application::execution::layout::{layout_failure, square_failure};
@@ -11,6 +12,8 @@ use crate::application::execution::layout::{layout_failure, square_failure};
 /// kernel wants, so an odd power pays one gather, two fast halves, and one
 /// combining pass rather than falling to a slower route entirely.
 fn radix2_split<F: MixedRadixScalar<Complex = eunomia::Complex<F>>, const INVERSE: bool>(
+    child: &FourStepState<F>,
+    twiddles: &std::sync::OnceLock<std::sync::Arc<[F::Complex]>>,
     data: &mut [F::Complex],
     scratch: &mut [F::Complex],
 ) {
@@ -21,7 +24,7 @@ fn radix2_split<F: MixedRadixScalar<Complex = eunomia::Complex<F>>, const INVERS
     // slots. The inverse conjugates each entry at the multiply rather than
     // caching a second table of `n - 1` entries: the inverse table's entries
     // are exactly these conjugated (`inverse_table_is_conjugate_of_forward`).
-    let twiddles = F::cached_twiddle_fwd(n);
+    let twiddles = twiddles.get_or_init(|| F::cached_twiddle_fwd(n));
     let combine = &twiddles[half - 1..n - 1];
 
     let (gathered, child_scratch) = scratch.split_at_mut(n);
@@ -30,8 +33,8 @@ fn radix2_split<F: MixedRadixScalar<Complex = eunomia::Complex<F>>, const INVERS
         gathered[half + j] = pair[1];
     }
     let (even, odd) = gathered.split_at_mut(half);
-    four_step_fft::<F, INVERSE, false>(even, child_scratch);
-    four_step_fft::<F, INVERSE, false>(odd, child_scratch);
+    child.execute::<INVERSE, false>(even, child_scratch);
+    child.execute::<INVERSE, false>(odd, child_scratch);
 
     let (low, high) = data.split_at_mut(half);
     for j in 0..half {
@@ -64,75 +67,67 @@ pub(crate) fn four_step_fft<
     data: &mut [F::Complex],
     scratch: &mut [F::Complex],
 ) {
-    let n = data.len();
-    let required = super::scratch_len(n)
-        .expect("invariant: four-step length admits a representable workspace");
-    assert!(
-        scratch.len() >= required,
-        "four-step workspace requires {required} elements, received {}",
-        scratch.len()
-    );
-    decompose::<F, INVERSE>(data, &mut scratch[..required]);
-    if INVERSE && NORMALIZE {
-        F::normalize(data, n);
+    FourStepState::<F>::new(data.len()).execute::<INVERSE, NORMALIZE>(data, scratch);
+}
+
+impl<F: MixedRadixScalar<Complex = eunomia::Complex<F>>> FourStepState<F> {
+    pub(crate) fn execute<const INVERSE: bool, const NORMALIZE: bool>(
+        &self,
+        data: &mut [F::Complex],
+        scratch: &mut [F::Complex],
+    ) {
+        assert_eq!(
+            data.len(),
+            self.len,
+            "invariant: four-step state length matches its transform"
+        );
+        let required = super::scratch_len(self.len)
+            .expect("invariant: four-step length admits a representable workspace");
+        assert!(
+            scratch.len() >= required,
+            "four-step workspace requires {required} elements, received {}",
+            scratch.len()
+        );
+        decompose::<F, INVERSE>(self, data, &mut scratch[..required]);
+        if INVERSE && NORMALIZE {
+            F::normalize(data, self.len);
+        }
     }
 }
 
 fn decompose<F: MixedRadixScalar<Complex = eunomia::Complex<F>>, const INVERSE: bool>(
+    state: &FourStepState<F>,
     data: &mut [F::Complex],
     scratch: &mut [F::Complex],
 ) {
     let n = data.len();
-    // The batched layout keeps the transform index in the lane position, which
-    // removes every cross-lane shuffle from the butterfly. It covers the square
-    // splits below the threading threshold; everything else continues below.
-    if F::try_four_step_batched::<INVERSE>(data, scratch) {
-        return;
-    }
-
-    // An odd `log2` has no square split, and the asymmetric one measured
-    // badly: the generic path streams a full N-element twiddle matrix, which
-    // at N = 8192 cost more than the square route spends on N = 16384. One
-    // radix-2 decimation instead leaves two halves that are *even* powers,
-    // so each takes the batched planar route above, and the combine reuses
-    // the final stage of the existing twiddle table -- `W_N^j` for
-    // `j < N/2` already sits at `N/2 - 1`, so no table is added
-    // (gap_audit.md#odd-power-routing).
-    //
-    // This is the unfused form, and it is now the fallback rather than the
-    // route: where both halves are themselves planar the call above takes
-    // them fused, reading each subsequence out of `data` at stride two
-    // instead of gathering it here. What is left for this path is the sizes
-    // whose halves exceed the planar threshold and thread their rows.
-    if n.trailing_zeros() % 2 == 1 && n >= 512 {
-        radix2_split::<F, INVERSE>(data, scratch);
-        return;
-    }
-
-    // Split N = N1 × N2 with N1 ≈ N2 ≈ √N for cache balance.
-    let k = n.trailing_zeros();
-    let k1 = k / 2;
-    let k2 = k - k1;
-    let n1 = 1usize << k1; // number of columns / length of second set of FFTs
-    let n2 = 1usize << k2; // number of rows / length of first set of FFTs
+    let (n1, n2, rows, tw_matrix) = match &state.decomposition {
+        Decomposition::Planar(planar) => {
+            planar.execute::<INVERSE>(data, scratch);
+            return;
+        }
+        Decomposition::Odd { child, combine } => {
+            radix2_split::<F, INVERSE>(child, combine, data, scratch);
+            return;
+        }
+        Decomposition::Matrix {
+            first_len,
+            second_len,
+            rows,
+            matrix,
+        } => (
+            *first_len,
+            *second_len,
+            FourStepState::<F>::row_tables::<INVERSE>(rows, *first_len, *second_len),
+            matrix.get_or_init(|| F::cached_four_step_twiddles(*first_len, *second_len)),
+        ),
+    };
 
     #[cfg(test)]
     super::profile::observe_buffers(data, scratch, n1, n2);
 
-    let tw1 = if INVERSE {
-        F::cached_twiddle_inv(n1)
-    } else {
-        F::cached_twiddle_fwd(n1)
-    };
-    let tw2 = if INVERSE {
-        F::cached_twiddle_inv(n2)
-    } else {
-        F::cached_twiddle_fwd(n2)
-    };
-
-    // Cached forward W_N^{j·k} twiddle matrix, row-major N2 × N1; the
-    // inverse conjugates each entry at the multiply.
-    let tw_matrix = F::cached_four_step_twiddles(n1, n2);
+    let tw1 = &rows.first;
+    let tw2 = &rows.second;
 
     let parallel = n >= PARALLEL_ROW_THRESHOLD;
 

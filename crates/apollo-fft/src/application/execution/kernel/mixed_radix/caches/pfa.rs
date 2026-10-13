@@ -1,54 +1,56 @@
-//! The Good-Thomas CRT permutation cache: input gather and output scatter
-//! tables per coprime pair.
+//! Weak index for Good-Thomas CRT permutation tables.
 
 use super::tables::{shared_table, LocalTable, SharedTable};
 use rustc_hash::FxHashMap;
 use std::cell::RefCell;
-use std::sync::Arc;
+use std::sync::{Arc, Weak};
 
-/// The input gather and output scatter tables of one coprime pair.
-pub(crate) type PfaPermutation = (Arc<[usize]>, Arc<[usize]>);
-
-static PFA_PERM_CACHE: SharedTable<(usize, usize), PfaPermutation> = shared_table();
-
-thread_local! {
-    pub(super) static TL_PFA_PERM: LocalTable<(usize, usize), PfaPermutation> = RefCell::new(FxHashMap::with_capacity_and_hasher(8, Default::default()));
+/// Input gather and output scatter tables for one coprime pair.
+pub(crate) struct PfaPermutation {
+    pub(crate) input: Box<[usize]>,
+    pub(crate) output: Box<[usize]>,
 }
 
-/// Return precomputed Good-Thomas input and output CRT permutation tables for
-/// a pair of coprime factors `(n1, n2)`.
-///
-/// `input_perm[i1 * n2 + i2]  = (i1 * n2 + i2 * n1) % n` — gather index for step 1.
-/// `output_perm[k2 * n1 + k1] = (k1 * n2 * inv_n2_n1 + k2 * n1 * inv_n1_n2) % n` — scatter index for step 5.
-///
-/// Tables are computed once on first use and shared across threads via `Arc`.
+type PfaIndex = Weak<PfaPermutation>;
+
+static PFA_PERM_CACHE: SharedTable<(usize, usize), PfaIndex> = shared_table();
+
+thread_local! {
+    static TL_PFA_PERM: LocalTable<(usize, usize), PfaIndex> = RefCell::new(FxHashMap::with_capacity_and_hasher(8, Default::default()));
+}
+
+/// Returns the reusable Good-Thomas input and output CRT permutations.
 #[inline]
-pub(crate) fn cached_pfa_perm(n1: usize, n2: usize) -> PfaPermutation {
+pub(crate) fn cached_pfa_perm(n1: usize, n2: usize) -> Arc<PfaPermutation> {
     let key = (n1, n2);
-    if let Some(v) = TL_PFA_PERM.with(|c| c.borrow().get(&key).cloned()) {
+    if let Some(tables) = TL_PFA_PERM.with(|cache| cache.borrow().get(&key).and_then(Weak::upgrade))
+    {
         #[cfg(feature = "cache-profiling")]
         super::profiler::get().pfa_perm.tl_hit();
-        return v;
+        return tables;
     }
+
     #[cfg(feature = "cache-profiling")]
     super::profiler::get().pfa_perm.global_hit();
-    let v = {
-        let maybe_cached = PFA_PERM_CACHE.read().get(&key).cloned();
-        if let Some(v) = maybe_cached {
-            v
+    if let Some(tables) = PFA_PERM_CACHE.read().get(&key).and_then(Weak::upgrade) {
+        TL_PFA_PERM.with(|cache| cache.borrow_mut().insert(key, Arc::downgrade(&tables)));
+        return tables;
+    }
+
+    #[cfg(feature = "cache-profiling")]
+    super::profiler::get().pfa_perm.miss();
+    let built = Arc::new(build_pfa_perm(n1, n2));
+    let tables = {
+        let mut cache = PFA_PERM_CACHE.write();
+        if let Some(tables) = cache.get(&key).and_then(Weak::upgrade) {
+            tables
         } else {
-            #[cfg(feature = "cache-profiling")]
-            super::profiler::get().pfa_perm.miss();
-            let pair = build_pfa_perm(n1, n2);
-            PFA_PERM_CACHE
-                .write()
-                .entry(key)
-                .or_insert_with(|| pair.clone())
-                .clone()
+            cache.insert(key, Arc::downgrade(&built));
+            built
         }
     };
-    TL_PFA_PERM.with(|c| c.borrow_mut().insert(key, v.clone()));
-    v
+    TL_PFA_PERM.with(|cache| cache.borrow_mut().insert(key, Arc::downgrade(&tables)));
+    tables
 }
 
 fn extended_gcd(a: usize, b: usize) -> (usize, i64, i64) {
@@ -69,28 +71,43 @@ fn build_pfa_perm(n1: usize, n2: usize) -> PfaPermutation {
     let inv_n2_n1 = mod_inverse_local(n2, n1);
     let inv_n1_n2 = mod_inverse_local(n1, n2);
 
-    let mut input_perm = vec![0usize; n];
-    let mut output_perm = vec![0usize; n];
-
+    let mut input = vec![0usize; n];
+    let mut output = vec![0usize; n];
     for i1 in 0..n1 {
         for i2 in 0..n2 {
-            input_perm[i1 * n2 + i2] = (i1 * n2 + i2 * n1) % n;
+            input[i1 * n2 + i2] = (i1 * n2 + i2 * n1) % n;
         }
     }
     for k1 in 0..n1 {
         for k2 in 0..n2 {
-            let k_idx = (k1 * n2 * inv_n2_n1 + k2 * n1 * inv_n1_n2) % n;
-            output_perm[k2 * n1 + k1] = k_idx;
+            let index = (k1 * n2 * inv_n2_n1 + k2 * n1 * inv_n1_n2) % n;
+            output[k2 * n1 + k1] = index;
         }
     }
-    // The PFA kernel gathers and scatters through these values unchecked;
-    // the build-time check is the release-mode half of that contract.
     assert!(
-        input_perm
-            .iter()
-            .chain(&output_perm)
-            .all(|&index| index < n),
+        input.iter().chain(&output).all(|&index| index < n),
         "invariant: PFA permutation entries stay below n = n1 * n2"
     );
-    (Arc::from(input_perm), Arc::from(output_perm))
+    PfaPermutation {
+        input: input.into_boxed_slice(),
+        output: output.into_boxed_slice(),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::cached_pfa_perm;
+    use std::sync::Arc;
+
+    #[test]
+    fn index_reuses_only_live_permutation_owners() {
+        let first = cached_pfa_perm(5, 8);
+        let again = cached_pfa_perm(5, 8);
+        assert!(Arc::ptr_eq(&first, &again));
+
+        let released = Arc::downgrade(&first);
+        drop(first);
+        drop(again);
+        assert!(released.upgrade().is_none());
+    }
 }

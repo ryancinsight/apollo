@@ -1,6 +1,5 @@
 #[macro_use]
 pub(crate) mod cache_macros;
-pub(crate) mod direct_mapped;
 pub(crate) mod factors;
 pub(crate) mod four_step;
 pub(crate) mod pfa;
@@ -12,7 +11,7 @@ pub(crate) mod scratch;
 pub(crate) mod tables;
 pub(crate) mod twiddle;
 
-pub(crate) use factors::{cached_coprime_factors, cached_is_prime};
+pub(crate) use factors::cached_coprime_factors;
 pub(crate) use four_step::cached_four_step_twiddles;
 pub(crate) use pfa::cached_pfa_perm;
 pub(crate) use rader::{

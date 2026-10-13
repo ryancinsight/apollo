@@ -9,9 +9,10 @@ use leto::ArrayViewMut1;
 
 /// Zero-sized 1D FFT plan for compile-time-known lengths.
 ///
-/// The length is encoded as `N`, so execution routes through const-generic
-/// branches that monomorphize per size instead of storing runtime executor
-/// function pointers.
+/// The length is encoded as `N`. Table-free codelets route through
+/// const-generic branches, while table-backed transforms borrow prepared
+/// state from the bounded plan owner. The static plan itself stores neither
+/// tables nor runtime executor function pointers.
 #[derive(Clone, Copy, Debug, Default)]
 pub struct StaticFftPlan1D<F: MixedRadixScalar, const N: usize> {
     precision: PhantomData<F>,
