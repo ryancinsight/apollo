@@ -381,6 +381,51 @@ fn mixed_f16_typed_paths_reuse_f32_workspace() {
 }
 
 #[test]
+fn release_typed_scratch_returns_capacities_to_baseline() {
+    use crate::application::execution::plan::fwht::storage::{
+        release_typed_scratch, typed_scratch_capacities,
+    };
+    let plan = FwhtPlan::new(8).expect("valid plan");
+    let signal = Array1::from(vec![
+        F16::from_f32(1.5),
+        F16::from_f32(0.0),
+        F16::from_f32(-0.75),
+        F16::from_f32(2.25),
+        F16::from_f32(0.5),
+        F16::from_f32(-1.0),
+        F16::from_f32(3.0),
+        F16::from_f32(0.25),
+    ]);
+    let mut output = Array1::from_elem([8], F16::from_f32(0.0));
+    plan.forward_typed_into(
+        &signal,
+        &mut output,
+        PrecisionProfile::MIXED_PRECISION_F16_F32,
+    )
+    .expect("typed forward grows the f32 pool");
+    assert!(
+        typed_scratch_capacities().2 >= plan.len(),
+        "the typed forward must retain its workspace"
+    );
+    release_typed_scratch();
+    assert_eq!(
+        typed_scratch_capacities(),
+        (0, 0, 0),
+        "release must return every typed pool to baseline"
+    );
+    plan.forward_typed_into(
+        &signal,
+        &mut output,
+        PrecisionProfile::MIXED_PRECISION_F16_F32,
+    )
+    .expect("typed forward after release");
+    assert!(
+        typed_scratch_capacities().2 >= plan.len(),
+        "the pool must serve after release"
+    );
+}
+
+#[test]
 fn typed_path_rejects_profile_storage_mismatch() {
     let plan = FwhtPlan::new(4).expect("valid plan");
     let signal = Array1::from(vec![1.0_f32, 2.0, 3.0, 4.0]);

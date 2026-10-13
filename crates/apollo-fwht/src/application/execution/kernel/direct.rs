@@ -75,72 +75,51 @@ where
     }
     debug_assert!(n.is_power_of_two(), "WHT requires power-of-2 length");
 
-    let lane_count = Arch::LANE_COUNT;
     let mut step = start_step;
     while step < n {
         let block = step * 2;
         if block >= PAR_THRESHOLD {
             moirai::for_each_chunk_mut_with::<moirai::Adaptive, _, _>(data, block, |chunk| {
                 let (left, right) = chunk.split_at_mut(step);
-                if step >= lane_count {
-                    let mut i = 0;
-                    while i < step {
-                        // SAFETY: step is a power of two and is at least the
-                        // SIMD lane count, so each lane-width block stays
-                        // inside the split left/right halves.
-                        unsafe {
-                            let ptr_a = left.as_mut_ptr().add(i);
-                            let ptr_b = right.as_mut_ptr().add(i);
-                            let va = Vector::<T, Arch>::load_unaligned(ptr_a);
-                            let vb = Vector::<T, Arch>::load_unaligned(ptr_b);
-                            let v_add = va + vb;
-                            let v_sub = va - vb;
-                            v_add.store_unaligned(ptr_a);
-                            v_sub.store_unaligned(ptr_b);
-                        }
-                        i += lane_count;
-                    }
-                } else {
-                    for i in 0..step {
-                        let a = left[i];
-                        let b = right[i];
-                        left[i] = a + b;
-                        right[i] = a - b;
-                    }
-                }
+                butterfly_halves::<T, Arch>(left, right, step);
             });
         } else {
             for chunk in data.chunks_mut(block) {
                 let (left, right) = chunk.split_at_mut(step);
-                if step >= lane_count {
-                    let mut i = 0;
-                    while i < step {
-                        // SAFETY: step is a power of two and is at least the
-                        // SIMD lane count, so each lane-width block stays
-                        // inside the split left/right halves.
-                        unsafe {
-                            let ptr_a = left.as_mut_ptr().add(i);
-                            let ptr_b = right.as_mut_ptr().add(i);
-                            let va = Vector::<T, Arch>::load_unaligned(ptr_a);
-                            let vb = Vector::<T, Arch>::load_unaligned(ptr_b);
-                            let v_add = va + vb;
-                            let v_sub = va - vb;
-                            v_add.store_unaligned(ptr_a);
-                            v_sub.store_unaligned(ptr_b);
-                        }
-                        i += lane_count;
-                    }
-                } else {
-                    for i in 0..step {
-                        let a = left[i];
-                        let b = right[i];
-                        left[i] = a + b;
-                        right[i] = a - b;
-                    }
-                }
+                butterfly_halves::<T, Arch>(left, right, step);
             }
         }
         step <<= 1;
+    }
+}
+
+/// One Hadamard butterfly over a split block's halves: a vector pass at or
+/// above the lane width, the scalar butterfly below it.
+fn butterfly_halves<T, Arch>(left: &mut [T], right: &mut [T], step: usize)
+where
+    T: SimdScalar + Add<Output = T> + Sub<Output = T> + Send + Sync + 'static,
+    Arch: SimdArch + SimdKernel<T>,
+{
+    if step >= Arch::LANE_COUNT {
+        let mut i = 0;
+        while i < step {
+            // SAFETY: step is a power of two and is at least the
+            // SIMD lane count, so each lane-width block stays
+            // inside the split left/right halves.
+            unsafe {
+                let ptr_a = left.as_mut_ptr().add(i);
+                let ptr_b = right.as_mut_ptr().add(i);
+                let va = Vector::<T, Arch>::load_unaligned(ptr_a);
+                let vb = Vector::<T, Arch>::load_unaligned(ptr_b);
+                let v_add = va + vb;
+                let v_sub = va - vb;
+                v_add.store_unaligned(ptr_a);
+                v_sub.store_unaligned(ptr_b);
+            }
+            i += Arch::LANE_COUNT;
+        }
+    } else {
+        butterfly_scalar(left, right, step);
     }
 }
 
@@ -160,25 +139,29 @@ where
         if block >= PAR_THRESHOLD {
             moirai::for_each_chunk_mut_with::<moirai::Adaptive, _, _>(data, block, |chunk| {
                 let (left, right) = chunk.split_at_mut(step);
-                for i in 0..step {
-                    let a = left[i];
-                    let b = right[i];
-                    left[i] = a + b;
-                    right[i] = a - b;
-                }
+                butterfly_scalar(left, right, step);
             });
         } else {
             for chunk in data.chunks_mut(block) {
                 let (left, right) = chunk.split_at_mut(step);
-                for i in 0..step {
-                    let a = left[i];
-                    let b = right[i];
-                    left[i] = a + b;
-                    right[i] = a - b;
-                }
+                butterfly_scalar(left, right, step);
             }
         }
         step <<= 1;
+    }
+}
+
+/// The scalar Hadamard butterfly over a split block's halves, shared by the
+/// generic fallback and the sub-lane path of the vector kernel.
+fn butterfly_scalar<T>(left: &mut [T], right: &mut [T], step: usize)
+where
+    T: Copy + Add<Output = T> + Sub<Output = T>,
+{
+    for i in 0..step {
+        let a = left[i];
+        let b = right[i];
+        left[i] = a + b;
+        right[i] = a - b;
     }
 }
 

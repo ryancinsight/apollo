@@ -204,6 +204,17 @@ fn with_f32_workspace<R>(n: usize, f: impl FnOnce(&mut [f32]) -> R) -> R {
     TYPED_F32_SCRATCH.with(|pool| pool.with_scratch(n, f))
 }
 
+/// Release this crate's thread-local typed scratch pools on the calling
+/// thread: capacities return to their recorded provisions (zero unless a
+/// bounded provision was recorded), so a thread that ran a typed transform
+/// does not hold its high-water mark for its life. The first slice of
+/// APOLLO-MEM-SIBLING-THREAD-SCRATCH.
+pub fn release_typed_scratch() {
+    TYPED_INPUT64_SCRATCH.with(|pool| pool.release());
+    TYPED_OUTPUT64_SCRATCH.with(|pool| pool.release());
+    TYPED_F32_SCRATCH.with(|pool| pool.release());
+}
+
 #[cfg(test)]
 pub(crate) fn typed_scratch_capacities() -> (usize, usize, usize) {
     TYPED_INPUT64_SCRATCH.with(|input_scratch| {
