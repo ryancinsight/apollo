@@ -14,7 +14,9 @@
 
 use crate::domain::contracts::error::{QftError, QftResult};
 use crate::domain::state::dimension::QuantumStateDimension;
-use apollo_fft::{CpuElement, CpuStorage, FftPlan1D, PrecisionProfile, Shape1D, F16};
+use apollo_fft::{
+    ensure_input_output_len, CpuElement, CpuStorage, FftPlan1D, PrecisionProfile, Shape1D, F16,
+};
 use eunomia::{Complex32, Complex64};
 use leto::Array1;
 use serde::de::Error as _;
@@ -352,8 +354,10 @@ pub trait QftStorage: CpuStorage<Complex64> {
         output: &mut [Self],
         profile: PrecisionProfile,
     ) -> QftResult<()> {
-        validate_profile(profile, Self::PROFILE)?;
-        validate_lengths(plan, input.len(), output.len())?;
+        profile.ensure_matches(Self::PROFILE, || QftError::PrecisionMismatch)?;
+        ensure_input_output_len(plan.len(), input.len(), output.len(), || {
+            QftError::LengthMismatch
+        })?;
         Complex64::with_scratch(plan.len(), plan.len(), |input64, output64| {
             for (slot, value) in input64.iter_mut().zip(input.iter().copied()) {
                 *slot = value.to_cpu();
@@ -390,8 +394,10 @@ pub trait QftStorage: CpuStorage<Complex64> {
         output: &mut [Self],
         profile: PrecisionProfile,
     ) -> QftResult<()> {
-        validate_profile(profile, Self::PROFILE)?;
-        validate_lengths(plan, input.len(), output.len())?;
+        profile.ensure_matches(Self::PROFILE, || QftError::PrecisionMismatch)?;
+        ensure_input_output_len(plan.len(), input.len(), output.len(), || {
+            QftError::LengthMismatch
+        })?;
         Complex64::with_scratch(plan.len(), plan.len(), |input64, output64| {
             for (slot, value) in input64.iter_mut().zip(input.iter().copied()) {
                 *slot = value.to_cpu();
@@ -429,7 +435,7 @@ impl QftStorage for Complex64 {
         output: &mut [Self],
         profile: PrecisionProfile,
     ) -> QftResult<()> {
-        validate_profile(profile, Self::PROFILE)?;
+        profile.ensure_matches(Self::PROFILE, || QftError::PrecisionMismatch)?;
         plan.forward_complex64_slice_into(input, output)
     }
 
@@ -439,7 +445,7 @@ impl QftStorage for Complex64 {
         output: &mut [Self],
         profile: PrecisionProfile,
     ) -> QftResult<()> {
-        validate_profile(profile, Self::PROFILE)?;
+        profile.ensure_matches(Self::PROFILE, || QftError::PrecisionMismatch)?;
         plan.inverse_complex64_slice_into(input, output)
     }
 }
@@ -447,22 +453,6 @@ impl QftStorage for Complex64 {
 impl QftStorage for Complex32 {}
 
 impl QftStorage for [F16; 2] {}
-
-fn validate_profile(actual: PrecisionProfile, expected: PrecisionProfile) -> QftResult<()> {
-    if actual.matches_storage_and_compute(expected) {
-        Ok(())
-    } else {
-        Err(QftError::PrecisionMismatch)
-    }
-}
-
-fn validate_lengths(plan: &QftPlan, input: usize, output: usize) -> QftResult<()> {
-    if input == plan.len() && output == plan.len() {
-        Ok(())
-    } else {
-        Err(QftError::LengthMismatch)
-    }
-}
 
 /// Convenience wrapper for forward QFT.
 pub fn qft(input: &Array1<Complex64>) -> QftResult<Array1<Complex64>> {

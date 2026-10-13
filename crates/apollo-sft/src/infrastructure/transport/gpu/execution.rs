@@ -174,7 +174,7 @@ impl SparseExecution for SftWgpuBackend {
         precision: PrecisionProfile,
         input: &[T],
     ) -> WgpuResult<SparseSpectrum> {
-        validate_profile::<T>(precision)?;
+        precision.ensure_matches(T::PROFILE, || WgpuError::InvalidPrecisionProfile)?;
         if let Some(input) = T::as_element_slice(input) {
             return self.sparse_forward(plan, input);
         }
@@ -243,7 +243,7 @@ impl SparseExecution for SftWgpuBackend {
         spectrum: &SparseSpectrum,
         output: &mut [T],
     ) -> WgpuResult<()> {
-        validate_profile::<T>(precision)?;
+        precision.ensure_matches(T::PROFILE, || WgpuError::InvalidPrecisionProfile)?;
         if let Some(output) = T::as_element_slice_mut(output) {
             return self.sparse_inverse_into(plan, spectrum, output);
         }
@@ -296,11 +296,4 @@ impl SparseExecution for SftWgpuBackend {
         }
         Ok(quantized)
     }
-}
-
-fn validate_profile<T: GpuStorage<Complex32>>(precision: PrecisionProfile) -> WgpuResult<()> {
-    if precision != T::PROFILE {
-        return Err(WgpuError::InvalidPrecisionProfile);
-    }
-    Ok(())
 }

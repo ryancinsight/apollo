@@ -405,7 +405,17 @@ pub trait SparseComplexStorage: CpuStorage<Complex64> {
         values: &mut Vec<Self>,
         profile: PrecisionProfile,
     ) -> ApolloResult<()> {
-        validate_profile(profile, Self::PROFILE)?;
+        profile.ensure_matches(Self::PROFILE, || {
+            ApolloError::validation(
+                "precision_profile",
+                format!("{profile:?}"),
+                format!(
+                    "storage {:?} with compute {:?}",
+                    Self::PROFILE.storage,
+                    Self::PROFILE.compute
+                ),
+            )
+        })?;
         validate_transform_len(plan.len(), signal.len())?;
         let owner_values = owner_values_from_storage(signal);
         let spectrum = plan.forward(&owner_values)?;
@@ -426,7 +436,17 @@ pub trait SparseComplexStorage: CpuStorage<Complex64> {
         output: &mut [Self],
         profile: PrecisionProfile,
     ) -> ApolloResult<()> {
-        validate_profile(profile, Self::PROFILE)?;
+        profile.ensure_matches(Self::PROFILE, || {
+            ApolloError::validation(
+                "precision_profile",
+                format!("{profile:?}"),
+                format!(
+                    "storage {:?} with compute {:?}",
+                    Self::PROFILE.storage,
+                    Self::PROFILE.compute
+                ),
+            )
+        })?;
         validate_transform_len(plan.len(), output.len())?;
         let spectrum = sparse_spectrum_from_storage(plan.len(), frequencies, values)?;
         let owner_values = plan.inverse(&spectrum)?;
@@ -443,7 +463,17 @@ impl SparseComplexStorage for Complex64 {
         values: &mut Vec<Self>,
         profile: PrecisionProfile,
     ) -> ApolloResult<()> {
-        validate_profile(profile, Self::PROFILE)?;
+        profile.ensure_matches(Self::PROFILE, || {
+            ApolloError::validation(
+                "precision_profile",
+                format!("{profile:?}"),
+                format!(
+                    "storage {:?} with compute {:?}",
+                    Self::PROFILE.storage,
+                    Self::PROFILE.compute
+                ),
+            )
+        })?;
         let spectrum = plan.forward(signal)?;
         frequencies.clear();
         values.clear();
@@ -459,7 +489,17 @@ impl SparseComplexStorage for Complex64 {
         output: &mut [Self],
         profile: PrecisionProfile,
     ) -> ApolloResult<()> {
-        validate_profile(profile, Self::PROFILE)?;
+        profile.ensure_matches(Self::PROFILE, || {
+            ApolloError::validation(
+                "precision_profile",
+                format!("{profile:?}"),
+                format!(
+                    "storage {:?} with compute {:?}",
+                    Self::PROFILE.storage,
+                    Self::PROFILE.compute
+                ),
+            )
+        })?;
         validate_transform_len(plan.len(), output.len())?;
         let spectrum = sparse_spectrum_from_storage(plan.len(), frequencies, values)?;
         let signal = plan.inverse(&spectrum)?;
@@ -471,21 +511,6 @@ impl SparseComplexStorage for Complex64 {
 impl SparseComplexStorage for Complex32 {}
 
 impl SparseComplexStorage for [F16; 2] {}
-
-fn validate_profile(actual: PrecisionProfile, expected: PrecisionProfile) -> ApolloResult<()> {
-    if actual.matches_storage_and_compute(expected) {
-        Ok(())
-    } else {
-        Err(ApolloError::validation(
-            "precision_profile",
-            format!("{actual:?}"),
-            format!(
-                "storage {:?} with compute {:?}",
-                expected.storage, expected.compute
-            ),
-        ))
-    }
-}
 
 #[inline]
 fn validate_transform_len(expected: usize, actual: usize) -> ApolloResult<()> {

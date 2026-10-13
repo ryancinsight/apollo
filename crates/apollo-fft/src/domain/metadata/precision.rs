@@ -76,6 +76,30 @@ impl PrecisionProfile {
         self.storage == expected.storage && self.compute == expected.compute
     }
 
+    /// Fail with `mismatch()` unless storage and arithmetic precision match `expected`.
+    ///
+    /// Mode intent is ignored, matching [`matches_storage_and_compute`](Self::matches_storage_and_compute).
+    /// The error is generic so every transform crate calls this directly instead
+    /// of cloning a per-crate validator.
+    ///
+    /// ```rust
+    /// use apollo_fft::PrecisionProfile;
+    /// let low = PrecisionProfile::LOW_PRECISION_F32;
+    /// assert!(low.ensure_matches(low, || "mismatch").is_ok());
+    /// assert_eq!(
+    ///     low.ensure_matches(PrecisionProfile::HIGH_ACCURACY_F64, || "mismatch"),
+    ///     Err("mismatch")
+    /// );
+    /// ```
+    #[inline]
+    pub fn ensure_matches<E>(self, expected: Self, mismatch: impl FnOnce() -> E) -> Result<(), E> {
+        if self.matches_storage_and_compute(expected) {
+            Ok(())
+        } else {
+            Err(mismatch())
+        }
+    }
+
     /// CPU-style high-accuracy profile.
     pub const HIGH_ACCURACY_F64: Self = Self {
         mode: PrecisionMode::HighAccuracy,

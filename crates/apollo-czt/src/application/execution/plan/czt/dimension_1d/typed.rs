@@ -1,7 +1,7 @@
 //! Typed storage implementations for 1D Chirp Z-Transform.
 
 use super::plan::CztPlan;
-use super::workspace::{validate_profile, with_complex64_workspaces};
+use super::workspace::with_complex64_workspaces;
 use crate::domain::contracts::error::CztError;
 use apollo_fft::{CpuStorage, PrecisionProfile, F16};
 use eunomia::{Complex32, Complex64};
@@ -40,7 +40,7 @@ pub trait CztStorage: CpuStorage<Complex64> {
         output: &mut [Self],
         profile: PrecisionProfile,
     ) -> Result<(), CztError> {
-        validate_profile(profile, Self::PROFILE)?;
+        profile.ensure_matches(Self::PROFILE, || CztError::PrecisionMismatch)?;
         if input.len() != plan.input_len() || output.len() != plan.output_len() {
             return Err(CztError::LengthMismatch);
         }
@@ -82,7 +82,7 @@ pub trait CztStorage: CpuStorage<Complex64> {
         output: &mut [Self],
         profile: PrecisionProfile,
     ) -> Result<(), CztError> {
-        validate_profile(profile, Self::PROFILE)?;
+        profile.ensure_matches(Self::PROFILE, || CztError::PrecisionMismatch)?;
         if spectrum.len() != plan.output_len() || output.len() != plan.input_len() {
             return Err(CztError::LengthMismatch);
         }
@@ -120,7 +120,7 @@ impl CztStorage for Complex64 {
         output: &mut Array1<Self>,
         profile: PrecisionProfile,
     ) -> Result<(), CztError> {
-        validate_profile(profile, Self::PROFILE)?;
+        profile.ensure_matches(Self::PROFILE, || CztError::PrecisionMismatch)?;
         plan.forward_into(input, output)
     }
 
@@ -130,7 +130,7 @@ impl CztStorage for Complex64 {
         output: &mut [Self],
         profile: PrecisionProfile,
     ) -> Result<(), CztError> {
-        validate_profile(profile, Self::PROFILE)?;
+        profile.ensure_matches(Self::PROFILE, || CztError::PrecisionMismatch)?;
         plan.forward_complex64_slice_into(input, output)
     }
 
@@ -140,7 +140,7 @@ impl CztStorage for Complex64 {
         output: &mut Array1<Self>,
         profile: PrecisionProfile,
     ) -> Result<(), CztError> {
-        validate_profile(profile, Self::PROFILE)?;
+        profile.ensure_matches(Self::PROFILE, || CztError::PrecisionMismatch)?;
         if spectrum.size() != plan.output_len() || output.size() != plan.input_len() {
             return Err(CztError::LengthMismatch);
         }
@@ -160,7 +160,7 @@ impl CztStorage for Complex64 {
         output: &mut [Self],
         profile: PrecisionProfile,
     ) -> Result<(), CztError> {
-        validate_profile(profile, Self::PROFILE)?;
+        profile.ensure_matches(Self::PROFILE, || CztError::PrecisionMismatch)?;
         plan.inverse_complex64_slice_into(spectrum, output)
     }
 }

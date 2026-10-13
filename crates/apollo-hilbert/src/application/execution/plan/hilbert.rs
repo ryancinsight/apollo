@@ -234,7 +234,7 @@ pub trait HilbertStorage: CpuStorage {
         signal: &[Self],
         profile: PrecisionProfile,
     ) -> HilbertResult<AnalyticSignal> {
-        validate_profile(profile, Self::PROFILE)?;
+        profile.ensure_matches(Self::PROFILE, || HilbertError::PrecisionMismatch)?;
         if signal.len() != plan.len() {
             return Err(HilbertError::LengthMismatch);
         }
@@ -253,7 +253,7 @@ pub trait HilbertStorage: CpuStorage {
         output: &mut [Self],
         profile: PrecisionProfile,
     ) -> HilbertResult<()> {
-        validate_profile(profile, Self::PROFILE)?;
+        profile.ensure_matches(Self::PROFILE, || HilbertError::PrecisionMismatch)?;
         if signal.len() != plan.len() || output.len() != plan.len() {
             return Err(HilbertError::LengthMismatch);
         }
@@ -276,7 +276,7 @@ impl HilbertStorage for f64 {
         signal: &[Self],
         profile: PrecisionProfile,
     ) -> HilbertResult<AnalyticSignal> {
-        validate_profile(profile, Self::PROFILE)?;
+        profile.ensure_matches(Self::PROFILE, || HilbertError::PrecisionMismatch)?;
         plan.analytic_signal(signal)
     }
 
@@ -286,7 +286,7 @@ impl HilbertStorage for f64 {
         output: &mut [Self],
         profile: PrecisionProfile,
     ) -> HilbertResult<()> {
-        validate_profile(profile, Self::PROFILE)?;
+        profile.ensure_matches(Self::PROFILE, || HilbertError::PrecisionMismatch)?;
         plan.transform_into(signal, output)
     }
 }
@@ -294,14 +294,6 @@ impl HilbertStorage for f64 {
 impl HilbertStorage for f32 {}
 
 impl HilbertStorage for F16 {}
-
-fn validate_profile(actual: PrecisionProfile, expected: PrecisionProfile) -> HilbertResult<()> {
-    if actual.matches_storage_and_compute(expected) {
-        Ok(())
-    } else {
-        Err(HilbertError::PrecisionMismatch)
-    }
-}
 
 #[cfg(test)]
 mod tests {

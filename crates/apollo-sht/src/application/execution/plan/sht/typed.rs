@@ -1,11 +1,10 @@
 //! Typed storage traits and implementations for Spherical Harmonic Transforms.
 
 use super::quadrature::{
-    validate_coefficient_array_shape, validate_profile, validate_sample_array_shape,
-    write_complex_array,
+    validate_coefficient_array_shape, validate_sample_array_shape, write_complex_array,
 };
 use super::ShtPlan;
-use crate::domain::contracts::error::ShtResult;
+use crate::domain::contracts::error::{ShtError, ShtResult};
 use crate::domain::spectrum::coefficients::SphericalHarmonicCoefficients;
 use apollo_fft::{CpuStorage, PrecisionProfile, F16};
 use eunomia::{Complex32, Complex64};
@@ -21,8 +20,8 @@ pub trait ShtRealStorage: CpuStorage {
         sample_profile: PrecisionProfile,
         coefficient_profile: PrecisionProfile,
     ) -> ShtResult<()> {
-        validate_profile(sample_profile, Self::PROFILE)?;
-        validate_profile(coefficient_profile, O::PROFILE)?;
+        sample_profile.ensure_matches(Self::PROFILE, || ShtError::PrecisionMismatch)?;
+        coefficient_profile.ensure_matches(O::PROFILE, || ShtError::PrecisionMismatch)?;
         validate_sample_array_shape(plan, samples)?;
         validate_coefficient_array_shape(plan, output)?;
         let samples64 = samples.mapv(CpuStorage::to_cpu);
@@ -40,8 +39,8 @@ impl ShtRealStorage for f64 {
         sample_profile: PrecisionProfile,
         coefficient_profile: PrecisionProfile,
     ) -> ShtResult<()> {
-        validate_profile(sample_profile, Self::PROFILE)?;
-        validate_profile(coefficient_profile, O::PROFILE)?;
+        sample_profile.ensure_matches(Self::PROFILE, || ShtError::PrecisionMismatch)?;
+        coefficient_profile.ensure_matches(O::PROFILE, || ShtError::PrecisionMismatch)?;
         validate_sample_array_shape(plan, samples)?;
         validate_coefficient_array_shape(plan, output)?;
         let coefficients = plan.forward_real(samples)?;
@@ -64,8 +63,8 @@ pub trait ShtComplexStorage: CpuStorage<Complex64> {
         sample_profile: PrecisionProfile,
         coefficient_profile: PrecisionProfile,
     ) -> ShtResult<()> {
-        validate_profile(sample_profile, Self::PROFILE)?;
-        validate_profile(coefficient_profile, O::PROFILE)?;
+        sample_profile.ensure_matches(Self::PROFILE, || ShtError::PrecisionMismatch)?;
+        coefficient_profile.ensure_matches(O::PROFILE, || ShtError::PrecisionMismatch)?;
         validate_sample_array_shape(plan, samples)?;
         validate_coefficient_array_shape(plan, output)?;
         let samples64 = samples.mapv(CpuStorage::to_cpu);
@@ -82,8 +81,8 @@ pub trait ShtComplexStorage: CpuStorage<Complex64> {
         coefficient_profile: PrecisionProfile,
         sample_profile: PrecisionProfile,
     ) -> ShtResult<()> {
-        validate_profile(coefficient_profile, Self::PROFILE)?;
-        validate_profile(sample_profile, O::PROFILE)?;
+        coefficient_profile.ensure_matches(Self::PROFILE, || ShtError::PrecisionMismatch)?;
+        sample_profile.ensure_matches(O::PROFILE, || ShtError::PrecisionMismatch)?;
         validate_coefficient_array_shape(plan, coefficients)?;
         validate_sample_array_shape(plan, output)?;
         let coefficients64 = coefficients.mapv(CpuStorage::to_cpu);
@@ -102,8 +101,8 @@ pub trait ShtComplexStorage: CpuStorage<Complex64> {
         coefficient_profile: PrecisionProfile,
         sample_profile: PrecisionProfile,
     ) -> ShtResult<()> {
-        validate_profile(coefficient_profile, Self::PROFILE)?;
-        validate_profile(sample_profile, O::PROFILE)?;
+        coefficient_profile.ensure_matches(Self::PROFILE, || ShtError::PrecisionMismatch)?;
+        sample_profile.ensure_matches(O::PROFILE, || ShtError::PrecisionMismatch)?;
         validate_coefficient_array_shape(plan, coefficients)?;
         validate_sample_array_shape(plan, output)?;
         let coefficients64 = coefficients.mapv(CpuStorage::to_cpu);
@@ -130,8 +129,8 @@ impl ShtComplexStorage for Complex64 {
         sample_profile: PrecisionProfile,
         coefficient_profile: PrecisionProfile,
     ) -> ShtResult<()> {
-        validate_profile(sample_profile, Self::PROFILE)?;
-        validate_profile(coefficient_profile, O::PROFILE)?;
+        sample_profile.ensure_matches(Self::PROFILE, || ShtError::PrecisionMismatch)?;
+        coefficient_profile.ensure_matches(O::PROFILE, || ShtError::PrecisionMismatch)?;
         validate_sample_array_shape(plan, samples)?;
         validate_coefficient_array_shape(plan, output)?;
         let coefficients = plan.forward_complex(samples)?;
@@ -146,8 +145,8 @@ impl ShtComplexStorage for Complex64 {
         coefficient_profile: PrecisionProfile,
         sample_profile: PrecisionProfile,
     ) -> ShtResult<()> {
-        validate_profile(coefficient_profile, Self::PROFILE)?;
-        validate_profile(sample_profile, O::PROFILE)?;
+        coefficient_profile.ensure_matches(Self::PROFILE, || ShtError::PrecisionMismatch)?;
+        sample_profile.ensure_matches(O::PROFILE, || ShtError::PrecisionMismatch)?;
         validate_coefficient_array_shape(plan, coefficients)?;
         validate_sample_array_shape(plan, output)?;
         let owner_coefficients = SphericalHarmonicCoefficients::from_values(
@@ -166,8 +165,8 @@ impl ShtComplexStorage for Complex64 {
         coefficient_profile: PrecisionProfile,
         sample_profile: PrecisionProfile,
     ) -> ShtResult<()> {
-        validate_profile(coefficient_profile, Self::PROFILE)?;
-        validate_profile(sample_profile, O::PROFILE)?;
+        coefficient_profile.ensure_matches(Self::PROFILE, || ShtError::PrecisionMismatch)?;
+        sample_profile.ensure_matches(O::PROFILE, || ShtError::PrecisionMismatch)?;
         validate_coefficient_array_shape(plan, coefficients)?;
         validate_sample_array_shape(plan, output)?;
         let owner_coefficients = SphericalHarmonicCoefficients::from_values(

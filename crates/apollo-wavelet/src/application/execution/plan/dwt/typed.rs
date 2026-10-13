@@ -1,6 +1,5 @@
 use super::boundary::{
     dwt_typed_coefficients_to_leto, validate_cwt_output_shape, validate_dwt_output_shapes,
-    validate_profile,
 };
 use super::{DwtLetoCoefficients, DwtPlan};
 use crate::domain::contracts::error::{WaveletError, WaveletResult};
@@ -34,7 +33,7 @@ impl DwtPlan {
         signal: leto::ArrayView1<'_, T>,
         profile: PrecisionProfile,
     ) -> WaveletResult<DwtLetoCoefficients<T>> {
-        validate_profile(profile, T::PROFILE)?;
+        profile.ensure_matches(T::PROFILE, || WaveletError::PrecisionMismatch)?;
         if signal.shape()[0] == 0 {
             return Err(WaveletError::EmptySignal);
         }
@@ -68,7 +67,7 @@ impl DwtPlan {
         coefficients: &DwtLetoCoefficients<T>,
         profile: PrecisionProfile,
     ) -> WaveletResult<leto::Array<T, leto::MnemosyneStorage<T>, 1>> {
-        validate_profile(profile, T::PROFILE)?;
+        profile.ensure_matches(T::PROFILE, || WaveletError::PrecisionMismatch)?;
         if coefficients.len() != self.len() || coefficients.levels() != self.levels() {
             return Err(WaveletError::CoefficientShapeMismatch);
         }
@@ -104,7 +103,7 @@ pub trait WaveletStorage: CpuStorage {
         details: &mut [Self],
         profile: PrecisionProfile,
     ) -> WaveletResult<()> {
-        validate_profile(profile, Self::PROFILE)?;
+        profile.ensure_matches(Self::PROFILE, || WaveletError::PrecisionMismatch)?;
         validate_dwt_output_shapes(plan, approximation.len(), details.len())?;
         if signal.len() != plan.len() {
             return Err(WaveletError::LengthMismatch);
@@ -135,7 +134,7 @@ pub trait WaveletStorage: CpuStorage {
         output: &mut [Self],
         profile: PrecisionProfile,
     ) -> WaveletResult<()> {
-        validate_profile(profile, Self::PROFILE)?;
+        profile.ensure_matches(Self::PROFILE, || WaveletError::PrecisionMismatch)?;
         validate_dwt_output_shapes(plan, approximation.len(), details.len())?;
         if output.len() != plan.len() {
             return Err(WaveletError::LengthMismatch);
@@ -162,7 +161,7 @@ pub trait WaveletStorage: CpuStorage {
         output: &mut Array2<Self>,
         profile: PrecisionProfile,
     ) -> WaveletResult<()> {
-        validate_profile(profile, Self::PROFILE)?;
+        profile.ensure_matches(Self::PROFILE, || WaveletError::PrecisionMismatch)?;
         validate_cwt_output_shape(plan, output)?;
         if signal.len() != plan.len() {
             return Err(WaveletError::LengthMismatch);
@@ -189,7 +188,7 @@ impl WaveletStorage for f64 {
         details: &mut [Self],
         profile: PrecisionProfile,
     ) -> WaveletResult<()> {
-        validate_profile(profile, Self::PROFILE)?;
+        profile.ensure_matches(Self::PROFILE, || WaveletError::PrecisionMismatch)?;
         validate_dwt_output_shapes(plan, approximation.len(), details.len())?;
         if signal.len() != plan.len() {
             return Err(WaveletError::LengthMismatch);
@@ -207,7 +206,7 @@ impl WaveletStorage for f64 {
         output: &mut [Self],
         profile: PrecisionProfile,
     ) -> WaveletResult<()> {
-        validate_profile(profile, Self::PROFILE)?;
+        profile.ensure_matches(Self::PROFILE, || WaveletError::PrecisionMismatch)?;
         validate_dwt_output_shapes(plan, approximation.len(), details.len())?;
         if output.len() != plan.len() {
             return Err(WaveletError::LengthMismatch);
@@ -229,7 +228,7 @@ impl WaveletStorage for f64 {
         output: &mut Array2<Self>,
         profile: PrecisionProfile,
     ) -> WaveletResult<()> {
-        validate_profile(profile, Self::PROFILE)?;
+        profile.ensure_matches(Self::PROFILE, || WaveletError::PrecisionMismatch)?;
         validate_cwt_output_shape(plan, output)?;
         if signal.len() != plan.len() {
             return Err(WaveletError::LengthMismatch);

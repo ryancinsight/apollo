@@ -225,3 +225,27 @@ impl HalfSpectrum3D {
         }
     }
 }
+
+/// Fail with `mismatch()` unless both slice lengths equal the plan length.
+///
+/// Every transform crate typed entry path checks this before touching
+/// scratch. One shared guard keeps the comparison from drifting per crate.
+///
+/// ```rust
+/// use apollo_fft::ensure_input_output_len;
+/// assert!(ensure_input_output_len(8, 8, 8, || "mismatch").is_ok());
+/// assert_eq!(ensure_input_output_len(8, 8, 7, || "mismatch"), Err("mismatch"));
+/// ```
+#[inline]
+pub fn ensure_input_output_len<E>(
+    plan_len: usize,
+    input_len: usize,
+    output_len: usize,
+    mismatch: impl FnOnce() -> E,
+) -> Result<(), E> {
+    if input_len == plan_len && output_len == plan_len {
+        Ok(())
+    } else {
+        Err(mismatch())
+    }
+}

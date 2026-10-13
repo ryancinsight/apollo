@@ -407,7 +407,17 @@ impl NufftPlan1D {
         output: &mut [T],
         profile: PrecisionProfile,
     ) -> ApolloResult<()> {
-        validate_profile(profile, T::PROFILE)?;
+        profile.ensure_matches(T::PROFILE, || {
+            ApolloError::validation(
+                "precision_profile",
+                format!("{profile:?}"),
+                format!(
+                    "storage {:?} with compute {:?}",
+                    T::PROFILE.storage,
+                    T::PROFILE.compute
+                ),
+            )
+        })?;
         if positions.len() != values.len() {
             return Err(ApolloError::ShapeMismatch {
                 expected: positions.len().to_string(),
@@ -470,7 +480,17 @@ impl NufftPlan1D {
         output: &mut [T],
         profile: PrecisionProfile,
     ) -> ApolloResult<()> {
-        validate_profile(profile, T::PROFILE)?;
+        profile.ensure_matches(T::PROFILE, || {
+            ApolloError::validation(
+                "precision_profile",
+                format!("{profile:?}"),
+                format!(
+                    "storage {:?} with compute {:?}",
+                    T::PROFILE.storage,
+                    T::PROFILE.compute
+                ),
+            )
+        })?;
         if fourier_coeffs.len() != self.n_out
             || scratch_spread.len() != self.m
             || output.len() != positions.len()
@@ -593,24 +613,6 @@ impl NufftComplexStorage for Complex32 {
 }
 
 impl NufftComplexStorage for [F16; 2] {}
-
-pub(crate) fn validate_profile(
-    actual: PrecisionProfile,
-    expected: PrecisionProfile,
-) -> ApolloResult<()> {
-    if actual.matches_storage_and_compute(expected) {
-        Ok(())
-    } else {
-        Err(ApolloError::validation(
-            "precision_profile",
-            format!("{actual:?}"),
-            format!(
-                "storage {:?} with compute {:?}",
-                expected.storage, expected.compute
-            ),
-        ))
-    }
-}
 
 pub(crate) fn write_typed_output<T: NufftComplexStorage>(source: &[Complex64], target: &mut [T]) {
     for (slot, value) in target.iter_mut().zip(source.iter().copied()) {

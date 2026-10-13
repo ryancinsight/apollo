@@ -183,8 +183,8 @@ impl StftPlan {
         output: &mut Array1<O>,
         profile: PrecisionProfile,
     ) -> StftResult<()> {
-        validate_profile(profile, T::PROFILE)?;
-        validate_profile(profile, O::PROFILE)?;
+        profile.ensure_matches(T::PROFILE, || StftError::PrecisionMismatch)?;
+        profile.ensure_matches(O::PROFILE, || StftError::PrecisionMismatch)?;
         if signal.size() < self.frame_len {
             return Err(StftError::InputTooShort);
         }
@@ -215,8 +215,8 @@ impl StftPlan {
         signal: leto::ArrayView1<'_, T>,
         profile: PrecisionProfile,
     ) -> StftResult<leto::Array<O, leto::MnemosyneStorage<O>, 1>> {
-        validate_profile(profile, T::PROFILE)?;
-        validate_profile(profile, O::PROFILE)?;
+        profile.ensure_matches(T::PROFILE, || StftError::PrecisionMismatch)?;
+        profile.ensure_matches(O::PROFILE, || StftError::PrecisionMismatch)?;
         if signal.shape()[0] == 0 {
             return Err(StftError::InputTooShort);
         }
@@ -391,8 +391,8 @@ impl StftPlan {
         output: &mut Array1<O>,
         profile: PrecisionProfile,
     ) -> StftResult<()> {
-        validate_profile(profile, T::PROFILE)?;
-        validate_profile(profile, O::PROFILE)?;
+        profile.ensure_matches(T::PROFILE, || StftError::PrecisionMismatch)?;
+        profile.ensure_matches(O::PROFILE, || StftError::PrecisionMismatch)?;
         let frames = self.frame_count(signal_len);
         if spectrum.size() != frames * self.spectrum_len() || output.size() != signal_len {
             return Err(StftError::LengthMismatch);
@@ -424,8 +424,8 @@ impl StftPlan {
         signal_len: usize,
         profile: PrecisionProfile,
     ) -> StftResult<leto::Array<O, leto::MnemosyneStorage<O>, 1>> {
-        validate_profile(profile, T::PROFILE)?;
-        validate_profile(profile, O::PROFILE)?;
+        profile.ensure_matches(T::PROFILE, || StftError::PrecisionMismatch)?;
+        profile.ensure_matches(O::PROFILE, || StftError::PrecisionMismatch)?;
         if spectrum.shape()[0] == 0 {
             return Err(StftError::InputTooShort);
         }
@@ -437,14 +437,6 @@ impl StftPlan {
             output.as_slice().expect("STFT output must be contiguous"),
         )
         .ok_or(StftError::LengthMismatch)
-    }
-}
-
-fn validate_profile(actual: PrecisionProfile, expected: PrecisionProfile) -> StftResult<()> {
-    if actual.matches_storage_and_compute(expected) {
-        Ok(())
-    } else {
-        Err(StftError::PrecisionMismatch)
     }
 }
 

@@ -2,7 +2,6 @@ use super::{DwtLetoCoefficients, DwtPlan};
 use crate::domain::contracts::error::{WaveletError, WaveletResult};
 use crate::domain::spectrum::coefficients::{detail_level_bounds, DwtCoefficients};
 use crate::CwtPlan;
-use apollo_fft::PrecisionProfile;
 use leto::Array2;
 
 pub(crate) fn dwt_coefficients_to_leto(
@@ -70,17 +69,6 @@ pub(crate) fn dwt_coefficients_from_leto(
         approximation,
         details,
     )
-}
-
-pub(crate) fn validate_profile(
-    actual: PrecisionProfile,
-    expected: PrecisionProfile,
-) -> WaveletResult<()> {
-    if actual.matches_storage_and_compute(expected) {
-        Ok(())
-    } else {
-        Err(WaveletError::PrecisionMismatch)
-    }
 }
 
 pub(crate) fn validate_dwt_output_shapes(

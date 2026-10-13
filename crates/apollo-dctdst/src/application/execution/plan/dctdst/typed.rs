@@ -79,7 +79,7 @@ pub trait RealTransformStorage: CpuStorage {
         output: &mut [Self],
         profile: PrecisionProfile,
     ) -> DctDstResult<()> {
-        validate_profile(profile, Self::PROFILE)?;
+        profile.ensure_matches(Self::PROFILE, || DctDstError::PrecisionMismatch)?;
         if signal.len() != plan.len() || output.len() != plan.len() {
             return Err(DctDstError::LengthMismatch);
         }
@@ -102,7 +102,7 @@ pub trait RealTransformStorage: CpuStorage {
         output: &mut [Self],
         profile: PrecisionProfile,
     ) -> DctDstResult<()> {
-        validate_profile(profile, Self::PROFILE)?;
+        profile.ensure_matches(Self::PROFILE, || DctDstError::PrecisionMismatch)?;
         if signal.len() != plan.len() || output.len() != plan.len() {
             return Err(DctDstError::LengthMismatch);
         }
@@ -126,7 +126,7 @@ impl RealTransformStorage for f64 {
         output: &mut [Self],
         profile: PrecisionProfile,
     ) -> DctDstResult<()> {
-        validate_profile(profile, Self::PROFILE)?;
+        profile.ensure_matches(Self::PROFILE, || DctDstError::PrecisionMismatch)?;
         plan.forward_into(signal, output)
     }
 
@@ -136,7 +136,7 @@ impl RealTransformStorage for f64 {
         output: &mut [Self],
         profile: PrecisionProfile,
     ) -> DctDstResult<()> {
-        validate_profile(profile, Self::PROFILE)?;
+        profile.ensure_matches(Self::PROFILE, || DctDstError::PrecisionMismatch)?;
         plan.inverse_into(signal, output)
     }
 }
@@ -190,13 +190,5 @@ impl RealTransformGpuStorage for F16 {
 
     fn from_gpu(value: f32) -> Self {
         F16::from_f32(value)
-    }
-}
-
-fn validate_profile(actual: PrecisionProfile, expected: PrecisionProfile) -> DctDstResult<()> {
-    if actual.matches_storage_and_compute(expected) {
-        Ok(())
-    } else {
-        Err(DctDstError::PrecisionMismatch)
     }
 }
