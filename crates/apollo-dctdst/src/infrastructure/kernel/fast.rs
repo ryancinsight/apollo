@@ -180,6 +180,14 @@ fn populate_zero_padded_real_input(signal: &[f64], buf: &mut [Complex64]) {
     zero_pad.fill(Complex64::new(0.0, 0.0));
 }
 
+/// Release this module's thread-local complex scratch pool on the calling
+/// thread: capacity returns to its recorded provision (zero unless a
+/// bounded provision was recorded). Called by the crate-level release;
+/// the third slice of APOLLO-MEM-SIBLING-THREAD-SCRATCH.
+pub fn release_fast_scratch() {
+    COMPLEX_SCRATCH_POOL.with(|pool| pool.release());
+}
+
 #[inline]
 fn with_zero_padded_forward_fft<R>(signal: &[f64], body: impl FnOnce(&[Complex64], f64) -> R) -> R {
     let two_n = 2 * signal.len();
