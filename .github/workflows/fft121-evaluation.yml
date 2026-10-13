@@ -3,6 +3,10 @@ name: FFT121 evaluation
 on:
   push:
     branches: [codex/apollo-row-prologue-642]
+    paths:
+      - crates/apollo-fft/**
+      - scripts/fft121_evaluate.py
+      - .github/workflows/fft121-evaluation.yml
   workflow_dispatch:
     inputs:
       baseline:
@@ -41,7 +45,9 @@ jobs:
       - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6
         with:
           workspaces: candidate -> ../target
-          cache-targets: false
+          cache-targets: true
+          cache-workspace-crates: true
+          cache-on-failure: true
       - name: Check native capabilities and export exact baseline
         working-directory: candidate
         run: |
@@ -63,6 +69,9 @@ jobs:
           diff -r ../baseline/crates/apollo-bench/src crates/apollo-bench/src
           diff -r ../baseline/crates/apollo-alloc/src crates/apollo-alloc/src
           cmp ../baseline/crates/apollo-fft/benches/rustfft_comparison.rs crates/apollo-fft/benches/rustfft_comparison.rs
+          cmp ../baseline/Cargo.toml Cargo.toml
+          cmp ../baseline/rust-toolchain.toml rust-toolchain.toml
+          cmp ../baseline/.cargo/config.toml .cargo/config.toml
           python3 - <<'PY'
           import tomllib
           from pathlib import Path
@@ -117,6 +126,5 @@ jobs:
           name: fft121-evaluation-${{ github.sha }}
           path: |
             evidence
-            !evidence/bin
           retention-days: 7
           if-no-files-found: error

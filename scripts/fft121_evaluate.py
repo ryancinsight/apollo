@@ -86,11 +86,11 @@ def main(evidence: Path) -> None:
     processor = available[1] if len(available) > 1 else available[0]
     os.sched_setaffinity(0, {processor})
     assert os.sched_getaffinity(0) == {processor}
-    environment = dict(os.environ, APOLLO_BENCH_MODE="measurement")
+    environment = dict(os.environ, APOLLO_BENCH_MODE="measurement",
+                       APOLLO_BENCH_PROCESSOR=str(processor))
     environment.pop("APOLLO_BENCH_FULL_SWEEP", None)
-    # Hermes does not implement Linux binding at the locked revision. The
-    # kernel affinity above pins this process and every child instead.
-    environment.pop("APOLLO_BENCH_PROCESSOR", None)
+    # Give the benchmark's own selector the same OS processor index. Its
+    # automatic topology choice need not belong to a restricted affinity set.
     binaries = {role: evidence / "bin" / role for role in ("baseline", "candidate")}
     identities = {
         role: hashlib.sha256(binary.read_bytes()).hexdigest()

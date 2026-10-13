@@ -162,7 +162,18 @@ mod tests {
     }
 
     fn max_err(got: &[Complex64], expected: &[Complex64]) -> f64 {
+        assert_eq!(got.len(), expected.len());
         got.iter().zip(expected).fold(0.0f64, |acc, (g, e)| {
+            // These bounded input families have finite analytical outputs.
+            // Reject non-finite values before max: float::max ignores NaN.
+            assert!(
+                g.re.is_finite() && g.im.is_finite(),
+                "non-finite DFT value {g:?}"
+            );
+            assert!(
+                e.re.is_finite() && e.im.is_finite(),
+                "non-finite oracle value {e:?}"
+            );
             let d = ((g.re - e.re) * (g.re - e.re) + (g.im - e.im) * (g.im - e.im)).sqrt();
             acc.max(d)
         })
