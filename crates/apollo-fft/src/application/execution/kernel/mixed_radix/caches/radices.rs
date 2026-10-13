@@ -41,12 +41,16 @@ pub(crate) fn cached_prime23_radices(n: usize) -> Option<Arc<[usize]>> {
             if let Some(radices) = index.get(&n).cloned().and_then(upgrade_index) {
                 radices
             } else {
-                index.insert(n, downgrade_index(&new_radices));
+                index.insert(n, downgrade_index(new_radices.as_ref()));
                 new_radices
             }
         }
     };
-    TL_PRIME23_RADIX.with(|cache| cache.borrow_mut().insert(n, downgrade_index(&radices)));
+    TL_PRIME23_RADIX.with(|cache| {
+        cache
+            .borrow_mut()
+            .insert(n, downgrade_index(radices.as_ref()))
+    });
     radices
 }
 
@@ -57,8 +61,8 @@ fn upgrade_index(index: RadixIndex) -> Option<Option<Arc<[usize]>>> {
     }
 }
 
-fn downgrade_index(radices: &Option<Arc<[usize]>>) -> RadixIndex {
-    radices.as_ref().map(Arc::downgrade)
+fn downgrade_index(radices: Option<&Arc<[usize]>>) -> RadixIndex {
+    radices.map(Arc::downgrade)
 }
 
 #[inline]

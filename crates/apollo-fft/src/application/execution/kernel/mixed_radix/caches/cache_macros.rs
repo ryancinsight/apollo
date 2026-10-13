@@ -3,8 +3,7 @@
 //!
 //! Every complex-type cache follows the same structure:
 //! 1. Two `static LazyLock<RwLock<FxHashMap<K, V>>>` globals (one per precision)
-//! 2. A sparse thread-local `FxHashMap` per precision and, where the key domain
-//!    is bounded, a process-wide collision-safe direct-mapped table
+//! 2. A sparse thread-local `FxHashMap` per precision
 //! 3. A sealed marker trait + a Store trait with `tl_get`/`tl_insert`/`global`
 //! 4. Identical `impl` blocks for `Complex64` and `Complex32`
 //! 5. A `cached_*` function with TL-then-global-then-build logic
@@ -13,11 +12,6 @@
 //! and both impl blocks). Each cache file keeps its own statics (step 1–2)
 //! and its own cached function (step 5), which may use the companion
 //! `cached_fetch_arc!` macro for the common `Arc<[C]>` + closure pattern.
-//! Flat tables use `const`-initialized slots. This keeps hot lookup direct and
-//! fixed-size without constructing a large array on each thread's bounded stack
-//! or duplicating the table for every worker. The table index and optional slot
-//! tag jointly validate the full semantic key; collisions fall through to the
-//! sparse thread-local cache.
 //!
 //! Uses `FxHashMap` (from rustc_hash) for faster hashing of integer keys.
 
@@ -38,8 +32,6 @@
 /// * `global_ret_self` — return type of `global()` using `Self`.
 /// * `tl_precise` / `tl_reduced` — thread-local static names.
 /// * `global_precise` / `global_reduced` — global static names.
-/// * `flat_precise` / `flat_reduced` — bounded flat-table static names.
-/// * `flat_coordinates` — maps a bounded key to its table index and tag.
 #[macro_export]
 macro_rules! declare_cache_store {
     (
@@ -107,101 +99,6 @@ macro_rules! declare_cache_store {
         }
     };
 
-    (
-        sealed_mod: $sealed_mod:ident,
-        sealed_trait: $sealed_trait:ident,
-        store_trait: $store_trait:ident,
-        extra_bounds: [$($bound:tt),* $(,)?],
-        key: $key_ty:ty,
-        val_precise: $val_precise:ty,
-        val_reduced: $val_reduced:ty,
-        val_self: $val_self:ty,
-        tl_get: $tl_get:ident,
-        tl_insert: $tl_insert:ident,
-        global: $global:ident,
-        global_ret_self: $global_ret_self:ty,
-        tl_precise: $tl_precise:ident,
-        tl_reduced: $tl_reduced:ident,
-        global_precise: $global_precise:ident,
-        global_reduced: $global_reduced:ident,
-        flat_precise: $flat_precise:ident,
-        flat_reduced: $flat_reduced:ident,
-        flat_coordinates: $flat_coordinates:expr,
-    ) => {
-        mod $sealed_mod {
-            pub(crate) trait $sealed_trait {}
-        }
-
-        pub(crate) trait $store_trait: $($bound +)* $sealed_mod::$sealed_trait {
-            fn $tl_get(key: $key_ty) -> Option<$val_self>;
-            fn $tl_insert(key: $key_ty, v: $val_self);
-            fn $global() -> &'static $global_ret_self;
-        }
-
-        impl $sealed_mod::$sealed_trait for eunomia::Complex64 {}
-        impl $store_trait for eunomia::Complex64 {
-            #[inline]
-            fn $tl_get(key: $key_ty) -> Option<$val_precise> {
-                if let Some((idx, tag)) = ($flat_coordinates)(key) {
-                    if let Some(value) = $crate::application::execution::kernel::mixed_radix::caches::direct_mapped::FlatCacheSlot::get_cached(&$flat_precise[idx], tag) {
-                        return Some(value);
-                    }
-                }
-                $tl_precise.with(|c| c.borrow().get(&key).cloned())
-            }
-            #[inline]
-            fn $tl_insert(key: $key_ty, v: $val_precise) {
-                if let Some((idx, tag)) = ($flat_coordinates)(key) {
-                    let Err(v) = $crate::application::execution::kernel::mixed_radix::caches::direct_mapped::FlatCacheSlot::insert_cached(&$flat_precise[idx], tag, v) else {
-                        return;
-                    };
-                    $tl_precise.with(|c| {
-                        c.borrow_mut().insert(key, v);
-                    });
-                    return;
-                }
-                $tl_precise.with(|c| {
-                    c.borrow_mut().insert(key, v);
-                });
-            }
-            #[inline]
-            fn $global() -> &'static $global_ret_self {
-                &$global_precise
-            }
-        }
-
-        impl $sealed_mod::$sealed_trait for eunomia::Complex32 {}
-        impl $store_trait for eunomia::Complex32 {
-            #[inline]
-            fn $tl_get(key: $key_ty) -> Option<$val_reduced> {
-                if let Some((idx, tag)) = ($flat_coordinates)(key) {
-                    if let Some(value) = $crate::application::execution::kernel::mixed_radix::caches::direct_mapped::FlatCacheSlot::get_cached(&$flat_reduced[idx], tag) {
-                        return Some(value);
-                    }
-                }
-                $tl_reduced.with(|c| c.borrow().get(&key).cloned())
-            }
-            #[inline]
-            fn $tl_insert(key: $key_ty, v: $val_reduced) {
-                if let Some((idx, tag)) = ($flat_coordinates)(key) {
-                    let Err(v) = $crate::application::execution::kernel::mixed_radix::caches::direct_mapped::FlatCacheSlot::insert_cached(&$flat_reduced[idx], tag, v) else {
-                        return;
-                    };
-                    $tl_reduced.with(|c| {
-                        c.borrow_mut().insert(key, v);
-                    });
-                    return;
-                }
-                $tl_reduced.with(|c| {
-                    c.borrow_mut().insert(key, v);
-                });
-            }
-            #[inline]
-            fn $global() -> &'static $global_ret_self {
-                &$global_reduced
-            }
-        }
-    };
 }
 
 /// Generates a `cached_*` function for the common pattern where:

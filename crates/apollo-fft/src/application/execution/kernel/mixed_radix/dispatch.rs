@@ -18,6 +18,8 @@ use super::scalar::MixedRadixScalar;
 use crate::application::execution::kernel::pot::StockhamAutosort;
 use crate::with_pot_zst;
 
+/// Test-only table: production dispatch reads [`cached_coprime_factors`].
+#[cfg(test)]
 #[inline]
 pub(crate) fn static_coprime_factors(n: usize) -> Option<(usize, usize)> {
     match n {

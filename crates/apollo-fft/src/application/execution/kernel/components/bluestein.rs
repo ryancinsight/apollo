@@ -43,8 +43,8 @@
 //! the length and direction only. [`ChirpTables`] holds them; a plan owns
 //! one per direction ([`BluesteinState`]) so a warm call runs two
 //! transforms at `p` and allocates nothing (the padded work buffer is the
-//! thread's Bluestein scratch role), while the free-function route
-//! ([`bluestein_fft`]) builds them per call.
+//! thread's Bluestein scratch role), while the test-only free-function
+//! route builds them per call.
 
 use crate::application::execution::kernel::mixed_radix::MixedRadixScalar;
 use crate::application::execution::plan::fft::dimension_1d::FftPlan1D;
@@ -158,6 +158,10 @@ impl<F: MixedRadixScalar<Complex = Complex<F>>> BluesteinState<F> {
 ///
 /// `NORMALIZE` divides by `n`, and like every other kernel in this module it
 /// applies only on the inverse.
+///
+/// Test-only oracle: production routes execute through plan-owned
+/// [`BluesteinState`], and these tests compare the plan against this route.
+#[cfg(test)]
 pub(crate) fn bluestein_fft<
     F: MixedRadixScalar<Complex = Complex<F>>,
     const INVERSE: bool,

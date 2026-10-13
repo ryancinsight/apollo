@@ -112,6 +112,20 @@ fn workspace(lane_len: usize) -> Option<usize> {
         .flatten()
 }
 
+/// The bounded 1-D owner for four-step lanes of `lane_len`.
+///
+/// Lane passes borrow the owner's tables across executions instead of
+/// rebuilding per pass: the owner is strong and bounded, so the first
+/// pass warms the tables and every later pass hits them.
+fn lane_owner<F: MixedRadixScalar<Complex = Complex<F>>>(
+    lane_len: usize,
+) -> std::sync::Arc<super::dimension_1d::FftPlan1D<F>> {
+    F::acquire_plan(
+        crate::domain::metadata::shape::Shape1D::new(lane_len)
+            .expect("invariant: a lane pass runs non-empty lanes"),
+    )
+}
+
 /// The inactive companion is disposable until the caller's next transpose.
 /// Each task receives disjoint groups containing enough elements for one
 /// complete FFT workspace. It reuses that workspace across its lanes. A final
@@ -131,7 +145,11 @@ pub(super) fn execute<F, D: Direction>(
         each(active, lane_len, |_, lane| direct(lane));
         return;
     };
-    let state = four_step::FourStepState::<F>::new(lane_len);
+    let owner = lane_owner::<F>(lane_len);
+    let state = owner
+        .four_step
+        .as_deref()
+        .expect("invariant: the bounded owner holds four-step state at every lane-gate length");
     assert!(companion.len() >= active.len());
     // A group is an integral number of lanes; both factors are bounded by
     // the companion length, which is a valid allocated complex slice.
@@ -151,12 +169,12 @@ pub(super) fn execute<F, D: Direction>(
             #[cfg(all(test, not(miri)))]
             crate::application::execution::kernel::worker_quiescence::record_worker();
             for lane in group.chunks_exact_mut(lane_len) {
-                transform::<F, D>(&state, lane, scratch);
+                transform::<F, D>(state, lane, scratch);
             }
         },
     );
     for lane in remainder.chunks_exact_mut(lane_len) {
-        transform::<F, D>(&state, lane, &mut companion[..required]);
+        transform::<F, D>(state, lane, &mut companion[..required]);
     }
 }
 
@@ -190,7 +208,11 @@ pub(super) fn execute_from<F, D: Direction>(
         });
         return;
     };
-    let state = four_step::FourStepState::<F>::new(lane_len);
+    let owner = lane_owner::<F>(lane_len);
+    let state = owner
+        .four_step
+        .as_deref()
+        .expect("invariant: the bounded owner holds four-step state at every lane-gate length");
     let group_len = required.div_ceil(lane_len) * lane_len;
     let prefix_len = target.len() / group_len * group_len;
     let (prefix, remainder) = target.split_at_mut(prefix_len);
@@ -205,12 +227,12 @@ pub(super) fn execute_from<F, D: Direction>(
         crate::application::execution::kernel::worker_quiescence::record_worker();
         group.copy_from_slice(staged);
         for lane in group.chunks_exact_mut(lane_len) {
-            transform::<F, D>(&state, lane, staged);
+            transform::<F, D>(state, lane, staged);
         }
     });
     remainder.copy_from_slice(source_remainder);
     for lane in remainder.chunks_exact_mut(lane_len) {
-        transform::<F, D>(&state, lane, &mut source[..required]);
+        transform::<F, D>(state, lane, &mut source[..required]);
     }
 }
 

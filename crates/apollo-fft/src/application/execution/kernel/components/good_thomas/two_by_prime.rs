@@ -32,6 +32,8 @@ enum TwoByPrimeConfig {
     NaturalPrime,
 }
 
+/// Test-only entry: production routes execute through [`try_fft_with_owner`].
+#[cfg(test)]
 pub(super) fn try_fft<F: MixedRadixScalar<Complex = eunomia::Complex<F>>, const INVERSE: bool>(
     data: &mut [F::Complex],
     n1: usize,

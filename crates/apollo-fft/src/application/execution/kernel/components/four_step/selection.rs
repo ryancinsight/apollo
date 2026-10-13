@@ -1,3 +1,4 @@
+#[cfg(test)]
 use crate::application::execution::kernel::mixed_radix::MixedRadixScalar;
 
 /// Runs the shared four-step route when the length admits the selected split.
@@ -5,6 +6,9 @@ use crate::application::execution::kernel::mixed_radix::MixedRadixScalar;
 /// Selection lives here so one-dimensional plans and the general mixed-radix
 /// dispatcher cannot diverge on split or normalization semantics. The caller
 /// supplies its measured workload crossover.
+///
+/// Test-only: production callers route through the lane gate and pot strategies.
+#[cfg(test)]
 #[inline]
 pub(crate) fn try_four_step<
     F: MixedRadixScalar<Complex = eunomia::Complex<F>>,

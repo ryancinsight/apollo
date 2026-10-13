@@ -81,7 +81,10 @@ pub struct FftPlan1D<F: MixedRadixScalar> {
     pub(crate) column180: Option<Arc<State180<F>>>,
     /// The chirp-z tables for a length every shaped route declines.
     pub(crate) bluestein: Option<Arc<BluesteinState<F>>>,
-    /// Tables retained by a reusable four-step route.
+    /// Tables retained by a reusable four-step route: present at every
+    /// length the multi-dimensional lane gate admits, whether or not this
+    /// plan's own strategy executes through it, so borrowed lane passes
+    /// share one warm owner instead of rebuilding per execution.
     pub(crate) four_step: Option<Arc<FourStepState<F>>>,
 
     // Function pointers for execution routing, selected at construction for
@@ -405,8 +408,12 @@ impl<F: MixedRadixScalar<Complex = Complex<F>>> FftPlan1D<F> {
         let twiddle_inv = std::sync::OnceLock::new();
 
         let mut bluestein = None;
-        let four_step =
-            matches!(strategy, PlanStrategy::FourStep).then(|| Arc::new(FourStepState::new(n)));
+        // Owned for borrowers, not only for this plan's strategy: the
+        // multi-dimensional lane passes borrow the bounded owner's state at
+        // every length their gate admits, including the base-route lengths
+        // whose own 1-D execution never touches it. The slots initialize
+        // lazily, so an unborrowed owner costs the slots alone.
+        let four_step = generic_four_step_applies(n).then(|| Arc::new(FourStepState::new(n)));
         let mut forward_impl: unsafe fn(&Self, &mut [F::Complex]) = exec_identity::<F>;
         let mut inverse_impl: unsafe fn(&Self, &mut [F::Complex]) = exec_identity::<F>;
         let mut inverse_unnorm_impl: unsafe fn(&Self, &mut [F::Complex]) = exec_identity::<F>;
