@@ -10,6 +10,7 @@ description = "Apollo benchmark measurement runtime"
 publish = false
 
 [dependencies]
+apollo-alloc = { path = "../apollo-alloc" }
 csv.workspace = true
 hermes-simd.workspace = true
 thiserror.workspace = true

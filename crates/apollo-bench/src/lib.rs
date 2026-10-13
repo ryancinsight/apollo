@@ -52,8 +52,8 @@ pub use comparison::{
 pub use config::{BenchmarkConfig, BenchmarkConfigError, BenchmarkMode, BenchmarkModeError};
 pub use error::BenchmarkError;
 pub use measurement::{
-    bind_measurement_processor, MeasurementProcessor, ProcessorSelection, ProcessorSelectionError,
-    PROCESSOR_VAR,
+    bind_measurement_processor, LaneBuffer, MeasurementProcessor, ProcessorSelection,
+    ProcessorSelectionError, PROCESSOR_VAR,
 };
 pub use report::BenchmarkRecord;
 pub use suite::BenchmarkSuite;

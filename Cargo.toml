@@ -1,5 +1,6 @@
 [workspace]
 members = [
+    "crates/apollo-alloc",
     "crates/apollo-czt",
     "crates/apollo-dctdst",
     "crates/apollo-dctdst-core",

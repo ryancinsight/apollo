@@ -2,6 +2,7 @@ mod calibration;
 mod processor;
 mod sample;
 
+pub use apollo_alloc::LaneBuffer;
 pub use processor::{
     bind_measurement_processor, MeasurementProcessor, ProcessorSelection, ProcessorSelectionError,
     PROCESSOR_VAR,
