@@ -814,18 +814,33 @@ mod tests {
     use eunomia::assert_abs_diff_eq;
     #[test]
     fn release_scratch_returns_pools_to_baseline_and_serves_again() {
+        use apollo_fft::PrecisionProfile;
         let domain = UniformDomain1D::new(8, 0.125).unwrap();
-        let positions = vec![0.0, 0.125, 0.25, 0.375];
+        let plan = NufftPlan1D::new(
+            domain,
+            DEFAULT_NUFFT_OVERSAMPLING,
+            DEFAULT_NUFFT_KERNEL_WIDTH,
+        );
+        let positions = vec![0.0, 0.09, 0.21, 0.47];
         let values = vec![
-            Complex64::new(1.0, 0.0),
-            Complex64::new(0.5, -0.25),
-            Complex64::new(-0.5, 0.75),
-            Complex64::new(0.25, 0.1),
+            Complex32::new(1.0, 0.25),
+            Complex32::new(-0.5, 0.75),
+            Complex32::new(0.25, -0.1),
+            Complex32::new(0.125, 0.5),
         ];
-        let first = nufft_type1_1d(&positions, &values, domain);
+        let mut scratch = vec![Complex64::new(0.0, 0.0); plan.m];
+        let mut first = vec![Complex32::new(0.0, 0.0); plan.n_out];
+        plan.type1_typed_into(
+            &positions,
+            &values,
+            &mut scratch,
+            &mut first,
+            PrecisionProfile::LOW_PRECISION_F32,
+        )
+        .expect("typed type-1 grows the pools");
         assert!(
             super::dimension_1d_scratch_capacities() != (0, 0),
-            "the 1-D type-1 must retain a workspace"
+            "the typed type-1 must retain a workspace"
         );
         super::release_dimension_1d_scratch();
         assert_eq!(
@@ -833,15 +848,20 @@ mod tests {
             (0, 0),
             "release must return every 1-D pool to baseline"
         );
-        let second = nufft_type1_1d(&positions, &values, domain);
+        let mut second = vec![Complex32::new(0.0, 0.0); plan.n_out];
+        plan.type1_typed_into(
+            &positions,
+            &values,
+            &mut scratch,
+            &mut second,
+            PrecisionProfile::LOW_PRECISION_F32,
+        )
+        .expect("typed type-1 after release");
         assert!(
             super::dimension_1d_scratch_capacities() != (0, 0),
             "the pools must serve after release"
         );
-        assert_eq!(first.size(), second.size());
-        for (actual, expected) in second.iter().zip(first.iter()) {
-            assert_eq!(actual, expected, "post-release output must match");
-        }
+        assert_eq!(first, second, "post-release output must match");
     }
 
     /// DC mode invariant: f_0 = sum(c_j) because exp(-2pi*i * 0 * x_j / L) = 1 for all j.
