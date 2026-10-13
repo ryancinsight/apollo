@@ -1,5 +1,24 @@
 # Apollo Backlog
 
+<a id="apollo-121-f32-simd-leaf"></a>
+## APOLLO-121-F32-SIMD-LEAF — Close the N=121 f32 gap with a dispatched SIMD dft11 [patch] [perf] — todo
+- **priority:** tightening. **needs:** none.
+- **Outcome:** N=121 f32 at parity-or-better vs RustFFT via a runtime-dispatched SIMD dft11 leaf; the scalar pair form remains the fallback.
+- **Evidence (2026-10-11, pinned leaf probe + rustfft_comparison measurement):** apollo_f32/121 median 273569 vs rustfft 94004 (2.91x, replicated); f64/121 1.48x. Leaf probe on both core classes: leaf-11 f32/f64 = 0.76 performance / 0.87 efficiency — the narrow pair form is healthy, so the wide-form move is refuted; do not apply it. 121 cost = exactly 22x leaf-11: the CT layer adds nothing. f32/121 ~= f64/121 (no precision scaling) → the gap is leaf codegen width, matching RustFFT's hand-SIMD butterfly11. Bench builds carry no target-cpu (SSE2 baseline), so cfg-gated AVX stays dormant there.
+- **Scope:** `crates/apollo-fft/src/application/execution/kernel/components/winograd/` (SIMD dft11 + runtime dispatch following the column_route `new_if_supported`/framed-executor precedent), leaf probe + 121 bench rows, this item. Public APIs, formulas, scalar fallback unchanged.
+- **Acceptance:** counterbalanced gate shows f32/121 at or under RustFFT with f64/121 unregressed; SIMD leaf agrees exactly with the scalar leaf; focused clippy/test/fmt green.
+- **Next step:** implement the AVX2/FMA dft11 variant behind runtime detection; measure leaf-11 then N=121.
+
+<a id="apollo-rescue-queue"></a>
+## APOLLO-RESCUE-QUEUE — Complete or close the unclaimed rescue PRs [patch] — todo
+- **priority:** correctness. **needs:** none.
+- **Outcome:** each listed rescue PR is completed onto current main (ported, verified, merged) or closed once its diff resolves empty against main.
+- **Scope:** `ryancinsight/apollo` rescue PR head refs only; a claimant opens a new item branch from the fetched default and ports the work there.
+- **Rescues:**
+  - `ryancinsight/apollo#596` (`rescue/apollo-mem-planar-owner`, draft): unverified wip commit plus 15 commits of a stale lane for [APOLLO-MEM-CACHE-BOUNDS](#apollo-mem-cache-bounds) slice 2 (planar and Bluestein tables owned by plans, [ADR 0068](docs/adr/0068-bounded-plan-and-table-caches.md)). 60 files, +1852 -1512; code in `crates/apollo-fft`, one ADR; gate run 2026-10-11 by takeover review: merge is conflict-free but 4 warm-path contract tests fail (temp PlanarState per execution under Weak caches, 35 allocs vs 0) plus 18 dead_code warnings; diagnosis posted on the PR; lane `Cargo.lock` change excluded.
+- **Acceptance:** no open `rescue/` PR for this repository remains unaccounted for.
+- **Next step:** claim #596 through the APOLLO-MEM-CACHE-BOUNDS integrator, diff its head against the fetched default, port the unlanded hunks, run the gate.
+
 <a id="apollo-dht-verification-split"></a>
 ## APOLLO-DHT-VERIFICATION-SPLIT — Restore the DHT source-size ratchet [patch]
 - **Integrator:** Codex `/root/apollo_verification_split`; branch `refactor/apollo-dht-verification-split`.

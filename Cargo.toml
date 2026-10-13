@@ -1,5 +1,6 @@
 [workspace]
 members = [
+    "crates/apollo-alloc",
     "crates/apollo-czt",
     "crates/apollo-dctdst",
     "crates/apollo-dctdst-core",
@@ -86,18 +87,18 @@ apollo-dctdst-core = { version = "0.16.0", path = "crates/apollo-dctdst-core" }
 anyhow = "1.0.103"
 csv = "1.4.0"
 # Eunomia PR #87 is merged; Cargo.lock records the reviewed default source.
-eunomia = { version = "0.8.0", git = "https://github.com/ryancinsight/eunomia", default-features = false, features = ["std"] }
+eunomia = { version = "0.9.0", git = "https://github.com/ryancinsight/eunomia", default-features = false, features = ["std"] }
 # Mnemosyne PR #128 is merged; Cargo.lock records the reviewed default source.
-mnemosyne = { package = "mnemosyne-memory", version = "0.7.0", git = "https://github.com/ryancinsight/Mnemosyne.git", features = ["eunomia"] }
-melinoe = { version = "0.9.0", git = "https://github.com/ryancinsight/melinoe.git", default-features = false, features = ["alloc"] }
+mnemosyne = { package = "mnemosyne-memory", version = "0.9.0", git = "https://github.com/ryancinsight/Mnemosyne.git", features = ["eunomia"] }
+melinoe = { version = "0.10.0", git = "https://github.com/ryancinsight/melinoe.git", default-features = false, features = ["alloc"] }
 # Hermes PR #156 and Leto PR #168 are merged; Cargo.lock records their reviewed
 # default sources.
-hermes-simd = { version = "0.7.0", git = "https://github.com/ryancinsight/hermes.git" }
-leto = { version = "0.43.0", git = "https://github.com/ryancinsight/leto.git" }
-leto-ops = { version = "0.43.0", git = "https://github.com/ryancinsight/leto.git" }
-hephaestus-wgpu = { version = "0.19.0", git = "https://github.com/ryancinsight/hephaestus.git" }
-hephaestus-core = { version = "0.19.0", git = "https://github.com/ryancinsight/hephaestus.git" }
-hephaestus-cuda = { version = "0.19.0", git = "https://github.com/ryancinsight/hephaestus.git" }
+hermes-simd = { version = "0.8.0", git = "https://github.com/ryancinsight/hermes.git" }
+leto = { version = "0.45.2", git = "https://github.com/ryancinsight/leto.git" }
+leto-ops = { version = "0.45.2", git = "https://github.com/ryancinsight/leto.git" }
+hephaestus-wgpu = { version = "0.20.2", git = "https://github.com/ryancinsight/hephaestus.git" }
+hephaestus-core = { version = "0.20.2", git = "https://github.com/ryancinsight/hephaestus.git" }
+hephaestus-cuda = { version = "0.20.2", git = "https://github.com/ryancinsight/hephaestus.git" }
 proc-macro2 = "1.0.106"
 once_cell = "1.21.4"
 parking_lot = "0.12.5"
@@ -117,14 +118,14 @@ phastft = { version = "0.4.1", default-features = false }
 # exploits real-input symmetry over rustfft: a size-N real transform costs about
 # half a size-N complex one and yields N/2+1 bins instead of N.
 realfft = "3.5.0"
-moirai = { package = "moirai-runtime", version = "0.6.0", git = "https://github.com/ryancinsight/Moirai.git", features = ["melinoe"] }
+moirai = { package = "moirai-runtime", version = "0.8.2", git = "https://github.com/ryancinsight/Moirai.git", features = ["melinoe"] }
 serde = { version = "1.0.228", features = ["derive"] }
 serde_json = "1.0.150"
 syn = { version = "2.0.118", features = ["full"] }
 # themis owns CPU topology across the stack: NUMA nodes, cache levels, and the
 # per-processor efficiency class the pinned measurement instruments select on
 # (ADR 0043). `std` supplies the platform detection backends.
-themis = { package = "themis-topology", version = "0.10.1", git = "https://github.com/ryancinsight/themis", default-features = false, features = ["std"] }
+themis = { package = "themis-topology", version = "0.11.0", git = "https://github.com/ryancinsight/themis", default-features = false, features = ["std"] }
 thiserror = "2.0.18"
 # Hephaestus 0.15 owns Apollo's WGPU 30 device contract.
 

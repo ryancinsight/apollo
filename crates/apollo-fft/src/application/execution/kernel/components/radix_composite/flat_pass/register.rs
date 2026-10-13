@@ -271,7 +271,7 @@ where
         2 * row.len() == per && per <= MAX_COMPLEXES_PER_REGISTER,
         "invariant: a duplicated row is half a register"
     );
-    let zero = Complex::new(T::from_f64(0.0), T::from_f64(0.0));
+    let zero = Complex::<T>::ZERO;
     let mut pair = [zero; MAX_COMPLEXES_PER_REGISTER];
     pair[..row.len()].copy_from_slice(row);
     pair[row.len()..per].copy_from_slice(row);

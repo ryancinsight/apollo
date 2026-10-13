@@ -14,6 +14,7 @@ on:
       - checklist.md
       - gap_audit.md
       - docs/adr/**
+      - .githooks/**
   pull_request:
     # `ready_for_review` is not in the default event set, and the draft filter
     # below skips every job of a draft's pushes: without it a draft marked
@@ -35,9 +36,9 @@ concurrency:
 
 jobs:
   scope:
-    # What a pull request changes. One that touches only the board, the ADRs
-    # or the tooling scripts needs the script tests and none of the Rust
-    # pipeline, which on a hosted runner is most of an hour of minutes per
+    # What a pull request changes. One that touches only the board, the ADRs,
+    # the tooling scripts or the git hooks needs the script tests and none of
+    # the Rust pipeline, which on a hosted runner is most of an hour of minutes per
     # board record. A merge-queue run applies the same rule to the group's
     # whole delta over the queue base. Every other change, every push to
     # main, and any failure of this job leaves `code` other than `false`,
@@ -71,7 +72,7 @@ jobs:
           git diff --no-renames --name-only "$BASE...$HEAD" > changed.txt
           echo "changed files:"
           cat changed.txt
-          if grep -Evq '^(backlog\.md|checklist\.md|gap_audit\.md|docs/adr/.+|scripts/.+)$' changed.txt; then
+          if grep -Evq '^(backlog\.md|checklist\.md|gap_audit\.md|docs/adr/.+|scripts/.+|\.githooks/.+)$' changed.txt; then
             echo "code=true" >> "$GITHUB_OUTPUT"
           elif [ -s changed.txt ]; then
             echo "code=false" >> "$GITHUB_OUTPUT"
@@ -107,7 +108,7 @@ jobs:
     needs: scope
     if: ${{ !cancelled() && (github.event_name != 'pull_request' || !github.event.pull_request.draft) && needs.scope.outputs.code != 'false' }}
     name: SemVer gate
-    uses: ryancinsight/atlas/.github/workflows/semver-gate.yml@b44c45c3875c9c03ac9fc83994ee068c1805bb49
+    uses: ryancinsight/atlas/.github/workflows/semver-gate.yml@50802ef4c975bdb1e668b94a700d8310f0348e9c
     with:
       package: apollo-czt,apollo-dctdst,apollo-dht,apollo-fft,apollo-fft-macros,apollo-frft,apollo-fwht,apollo-gft,apollo-hilbert,apollo-leto-interop,apollo-mellin,apollo-ntt,apollo-nufft,apollo-qft,apollo-radon,apollo-sdft,apollo-sft,apollo-sht,apollo-stft,apollo-validation,apollo-wavelet
       rust-toolchain: 1.97.0

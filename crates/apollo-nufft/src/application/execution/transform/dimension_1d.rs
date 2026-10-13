@@ -71,38 +71,36 @@ struct IndexedPoint1D {
     bucket: usize,
 }
 
-fn sort_points_1d(
-    positions: &[f64],
-    values: &[Complex64],
-    domain: UniformDomain1D,
-    oversampled_len: usize,
-    kernel_width: usize,
-) -> Vec<IndexedPoint1D> {
-    let buckets = bucket_count(oversampled_len, kernel_width);
-    let bucket_scale = buckets as f64 / domain.length();
-    let mut indexed: Vec<_> = positions
-        .iter()
-        .zip(values.iter())
-        .map(|(&x, &value)| {
-            let x_mod = x.rem_euclid(domain.length());
-            let bucket = ((x_mod * bucket_scale).floor() as usize).min(buckets - 1);
-            IndexedPoint1D {
-                x: x_mod,
-                value,
-                bucket,
-            }
-        })
-        .collect();
-    indexed.sort_unstable_by_key(|lhs| lhs.bucket);
-    indexed
+trait BucketIndexed {
+    fn bucket(&self) -> usize;
 }
 
-fn sort_positions_1d(
+impl BucketIndexed for IndexedPoint1D {
+    #[inline]
+    fn bucket(&self) -> usize {
+        self.bucket
+    }
+}
+
+impl BucketIndexed for (usize, f64, usize) {
+    #[inline]
+    fn bucket(&self) -> usize {
+        self.2
+    }
+}
+
+#[inline]
+fn index_positions_by_bucket<T, F>(
     positions: &[f64],
     domain: UniformDomain1D,
     oversampled_len: usize,
     kernel_width: usize,
-) -> Vec<(usize, f64, usize)> {
+    mut project: F,
+) -> Vec<T>
+where
+    T: BucketIndexed,
+    F: FnMut(usize, f64, usize) -> T,
+{
     let buckets = bucket_count(oversampled_len, kernel_width);
     let bucket_scale = buckets as f64 / domain.length();
     let mut indexed: Vec<_> = positions
@@ -111,11 +109,46 @@ fn sort_positions_1d(
         .map(|(original_index, &x)| {
             let x_mod = x.rem_euclid(domain.length());
             let bucket = ((x_mod * bucket_scale).floor() as usize).min(buckets - 1);
-            (original_index, x_mod, bucket)
+            project(original_index, x_mod, bucket)
         })
         .collect();
-    indexed.sort_unstable_by_key(|lhs| lhs.2);
+    indexed.sort_unstable_by_key(BucketIndexed::bucket);
     indexed
+}
+
+fn sort_points_1d(
+    positions: &[f64],
+    values: &[Complex64],
+    domain: UniformDomain1D,
+    oversampled_len: usize,
+    kernel_width: usize,
+) -> Vec<IndexedPoint1D> {
+    index_positions_by_bucket(
+        positions,
+        domain,
+        oversampled_len,
+        kernel_width,
+        |original_index, x_mod, bucket| IndexedPoint1D {
+            x: x_mod,
+            value: values[original_index],
+            bucket,
+        },
+    )
+}
+
+fn sort_positions_1d(
+    positions: &[f64],
+    domain: UniformDomain1D,
+    oversampled_len: usize,
+    kernel_width: usize,
+) -> Vec<(usize, f64, usize)> {
+    index_positions_by_bucket(
+        positions,
+        domain,
+        oversampled_len,
+        kernel_width,
+        |original_index, x_mod, bucket| (original_index, x_mod, bucket),
+    )
 }
 
 fn array1_from_vec<T>(values: Vec<T>) -> Array1<T> {

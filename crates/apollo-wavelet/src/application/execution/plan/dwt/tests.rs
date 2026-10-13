@@ -4,10 +4,24 @@ use crate::domain::metadata::wavelet::DiscreteWavelet;
 use apollo_fft::{PrecisionProfile, F16};
 use eunomia::assert_abs_diff_eq;
 
-fn detail_buffers<T: Copy>(plan: &DwtPlan, fill: T) -> Vec<Vec<T>> {
-    plan.coefficient_shapes()
-        .map(|len| vec![fill; len])
-        .collect()
+/// A flat, finest-level-first detail buffer the size `forward_typed_into`
+/// and `inverse_typed_into` share.
+fn detail_buffers<T: Copy>(plan: &DwtPlan, fill: T) -> Vec<T> {
+    vec![fill; plan.len() - (plan.len() >> plan.levels())]
+}
+
+/// Chunk a flat, finest-first detail buffer back into its per-level slices
+/// for comparison against `DwtCoefficients::detail_levels`'s per-level
+/// iterator.
+fn detail_level_slices<'a, T>(details: &'a [T], plan: &DwtPlan) -> impl Iterator<Item = &'a [T]> {
+    let len = plan.len();
+    let mut offset = 0usize;
+    (0..plan.levels()).map(move |level| {
+        let level_len = len >> (level + 1);
+        let slice = &details[offset..offset + level_len];
+        offset += level_len;
+        slice
+    })
 }
 
 #[test]
@@ -28,7 +42,9 @@ fn typed_dwt_paths_support_f64_f32_and_mixed_f16_storage() {
     for (actual, expected) in approx64.iter().zip(expected.approximation()) {
         assert_abs_diff_eq!(actual, expected, epsilon = 1.0e-12);
     }
-    for (actual_detail, expected_detail) in details64.iter().zip(expected.detail_levels()) {
+    for (actual_detail, expected_detail) in
+        detail_level_slices(&details64, &plan).zip(expected.detail_levels())
+    {
         for (actual, expected) in actual_detail.iter().zip(expected_detail) {
             assert_abs_diff_eq!(actual, expected, epsilon = 1.0e-12);
         }
@@ -183,7 +199,11 @@ fn typed_leto_forward_and_inverse_match_slice_reference() {
     {
         assert_eq!(actual.to_bits(), expected.to_bits());
     }
-    for (actual_detail, expected_detail) in actual.details().iter().zip(expected_details.iter()) {
+    for (actual_detail, expected_detail) in actual
+        .details()
+        .iter()
+        .zip(detail_level_slices(&expected_details, &plan))
+    {
         let actual_detail = actual_detail.view();
         let actual_detail = actual_detail.as_slice().expect("contiguous detail");
         for (actual, expected) in actual_detail.iter().zip(expected_detail) {
@@ -227,7 +247,7 @@ fn typed_dwt_rejects_profile_and_shape_mismatch() {
         Err(WaveletError::PrecisionMismatch)
     ));
 
-    details[0].pop();
+    details.pop();
     assert!(matches!(
         plan.forward_typed_into(
             &signal,

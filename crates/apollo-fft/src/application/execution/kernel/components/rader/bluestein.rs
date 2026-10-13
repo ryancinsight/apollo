@@ -102,25 +102,22 @@ where
     // Build Rader time-domain kernel, zero-padded to P.
     let sign = if INVERSE { 1.0_f64 } else { -1.0_f64 };
     let mut cur = 1usize;
-    // Use native precision for phase trig where possible (f32 path uses f32::cos/sin for perf;
-    // no excess widen-narrow in arithmetic per persona -- f64 only for f64 path or accuracy contract
-    // of bluestein chirp phase; cast only at F::complex API boundary (once per sample, not bulk inner math).
-    // For f32 rader bluestein (hot for worst md ratios like 67/271 f32), this avoids f64 trig cost.
-    // Mem eff: build kernel using pooled bluestein scratch (TL aligned, reuses across plans,
-    // zero extra alloc/growth for temp during cache populate for rader). Final to_vec for Arc
-    // is the cached storage (unavoidable), but temp uses pool (improves mem efficiency for
-    // rader plans, esp f32 worst primes).
+    // Phase precision: the chirp phase is evaluated in f64 and narrowed exactly
+    // once, where `F::complex` materializes the constant at F's own precision.
+    // Narrowing the *angle* first would cost roughly 2 extra ulps of F32 twiddle
+    // accuracy (|a| < 2π, so ulp(a) in f32 is ~4.8e-7, against ~6e-8 for one
+    // rounding of the result) to save f64 trig on a path that runs once per
+    // (m, INVERSE, generator_inverse) key and is then served from the two-level
+    // cache — the trig cost is amortized to nothing, so the accuracy is free.
+    //
+    // Memory: the kernel is built in the pooled Bluestein scratch (thread-local,
+    // aligned, reused across plans) so populating the cache adds no transient
+    // allocation. The final `to_vec` is the cached storage itself.
     let kernel_vec = F::with_bluestein_scratch(p, |buf| {
         buf[..p].fill(F::complex(0.0, 0.0));
         for j in 0..m {
             let a = sign * std::f64::consts::TAU * (cur as f64) / (n as f64);
-            let (re, im) = if F::BLUESTEIN_NATIVE_PHASE_TRIG {
-                let af = a as f32;
-                (af.cos() as f64, af.sin() as f64)
-            } else {
-                (a.cos(), a.sin())
-            };
-            buf[j] = F::complex(re, im);
+            buf[j] = F::complex(a.cos(), a.sin());
             cur = (cur * generator_inverse) % n;
         }
 

@@ -14,12 +14,15 @@ impl DwtPlan {
     ///
     /// The owner kernel remains the `f64` orthogonal filter bank. Typed paths
     /// convert represented input into owner arithmetic and quantize once when
-    /// writing caller-owned approximation/detail buffers.
+    /// writing caller-owned approximation/detail buffers. `details` is one
+    /// flat buffer, finest level first, in the halving shape `(len, levels)`
+    /// fixes — the same layout [`DwtCoefficients`] derives its level slices
+    /// from, so no per-level heap row exists on this path.
     pub fn forward_typed_into<T: WaveletStorage>(
         &self,
         signal: &[T],
         approximation: &mut [T],
-        details: &mut [Vec<T>],
+        details: &mut [T],
         profile: PrecisionProfile,
     ) -> WaveletResult<()> {
         T::forward_dwt_into(self, signal, approximation, details, profile)
@@ -40,19 +43,19 @@ impl DwtPlan {
             return Err(WaveletError::LengthMismatch);
         }
         let mut approximation = vec![T::from_cpu(0.0); self.len() >> self.levels()];
-        let mut details = self
-            .coefficient_shapes()
-            .map(|len| vec![T::from_cpu(0.0); len])
-            .collect::<Vec<_>>();
+        let mut details = vec![T::from_cpu(0.0); self.len() - (self.len() >> self.levels())];
         self.forward_typed_into(signal.as_ref(), &mut approximation, &mut details, profile)?;
         dwt_typed_coefficients_to_leto(self.len(), self.levels(), &approximation, &details)
     }
 
     /// Execute inverse multilevel DWT for `f64`, `f32`, or mixed `F16` storage.
+    ///
+    /// `details` is the same flat, finest-first buffer `forward_typed_into`
+    /// writes.
     pub fn inverse_typed_into<T: WaveletStorage>(
         &self,
         approximation: &[T],
-        details: &[Vec<T>],
+        details: &[T],
         output: &mut [T],
         profile: PrecisionProfile,
     ) -> WaveletResult<()> {
@@ -74,17 +77,14 @@ impl DwtPlan {
             return Err(WaveletError::EmptySignal);
         }
         let approximation = apollo_leto_interop::view_cow(&approximation_view);
-        let details = coefficients
-            .details()
-            .iter()
-            .map(|detail| {
-                let detail_view = detail.view();
-                if detail_view.shape()[0] == 0 {
-                    return Err(WaveletError::EmptySignal);
-                }
-                Ok(apollo_leto_interop::view_cow(&detail_view).into_owned())
-            })
-            .collect::<WaveletResult<Vec<_>>>()?;
+        let mut details = Vec::with_capacity(self.len() - (self.len() >> self.levels()));
+        for detail in coefficients.details() {
+            let detail_view = detail.view();
+            if detail_view.shape()[0] == 0 {
+                return Err(WaveletError::EmptySignal);
+            }
+            details.extend_from_slice(&apollo_leto_interop::view_cow(&detail_view));
+        }
         let mut output = vec![T::from_cpu(0.0); self.len()];
         self.inverse_typed_into(approximation.as_ref(), &details, &mut output, profile)?;
         apollo_leto_interop::try_array1_from_slice(&output)
@@ -94,16 +94,18 @@ impl DwtPlan {
 
 /// Real storage accepted by typed wavelet paths.
 pub trait WaveletStorage: CpuStorage {
-    /// Execute typed forward DWT into caller-owned buffers.
+    /// Execute typed forward DWT into caller-owned buffers. `details` is one
+    /// flat, finest-level-first buffer of length `plan.len() - (plan.len()
+    /// >> plan.levels())`.
     fn forward_dwt_into(
         plan: &DwtPlan,
         signal: &[Self],
         approximation: &mut [Self],
-        details: &mut [Vec<Self>],
+        details: &mut [Self],
         profile: PrecisionProfile,
     ) -> WaveletResult<()> {
         validate_profile(profile, Self::PROFILE)?;
-        validate_dwt_output_shapes(plan, approximation.len(), details)?;
+        validate_dwt_output_shapes(plan, approximation.len(), details.len())?;
         if signal.len() != plan.len() {
             return Err(WaveletError::LengthMismatch);
         }
@@ -115,24 +117,26 @@ pub trait WaveletStorage: CpuStorage {
         {
             *slot = Self::from_cpu(value);
         }
-        for (detail_out, detail_in) in details.iter_mut().zip(coefficients.detail_levels()) {
-            for (slot, value) in detail_out.iter_mut().zip(detail_in.iter().copied()) {
-                *slot = Self::from_cpu(value);
-            }
+        for (slot, value) in details
+            .iter_mut()
+            .zip(coefficients.details().iter().copied())
+        {
+            *slot = Self::from_cpu(value);
         }
         Ok(())
     }
 
-    /// Execute typed inverse DWT into a caller-owned signal buffer.
+    /// Execute typed inverse DWT into a caller-owned signal buffer. `details`
+    /// is the same flat, finest-level-first buffer `forward_dwt_into` writes.
     fn inverse_dwt_into(
         plan: &DwtPlan,
         approximation: &[Self],
-        details: &[Vec<Self>],
+        details: &[Self],
         output: &mut [Self],
         profile: PrecisionProfile,
     ) -> WaveletResult<()> {
         validate_profile(profile, Self::PROFILE)?;
-        validate_dwt_output_shapes(plan, approximation.len(), details)?;
+        validate_dwt_output_shapes(plan, approximation.len(), details.len())?;
         if output.len() != plan.len() {
             return Err(WaveletError::LengthMismatch);
         }
@@ -141,12 +145,7 @@ pub trait WaveletStorage: CpuStorage {
             .copied()
             .map(CpuStorage::to_cpu)
             .collect();
-        // One flat buffer in the halving level order `DwtCoefficients` derives
-        // its level slices from — no per-level heap rows.
-        let mut details64 = Vec::with_capacity(plan.len() - (plan.len() >> plan.levels()));
-        for detail in details {
-            details64.extend(detail.iter().copied().map(CpuStorage::to_cpu));
-        }
+        let details64: Vec<f64> = details.iter().copied().map(CpuStorage::to_cpu).collect();
         let coefficients =
             DwtCoefficients::new(plan.len(), plan.levels(), approximation64, details64)?;
         let signal = plan.inverse(&coefficients)?;
@@ -187,31 +186,29 @@ impl WaveletStorage for f64 {
         plan: &DwtPlan,
         signal: &[Self],
         approximation: &mut [Self],
-        details: &mut [Vec<Self>],
+        details: &mut [Self],
         profile: PrecisionProfile,
     ) -> WaveletResult<()> {
         validate_profile(profile, Self::PROFILE)?;
-        validate_dwt_output_shapes(plan, approximation.len(), details)?;
+        validate_dwt_output_shapes(plan, approximation.len(), details.len())?;
         if signal.len() != plan.len() {
             return Err(WaveletError::LengthMismatch);
         }
         let coefficients = plan.forward(signal)?;
         approximation.copy_from_slice(coefficients.approximation());
-        for (detail_out, detail_in) in details.iter_mut().zip(coefficients.detail_levels()) {
-            detail_out.copy_from_slice(detail_in);
-        }
+        details.copy_from_slice(coefficients.details());
         Ok(())
     }
 
     fn inverse_dwt_into(
         plan: &DwtPlan,
         approximation: &[Self],
-        details: &[Vec<Self>],
+        details: &[Self],
         output: &mut [Self],
         profile: PrecisionProfile,
     ) -> WaveletResult<()> {
         validate_profile(profile, Self::PROFILE)?;
-        validate_dwt_output_shapes(plan, approximation.len(), details)?;
+        validate_dwt_output_shapes(plan, approximation.len(), details.len())?;
         if output.len() != plan.len() {
             return Err(WaveletError::LengthMismatch);
         }
@@ -219,7 +216,7 @@ impl WaveletStorage for f64 {
             plan.len(),
             plan.levels(),
             approximation.to_vec(),
-            details.concat(),
+            details.to_vec(),
         )?;
         let signal = plan.inverse(&coefficients)?;
         output.copy_from_slice(&signal);

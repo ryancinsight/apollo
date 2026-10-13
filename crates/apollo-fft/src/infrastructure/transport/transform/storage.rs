@@ -32,6 +32,60 @@ thread_local! {
     static COMPLEX_OUTPUT_SCRATCH: ScratchPool<Complex32> = const { ScratchPool::new() };
 }
 
+macro_rules! impl_gpu_element {
+    ($ty:ty, $input:ident, $output:ident) => {
+        impl GpuElement for $ty {
+            fn with_input_scratch<R>(len: usize, body: impl FnOnce(&mut [Self]) -> R) -> R {
+                $input.with(|pool| pool.with_scratch(len, body))
+            }
+
+            fn with_output_scratch<R>(len: usize, body: impl FnOnce(&mut [Self]) -> R) -> R {
+                $output.with(|pool| pool.with_scratch(len, body))
+            }
+
+            fn with_scratch<R>(
+                input_len: usize,
+                output_len: usize,
+                body: impl FnOnce(&mut [Self], &mut [Self]) -> R,
+            ) -> R {
+                $input.with(|input_pool| {
+                    input_pool.with_scratch(input_len, |input| {
+                        $output.with(|output_pool| {
+                            output_pool.with_scratch(output_len, |output| body(input, output))
+                        })
+                    })
+                })
+            }
+        }
+    };
+}
+
+macro_rules! impl_identity_gpu_storage {
+    ($storage:ty, $element:ty, $profile:expr) => {
+        impl GpuStorage<$element> for $storage {
+            const PROFILE: PrecisionProfile = $profile;
+
+            fn to_gpu(self) -> $element {
+                self
+            }
+
+            fn from_gpu(value: $element) -> Self {
+                value
+            }
+
+            #[inline]
+            fn as_element_slice(slice: &[Self]) -> Option<&[$element]> {
+                Some(slice)
+            }
+
+            #[inline]
+            fn as_element_slice_mut(slice: &mut [Self]) -> Option<&mut [$element]> {
+                Some(slice)
+            }
+        }
+    };
+}
+
 /// Concrete accelerator element of a GPU transform contract.
 ///
 /// Sealed to the element families the WGSL kernels execute: `f32` and
@@ -57,53 +111,8 @@ pub trait GpuElement:
     fn with_output_scratch<R>(len: usize, body: impl FnOnce(&mut [Self]) -> R) -> R;
 }
 
-impl GpuElement for f32 {
-    fn with_input_scratch<R>(len: usize, body: impl FnOnce(&mut [Self]) -> R) -> R {
-        REAL_INPUT_SCRATCH.with(|pool| pool.with_scratch(len, body))
-    }
-
-    fn with_output_scratch<R>(len: usize, body: impl FnOnce(&mut [Self]) -> R) -> R {
-        REAL_OUTPUT_SCRATCH.with(|pool| pool.with_scratch(len, body))
-    }
-
-    fn with_scratch<R>(
-        input_len: usize,
-        output_len: usize,
-        body: impl FnOnce(&mut [Self], &mut [Self]) -> R,
-    ) -> R {
-        REAL_INPUT_SCRATCH.with(|input_pool| {
-            input_pool.with_scratch(input_len, |input| {
-                REAL_OUTPUT_SCRATCH.with(|output_pool| {
-                    output_pool.with_scratch(output_len, |output| body(input, output))
-                })
-            })
-        })
-    }
-}
-
-impl GpuElement for Complex32 {
-    fn with_input_scratch<R>(len: usize, body: impl FnOnce(&mut [Self]) -> R) -> R {
-        COMPLEX_INPUT_SCRATCH.with(|pool| pool.with_scratch(len, body))
-    }
-
-    fn with_output_scratch<R>(len: usize, body: impl FnOnce(&mut [Self]) -> R) -> R {
-        COMPLEX_OUTPUT_SCRATCH.with(|pool| pool.with_scratch(len, body))
-    }
-
-    fn with_scratch<R>(
-        input_len: usize,
-        output_len: usize,
-        body: impl FnOnce(&mut [Self], &mut [Self]) -> R,
-    ) -> R {
-        COMPLEX_INPUT_SCRATCH.with(|input_pool| {
-            input_pool.with_scratch(input_len, |input| {
-                COMPLEX_OUTPUT_SCRATCH.with(|output_pool| {
-                    output_pool.with_scratch(output_len, |output| body(input, output))
-                })
-            })
-        })
-    }
-}
+impl_gpu_element!(f32, REAL_INPUT_SCRATCH, REAL_OUTPUT_SCRATCH);
+impl_gpu_element!(Complex32, COMPLEX_INPUT_SCRATCH, COMPLEX_OUTPUT_SCRATCH);
 
 /// Host storage admitted by an element family's typed GPU paths.
 ///
@@ -146,27 +155,7 @@ pub trait GpuStorage<E: GpuElement = f32>:
     }
 }
 
-impl GpuStorage for f32 {
-    const PROFILE: PrecisionProfile = PrecisionProfile::LOW_PRECISION_F32;
-
-    fn to_gpu(self) -> f32 {
-        self
-    }
-
-    fn from_gpu(value: f32) -> Self {
-        value
-    }
-
-    #[inline]
-    fn as_element_slice(slice: &[Self]) -> Option<&[f32]> {
-        Some(slice)
-    }
-
-    #[inline]
-    fn as_element_slice_mut(slice: &mut [Self]) -> Option<&mut [f32]> {
-        Some(slice)
-    }
-}
+impl_identity_gpu_storage!(f32, f32, PrecisionProfile::LOW_PRECISION_F32);
 
 impl GpuStorage for F16 {
     const PROFILE: PrecisionProfile = PrecisionProfile::MIXED_PRECISION_F16_F32;
@@ -180,27 +169,7 @@ impl GpuStorage for F16 {
     }
 }
 
-impl GpuStorage<Complex32> for Complex32 {
-    const PROFILE: PrecisionProfile = PrecisionProfile::LOW_PRECISION_F32;
-
-    fn to_gpu(self) -> Complex32 {
-        self
-    }
-
-    fn from_gpu(value: Complex32) -> Self {
-        value
-    }
-
-    #[inline]
-    fn as_element_slice(slice: &[Self]) -> Option<&[Complex32]> {
-        Some(slice)
-    }
-
-    #[inline]
-    fn as_element_slice_mut(slice: &mut [Self]) -> Option<&mut [Complex32]> {
-        Some(slice)
-    }
-}
+impl_identity_gpu_storage!(Complex32, Complex32, PrecisionProfile::LOW_PRECISION_F32);
 
 impl GpuStorage<Complex32> for [F16; 2] {
     const PROFILE: PrecisionProfile = PrecisionProfile::MIXED_PRECISION_F16_F32;

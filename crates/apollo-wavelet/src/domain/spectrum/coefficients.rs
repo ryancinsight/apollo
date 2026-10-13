@@ -3,6 +3,17 @@
 use crate::domain::contracts::error::{WaveletError, WaveletResult};
 use leto::Array2;
 
+/// Half-open bounds of detail level `level` (0 = finest) within a flat
+/// detail buffer of the halving shape any `(len, levels)` DWT plan fixes:
+/// `len - (len >> level)..len - (len >> (level + 1))`. Shared by
+/// [`DwtCoefficients`]'s `f64` owner buffer and the typed per-storage flat
+/// buffers, so both derive one level shape from `(len, levels)` instead of
+/// storing it.
+#[must_use]
+pub(crate) const fn detail_level_bounds(len: usize, level: usize) -> (usize, usize) {
+    (len - (len >> level), len - (len >> (level + 1)))
+}
+
 /// Multilevel DWT coefficient storage.
 ///
 /// Detail levels are stored contiguously in one buffer, finest level first:
@@ -90,7 +101,8 @@ impl DwtCoefficients {
     /// Level slice from the telescoping offsets; `level < self.levels` is the
     /// caller's proven invariant.
     fn detail_slice(&self, len: usize, level: usize) -> &[f64] {
-        &self.details[len - (len >> level)..len - (len >> (level + 1))]
+        let (start, end) = detail_level_bounds(len, level);
+        &self.details[start..end]
     }
 }
 

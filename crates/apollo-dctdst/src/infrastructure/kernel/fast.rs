@@ -171,6 +171,49 @@ thread_local! {
     static COMPLEX_SCRATCH_POOL: ScratchPool<Complex64> = const { ScratchPool::new() };
 }
 
+#[inline]
+fn populate_zero_padded_real_input(signal: &[f64], buf: &mut [Complex64]) {
+    let (signal_buf, zero_pad) = buf.split_at_mut(signal.len());
+    for (slot, &value) in signal_buf.iter_mut().zip(signal) {
+        *slot = Complex64::new(value, 0.0);
+    }
+    zero_pad.fill(Complex64::new(0.0, 0.0));
+}
+
+#[inline]
+fn with_zero_padded_forward_fft<R>(signal: &[f64], body: impl FnOnce(&[Complex64], f64) -> R) -> R {
+    let two_n = 2 * signal.len();
+    let half_cycle = PI / two_n as f64;
+    COMPLEX_SCRATCH_POOL.with(|pool| {
+        pool.with_scratch(two_n, |buf| {
+            populate_zero_padded_real_input(signal, buf);
+            let plan = f64::get_1d_plan(Shape1D::new(two_n).expect("Shape1D"));
+            plan.forward_complex_slice_inplace(buf);
+            body(buf, half_cycle)
+        })
+    })
+}
+
+#[inline]
+fn fill_dct2_from_fft(fft: &[Complex64], half_cycle: f64, output: &mut [f64]) {
+    for (k, slot) in output.iter_mut().enumerate() {
+        let angle = -(half_cycle * k as f64);
+        let (sin_a, cos_a) = angle.sin_cos();
+        let w = Complex64::new(cos_a, sin_a);
+        *slot = (w * fft[k]).re;
+    }
+}
+
+#[inline]
+fn fill_dst2_from_fft(fft: &[Complex64], half_cycle: f64, output: &mut [f64]) {
+    for (k, slot) in output.iter_mut().enumerate() {
+        let angle = -(half_cycle * (k as f64 + 1.0));
+        let (sin_a, cos_a) = angle.sin_cos();
+        let w = Complex64::new(cos_a, sin_a);
+        *slot = -(w * fft[k + 1]).im;
+    }
+}
+
 /// Shared 2N-point forward DFT kernel for DCT-II and DST-II.
 ///
 /// Computes one unnormalized 2N-point forward FFT of the zero-padded real input `signal`
@@ -198,38 +241,9 @@ pub fn dct2_dst2_fast(signal: &[f64], dct_output: &mut [f64], dst_output: &mut [
         n,
         "dct2_dst2_fast: dst_output length mismatch"
     );
-
-    let two_n = 2 * n;
-    let half_cycle = PI / two_n as f64;
-
-    COMPLEX_SCRATCH_POOL.with(|pool| {
-        pool.with_scratch(two_n, |buf| {
-            for (i, &x) in signal.iter().enumerate() {
-                buf[i] = Complex64::new(x, 0.0);
-            }
-            for i in n..two_n {
-                buf[i] = Complex64::new(0.0, 0.0);
-            }
-
-            let plan = f64::get_1d_plan(Shape1D::new(two_n).expect("Shape1D"));
-            plan.forward_complex_slice_inplace(buf);
-
-            // fill_dct2_from_fft
-            for k in 0..n {
-                let angle = -(half_cycle * k as f64);
-                let (sin_a, cos_a) = angle.sin_cos();
-                let w = Complex64::new(cos_a, sin_a);
-                dct_output[k] = (w * buf[k]).re;
-            }
-
-            // fill_dst2_from_fft
-            for k in 0..n {
-                let angle = -(half_cycle * (k as f64 + 1.0));
-                let (sin_a, cos_a) = angle.sin_cos();
-                let w = Complex64::new(cos_a, sin_a);
-                dst_output[k] = -(w * buf[k + 1]).im;
-            }
-        });
+    with_zero_padded_forward_fft(signal, |fft, half_cycle| {
+        fill_dct2_from_fft(fft, half_cycle, dct_output);
+        fill_dst2_from_fft(fft, half_cycle, dst_output);
     });
 }
 
@@ -247,29 +261,8 @@ pub fn dct2_dst2_fast(signal: &[f64], dct_output: &mut [f64], dst_output: &mut [
 pub fn dct2_fast(signal: &[f64], output: &mut [f64]) {
     let n = signal.len();
     debug_assert_eq!(output.len(), n, "dct2_fast: output length mismatch");
-    let two_n = 2 * n;
-    let half_cycle = PI / two_n as f64;
-
-    COMPLEX_SCRATCH_POOL.with(|pool| {
-        pool.with_scratch(two_n, |buf| {
-            for (i, &x) in signal.iter().enumerate() {
-                buf[i] = Complex64::new(x, 0.0);
-            }
-            for i in n..two_n {
-                buf[i] = Complex64::new(0.0, 0.0);
-            }
-
-            let plan = f64::get_1d_plan(Shape1D::new(two_n).expect("Shape1D"));
-            plan.forward_complex_slice_inplace(buf);
-
-            // fill_dct2_from_fft
-            for k in 0..n {
-                let angle = -(half_cycle * k as f64);
-                let (sin_a, cos_a) = angle.sin_cos();
-                let w = Complex64::new(cos_a, sin_a);
-                output[k] = (w * buf[k]).re;
-            }
-        });
+    with_zero_padded_forward_fft(signal, |fft, half_cycle| {
+        fill_dct2_from_fft(fft, half_cycle, output);
     });
 }
 
@@ -287,29 +280,8 @@ pub fn dct2_fast(signal: &[f64], output: &mut [f64]) {
 pub fn dst2_fast(signal: &[f64], output: &mut [f64]) {
     let n = signal.len();
     debug_assert_eq!(output.len(), n, "dst2_fast: output length mismatch");
-    let two_n = 2 * n;
-    let half_cycle = PI / two_n as f64;
-
-    COMPLEX_SCRATCH_POOL.with(|pool| {
-        pool.with_scratch(two_n, |buf| {
-            for (i, &x) in signal.iter().enumerate() {
-                buf[i] = Complex64::new(x, 0.0);
-            }
-            for i in n..two_n {
-                buf[i] = Complex64::new(0.0, 0.0);
-            }
-
-            let plan = f64::get_1d_plan(Shape1D::new(two_n).expect("Shape1D"));
-            plan.forward_complex_slice_inplace(buf);
-
-            // fill_dst2_from_fft
-            for k in 0..n {
-                let angle = -(half_cycle * (k as f64 + 1.0));
-                let (sin_a, cos_a) = angle.sin_cos();
-                let w = Complex64::new(cos_a, sin_a);
-                output[k] = -(w * buf[k + 1]).im;
-            }
-        });
+    with_zero_padded_forward_fft(signal, |fft, half_cycle| {
+        fill_dst2_from_fft(fft, half_cycle, output);
     });
 }
 

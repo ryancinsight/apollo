@@ -48,16 +48,23 @@ impl QftPlan {
         self.fft_plan.as_ref()
     }
 
-    fn forward_fft_into(&self, input: &[Complex64], output: &mut [Complex64]) {
+    #[inline]
+    fn apply_fft<const FORWARD: bool>(&self, input: &[Complex64], output: &mut [Complex64]) {
         output.copy_from_slice(input);
-        self.fft_plan().inverse_complex_slice_unnorm_inplace(output);
+        if FORWARD {
+            self.fft_plan().inverse_complex_slice_unnorm_inplace(output);
+        } else {
+            self.fft_plan().forward_complex_slice_inplace(output);
+        }
         Self::scale_unitary(output);
     }
 
+    fn forward_fft_into(&self, input: &[Complex64], output: &mut [Complex64]) {
+        self.apply_fft::<true>(input, output);
+    }
+
     fn inverse_fft_into(&self, input: &[Complex64], output: &mut [Complex64]) {
-        output.copy_from_slice(input);
-        self.fft_plan().forward_complex_slice_inplace(output);
-        Self::scale_unitary(output);
+        self.apply_fft::<false>(input, output);
     }
 
     fn scale_unitary(output: &mut [Complex64]) {
@@ -94,9 +101,21 @@ impl QftPlan {
         &self,
         input: leto::ArrayView1<'_, Complex64>,
     ) -> QftResult<leto::Array<Complex64, leto::MnemosyneStorage<Complex64>, 1>> {
+        self.execute_leto_complex64::<true>(input)
+    }
+
+    #[inline]
+    fn execute_leto_complex64<const FORWARD: bool>(
+        &self,
+        input: leto::ArrayView1<'_, Complex64>,
+    ) -> QftResult<leto::Array<Complex64, leto::MnemosyneStorage<Complex64>, 1>> {
         let signal = apollo_leto_interop::view_cow(&input);
         let mut output = vec![Complex64::new(0.0, 0.0); self.len()];
-        self.forward_complex64_slice_into(&signal, &mut output)?;
+        if FORWARD {
+            self.forward_complex64_slice_into(&signal, &mut output)?;
+        } else {
+            self.inverse_complex64_slice_into(&signal, &mut output)?;
+        }
         Ok(
             leto::Array::<Complex64, leto::MnemosyneStorage<Complex64>, 1>::from_mnemosyne_vec(
                 [output.len()],
@@ -126,10 +145,23 @@ impl QftPlan {
         input: &[Complex64],
         output: &mut [Complex64],
     ) -> QftResult<()> {
+        self.execute_complex64_slice::<true>(input, output)
+    }
+
+    #[inline]
+    fn execute_complex64_slice<const FORWARD: bool>(
+        &self,
+        input: &[Complex64],
+        output: &mut [Complex64],
+    ) -> QftResult<()> {
         if input.len() != self.len() || output.len() != self.len() {
             return Err(QftError::LengthMismatch);
         }
-        self.forward_fft_into(input, output);
+        if FORWARD {
+            self.forward_fft_into(input, output);
+        } else {
+            self.inverse_fft_into(input, output);
+        }
         Ok(())
     }
 
@@ -149,9 +181,22 @@ impl QftPlan {
         input: leto::ArrayView1<'_, T>,
         profile: PrecisionProfile,
     ) -> QftResult<leto::Array<T, leto::MnemosyneStorage<T>, 1>> {
+        self.execute_leto_typed::<T, true>(input, profile)
+    }
+
+    #[inline]
+    fn execute_leto_typed<T: QftStorage, const FORWARD: bool>(
+        &self,
+        input: leto::ArrayView1<'_, T>,
+        profile: PrecisionProfile,
+    ) -> QftResult<leto::Array<T, leto::MnemosyneStorage<T>, 1>> {
         let signal = apollo_leto_interop::view_cow(&input);
         let mut output = vec![T::from_cpu(Complex64::new(0.0, 0.0)); self.len()];
-        T::forward_slice_into(self, &signal, &mut output, profile)?;
+        if FORWARD {
+            T::forward_slice_into(self, &signal, &mut output, profile)?;
+        } else {
+            T::inverse_slice_into(self, &signal, &mut output, profile)?;
+        }
         Ok(
             leto::Array::<T, leto::MnemosyneStorage<T>, 1>::from_mnemosyne_vec(
                 [output.len()],
@@ -176,16 +221,7 @@ impl QftPlan {
         &self,
         input: leto::ArrayView1<'_, Complex64>,
     ) -> QftResult<leto::Array<Complex64, leto::MnemosyneStorage<Complex64>, 1>> {
-        let signal = apollo_leto_interop::view_cow(&input);
-        let mut output = vec![Complex64::new(0.0, 0.0); self.len()];
-        self.inverse_complex64_slice_into(&signal, &mut output)?;
-        Ok(
-            leto::Array::<Complex64, leto::MnemosyneStorage<Complex64>, 1>::from_mnemosyne_vec(
-                [output.len()],
-                output,
-            )
-            .expect("inverse QFT output length must match Leto output shape"),
-        )
+        self.execute_leto_complex64::<false>(input)
     }
 
     /// Inverse QFT into caller-owned storage.
@@ -208,11 +244,7 @@ impl QftPlan {
         input: &[Complex64],
         output: &mut [Complex64],
     ) -> QftResult<()> {
-        if input.len() != self.len() || output.len() != self.len() {
-            return Err(QftError::LengthMismatch);
-        }
-        self.inverse_fft_into(input, output);
-        Ok(())
+        self.execute_complex64_slice::<false>(input, output)
     }
 
     /// Inverse QFT for `Complex64`, `Complex32`, or mixed two-lane `F16` storage.
@@ -231,16 +263,7 @@ impl QftPlan {
         input: leto::ArrayView1<'_, T>,
         profile: PrecisionProfile,
     ) -> QftResult<leto::Array<T, leto::MnemosyneStorage<T>, 1>> {
-        let signal = apollo_leto_interop::view_cow(&input);
-        let mut output = vec![T::from_cpu(Complex64::new(0.0, 0.0)); self.len()];
-        T::inverse_slice_into(self, &signal, &mut output, profile)?;
-        Ok(
-            leto::Array::<T, leto::MnemosyneStorage<T>, 1>::from_mnemosyne_vec(
-                [output.len()],
-                output,
-            )
-            .expect("typed inverse QFT output length must match Leto output shape"),
-        )
+        self.execute_leto_typed::<T, false>(input, profile)
     }
 
     /// Forward QFT executed in place.
