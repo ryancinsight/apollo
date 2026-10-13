@@ -1,9 +1,9 @@
-use apollo_fft::Complex32;
+use apollo_fft::{Complex32, WgpuError, WgpuResult};
 use eunomia::Complex64;
 
 use crate::domain::spectrum::sparse::SparseSpectrum;
 
-use super::{SftWgpuPlan, WgpuError, WgpuResult};
+use super::SftWgpuPlan;
 
 pub(super) fn validate_spectrum(plan: &SftWgpuPlan, spectrum: &SparseSpectrum) -> WgpuResult<()> {
     if spectrum.n != plan.len() {

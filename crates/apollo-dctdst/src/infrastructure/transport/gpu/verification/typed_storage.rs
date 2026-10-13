@@ -1,7 +1,7 @@
-use apollo_fft::{PrecisionProfile, F16};
+use apollo_fft::{PrecisionProfile, WgpuError, F16};
 use leto::Storage;
 
-use crate::{infrastructure::transport::gpu::WgpuError, RealTransformKind};
+use crate::RealTransformKind;
 
 use super::support::backend;
 use crate::infrastructure::transport::gpu::RealTransformPlan;

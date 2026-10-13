@@ -16,7 +16,6 @@ mod spherical;
 #[cfg(test)]
 pub(crate) mod verification;
 
-pub use apollo_fft::{WgpuCapabilities, WgpuError, WgpuResult};
 pub use execution::HarmonicExecution;
 pub use infrastructure::kernel::ShtGpuKernel;
 pub use spherical::SphericalPlan;

@@ -1,8 +1,8 @@
 //! Value-semantic GFT GPU precision-rejection contract.
 
-use apollo_fft::{PrecisionProfile, F16};
+use apollo_fft::{PrecisionProfile, WgpuError, F16};
 
-use crate::infrastructure::transport::gpu::{GftWgpuPlan, WgpuError};
+use crate::infrastructure::transport::gpu::GftWgpuPlan;
 
 use super::support::{backend, path4_plan_and_basis};
 use crate::infrastructure::transport::gpu::BasisTransform;

@@ -2,11 +2,9 @@
 
 #[cfg(test)]
 mod tests {
-    use crate::infrastructure::transport::gpu::{
-        FwhtWgpuBackend, FwhtWgpuPlan, WgpuCapabilities, WgpuError,
-    };
+    use crate::infrastructure::transport::gpu::{FwhtWgpuBackend, FwhtWgpuPlan};
     use crate::FwhtPlan;
-    use apollo_fft::{PrecisionProfile, F16};
+    use apollo_fft::{PrecisionProfile, WgpuCapabilities, WgpuError, F16};
     use leto::Array1;
     use leto::{SliceArg, Storage};
 

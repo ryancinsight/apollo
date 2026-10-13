@@ -1,8 +1,6 @@
 //! Value-semantic CZT GPU precision-rejection contracts.
 
-use apollo_fft::{PrecisionProfile, F16};
-
-use crate::infrastructure::transport::gpu::WgpuError;
+use apollo_fft::{PrecisionProfile, WgpuError, F16};
 
 use super::support::{backend, reference_parameters};
 use crate::infrastructure::transport::gpu::ChirpPlan;

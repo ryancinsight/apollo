@@ -1,6 +1,6 @@
 //! Value-semantic CZT GPU inverse contracts.
 
-use crate::infrastructure::transport::gpu::WgpuError;
+use apollo_fft::WgpuError;
 use eunomia::Complex32;
 
 use super::support::{backend, dft_input, dft_parameters, DFT_ROUNDTRIP_BOUND};

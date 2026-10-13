@@ -1,8 +1,8 @@
-use apollo_fft::{PrecisionProfile, F16};
+use apollo_fft::{PrecisionProfile, WgpuError, F16};
 use eunomia::Complex32;
 use leto::Storage;
 
-use crate::infrastructure::transport::gpu::{FrftWgpuPlan, WgpuError};
+use crate::infrastructure::transport::gpu::FrftWgpuPlan;
 
 use super::support::backend;
 use crate::infrastructure::transport::gpu::OrderPlan;

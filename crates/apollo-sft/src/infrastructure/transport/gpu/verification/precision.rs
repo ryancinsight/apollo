@@ -1,12 +1,9 @@
 //! Value-semantic SFT GPU explicit-precision contracts.
 
-use apollo_fft::{PrecisionProfile, F16};
+use apollo_fft::{PrecisionProfile, WgpuError, F16};
 use eunomia::Complex64;
 
-use crate::{
-    infrastructure::transport::gpu::{SftWgpuPlan, WgpuError},
-    SparseSpectrum,
-};
+use crate::{infrastructure::transport::gpu::SftWgpuPlan, SparseSpectrum};
 
 use super::support::{assert_accelerated_complex_close, backend, INVERSE_N0_ERROR_BOUND};
 use crate::infrastructure::transport::gpu::{SparseExecution, SparsityPlan};

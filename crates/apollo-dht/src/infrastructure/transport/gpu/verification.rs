@@ -2,11 +2,9 @@
 
 #[cfg(test)]
 mod tests {
-    use crate::infrastructure::transport::gpu::{
-        DhtWgpuBackend, DhtWgpuPlan, WgpuCapabilities, WgpuError,
-    };
+    use crate::infrastructure::transport::gpu::{DhtWgpuBackend, DhtWgpuPlan};
     use crate::DhtPlan;
-    use apollo_fft::{PrecisionProfile, F16};
+    use apollo_fft::{PrecisionProfile, WgpuCapabilities, WgpuError, F16};
     use leto::{SliceArg, Storage};
 
     // Each direct coefficient performs N f32 products/accumulations plus

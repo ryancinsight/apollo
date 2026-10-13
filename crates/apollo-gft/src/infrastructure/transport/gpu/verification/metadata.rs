@@ -1,6 +1,8 @@
 //! Value-semantic GFT GPU metadata and capability contracts.
 
-use crate::infrastructure::transport::gpu::{GftWgpuPlan, WgpuCapabilities, WgpuError};
+use apollo_fft::{WgpuCapabilities, WgpuError};
+
+use crate::infrastructure::transport::gpu::GftWgpuPlan;
 
 use super::support::backend;
 

@@ -1,7 +1,6 @@
-use crate::{
-    infrastructure::transport::gpu::{DctDstWgpuPlan, WgpuCapabilities},
-    RealTransformKind,
-};
+use apollo_fft::WgpuCapabilities;
+
+use crate::{infrastructure::transport::gpu::DctDstWgpuPlan, RealTransformKind};
 
 use super::support::backend;
 use crate::infrastructure::transport::gpu::RealTransformPlan;

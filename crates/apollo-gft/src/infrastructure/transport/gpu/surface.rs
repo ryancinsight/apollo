@@ -1,6 +1,6 @@
-use apollo_fft::{GpuStorage, PrecisionProfile};
+use apollo_fft::{GpuStorage, PrecisionProfile, WgpuResult};
 
-use super::{GftWgpuPlan, WgpuResult};
+use super::GftWgpuPlan;
 
 /// Basis-parameterized execution surface of the GFT backend.
 ///

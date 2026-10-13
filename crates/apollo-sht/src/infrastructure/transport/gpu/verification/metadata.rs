@@ -1,5 +1,7 @@
+use apollo_fft::WgpuCapabilities;
+
+use crate::infrastructure::transport::gpu::ShtWgpuPlan;
 use crate::infrastructure::transport::gpu::SphericalPlan;
-use crate::infrastructure::transport::gpu::{ShtWgpuPlan, WgpuCapabilities};
 
 #[test]
 fn capabilities_advertise_direct_complex_execution() {

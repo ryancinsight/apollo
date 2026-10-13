@@ -17,7 +17,6 @@ mod spectrum;
 #[cfg(test)]
 pub(crate) mod verification;
 
-pub use apollo_fft::{WgpuCapabilities, WgpuError, WgpuResult};
 pub use execution::SparseExecution;
 pub use infrastructure::kernel::SftGpuKernel;
 pub use sparsity::SparsityPlan;

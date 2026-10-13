@@ -13,12 +13,11 @@ pub mod infrastructure;
 #[cfg(test)]
 pub(crate) mod verification;
 
-use apollo_fft::WgpuTransformPlan as Plan;
+use apollo_fft::{WgpuError, WgpuResult, WgpuTransformPlan as Plan};
 
 use infrastructure::kernel::{forward_mode, inverse_mode_scale, FiberLayout};
 
 pub use crate::RealTransformKind;
-pub use apollo_fft::{WgpuCapabilities, WgpuError, WgpuResult};
 pub use infrastructure::kernel::DctGpuKernel;
 pub use leto::{Array2, Array3};
 

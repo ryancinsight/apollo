@@ -12,7 +12,6 @@ pub mod infrastructure;
 #[cfg(test)]
 pub(crate) mod verification;
 
-pub use apollo_fft::{WgpuCapabilities, WgpuError, WgpuResult};
 pub use infrastructure::kernel::SdftGpuKernel;
 
 /// Plan payload for the sliding DFT: window length and generated bin

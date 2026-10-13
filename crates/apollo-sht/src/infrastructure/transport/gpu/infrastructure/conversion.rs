@@ -291,7 +291,7 @@ mod tests {
 
         assert!(matches!(
             error,
-            crate::infrastructure::transport::gpu::WgpuError::PrecisionLoss {
+            apollo_fft::WgpuError::PrecisionLoss {
                 component: "real",
                 value,
             } if value == 0.1

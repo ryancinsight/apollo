@@ -1,7 +1,7 @@
-use apollo_fft::{Complex32, GpuElement, GpuStorage, PrecisionProfile};
+use apollo_fft::{Complex32, GpuElement, GpuStorage, PrecisionProfile, WgpuError, WgpuResult};
 
 use super::infrastructure::kernel::{validate_domain, MellinGpuKernel as Kernel};
-use super::{MellinWgpuBackend, MellinWgpuPlan, WgpuError, WgpuResult};
+use super::{MellinWgpuBackend, MellinWgpuPlan};
 
 /// Resampled execution surface of the Mellin backend.
 ///

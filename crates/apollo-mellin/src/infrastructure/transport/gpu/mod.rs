@@ -15,7 +15,6 @@ mod scale;
 #[cfg(test)]
 pub(crate) mod verification;
 
-pub use apollo_fft::{WgpuCapabilities, WgpuError, WgpuResult};
 pub use execution::ResampledExecution;
 pub use infrastructure::kernel::MellinGpuKernel;
 pub use scale::ScalePlan;

@@ -1,11 +1,8 @@
-use apollo_fft::{PrecisionProfile, F16};
+use apollo_fft::{PrecisionProfile, WgpuError, F16};
 use eunomia::Complex32;
 use leto::{Array2, Storage};
 
-use crate::{
-    infrastructure::transport::gpu::{ShtWgpuPlan, WgpuError},
-    SphericalHarmonicCoefficients,
-};
+use crate::{infrastructure::transport::gpu::ShtWgpuPlan, SphericalHarmonicCoefficients};
 
 use super::support::{backend, REPRESENTED_STORAGE_TOLERANCE};
 use crate::infrastructure::transport::gpu::{HarmonicExecution, SphericalPlan};

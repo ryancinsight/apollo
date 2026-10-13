@@ -11,9 +11,8 @@ pub mod infrastructure;
 #[cfg(test)]
 pub(crate) mod verification;
 
-use apollo_fft::{Complex32, GpuElement};
+use apollo_fft::{Complex32, GpuElement, WgpuError, WgpuResult};
 
-pub use apollo_fft::{WgpuCapabilities, WgpuError, WgpuResult};
 pub use infrastructure::kernel::HilbertGpuKernel;
 
 /// Metadata-preserving WGPU plan descriptor.

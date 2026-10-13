@@ -13,7 +13,6 @@ pub mod infrastructure;
 #[cfg(test)]
 pub(crate) mod verification;
 
-pub use apollo_fft::{WgpuCapabilities, WgpuError, WgpuResult};
 pub use infrastructure::kernel::{NttGpuBuffers, NttGpuKernel};
 
 mod execution;

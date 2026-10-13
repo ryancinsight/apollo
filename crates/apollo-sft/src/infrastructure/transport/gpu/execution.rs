@@ -1,4 +1,4 @@
-use apollo_fft::{Complex32, GpuElement, GpuStorage, PrecisionProfile};
+use apollo_fft::{Complex32, GpuElement, GpuStorage, PrecisionProfile, WgpuError, WgpuResult};
 use eunomia::Complex64;
 
 use crate::domain::spectrum::sparse::SparseSpectrum;
@@ -6,7 +6,7 @@ use crate::domain::spectrum::sparse::SparseSpectrum;
 use super::spectrum::{
     populate_dense_spectrum, quantize_accelerator_component, select_top_k, validate_spectrum,
 };
-use super::{SftWgpuBackend, SftWgpuPlan, WgpuError, WgpuResult};
+use super::{SftWgpuBackend, SftWgpuPlan};
 
 /// Sparse-domain surface of the SFT backend.
 ///

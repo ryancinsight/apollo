@@ -138,6 +138,14 @@ Change-class tags: [patch] backward-compatible fix, [minor] additive non-breakin
   Apollo retains framing, Hann conversion, interleave/deinterleave, synthesis
   windowing, and weighted overlap-add. See ADR 0008 and
   `docs/MIGRATION_GPU_FFT.md`.
+- [major] The sixteen transform crates (`apollo-czt`, `apollo-dctdst`,
+  `apollo-dht`, `apollo-frft`, `apollo-fwht`, `apollo-gft`, `apollo-hilbert`,
+  `apollo-mellin`, `apollo-ntt`, `apollo-qft`, `apollo-radon`, `apollo-sdft`,
+  `apollo-sft`, `apollo-sht`, `apollo-stft`, `apollo-wavelet`) no longer
+  re-export `apollo_fft::{WgpuCapabilities, WgpuError, WgpuResult}` from
+  their WGPU transport modules. Migration: import the canonical owner
+  directly (`use apollo_fft::WgpuError;`). No in-workspace consumer used
+  the aliases.
 
 ### Added
 

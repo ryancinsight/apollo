@@ -1,4 +1,6 @@
-use crate::infrastructure::transport::gpu::{QftWgpuPlan, WgpuCapabilities, WgpuError};
+use apollo_fft::{WgpuCapabilities, WgpuError};
+
+use crate::infrastructure::transport::gpu::QftWgpuPlan;
 
 use super::support::backend;
 

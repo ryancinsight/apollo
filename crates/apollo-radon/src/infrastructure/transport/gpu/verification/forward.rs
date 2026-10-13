@@ -8,10 +8,9 @@
     )
 )]
 
-use crate::{
-    infrastructure::transport::gpu::{RadonWgpuPlan, WgpuError},
-    RadonPlan,
-};
+use apollo_fft::WgpuError;
+
+use crate::{infrastructure::transport::gpu::RadonWgpuPlan, RadonPlan};
 
 use super::support::backend;
 use crate::infrastructure::transport::gpu::{GeometryPlan, ProjectionExecution};

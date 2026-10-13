@@ -1,6 +1,5 @@
+use apollo_fft::WgpuError;
 use leto::Storage;
-
-use crate::infrastructure::transport::gpu::WgpuError;
 
 use super::support::backend;
 use crate::infrastructure::transport::gpu::{ModularExecution, ResiduePlan};

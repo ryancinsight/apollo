@@ -1,8 +1,8 @@
-use apollo_fft::{GpuElement, GpuStorage, PrecisionProfile};
+use apollo_fft::{GpuElement, GpuStorage, PrecisionProfile, WgpuError, WgpuResult};
 
 use super::infrastructure::kernel::GftDirection;
 use super::surface::BasisTransform;
-use super::{GftGpuKernel, GftWgpuBackend, GftWgpuPlan, WgpuError, WgpuResult};
+use super::{GftGpuKernel, GftWgpuBackend, GftWgpuPlan};
 
 impl BasisTransform for GftWgpuBackend {
     fn execute_forward(

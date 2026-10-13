@@ -1,9 +1,7 @@
+use apollo_fft::WgpuError;
 use leto::{SliceArg, Storage};
 
-use crate::{
-    infrastructure::transport::gpu::{DctDstWgpuPlan, WgpuError},
-    RealTransformKind,
-};
+use crate::{infrastructure::transport::gpu::DctDstWgpuPlan, RealTransformKind};
 
 use super::support::{
     assert_cpu_differential, assert_roundtrip, backend, cpu_forward, ONE_DIMENSIONAL_TOLERANCE,
