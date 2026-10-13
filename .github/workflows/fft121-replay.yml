@@ -1,14 +1,10 @@
 name: FFT121 measurement replication
 
 on:
-  push:
-    branches: [codex/apollo-row-prologue-642]
-    paths: [.github/workflows/fft121-replay.yml]
   workflow_dispatch:
     inputs:
       source_run:
         description: Successful native evaluation containing the validated binaries
-        default: '38457429306'
         required: true
 
 permissions:
@@ -21,7 +17,7 @@ jobs:
     timeout-minutes: 10
     env:
       GH_TOKEN: ${{ github.token }}
-      SOURCE_RUN: ${{ inputs.source_run || '38457429306' }}
+      SOURCE_RUN: ${{ inputs.source_run }}
     steps:
       - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803
         with:
