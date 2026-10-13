@@ -430,6 +430,14 @@ pub fn dst4(signal: &[f64], output: &mut [f64]) {
     }
 }
 
+/// Release this module's thread-local direct-basis scratch pool on the
+/// calling thread: capacity returns to its recorded provision (zero unless
+/// a bounded provision was recorded). Called by the crate-level release;
+/// the third slice of APOLLO-MEM-SIBLING-THREAD-SCRATCH.
+pub fn release_direct_scratch() {
+    DIRECT_BASIS_SCRATCH.with(|pool| pool.release());
+}
+
 fn direct_row_hermes(signal: &[f64], kind: DirectBasisKind, row: usize) -> f64 {
     DIRECT_BASIS_SCRATCH.with(|pool| {
         pool.with_scratch(signal.len(), |basis| {

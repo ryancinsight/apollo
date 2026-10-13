@@ -18,13 +18,21 @@ pub struct FftPlan2D<F: MixedRadixScalar> {
     ny: usize,
     ny_c: usize,
     twiddle_row_fwd: Option<Arc<[F::Complex]>>,
-    twiddle_row_inv: Option<Arc<[F::Complex]>>,
+    /// Inverse row table, built on the first inverse execution rather than
+    /// at construction: the memory audit measured the eager inverse build
+    /// as retained bytes forward-only consumers never touch, and the 1-D
+    /// plan made its inverse lazy for exactly this reason
+    /// (`dimension_1d/dynamic_impl.rs`, citing
+    /// `gap_audit.md#retained-attribution`).
+    twiddle_row_inv: std::sync::OnceLock<Option<Arc<[F::Complex]>>>,
     twiddle_col_fwd: Option<Arc<[F::Complex]>>,
-    twiddle_col_inv: Option<Arc<[F::Complex]>>,
+    /// Inverse column table, lazy for the same reason as the row inverse.
+    twiddle_col_inv: std::sync::OnceLock<Option<Arc<[F::Complex]>>>,
     /// Tables for the packed rows of the real split: a real row of `ny`
     /// samples is `ny/2` complex ones.
     twiddle_half_row_fwd: Option<Arc<[F::Complex]>>,
-    twiddle_half_row_inv: Option<Arc<[F::Complex]>>,
+    /// Inverse half-row table, lazy for the same reason as the row inverse.
+    twiddle_half_row_inv: std::sync::OnceLock<Option<Arc<[F::Complex]>>>,
     /// The real split's `W_ny^k`, evaluated once for every row of the
     /// half-spectrum pair rather than once per row.
     split_twiddles: Box<[F::Complex]>,
@@ -56,11 +64,11 @@ where
             ny,
             ny_c: m + 1,
             twiddle_row_fwd: cached_power_of_two_twiddle::<F, true>(ny),
-            twiddle_row_inv: cached_power_of_two_twiddle::<F, false>(ny),
+            twiddle_row_inv: std::sync::OnceLock::new(),
             twiddle_col_fwd: cached_power_of_two_twiddle::<F, true>(nx),
-            twiddle_col_inv: cached_power_of_two_twiddle::<F, false>(nx),
+            twiddle_col_inv: std::sync::OnceLock::new(),
             twiddle_half_row_fwd: cached_power_of_two_twiddle::<F, true>(m),
-            twiddle_half_row_inv: cached_power_of_two_twiddle::<F, false>(m),
+            twiddle_half_row_inv: std::sync::OnceLock::new(),
             split_twiddles: split_twiddle_table::<F>(ny),
         }
     }
@@ -225,17 +233,39 @@ where
         });
     }
 
+    /// The inverse row table, built on first use: forward-only plans never
+    /// touch it, so construction must not retain it.
+    fn row_inv_twiddles(&self) -> Option<&[F::Complex]> {
+        self.twiddle_row_inv
+            .get_or_init(|| cached_power_of_two_twiddle::<F, false>(self.ny))
+            .as_deref()
+    }
+
+    /// The inverse column table, built on first use like the row inverse.
+    fn col_inv_twiddles(&self) -> Option<&[F::Complex]> {
+        self.twiddle_col_inv
+            .get_or_init(|| cached_power_of_two_twiddle::<F, false>(self.nx))
+            .as_deref()
+    }
+
+    /// The inverse half-row table, built on first use like the row inverse.
+    fn half_row_inv_twiddles(&self) -> Option<&[F::Complex]> {
+        self.twiddle_half_row_inv
+            .get_or_init(|| cached_power_of_two_twiddle::<F, false>(self.ny / 2))
+            .as_deref()
+    }
+
     /// One direction's transform of a packed row: the `ny/2` complex samples
     /// that carry a real row's `ny` values in the real split.
     pub(crate) fn half_y_lane<D: Direction>(
         &self,
     ) -> impl Fn(&mut [F::Complex]) + Send + Sync + '_ {
         let twiddles = if D::FORWARD {
-            &self.twiddle_half_row_fwd
+            self.twiddle_half_row_fwd.as_deref()
         } else {
-            &self.twiddle_half_row_inv
+            self.half_row_inv_twiddles()
         };
-        lanes::lane_over::<F, D>(twiddles.as_deref())
+        lanes::lane_over::<F, D>(twiddles)
     }
 
     /// The real split's twiddles for the rows, `W_ny^k` for `k = 1..⌈ny/4⌉`.
@@ -282,13 +312,12 @@ where
     /// twiddles where the length has them, the generic mixed radix otherwise.
     fn lane<D: Direction>(&self, axis: usize) -> impl Fn(&mut [F::Complex]) + Send + Sync + '_ {
         let twiddles = match (axis, D::FORWARD) {
-            (0, true) => &self.twiddle_col_fwd,
-            (0, false) => &self.twiddle_col_inv,
-            (1, true) => &self.twiddle_row_fwd,
-            (1, false) => &self.twiddle_row_inv,
+            (0, true) => self.twiddle_col_fwd.as_deref(),
+            (0, false) => self.col_inv_twiddles(),
+            (1, true) => self.twiddle_row_fwd.as_deref(),
+            (1, false) => self.row_inv_twiddles(),
             _ => unreachable!("invariant: the entry points validate the axis"),
-        }
-        .as_deref();
+        };
         lanes::lane_over::<F, D>(twiddles)
     }
 }

@@ -41,6 +41,32 @@ fn typed_paths_support_f64_f32_and_mixed_f16_storage() {
 }
 
 #[test]
+fn release_scratch_returns_typed_pools_to_baseline_and_serves_again() {
+    use super::typed::{release_scratch, typed_scratch_capacities};
+    let plan = DctDstPlan::new(8, RealTransformKind::DctII).expect("valid plan");
+    let signal32 = [1.0_f32, -2.0, 0.5, 2.25, -4.0, 1.5, 0.0, -0.75];
+    let mut output = [0.0_f32; 8];
+    plan.forward_typed_into(&signal32, &mut output, PrecisionProfile::LOW_PRECISION_F32)
+        .expect("typed forward grows the workspaces");
+    assert!(
+        typed_scratch_capacities().0 >= plan.len(),
+        "the typed forward must retain its workspace"
+    );
+    release_scratch();
+    assert_eq!(
+        typed_scratch_capacities(),
+        (0, 0),
+        "release must return every typed pool to baseline"
+    );
+    plan.forward_typed_into(&signal32, &mut output, PrecisionProfile::LOW_PRECISION_F32)
+        .expect("typed forward after release");
+    assert!(
+        typed_scratch_capacities().0 >= plan.len(),
+        "the pools must serve after release"
+    );
+}
+
+#[test]
 fn typed_path_rejects_profile_storage_mismatch() {
     let plan = DctDstPlan::new(4, RealTransformKind::DstII).expect("valid plan");
     let signal = [1.0_f32, 2.0, 3.0, 4.0];

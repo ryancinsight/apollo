@@ -11,6 +11,14 @@ thread_local! {
     static DIRECT_WEIGHT_LANE_SCRATCH: ScratchPool<f64> = const { ScratchPool::new() };
 }
 
+/// Release this module's thread-local weight-lane scratch pool on the
+/// calling thread: capacity returns to its recorded provision (zero unless
+/// a bounded provision was recorded). Called by the crate-level release;
+/// the fourth slice of APOLLO-MEM-SIBLING-THREAD-SCRATCH.
+pub fn release_direct_scratch() {
+    DIRECT_WEIGHT_LANE_SCRATCH.with(|pool| pool.release());
+}
+
 /// Direct execution of the Chirp Z-Transform logic.
 /// Evaluates sequentially against $O(NM)$ limits.
 pub fn czt_direct_forward(

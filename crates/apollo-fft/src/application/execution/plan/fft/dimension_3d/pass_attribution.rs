@@ -85,7 +85,7 @@ static LANES_PER_PROCESSOR: [AtomicU32; PROCESSOR_SLOTS] =
 /// One lane pass in the given direction, exactly as an axis pass issues it.
 fn lane_pass<D: Direction>(plan: &FftPlan3D<f64>, data: &mut [Complex64], count_processors: bool) {
     let lane_len = plan.nz;
-    let (forward, inverse) = (plan.twiddle_z_fwd.as_deref(), plan.twiddle_z_inv.as_deref());
+    let (forward, inverse) = (plan.twiddle_z_fwd.as_deref(), plan.z_inv_twiddles());
     let lane_fn = |lane: &mut [Complex64]| {
         if count_processors {
             let processor = ProcessorIndex::current()
@@ -126,7 +126,7 @@ fn lane_pass_scheduled<D: Direction>(
     lanes_per_task: usize,
 ) {
     let lane_len = plan.nz;
-    let (forward, inverse) = (plan.twiddle_z_fwd.as_deref(), plan.twiddle_z_inv.as_deref());
+    let (forward, inverse) = (plan.twiddle_z_fwd.as_deref(), plan.z_inv_twiddles());
     let one_lane = |lane: &mut [Complex64]| match (D::FORWARD, forward, inverse) {
         (true, Some(tw), _) => dispatch_inplace::<f64, false, false>(lane, Some(tw)),
         (false, _, Some(tw)) => dispatch_inplace::<f64, true, true>(lane, Some(tw)),

@@ -35,6 +35,26 @@ pub(crate) fn with_complex64_workspaces<R>(
     })
 }
 
+/// Release this module's thread-local workspace pools on the calling
+/// thread: capacities return to their recorded provisions (zero unless a
+/// bounded provision was recorded). Called by the crate-level release;
+/// the fourth slice of APOLLO-MEM-SIBLING-THREAD-SCRATCH.
+pub fn release_workspace_scratch() {
+    TYPED_INPUT64_SCRATCH.with(|pool| pool.release());
+    TYPED_OUTPUT64_SCRATCH.with(|pool| pool.release());
+    FORWARD_WORKSPACE_SCRATCH.with(|pool| pool.release());
+}
+
+/// Release every thread-local scratch pool this crate owns on the calling
+/// thread: the plan workspaces, the Bluestein complex pool, and the direct
+/// weight-lane pool. The fourth slice of APOLLO-MEM-SIBLING-THREAD-SCRATCH,
+/// following the apollo-fwht, apollo-gft, and apollo-dctdst precedents.
+pub fn release_scratch() {
+    release_workspace_scratch();
+    crate::application::execution::kernel::bluestein::release_bluestein_scratch();
+    crate::application::execution::kernel::direct::release_direct_scratch();
+}
+
 #[cfg(test)]
 pub(crate) fn typed_scratch_capacities() -> (usize, usize) {
     TYPED_INPUT64_SCRATCH.with(|in_pool| {

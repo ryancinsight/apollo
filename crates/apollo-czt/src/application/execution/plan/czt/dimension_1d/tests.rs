@@ -1,7 +1,7 @@
 //! Unit tests for 1D Chirp Z-Transform.
 
 use super::plan::CztPlan;
-use super::workspace::{forward_workspace_capacity, typed_scratch_capacities};
+use super::workspace::{forward_workspace_capacity, release_scratch, typed_scratch_capacities};
 use crate::domain::contracts::error::CztError;
 use apollo_fft::{PrecisionProfile, F16};
 use eunomia::{assert_abs_diff_eq, assert_relative_eq};
@@ -208,6 +208,19 @@ mod general_czt_tests {
         plan.forward_into(&input, &mut second)
             .expect("second caller-owned fast path");
         assert_eq!(forward_workspace_capacity(), capacity_after_first);
+        release_scratch();
+        assert_eq!(
+            (typed_scratch_capacities(), forward_workspace_capacity()),
+            ((0, 0), 0),
+            "release must return every CZT pool to baseline"
+        );
+        plan.forward_into(&input, &mut second)
+            .expect("caller-owned fast path after release");
+        assert_eq!(
+            forward_workspace_capacity(),
+            capacity_after_first,
+            "the pools must serve after release"
+        );
         for (actual, expected) in second.iter().zip(first.iter()) {
             assert_relative_eq!(actual.re, expected.re, epsilon = 1.0e-12);
             assert_relative_eq!(actual.im, expected.im, epsilon = 1.0e-12);

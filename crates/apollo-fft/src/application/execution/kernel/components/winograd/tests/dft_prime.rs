@@ -9,7 +9,7 @@
 use crate::application::execution::kernel::components::rader;
 use crate::application::execution::kernel::components::winograd::ShortWinogradScalar;
 use crate::application::execution::kernel::direct::{dft_forward, dft_inverse};
-use eunomia::{Complex32, Complex64};
+use eunomia::{Complex32, Complex64, F64};
 
 fn max_err(a: &[Complex64], b: &[Complex64]) -> f64 {
     a.iter()
@@ -20,7 +20,12 @@ fn max_err(a: &[Complex64], b: &[Complex64]) -> f64 {
 
 fn signal(n: usize) -> Vec<Complex64> {
     (0..n)
-        .map(|k| Complex64::new((k as f64 * 0.19).sin(), (k as f64 * 0.37).cos()))
+        .map(|k| {
+            Complex64::new(
+                (F64::from_count(k).0 * 0.19).sin(),
+                (F64::from_count(k).0 * 0.37).cos(),
+            )
+        })
         .collect()
 }
 
@@ -30,7 +35,7 @@ fn assert_short_forward_precise<const N: usize>(kernel: impl FnOnce(&mut [Comple
     let mut buf: [Complex64; N] = input.as_slice().try_into().unwrap();
     kernel(&mut buf);
     let err = max_err(&buf, &expected);
-    let tol = 512.0 * N as f64 * f64::EPSILON;
+    let tol = 512.0 * F64::from_count(N).0 * f64::EPSILON;
     assert!(
         err < tol,
         "DFT-{N} f64 forward max_err={err:.2e}, tol={tol:.2e}"
@@ -45,10 +50,10 @@ fn assert_short_forward_reduced<const N: usize>(kernel: impl FnOnce(&mut [Comple
     kernel(&mut buf);
     let got: Vec<Complex64> = buf
         .iter()
-        .map(|x| Complex64::new(x.re as f64, x.im as f64))
+        .map(|x| Complex64::new(f64::from(x.re), f64::from(x.im)))
         .collect();
     let err = max_err(&got, &expected);
-    let tol = 32.0 * N as f64 * f32::EPSILON as f64;
+    let tol = 32.0 * F64::from_count(N).0 * f64::from(f32::EPSILON);
     assert!(
         err < tol,
         "DFT-{N} f32 forward max_err={err:.2e}, tol={tol:.2e}"
@@ -59,17 +64,17 @@ fn assert_short_inverse_reduced<const N: usize>(kernel: impl FnOnce(&mut [Comple
     let input = signal(N);
     let expected: Vec<_> = dft_inverse(&input)
         .into_iter()
-        .map(|x| x * N as f64)
+        .map(|x| x * F64::from_count(N).0)
         .collect();
     let mut buf: [Complex32; N] =
         core::array::from_fn(|i| Complex32::new(input[i].re as f32, input[i].im as f32));
     kernel(&mut buf);
     let got: Vec<Complex64> = buf
         .iter()
-        .map(|x| Complex64::new(x.re as f64, x.im as f64))
+        .map(|x| Complex64::new(f64::from(x.re), f64::from(x.im)))
         .collect();
     let err = max_err(&got, &expected);
-    let tol = 32.0 * N as f64 * f32::EPSILON as f64;
+    let tol = 32.0 * F64::from_count(N).0 * f64::from(f32::EPSILON);
     assert!(
         err < tol,
         "DFT-{N} f32 inverse max_err={err:.2e}, tol={tol:.2e}"
@@ -95,7 +100,7 @@ fn generated_rader_primes_match_direct_forward_and_inverse() {
 
         let expected_inverse: Vec<_> = dft_inverse(&input)
             .into_iter()
-            .map(|x| x * n as f64)
+            .map(|x| x * F64::from_count(n).0)
             .collect();
         let mut inverse = input.clone();
         rader::rader_fft::<f64, true>(&mut inverse);
@@ -110,7 +115,12 @@ fn generated_rader_primes_match_direct_forward_and_inverse() {
 #[test]
 fn dft17_forward_matches_direct() {
     let input: Vec<Complex64> = (0..17)
-        .map(|k| Complex64::new((k as f64 * 0.19).sin(), (k as f64 * 0.37).cos()))
+        .map(|k| {
+            Complex64::new(
+                (F64::from_count(k).0 * 0.19).sin(),
+                (F64::from_count(k).0 * 0.37).cos(),
+            )
+        })
         .collect();
     let expected = dft_forward(&input);
     let mut buf: [Complex64; 17] = input.as_slice().try_into().unwrap();
@@ -122,7 +132,12 @@ fn dft17_forward_matches_direct() {
 #[test]
 fn dft17_inverse_roundtrip() {
     let input: Vec<Complex64> = (0..17)
-        .map(|k| Complex64::new((k as f64 * 0.29).cos(), -(k as f64 * 0.13).sin()))
+        .map(|k| {
+            Complex64::new(
+                (F64::from_count(k).0 * 0.29).cos(),
+                -(F64::from_count(k).0 * 0.13).sin(),
+            )
+        })
         .collect();
     let mut buf: [Complex64; 17] = input.as_slice().try_into().unwrap();
     <f64 as ShortWinogradScalar>::dft17::<false>(&mut buf);
@@ -135,7 +150,12 @@ fn dft17_inverse_roundtrip() {
 #[test]
 fn dft17_inverse_matches_direct() {
     let input: Vec<Complex64> = (0..17)
-        .map(|k| Complex64::new((k as f64 * 0.43).sin(), (k as f64 * 0.31).cos()))
+        .map(|k| {
+            Complex64::new(
+                (F64::from_count(k).0 * 0.43).sin(),
+                (F64::from_count(k).0 * 0.31).cos(),
+            )
+        })
         .collect();
     let expected_unnorm: Vec<Complex64> =
         dft_inverse(&input).into_iter().map(|x| x * 17.0).collect();
@@ -148,7 +168,12 @@ fn dft17_inverse_matches_direct() {
 #[test]
 fn dft17_f32_forward_matches_direct() {
     let input: Vec<Complex64> = (0..17)
-        .map(|k| Complex64::new((k as f64 * 0.23).sin(), (k as f64 * 0.41).cos()))
+        .map(|k| {
+            Complex64::new(
+                (F64::from_count(k).0 * 0.23).sin(),
+                (F64::from_count(k).0 * 0.41).cos(),
+            )
+        })
         .collect();
     let expected = dft_forward(&input);
     let mut buf: [Complex32; 17] =
@@ -156,7 +181,7 @@ fn dft17_f32_forward_matches_direct() {
     <f32 as ShortWinogradScalar>::dft17::<false>(&mut buf);
     let got: Vec<Complex64> = buf
         .iter()
-        .map(|x| Complex64::new(x.re as f64, x.im as f64))
+        .map(|x| Complex64::new(f64::from(x.re), f64::from(x.im)))
         .collect();
     let err = max_err(&got, &expected);
     assert!(err < 2e-5, "DFT-17 f32 forward max_err={err:.2e}");
@@ -165,7 +190,12 @@ fn dft17_f32_forward_matches_direct() {
 #[test]
 fn dft23_forward_matches_direct() {
     let input: Vec<Complex64> = (0..23)
-        .map(|k| Complex64::new((k as f64 * 0.17).sin(), (k as f64 * 0.35).cos()))
+        .map(|k| {
+            Complex64::new(
+                (F64::from_count(k).0 * 0.17).sin(),
+                (F64::from_count(k).0 * 0.35).cos(),
+            )
+        })
         .collect();
     let expected = dft_forward(&input);
     let mut buf: [Complex64; 23] = input.as_slice().try_into().unwrap();
@@ -177,7 +207,12 @@ fn dft23_forward_matches_direct() {
 #[test]
 fn dft23_inverse_roundtrip() {
     let input: Vec<Complex64> = (0..23)
-        .map(|k| Complex64::new((k as f64 * 0.27).cos(), -(k as f64 * 0.11).sin()))
+        .map(|k| {
+            Complex64::new(
+                (F64::from_count(k).0 * 0.27).cos(),
+                -(F64::from_count(k).0 * 0.11).sin(),
+            )
+        })
         .collect();
     let mut buf: [Complex64; 23] = input.as_slice().try_into().unwrap();
     <f64 as ShortWinogradScalar>::dft23::<false>(&mut buf);
@@ -190,7 +225,12 @@ fn dft23_inverse_roundtrip() {
 #[test]
 fn dft23_inverse_matches_direct() {
     let input: Vec<Complex64> = (0..23)
-        .map(|k| Complex64::new((k as f64 * 0.39).sin(), (k as f64 * 0.29).cos()))
+        .map(|k| {
+            Complex64::new(
+                (F64::from_count(k).0 * 0.39).sin(),
+                (F64::from_count(k).0 * 0.29).cos(),
+            )
+        })
         .collect();
     let expected_unnorm: Vec<Complex64> =
         dft_inverse(&input).into_iter().map(|x| x * 23.0).collect();
@@ -203,7 +243,12 @@ fn dft23_inverse_matches_direct() {
 #[test]
 fn dft23_f32_forward_matches_direct() {
     let input: Vec<Complex64> = (0..23)
-        .map(|k| Complex64::new((k as f64 * 0.21).sin(), (k as f64 * 0.43).cos()))
+        .map(|k| {
+            Complex64::new(
+                (F64::from_count(k).0 * 0.21).sin(),
+                (F64::from_count(k).0 * 0.43).cos(),
+            )
+        })
         .collect();
     let expected = dft_forward(&input);
     let mut buf: [Complex32; 23] =
@@ -211,7 +256,7 @@ fn dft23_f32_forward_matches_direct() {
     <f32 as ShortWinogradScalar>::dft23::<false>(&mut buf);
     let got: Vec<Complex64> = buf
         .iter()
-        .map(|x| Complex64::new(x.re as f64, x.im as f64))
+        .map(|x| Complex64::new(f64::from(x.re), f64::from(x.im)))
         .collect();
     let err = max_err(&got, &expected);
     assert!(err < 4e-5, "DFT-23 f32 forward max_err={err:.2e}");
@@ -261,7 +306,7 @@ fn rader_fft_n10007_roundtrip() {
     let mut buf = input.clone();
     rader::rader_fft::<f64, false>(&mut buf);
     rader::rader_fft::<f64, true>(&mut buf);
-    let recovered: Vec<_> = buf.iter().map(|x| *x / n as f64).collect();
+    let recovered: Vec<_> = buf.iter().map(|x| *x / F64::from_count(n).0).collect();
     let err = max_err(&recovered, &input);
     assert!(err < 1e-8, "Rader N=10007 roundtrip max_err={err:.2e}");
 }
