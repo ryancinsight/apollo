@@ -90,9 +90,14 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "330a5ed07fa54e4702c9d6c4174f74427fc0ef6e214bbd677ae50a5099946470"
 
 [[package]]
+name = "apollo-alloc"
+version = "0.16.0"
+
+[[package]]
 name = "apollo-bench"
 version = "0.16.0"
 dependencies = [
+ "apollo-alloc",
  "csv",
  "hermes-simd",
  "themis-topology",
