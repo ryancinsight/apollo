@@ -1,4 +1,4 @@
-//! Typed complex storage views for 1D NUFFT paths.
+﻿//! Typed complex storage views for 1D NUFFT paths.
 
 use apollo_fft::{CpuStorage, PrecisionProfile, F16};
 use eunomia::{Complex32, Complex64};
@@ -10,7 +10,7 @@ use eunomia::{Complex32, Complex64};
 /// use to skip a copy when the host layout already matches an accelerator
 /// element. One storage type carries two truthful profiles, one per tier:
 /// [`CpuStorage::PROFILE`] describes the widening arithmetic the CPU plans
-/// execute, and [`DEVICE_PROFILE`] describes the native arithmetic the
+/// execute, and [`Self::DEVICE_PROFILE`] describes the native arithmetic the
 /// accelerator typed paths execute over `Complex32` device buffers.
 pub trait NufftComplexStorage: CpuStorage<Complex64> {
     /// Precision profile the accelerator typed paths advertise.
