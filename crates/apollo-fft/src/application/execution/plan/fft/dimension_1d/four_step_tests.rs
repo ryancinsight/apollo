@@ -142,10 +142,16 @@ fn four_step_plan_past_planar_domain_owns_generic_state() {
     let plan =
         FftPlan1D::<f64>::new(Shape1D::new(1 << 21).expect("the boundary length is non-zero"));
     assert!(matches!(plan.strategy, PlanStrategy::FourStep));
-    assert!(
-        plan.four_step.is_some(),
-        "the generic four-step route must retain its table owner"
-    );
+    let state = plan
+        .four_step
+        .as_ref()
+        .expect("the generic four-step route must retain its table owner");
+    let cloned = plan.clone();
+    let cloned_state = cloned
+        .four_step
+        .as_ref()
+        .expect("the cloned four-step route must retain its table owner");
+    assert!(std::sync::Arc::ptr_eq(state, cloned_state));
 }
 
 #[test]
