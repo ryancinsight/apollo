@@ -319,6 +319,17 @@ fn with_f64_workspaces<R>(n: usize, f: impl FnOnce(&mut [f64], &mut [f64]) -> R)
     })
 }
 
+/// Release this crate's thread-local scratch pools on the calling thread:
+/// capacities return to their recorded provisions (zero unless a bounded
+/// provision was recorded), so a thread that ran a GFT does not hold its
+/// high-water mark for its life. The second slice of
+/// APOLLO-MEM-SIBLING-THREAD-SCRATCH, following the apollo-fwht precedent.
+pub fn release_typed_scratch() {
+    TYPED_INPUT64_SCRATCH.with(|pool| pool.release());
+    TYPED_OUTPUT64_SCRATCH.with(|pool| pool.release());
+    INVERSE_ROW_SCRATCH.with(|pool| pool.release());
+}
+
 #[cfg(test)]
 pub(crate) fn typed_scratch_capacities() -> (usize, usize) {
     TYPED_INPUT64_SCRATCH.with(|in_pool| {
@@ -474,6 +485,31 @@ mod tests {
             assert_abs_diff_eq!(actual, expected, epsilon = 0.0);
             assert!((*actual - *original).abs() < 1.0e-5);
         }
+    }
+
+    #[test]
+    fn release_typed_scratch_returns_capacities_to_baseline() {
+        let plan = path_three_plan();
+        let signal = Array1::from(vec![1.25_f32, -0.5, 2.0]);
+        let mut spectrum = Array1::<f32>::zeros([plan.len()]);
+        plan.forward_typed_into(&signal, &mut spectrum, PrecisionProfile::LOW_PRECISION_F32)
+            .expect("typed forward grows the workspaces");
+        assert!(
+            typed_scratch_capacities().0 >= plan.len(),
+            "the typed forward must retain its workspace"
+        );
+        super::release_typed_scratch();
+        assert_eq!(
+            typed_scratch_capacities(),
+            (0, 0),
+            "release must return every typed pool to baseline"
+        );
+        plan.forward_typed_into(&signal, &mut spectrum, PrecisionProfile::LOW_PRECISION_F32)
+            .expect("typed forward after release");
+        assert!(
+            typed_scratch_capacities().0 >= plan.len(),
+            "the pools must serve after release"
+        );
     }
 
     #[test]

@@ -17,6 +17,33 @@ fn with_f64_workspaces<R>(n: usize, f: impl FnOnce(&mut [f64], &mut [f64]) -> R)
     })
 }
 
+/// Release this crate's thread-local typed workspace pools on the calling
+/// thread: capacities return to their recorded provisions (zero unless a
+/// bounded provision was recorded), so a thread that ran a typed transform
+/// does not hold its high-water mark for its life. Called by the
+/// crate-level release; the third slice of APOLLO-MEM-SIBLING-THREAD-SCRATCH.
+pub fn release_typed_scratch() {
+    TYPED_INPUT64_SCRATCH.with(|pool| pool.release());
+    TYPED_OUTPUT64_SCRATCH.with(|pool| pool.release());
+}
+
+/// Release every thread-local scratch pool this crate owns on the calling
+/// thread: the typed workspaces, the direct-basis pool, and the fast-kernel
+/// complex pool. The third slice of APOLLO-MEM-SIBLING-THREAD-SCRATCH,
+/// following the apollo-fwht and apollo-gft precedents.
+pub fn release_scratch() {
+    release_typed_scratch();
+    crate::infrastructure::kernel::direct::release_direct_scratch();
+    crate::infrastructure::kernel::fast::release_fast_scratch();
+}
+
+#[cfg(test)]
+pub(crate) fn typed_scratch_capacities() -> (usize, usize) {
+    TYPED_INPUT64_SCRATCH.with(|in_pool| {
+        TYPED_OUTPUT64_SCRATCH.with(|out_pool| (in_pool.capacity(), out_pool.capacity()))
+    })
+}
+
 impl DctDstPlan {
     /// Execute the forward transform for `f64`, `f32`, or mixed `F16` storage.
     ///
