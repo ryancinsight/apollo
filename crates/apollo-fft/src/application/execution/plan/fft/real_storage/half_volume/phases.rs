@@ -56,7 +56,7 @@ fn chain_steps<D: Direction>(
     let (x_table, y_table) = if D::FORWARD {
         (plan.twiddle_x_fwd.as_deref(), plan.twiddle_y_fwd.as_deref())
     } else {
-        (plan.twiddle_x_inv.as_deref(), plan.twiddle_y_inv.as_deref())
+        (plan.x_inv_twiddles(), plan.y_inv_twiddles())
     };
     let lane_x = lanes::lane_over::<f64, D>(x_table);
     let lane_y = lanes::lane_over::<f64, D>(y_table);

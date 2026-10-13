@@ -157,23 +157,39 @@ impl TwiddleLayout {
     }
 }
 
-/// The chain level of radix `radix` over the twiddles `w`, `samples`
-/// complexes a register, in the layout their count selects.
+/// The chain level of radix `radix` over `count` chunk-major twiddles,
+/// `samples` complexes a register, in the layout their count selects:
+/// `lanes` is the complex stream, relaid to the selected layout in place
+/// with no intermediate complex `Vec`.
 fn chain_level<T: Copy + core::ops::Neg<Output = T>>(
     radix: usize,
     samples: usize,
-    w: &[Complex<T>],
+    count: usize,
+    lanes: impl IntoIterator<Item = Complex<T>>,
     zero: T,
 ) -> ChainLevel<T> {
-    let layout = TwiddleLayout::for_twiddles::<T>(w.len());
-    let lanes = match layout {
-        TwiddleLayout::Interleaved => interleaved(w),
-        TwiddleLayout::Split => split_signed(samples, w),
+    let layout = TwiddleLayout::for_twiddles::<T>(count);
+    let rows = match layout {
+        TwiddleLayout::Interleaved => AlignedLanes::from_iter(
+            2 * count,
+            zero,
+            lanes.into_iter().flat_map(|c| [c.re, c.im]),
+        ),
+        TwiddleLayout::Split => {
+            // The split layout is per-chunk (reals then signed imaginaries),
+            // so chunk boundaries must survive the relay: buffer the stream
+            // once at complex width, then relay chunk by chunk in place.
+            // This keeps the two lane `Vec`s; only the complex stream copy
+            // is removed.
+            let lanes: Vec<Complex<T>> = lanes.into_iter().collect();
+            debug_assert_eq!(lanes.len(), count);
+            AlignedLanes::from_iter(4 * lanes.len(), zero, split_signed(samples, &lanes))
+        }
     };
     ChainLevel {
         radix,
         layout,
-        rows: AlignedLanes::new(&lanes, zero),
+        rows,
     }
 }
 
@@ -210,20 +226,28 @@ struct AlignedLanes<T> {
 
 impl<T: Copy> AlignedLanes<T> {
     fn empty(zero: T) -> Self {
-        Self::new(&[], zero)
+        Self::from_iter(0, zero, [])
     }
 
-    fn new(values: &[T], zero: T) -> Self {
+    /// Size the buffer once and fill it in place: the relay layouts have
+    /// known lengths, so no intermediate `Vec` is needed between the
+    /// source table and the aligned buffer.
+    fn from_iter(len: usize, zero: T, values: impl IntoIterator<Item = T>) -> Self {
         let slack = 64 / size_of::<T>();
         // `vec![x; n]` allocates exactly `n`, so the boxed slice is the
         // same allocation and keeps the boundary found in it.
-        let mut buffer = vec![zero; values.len() + slack];
+        let mut buffer = vec![zero; len + slack];
         let start = buffer.as_ptr().align_offset(64);
-        buffer[start..start + values.len()].copy_from_slice(values);
+        let mut count = 0;
+        for (slot, value) in buffer[start..start + len].iter_mut().zip(values) {
+            *slot = value;
+            count += 1;
+        }
+        debug_assert_eq!(count, len, "the relay layout must fill its lanes exactly");
         Self {
             buffer: buffer.into_boxed_slice(),
             start,
-            len: values.len(),
+            len,
         }
     }
 
@@ -239,12 +263,14 @@ impl<T: MixedRadixScalar<Complex = Complex<T>>> SplitSinks<T> {
     pub(crate) fn build(samples: usize, twiddles: &[Complex<T>], base: usize, n: usize) -> Self {
         let zero = T::from_precise(0.0);
         let inner = if n >= 2 * base {
-            AlignedLanes::new(&dup_split(samples, &twiddles[base - 1..2 * base - 1]), zero)
+            let source = &twiddles[base - 1..2 * base - 1];
+            AlignedLanes::from_iter(4 * source.len(), zero, dup_split(samples, source))
         } else {
             AlignedLanes::empty(zero)
         };
         let outer = if n >= 4 * base {
-            AlignedLanes::new(&interleaved(&twiddles[2 * base - 1..3 * base - 1]), zero)
+            let source = &twiddles[2 * base - 1..3 * base - 1];
+            AlignedLanes::from_iter(2 * source.len(), zero, interleaved(source))
         } else {
             AlignedLanes::empty(zero)
         };
@@ -273,15 +299,14 @@ impl<T: MixedRadixScalar<Complex = Complex<T>>> SplitSinks<T> {
         // The same twiddles chunk-major for the radix-3 pass ahead of the
         // blocks: per register chunk, `W^{k}` then `W^{2 k}`.
         debug_assert_eq!(base % samples, 0);
-        let rows: Vec<Complex<T>> = (0..base / samples)
+        let rows = (0..base / samples)
             .flat_map(|c| (1..3).flat_map(move |j| (0..samples).map(move |s| (j, samples * c + s))))
-            .map(|(j, k)| w(j * k))
-            .collect();
+            .map(|(j, k)| w(j * k));
         Self {
-            inner: AlignedLanes::new(&dup_split(samples, &first), zero),
-            second: AlignedLanes::new(&dup_split(samples, &second), zero),
+            inner: AlignedLanes::from_iter(4 * first.len(), zero, dup_split(samples, &first)),
+            second: AlignedLanes::from_iter(4 * second.len(), zero, dup_split(samples, &second)),
             outer: AlignedLanes::empty(zero),
-            chain: Box::new([chain_level(3, samples, &rows, zero)]),
+            chain: Box::new([chain_level(3, samples, 2 * base, rows, zero)]),
         }
     }
 
@@ -303,12 +328,8 @@ impl<T: MixedRadixScalar<Complex = Complex<T>>> SplitSinks<T> {
             .iter()
             .map(|&radix| {
                 block /= radix;
-                chain_level(
-                    radix,
-                    samples,
-                    &chunk_major_rows(samples, twiddles, radix, block),
-                    zero,
-                )
+                let (len, rows) = chunk_major_rows(samples, twiddles, radix, block);
+                chain_level(radix, samples, len, rows, zero)
             })
             .collect();
         Self {
@@ -360,69 +381,68 @@ impl<T: MixedRadixScalar<Complex = Complex<T>>> SplitSinks<T> {
 /// for `n` holds `W_n^m` for `m < n / 2` at `n / 2 - 1`, and the upper
 /// half of the circle is that level negated, so the pass multiplies by
 /// exactly the cache's values.
+fn chunk_major_len(radix: usize, block: usize, samples: usize) -> usize {
+    (block / samples) * (radix - 1) * samples
+}
+
 fn chunk_major_rows<T: MixedRadixScalar<Complex = Complex<T>>>(
     samples: usize,
     twiddles: &[Complex<T>],
     radix: usize,
     block: usize,
-) -> Vec<Complex<T>> {
+) -> (usize, impl Iterator<Item = Complex<T>> + '_) {
     let n = radix * block;
     let half = n / 2;
     let level = &twiddles[half - 1..n - 1];
-    let power = |m: usize| -> Complex<T> {
-        let m = m % n;
-        if m < half {
-            level[m]
-        } else {
-            let w = level[m - half];
-            Complex::new(-w.re, -w.im)
-        }
-    };
     debug_assert_eq!(block % samples, 0);
-    (0..block / samples)
-        .flat_map(|c| (1..radix).flat_map(move |j| (0..samples).map(move |s| (j, samples * c + s))))
-        .map(|(j, k)| power(j * k))
-        .collect()
+    let len = chunk_major_len(radix, block, samples);
+    let rows = (0..block / samples)
+        .flat_map(move |c| {
+            (1..radix).flat_map(move |j| (0..samples).map(move |s| (j, samples * c + s)))
+        })
+        .map(move |(j, k)| {
+            let m = (j * k) % n;
+            if m < half {
+                level[m]
+            } else {
+                let w = level[m - half];
+                Complex::new(-w.re, -w.im)
+            }
+        });
+    (len, rows)
 }
 
 /// `w` as interleaved lanes: the outer level's table, kept compact so the
 /// 1024 route's working set stays inside L1; the final sink duplicates
 /// each twiddle in registers.
-fn interleaved<T: Copy>(w: &[Complex<T>]) -> Vec<T> {
-    w.iter().flat_map(|c| [c.re, c.im]).collect()
+fn interleaved<T: Copy>(w: &[Complex<T>]) -> impl Iterator<Item = T> + '_ {
+    w.iter().flat_map(|c| [c.re, c.im])
 }
 
 /// `w` relaid per register chunk of `samples` complex samples as two
 /// registers: the real parts duplicated, then the imaginary parts as
 /// `(-im, im)`, so the pass multiplies an interleaved `y` by `w` as
 /// `y * re + swap(y) * signed_im` with one swap and no twiddle shuffle.
-fn split_signed<T: Copy + core::ops::Neg<Output = T>>(samples: usize, w: &[Complex<T>]) -> Vec<T> {
+fn split_signed<T: Copy + core::ops::Neg<Output = T>>(
+    samples: usize,
+    w: &[Complex<T>],
+) -> impl Iterator<Item = T> + '_ {
     debug_assert_eq!(w.len() % samples, 0);
-    let mut lanes = Vec::with_capacity(4 * w.len());
-    for chunk in w.chunks_exact(samples) {
-        for c in chunk {
-            lanes.extend([c.re; 2]);
-        }
-        for c in chunk {
-            lanes.extend([-c.im, c.im]);
-        }
-    }
-    lanes
+    w.chunks_exact(samples).flat_map(|chunk| {
+        let re = chunk.iter().flat_map(|c| [c.re; 2]);
+        let im = chunk.iter().flat_map(|c| [-c.im, c.im]);
+        re.chain(im)
+    })
 }
 
 /// `w` relaid as dup-split chunk pairs of `samples` complex samples.
-fn dup_split<T: Copy>(samples: usize, w: &[Complex<T>]) -> Vec<T> {
+fn dup_split<T: Copy>(samples: usize, w: &[Complex<T>]) -> impl Iterator<Item = T> + '_ {
     debug_assert_eq!(w.len() % samples, 0);
-    let mut lanes = Vec::with_capacity(4 * w.len());
-    for chunk in w.chunks_exact(samples) {
-        for c in chunk {
-            lanes.extend([c.re; 2]);
-        }
-        for c in chunk {
-            lanes.extend([c.im; 2]);
-        }
-    }
-    lanes
+    w.chunks_exact(samples).flat_map(|chunk| {
+        let re = chunk.iter().flat_map(|c| [c.re; 2]);
+        let im = chunk.iter().flat_map(|c| [c.im; 2]);
+        re.chain(im)
+    })
 }
 
 /// `v` times dup-split twiddle chunk `chunk` of `tw`, a forward twiddle,

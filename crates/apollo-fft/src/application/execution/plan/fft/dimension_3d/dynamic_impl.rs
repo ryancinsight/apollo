@@ -20,15 +20,24 @@ pub struct FftPlan3D<F: MixedRadixScalar> {
     pub(crate) nz: usize,
     pub(crate) nz_c: usize,
     pub(crate) twiddle_z_fwd: Option<Arc<[F::Complex]>>,
-    pub(crate) twiddle_z_inv: Option<Arc<[F::Complex]>>,
+    /// Inverse z table, built on the first inverse execution rather than
+    /// at construction: the memory audit measured the eager inverse build
+    /// as retained bytes forward-only consumers never touch, and the 1-D
+    /// plan made its inverse lazy for exactly this reason
+    /// (`dimension_1d/dynamic_impl.rs`, citing
+    /// `gap_audit.md#retained-attribution`).
+    pub(crate) twiddle_z_inv: std::sync::OnceLock<Option<Arc<[F::Complex]>>>,
     pub(crate) twiddle_y_fwd: Option<Arc<[F::Complex]>>,
-    pub(crate) twiddle_y_inv: Option<Arc<[F::Complex]>>,
+    /// Inverse y table, lazy for the same reason as the z inverse.
+    pub(crate) twiddle_y_inv: std::sync::OnceLock<Option<Arc<[F::Complex]>>>,
     pub(crate) twiddle_x_fwd: Option<Arc<[F::Complex]>>,
-    pub(crate) twiddle_x_inv: Option<Arc<[F::Complex]>>,
+    /// Inverse x table, lazy for the same reason as the z inverse.
+    pub(crate) twiddle_x_inv: std::sync::OnceLock<Option<Arc<[F::Complex]>>>,
     /// Tables for the packed z lanes of the real split: a real lane of `nz`
     /// samples is `nz/2` complex ones.
     pub(crate) twiddle_half_z_fwd: Option<Arc<[F::Complex]>>,
-    pub(crate) twiddle_half_z_inv: Option<Arc<[F::Complex]>>,
+    /// Inverse half-z table, lazy for the same reason as the z inverse.
+    pub(crate) twiddle_half_z_inv: std::sync::OnceLock<Option<Arc<[F::Complex]>>>,
     /// The real split's `W_nz^k`, evaluated once for every z lane of the
     /// half-spectrum pair rather than once per lane.
     pub(crate) split_twiddles: Box<[F::Complex]>,
@@ -63,13 +72,13 @@ where
             nz,
             nz_c: nz_c_val,
             twiddle_z_fwd: cached_power_of_two_twiddle::<F, true>(nz),
-            twiddle_z_inv: cached_power_of_two_twiddle::<F, false>(nz),
+            twiddle_z_inv: std::sync::OnceLock::new(),
             twiddle_y_fwd: cached_power_of_two_twiddle::<F, true>(ny),
-            twiddle_y_inv: cached_power_of_two_twiddle::<F, false>(ny),
+            twiddle_y_inv: std::sync::OnceLock::new(),
             twiddle_x_fwd: cached_power_of_two_twiddle::<F, true>(nx),
-            twiddle_x_inv: cached_power_of_two_twiddle::<F, false>(nx),
+            twiddle_x_inv: std::sync::OnceLock::new(),
             twiddle_half_z_fwd: cached_power_of_two_twiddle::<F, true>(m),
-            twiddle_half_z_inv: cached_power_of_two_twiddle::<F, false>(m),
+            twiddle_half_z_inv: std::sync::OnceLock::new(),
             split_twiddles: split_twiddle_table::<F>(nz),
         }
     }
@@ -309,17 +318,46 @@ where
         );
     }
 
+    /// The inverse z table, built on first use: forward-only plans never
+    /// touch it, so construction must not retain it.
+    pub(crate) fn z_inv_twiddles(&self) -> Option<&[F::Complex]> {
+        self.twiddle_z_inv
+            .get_or_init(|| cached_power_of_two_twiddle::<F, false>(self.nz))
+            .as_deref()
+    }
+
+    /// The inverse y table, built on first use like the z inverse.
+    pub(crate) fn y_inv_twiddles(&self) -> Option<&[F::Complex]> {
+        self.twiddle_y_inv
+            .get_or_init(|| cached_power_of_two_twiddle::<F, false>(self.ny))
+            .as_deref()
+    }
+
+    /// The inverse x table, built on first use like the z inverse.
+    pub(crate) fn x_inv_twiddles(&self) -> Option<&[F::Complex]> {
+        self.twiddle_x_inv
+            .get_or_init(|| cached_power_of_two_twiddle::<F, false>(self.nx))
+            .as_deref()
+    }
+
+    /// The inverse half-z table, built on first use like the z inverse.
+    pub(crate) fn half_z_inv_twiddles(&self) -> Option<&[F::Complex]> {
+        self.twiddle_half_z_inv
+            .get_or_init(|| cached_power_of_two_twiddle::<F, false>(self.nz / 2))
+            .as_deref()
+    }
+
     /// One direction's transform of a packed z lane: the `nz/2` complex
     /// samples that carry a real lane's `nz` values in the real split.
     pub(crate) fn half_z_lane<D: Direction>(
         &self,
     ) -> impl Fn(&mut [F::Complex]) + Send + Sync + '_ {
         let twiddles = if D::FORWARD {
-            &self.twiddle_half_z_fwd
+            self.twiddle_half_z_fwd.as_deref()
         } else {
-            &self.twiddle_half_z_inv
+            self.half_z_inv_twiddles()
         };
-        lanes::lane_over::<F, D>(twiddles.as_deref())
+        lanes::lane_over::<F, D>(twiddles)
     }
 
     /// The real split's twiddles for the z lanes, `W_nz^k` for `k = 1..⌈nz/4⌉`.
@@ -415,15 +453,14 @@ where
     /// twiddles where the length has them, the generic mixed radix otherwise.
     fn lane<D: Direction>(&self, axis: usize) -> impl Fn(&mut [F::Complex]) + Send + Sync + '_ {
         let twiddles = match (axis, D::FORWARD) {
-            (0, true) => &self.twiddle_x_fwd,
-            (0, false) => &self.twiddle_x_inv,
-            (1, true) => &self.twiddle_y_fwd,
-            (1, false) => &self.twiddle_y_inv,
-            (2, true) => &self.twiddle_z_fwd,
-            (2, false) => &self.twiddle_z_inv,
+            (0, true) => self.twiddle_x_fwd.as_deref(),
+            (0, false) => self.x_inv_twiddles(),
+            (1, true) => self.twiddle_y_fwd.as_deref(),
+            (1, false) => self.y_inv_twiddles(),
+            (2, true) => self.twiddle_z_fwd.as_deref(),
+            (2, false) => self.z_inv_twiddles(),
             _ => unreachable!("invariant: the entry points validate the axis"),
-        }
-        .as_deref();
+        };
         lanes::lane_over::<F, D>(twiddles)
     }
 }
