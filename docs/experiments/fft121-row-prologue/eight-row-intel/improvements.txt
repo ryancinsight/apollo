@@ -1,0 +1,2 @@
+rustfft_comparison.csv: fft_forward_clone_inclusive/apollo_f32/121 candidate is slower in all four comparisons: first baseline-first 314712 ps > 300398 ps; first candidate-first 327737 ps > 299292 ps; second baseline-first 328992 ps > 312689 ps; second candidate-first 330488 ps > 307763 ps
+rustfft_comparison.csv: fft_forward_clone_inclusive/apollo_f64/3 candidate is slower in all four comparisons: first baseline-first 3831 ps > 3540 ps; first candidate-first 3832 ps > 3537 ps; second baseline-first 3831 ps > 3728 ps; second candidate-first 3832 ps > 3564 ps

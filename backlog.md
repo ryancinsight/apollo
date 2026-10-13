@@ -1,5 +1,14 @@
 # Apollo Backlog
 
+<a id="apollo-fft121-row-prologue-642"></a>
+## APOLLO-FFT121-ROW-PROLOGUE-642 [patch] — done (candidate rejected)
+
+- Deliverable: implement and evaluate the AVX2 row prologue, preserve numerical/memory contracts, extend layout verification, and decide retention from PR #649's corrected infrastructure.
+- Baseline: frozen main `aa5adba1df3f318d47cb5e41770dff9d01099603`; both the eight-row and four-stream prototypes pass 5/5 debug and 5/5 release native tests plus warning-denied diagnostics.
+- Result: four-stream N=121 improves 425.633 → 395.976 ns on EPYC 7763 and 366.612 → 345.709 ns on EPYC 9V74, supported in all four comparisons on each host. The full families still report unrelated Apollo and RustFFT regressions, so the broad performance-preservation gate does not pass.
+- Decision: remove the experimental production path; keep 25-layout forward/inverse bitwise checks, offset/gap guards, finite-output error validation, no-mutation declines, the reproducible CI campaign, and [complete evidence](docs/experiments/fft121-row-prologue/README.md).
+- Next increment [patch]: make benchmark attribution stable across binary layout, then evaluate register-resident pair dots and exact-rounding tail packing. A different 11-point formulation is not established as necessary: RustFFT also uses dense pair symmetry.
+
 <a id="apollo-121-f32-simd-leaf"></a>
 ## APOLLO-121-F32-SIMD-LEAF — Close the N=121 f32 gap with a dispatched SIMD dft11 [patch] [perf] — todo
 - **priority:** tightening. **needs:** none.

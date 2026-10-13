@@ -1,0 +1,54 @@
+{
+  "2": {
+    "baseline": {
+      "apollo_ns": 330.709,
+      "rustfft_ns": 174.025,
+      "ratio": 1.8755742596287577
+    },
+    "candidate": {
+      "apollo_ns": 301.368,
+      "rustfft_ns": 184.95749999999998,
+      "ratio": 1.642951799244463
+    },
+    "apollo_change_percent": -8.872150440417403
+  },
+  "3": {
+    "baseline": {
+      "apollo_ns": 418.87149999999997,
+      "rustfft_ns": 208.7525,
+      "ratio": 2.0069641317631914
+    },
+    "candidate": {
+      "apollo_ns": 408.4705,
+      "rustfft_ns": 201.207,
+      "ratio": 2.0101498845544894
+    },
+    "apollo_change_percent": -2.4831004257868994
+  },
+  "4": {
+    "baseline": {
+      "apollo_ns": 425.63250000000005,
+      "rustfft_ns": 208.7175,
+      "ratio": 2.0405043405858736
+    },
+    "candidate": {
+      "apollo_ns": 395.976,
+      "rustfft_ns": 205.67700000000002,
+      "ratio": 1.9243735127625392
+    },
+    "apollo_change_percent": -6.967630526334345
+  },
+  "5": {
+    "baseline": {
+      "apollo_ns": 366.6115,
+      "rustfft_ns": 154.7415,
+      "ratio": 2.4035907922699176
+    },
+    "candidate": {
+      "apollo_ns": 345.7085,
+      "rustfft_ns": 152.27100000000002,
+      "ratio": 2.239342239448491
+    },
+    "apollo_change_percent": -5.701676024892821
+  }
+}

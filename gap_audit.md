@@ -1,5 +1,27 @@
 # Apollo gap audit
 
+## FFT121 row-prologue evaluation (2026-10-13) <a id="fft121-row-prologue-642"></a>
+
+The isolated approximately 28 ns premium in issue #642 is not an end-to-end prediction.
+PR #649 changes the acceptance baseline: main `aa5adba1` measures 1.876x on Xeon
+6973P-C, 2.041x on EPYC 7763, and 2.404x on EPYC 9V74 in these hosted campaigns;
+the earlier 1.62x is not reproduced on the original Arrow Lake host here.
+Eight-row packing improves Intel but lacks a supported AMD target gain. Four-stream
+packing passes 5/5 native tests in each profile and supports target gains on both AMD
+hosts (6.97% and 5.70% descriptive median reductions), but full-family controls still
+regress. Normalized timing-loop instruction streams are identical while code locations
+shift 32 bytes relative to 64-byte boundaries; internal engine buffers also remain
+outside PR #649's external address lanes. Placement is a demonstrated confound, not
+a proven complete explanation of every control movement. The production candidate is
+removed because the broad retention gate remains unresolved; scalar/column kernels
+match main. [Raw samples, source identities, and verdicts](docs/experiments/fft121-row-prologue/README.md).
+The 1,936-byte scratch and k-dot tail remain concrete execution costs. Assembly shows
+packed multiply/add plus a scalar last stream, while the main region uses FMA.
+RustFFT's AVX radix 11 also uses pair symmetry and dense coefficient products, so
+Rader/Winograd-minimal superiority needs a real codelet comparison.
+Re-open trigger: stable binary-layout attribution, followed by the same full-family
+retention gate for a register-resident or tail-packing implementation.
+
 Open risks with their re-open triggers, and the findings the board, the ADRs
 and the session notes cite, one anchored section each. Compacted by
 `scripts/compact_gap_audit.py`: a section keeps its heading, its lead and its

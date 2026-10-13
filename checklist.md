@@ -1,5 +1,14 @@
 # Apollo Checklist
 
+## FFT121 row-prologue evaluation — target apollo-fft 0.28.1 [patch]
+
+- [x] [patch] Freeze main after PR #649; preserve benchmark sources, profiles, toolchain, and dependency graph.
+- [x] [patch] Implement eight-row and four-stream prologues with unchanged summation/sign operations, pair five, scalar tail, and fallback.
+- [x] [patch] Pass 25-layout forward/inverse equivalence, offset/gap guards, finite scratch properties, independent direct DFTs, and native debug/release diagnostics.
+- [x] [patch] Execute four complete ABBA/BAAB campaigns: 32 recorded reports, 104 cases per report, 100 samples per case; discard all warm runs.
+- [x] [patch] Reject broad retention because unrelated controls regress; restore production kernel files to main and remove all experimental helpers.
+- [x] [patch] Preserve complete evidence, strengthen retained tests, record the formulation audit and next increment.
+
 ## claude/fable — current execution
 - [ ] [Lane order inverse](backlog.md#apollo-planar-lane-order-inverse): PR enqueued; merged; PR 363 rebased and re-verified.
 - [ ] [Rectangular odd powers](backlog.md#apollo-planar-rectangular-odd-powers): ADR 0060 Accepted; PR enqueued; merged, lease discharged.

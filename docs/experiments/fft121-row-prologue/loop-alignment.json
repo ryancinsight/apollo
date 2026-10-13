@@ -1,0 +1,39 @@
+{
+  "source_campaign": 38462868681,
+  "method": "LLVM objdump; normalize branch destinations and RIP-relative relocations",
+  "qualification": "Placement confound; not a causal timing proof",
+  "functions": [
+    {
+      "function": "apollo_bench::measurement::timed_block::<rustfft_comparison::bench_size::{closure#0}>",
+      "baseline_mod_64": 0,
+      "candidate_mod_64": 32,
+      "normalized_ops_equal": true,
+      "baseline_instruction_count": 85,
+      "candidate_instruction_count": 85
+    },
+    {
+      "function": "apollo_bench::measurement::timed_block::<rustfft_comparison::bench_size::{closure#2}>",
+      "baseline_mod_64": 32,
+      "candidate_mod_64": 0,
+      "normalized_ops_equal": true,
+      "baseline_instruction_count": 85,
+      "candidate_instruction_count": 85
+    },
+    {
+      "function": "apollo_bench::measurement::timed_block::<rustfft_comparison::bench_size::{closure#3}>",
+      "baseline_mod_64": 0,
+      "candidate_mod_64": 32,
+      "normalized_ops_equal": true,
+      "baseline_instruction_count": 95,
+      "candidate_instruction_count": 95
+    },
+    {
+      "function": "apollo_bench::measurement::timed_block::<rustfft_comparison::bench_size::{closure#1}>",
+      "baseline_mod_64": 0,
+      "candidate_mod_64": 32,
+      "normalized_ops_equal": true,
+      "baseline_instruction_count": 95,
+      "candidate_instruction_count": 95
+    }
+  ]
+}

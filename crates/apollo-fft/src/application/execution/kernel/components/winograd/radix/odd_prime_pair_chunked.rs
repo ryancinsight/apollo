@@ -162,7 +162,18 @@ mod tests {
     }
 
     fn max_err(got: &[Complex64], expected: &[Complex64]) -> f64 {
+        assert_eq!(got.len(), expected.len());
         got.iter().zip(expected).fold(0.0f64, |acc, (g, e)| {
+            // These bounded input families have finite analytical outputs.
+            // Reject non-finite values before max: float::max ignores NaN.
+            assert!(
+                g.re.is_finite() && g.im.is_finite(),
+                "non-finite DFT value {g:?}"
+            );
+            assert!(
+                e.re.is_finite() && e.im.is_finite(),
+                "non-finite oracle value {e:?}"
+            );
             let d = ((g.re - e.re) * (g.re - e.re) + (g.im - e.im) * (g.im - e.im)).sqrt();
             acc.max(d)
         })
@@ -214,21 +225,43 @@ mod tests {
         out_starts: &[usize; 11],
         out_step: usize,
     ) -> Vec<(u32, u32)> {
-        let mut base = [Complex32::new(0.0, 0.0); 121];
+        // Offsets, gaps, and guards must survive every in-place layout.
+        let last_input = in_starts.iter().max().expect("eleven input starts") + 10 * in_step;
+        let last_output = out_starts.iter().max().expect("eleven output starts") + 10 * out_step;
+        let mut base = vec![Complex32::new(0.125, -0.375); last_input.max(last_output) + 2];
         for s in 0..11 {
             for i in 0..11 {
                 base[in_starts[s] + i * in_step] = streams[s][i];
             }
         }
+        let before = base.clone();
         assert!(
             try_dft11_streams::<INVERSE>(&mut base, in_starts, in_step, out_starts, out_step),
             "chunked streams require AVX2+FMA on this host"
         );
         let mut bits = Vec::with_capacity(121);
+        let mut written = vec![false; base.len()];
         for s in 0..11 {
             for i in 0..11 {
-                let x = base[out_starts[s] + i * out_step];
+                let slot = out_starts[s] + i * out_step;
+                assert!(!written[slot], "output slots must be disjoint");
+                written[slot] = true;
+                let x = base[slot];
                 bits.push((x.re.to_bits(), x.im.to_bits()));
+            }
+        }
+        for (slot, (&actual, &original)) in base.iter().zip(&before).enumerate() {
+            if !written[slot] {
+                assert_eq!(
+                    actual.re.to_bits(),
+                    original.re.to_bits(),
+                    "re guard {slot}"
+                );
+                assert_eq!(
+                    actual.im.to_bits(),
+                    original.im.to_bits(),
+                    "im guard {slot}"
+                );
             }
         }
         bits
@@ -236,11 +269,16 @@ mod tests {
 
     #[test]
     fn chunked_streams_layouts_are_bitwise_identical() {
-        // Scalar stages run every layout; the vector stages run step 11
-        // with consecutive starts. All four stage combos must compute
-        // each lane identically, bit for bit.
-        let scalar: [usize; 11] = core::array::from_fn(|s| s * 11);
-        let vector: [usize; 11] = core::array::from_fn(|s| s);
+        // The reversed column layout forces the unchanged scalar prologue.
+        // Rows vectorize within streams; columns vectorize across streams.
+        // The padded layout exercises the scalar fallback at another stride.
+        let layouts: [([usize; 11], usize); 5] = [
+            (core::array::from_fn(|s| 3 + s * 11), 1),
+            (core::array::from_fn(|s| 3 + s), 11),
+            (core::array::from_fn(|s| 3 + 10 - s), 11),
+            (core::array::from_fn(|s| 3 + ((s * 7) % 11) * 11), 1),
+            (core::array::from_fn(|s| 3 + s * 23), 2),
+        ];
         for kind in 0..6 {
             let mut streams = [[Complex32::new(0.0, 0.0); 11]; 11];
             for (s, stream) in streams.iter_mut().enumerate() {
@@ -254,15 +292,53 @@ mod tests {
                         layout_bits::<false>(&streams, i, is, o, os)
                     }
                 };
-                let ss = run(&scalar, 1, &scalar, 1);
-                let vv = run(&vector, 11, &vector, 11);
-                let vs = run(&vector, 11, &scalar, 1);
-                let sv = run(&scalar, 1, &vector, 11);
-                assert_eq!(vv, ss, "vec/vec vs scalar kind={kind} inverse={inverse}");
-                assert_eq!(vs, ss, "vec/scalar vs scalar kind={kind} inverse={inverse}");
-                assert_eq!(sv, ss, "scalar/vec vs scalar kind={kind} inverse={inverse}");
+                let reference = run(&layouts[2].0, layouts[2].1, &layouts[0].0, layouts[0].1);
+                for (input, (i, is)) in layouts.iter().enumerate() {
+                    for (output, (o, os)) in layouts.iter().enumerate() {
+                        assert_eq!(
+                            run(i, *is, o, *os),
+                            reference,
+                            "kind={kind} inverse={inverse} input={input} output={output}"
+                        );
+                    }
+                }
             }
         }
+    }
+
+    #[test]
+    fn chunked_dispatch_declines_without_mutation_when_unavailable() {
+        #[cfg(target_arch = "x86_64")]
+        if std::arch::is_x86_feature_detected!("avx2") && std::arch::is_x86_feature_detected!("fma")
+        {
+            // The value tests above exercise the successful dispatch.
+            return;
+        }
+        let original: [Complex32; 121] = core::array::from_fn(|i| {
+            Complex32::new((i as f32 + 1.0) / 128.0, -(i as f32 + 1.0) / 256.0)
+        });
+        let mut candidate = original;
+        assert!(!try_dft121_chunked::<false>(&mut candidate));
+        assert_eq!(candidate, original);
+        assert!(!try_dft121_chunked::<true>(&mut candidate));
+        assert_eq!(candidate, original);
+        let starts = core::array::from_fn(|s| s * 11);
+        assert!(!try_dft11_streams::<false>(
+            &mut candidate,
+            &starts,
+            1,
+            &starts,
+            1
+        ));
+        assert_eq!(candidate, original);
+        assert!(!try_dft11_streams::<true>(
+            &mut candidate,
+            &starts,
+            1,
+            &starts,
+            1
+        ));
+        assert_eq!(candidate, original);
     }
 
     #[test]
