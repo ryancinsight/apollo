@@ -57,6 +57,28 @@ mod private {
             }
         }
     }
+
+    pub trait Dft121Dispatch {
+        fn dft121<const INVERSE: bool>(data: &mut [eunomia::Complex<Self>; 121])
+        where
+            Self: Sized;
+    }
+
+    impl Dft121Dispatch for f32 {
+        #[inline]
+        fn dft121<const INVERSE: bool>(data: &mut [eunomia::Complex32; 121]) {
+            if !super::super::radix::odd_prime_pair_chunked::try_dft121_chunked::<INVERSE>(data) {
+                super::super::dft121_impl::<f32, INVERSE>(data);
+            }
+        }
+    }
+
+    impl Dft121Dispatch for f64 {
+        #[inline]
+        fn dft121<const INVERSE: bool>(data: &mut [eunomia::Complex64; 121]) {
+            super::super::dft121_impl::<f64, INVERSE>(data);
+        }
+    }
 }
 
 #[inline]
@@ -71,6 +93,13 @@ pub(crate) fn dft32_rows<F: ShortWinogradScalar, const ROWS: usize, const INVERS
     data: &mut [[eunomia::Complex<F>; 32]; ROWS],
 ) {
     <F as private::Dft32Dispatch>::dft32_rows::<ROWS, INVERSE>(data);
+}
+
+#[inline]
+pub(crate) fn dft121<F: ShortWinogradScalar, const INVERSE: bool>(
+    data: &mut [eunomia::Complex<F>; 121],
+) {
+    <F as private::Dft121Dispatch>::dft121::<INVERSE>(data);
 }
 
 macro_rules! impl_short_winograd_prime_pair {
@@ -100,7 +129,9 @@ macro_rules! impl_short_winograd_prime_pair {
     };
 }
 
-pub trait ShortWinogradScalar: WinogradScalar + private::Dft32Dispatch {
+pub trait ShortWinogradScalar:
+    WinogradScalar + private::Dft32Dispatch + private::Dft121Dispatch
+{
     fn dft2(data: &mut [eunomia::Complex<Self>; 2]);
     fn dft3<const INVERSE: bool>(data: &mut [eunomia::Complex<Self>; 3]);
     fn dft4<const INVERSE: bool>(data: &mut [eunomia::Complex<Self>; 4]);
@@ -304,7 +335,6 @@ impl ShortWinogradScalar for f32 {
 
     impl_short_winograd_prime_pair!(
         f32,
-        (dft11, 11, 5),
         (dft13, 13, 6),
         (dft17, 17, 8),
         (dft37, 37, 18),
@@ -313,4 +343,17 @@ impl ShortWinogradScalar for f32 {
         (dft47, 47, 23),
         (dft53, 53, 26),
     );
+
+    // f32 dft11 runs the runtime-dispatched AVX2/FMA leaf: the end-to-end
+    // N = 121 gate measured 238ns dispatched against 379ns narrow
+    // (rustfft 89ns), so the leaf earns its own route. Other targets and
+    // non-AVX2 hosts fall back to the narrow pair form inside the dispatch.
+    #[inline]
+    fn dft11<const INVERSE: bool>(data: &mut [Complex32; 11]) {
+        super::radix::odd_prime_pair_simd::dft11_dispatched::<INVERSE>(
+            data,
+            <f32 as PrimePairTable<11, 5>>::cos_table(),
+            <f32 as PrimePairTable<11, 5>>::sin_table(),
+        );
+    }
 }

@@ -21,11 +21,19 @@
 //!
 //! ## Runtime budget
 //!
+//! Each size runs two interleaved pairs (Apollo/RustFFT at f64, then at
+//! f32): sequential per-engine windows alias with package-turbo
+//! oscillation (#639), so both arms of a pair share one warm-up and
+//! alternate timed sample blocks within one window.
+//!
 //! ```text
-//! per case  = WARM_UP_MS + MEASUREMENT_MS         = 20 ms + 80 ms = 100 ms
-//! cases     = 4 per size (Apollo/RustFFT x f64/f32)
-//! default   = 25 sizes x 4 x 100 ms               ~ 10.0 s
-//! full      = 500 sizes x 4 x 100 ms              ~ 200 s   (opt-in)
+//! per pair  = WARM_UP_MS + 2 x MEASUREMENT_MS     = 20 ms + 160 ms = 180 ms (base)
+//!             sizes at and above 1024 scale each arm's measurement window
+//!             by len / 512, so a 1024-point pair gets 20 + 2 x 160 ms,
+//!             stabilizing the 100-sample medians against scheduler noise.
+//! pairs     = 2 per size (f64, f32)
+//! default   = 26 sizes x 2 x ~200 ms (avg)        ~ 11 s
+//! full      = 500 sizes x 2 x 180 ms              ~ 180 s   (opt-in)
 //! ```
 //!
 //! The default sweep is budgeted to sit inside the 30 s bound that every Apollo
@@ -49,7 +57,7 @@ use std::time::{Duration, Instant};
 
 use apollo_bench::{
     bind_measurement_processor, BenchmarkCase, BenchmarkConfig, BenchmarkError, BenchmarkMode,
-    BenchmarkSuite,
+    BenchmarkSuite, LaneBuffer,
 };
 use eunomia::{Complex32, Complex64};
 use rustfft::num_complex::Complex as RustComplex;
@@ -60,19 +68,41 @@ use std::hint::black_box;
 const BUDGET_SECS: u64 = 30;
 /// Per-case warm-up.
 const WARM_UP_MS: u64 = 20;
-/// Per-case measurement window.
+/// Per-case base measurement window, scaled for sizes at and above
+/// [`LARGE_SIZE_THRESHOLD`] so the 100-sample median collects enough
+/// iterations to resist scheduler noise.
 const MEASUREMENT_MS: u64 = 80;
+/// Sizes at and above this threshold get a scaled measurement budget.
+/// Below it the flat 80 ms window admits enough iterations per sample
+/// for a stable median; at and above it the per-iteration cost is large
+/// enough that 80 ms / 100 samples leaves each sample with too few
+/// iterations, and the median swings 3x between runs.
+const LARGE_SIZE_THRESHOLD: usize = 1024;
+/// The base size for scaling: a transform of this length gets the base
+/// measurement window, and larger lengths get a proportionally larger
+/// window. Set below [`LARGE_SIZE_THRESHOLD`] so the threshold itself
+/// gets a 2x budget rather than 1x.
+const SCALE_BASE: usize = 512;
 /// Largest length in the opt-in full sweep.
 const FULL_SWEEP_MAX: usize = 500;
 /// Environment switch selecting the dense 1..=FULL_SWEEP_MAX sweep.
 const FULL_SWEEP_VAR: &str = "APOLLO_BENCH_FULL_SWEEP";
+/// In-page lanes for the measurement roles (#646). Distinct mod 4096 with
+/// L1-set spread (sets 0/32/16/48/8); the copy pair sits on opposite page
+/// halves. The f32 pair reuses these lanes in its disjoint window.
+const LANE_SOURCE: usize = 0;
+const LANE_WORK: usize = 2048;
+const LANE_RUST_SOURCE: usize = 1024;
+const LANE_RUST_WORK: usize = 3072;
+const LANE_SCRATCH: usize = 512;
 /// Representative lengths spanning the regimes Apollo dispatches differently:
 /// identity, short Winograd codelets, power-of-two Stockham, odd primes that
-/// reach Rader, prime-power and smooth composites, and a few larger sizes where
-/// asymptotics rather than codelet quality dominate.
-const DEFAULT_SIZES: [usize; 25] = [
+/// reach Rader, prime-power and smooth composites, and the sizes where the
+/// per-length specializations at 1024, 2048, 4096, and 8192 live — which a
+/// sweep stopping at 512 could not see.
+const DEFAULT_SIZES: [usize; 26] = [
     1, 2, 3, 4, 5, 7, 8, 11, 13, 16, 19, 31, 32, 53, 64, 67, 96, 121, 128, 200, 256, 512, 1024,
-    2048, 32768,
+    2048, 4096, 8192,
 ];
 
 /// Deterministic complex signal; identical values feed both engines.
@@ -113,13 +143,44 @@ fn sizes() -> Vec<usize> {
     }
 }
 
-fn bench_size(suite: &mut BenchmarkSuite, config: BenchmarkConfig, len: usize) {
-    const GROUP: &str = "fft_forward_clone_inclusive";
+/// Returns the measurement configuration for `len`, scaling the base budget
+/// at and above [`LARGE_SIZE_THRESHOLD`] so the 100-sample median collects
+/// enough iterations to resist scheduler noise. The mode (smoke vs measurement)
+/// is preserved from `base`.
+fn config_for(len: usize, base: BenchmarkConfig, mode: BenchmarkMode) -> BenchmarkConfig {
+    if len < LARGE_SIZE_THRESHOLD {
+        return base;
+    }
+    // Scale the measurement window by the transform-length ratio above the
+    // scale base, so a 1024-point case gets 2x the base (160 ms), a 2048
+    // gets 4x (320 ms), etc. This keeps iterations per sample roughly
+    // constant across sizes rather than inversely proportional to length.
+    let scale = len / SCALE_BASE;
+    let scaled_measurement = MEASUREMENT_MS.saturating_mul(scale as u64);
+    mode.apply(
+        BenchmarkConfig::try_with_budgets(
+            Duration::from_millis(WARM_UP_MS),
+            Duration::from_millis(scaled_measurement),
+        )
+        .expect("invariant: scaled budgets are non-zero"),
+    )
+}
 
-    let source64 = signal(len);
-    let source32 = narrow(&source64);
-    let rust_source64 = to_rustfft_64(&source64);
-    let rust_source32 = to_rustfft_32(&source32);
+fn bench_size(
+    suite: &mut BenchmarkSuite,
+    base_config: BenchmarkConfig,
+    mode: BenchmarkMode,
+    len: usize,
+) {
+    const GROUP: &str = "fft_forward_clone_inclusive";
+    let config = config_for(len, base_config, mode);
+
+    let source64 = LaneBuffer::from_slice(&signal(len), LANE_SOURCE);
+    let source32 = LaneBuffer::from_slice(&narrow(source64.as_slice()), LANE_SOURCE);
+    let rust_source64 =
+        LaneBuffer::from_slice(&to_rustfft_64(source64.as_slice()), LANE_RUST_SOURCE);
+    let rust_source32 =
+        LaneBuffer::from_slice(&to_rustfft_32(source32.as_slice()), LANE_RUST_SOURCE);
 
     // Plans, working buffers, and reusable scratch are built once; only the
     // copy plus transform is timed. Both engines get the same treatment.
@@ -133,44 +194,61 @@ fn bench_size(suite: &mut BenchmarkSuite, config: BenchmarkConfig, len: usize) {
     let mut planner32 = FftPlanner::<f32>::new();
     let rust64 = planner64.plan_fft_forward(len);
     let rust32 = planner32.plan_fft_forward(len);
-    let mut rust_scratch64 = vec![RustComplex::new(0.0, 0.0); rust64.get_inplace_scratch_len()];
-    let mut rust_scratch32 = vec![RustComplex::new(0.0, 0.0); rust32.get_inplace_scratch_len()];
+    let mut rust_scratch64 = LaneBuffer::zeros(rust64.get_inplace_scratch_len(), LANE_SCRATCH);
+    let mut rust_scratch32 = LaneBuffer::zeros(rust32.get_inplace_scratch_len(), LANE_SCRATCH);
 
-    let mut work64 = source64.clone();
-    suite.run_with_config(config, BenchmarkCase::new(GROUP, "apollo_f64", len), || {
-        work64.copy_from_slice(&source64);
-        apollo64.forward_complex_slice_inplace(black_box(&mut work64));
-        black_box(&work64);
-    });
-
-    let mut rust_work64 = rust_source64.clone();
-    suite.run_with_config(
+    // Paired per precision: sequential per-engine windows alias with
+    // package-turbo oscillation (#639), so each pair shares one window
+    // and the medians are directly comparable.
+    // Deterministic in-page lanes (#646): plain heap buffers slide with
+    // ASLR and the low address bits decide 4 KiB-aliasing stalls, which
+    // swung N=32 medians +-70-100% across runs of one binary. Distinct
+    // lanes per live role (opposite page halves for the copy pair, L1-set
+    // spread otherwise) pin the aliasing configuration so ratios compare
+    // across runs; the f32 pair reuses lanes in its disjoint window.
+    let mut work64 = LaneBuffer::from_slice(source64.as_slice(), LANE_WORK);
+    let mut rust_work64 = LaneBuffer::from_slice(rust_source64.as_slice(), LANE_RUST_WORK);
+    suite.run_paired_with_config(
         config,
+        BenchmarkCase::new(GROUP, "apollo_f64", len),
+        || {
+            work64.as_mut_slice().copy_from_slice(source64.as_slice());
+            apollo64.forward_complex_slice_inplace(black_box(work64.as_mut_slice()));
+            black_box(work64.as_slice());
+        },
         BenchmarkCase::new(GROUP, "rustfft_f64", len),
         || {
-            rust_work64.copy_from_slice(&rust_source64);
-            rust64
-                .process_with_scratch(black_box(&mut rust_work64), black_box(&mut rust_scratch64));
-            black_box(&rust_work64);
+            rust_work64
+                .as_mut_slice()
+                .copy_from_slice(rust_source64.as_slice());
+            rust64.process_with_scratch(
+                black_box(rust_work64.as_mut_slice()),
+                black_box(rust_scratch64.as_mut_slice()),
+            );
+            black_box(rust_work64.as_slice());
         },
     );
 
-    let mut work32 = source32.clone();
-    suite.run_with_config(config, BenchmarkCase::new(GROUP, "apollo_f32", len), || {
-        work32.copy_from_slice(&source32);
-        apollo32.forward_complex_slice_inplace(black_box(&mut work32));
-        black_box(&work32);
-    });
-
-    let mut rust_work32 = rust_source32.clone();
-    suite.run_with_config(
+    let mut work32 = LaneBuffer::from_slice(source32.as_slice(), LANE_WORK);
+    let mut rust_work32 = LaneBuffer::from_slice(rust_source32.as_slice(), LANE_RUST_WORK);
+    suite.run_paired_with_config(
         config,
+        BenchmarkCase::new(GROUP, "apollo_f32", len),
+        || {
+            work32.as_mut_slice().copy_from_slice(source32.as_slice());
+            apollo32.forward_complex_slice_inplace(black_box(work32.as_mut_slice()));
+            black_box(work32.as_slice());
+        },
         BenchmarkCase::new(GROUP, "rustfft_f32", len),
         || {
-            rust_work32.copy_from_slice(&rust_source32);
-            rust32
-                .process_with_scratch(black_box(&mut rust_work32), black_box(&mut rust_scratch32));
-            black_box(&rust_work32);
+            rust_work32
+                .as_mut_slice()
+                .copy_from_slice(rust_source32.as_slice());
+            rust32.process_with_scratch(
+                black_box(rust_work32.as_mut_slice()),
+                black_box(rust_scratch32.as_mut_slice()),
+            );
+            black_box(rust_work32.as_slice());
         },
     );
 }
@@ -192,7 +270,7 @@ fn main() -> Result<(), BenchmarkError> {
     );
 
     eprintln!(
-        "rustfft_comparison: {mode:?} mode, {} sweep, {} sizes, measurement configuration warm-up {WARM_UP_MS}ms and measurement {MEASUREMENT_MS}ms",
+        "rustfft_comparison: {mode:?} mode, {} sweep, {} sizes, base measurement warm-up {WARM_UP_MS}ms and measurement {MEASUREMENT_MS}ms (scaled at and above {LARGE_SIZE_THRESHOLD})",
         if full { "full" } else { "default" },
         lengths.len()
     );
@@ -206,7 +284,7 @@ fn main() -> Result<(), BenchmarkError> {
 
     let mut suite = BenchmarkSuite::new(config);
     for len in lengths {
-        bench_size(&mut suite, config, len);
+        bench_size(&mut suite, config, mode, len);
     }
     print!("{}", suite.report());
 

@@ -224,7 +224,15 @@ impl_short_dft!(99, winograd_impl, dft99_impl);
 impl_short_dft!(108, winograd_impl, dft108_impl);
 impl_short_dft!(112, winograd_impl, dft112_impl);
 impl_short_dft!(120, winograd_impl, dft120_impl);
-impl_short_dft!(121, winograd_impl, dft121_impl);
+impl<F: ShortWinogradScalar> ShortDft<121> for F {
+    #[inline]
+    fn dft<const INVERSE: bool>(data: &mut [eunomia::Complex<Self>; 121]) {
+        crate::application::execution::kernel::components::winograd::short_winograd::dft121::<
+            F,
+            INVERSE,
+        >(data);
+    }
+}
 impl_short_dft!(126, winograd_impl, dft126_impl);
 impl_short_dft!(128, winograd_impl, dft128_impl);
 impl_short_dft!(144, winograd_impl, dft144_impl, Fused);
