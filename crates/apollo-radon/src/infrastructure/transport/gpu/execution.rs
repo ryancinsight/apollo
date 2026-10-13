@@ -201,7 +201,7 @@ impl ProjectionExecution for RadonWgpuBackend {
         flat_image: &[T],
         angles: &[f32],
     ) -> WgpuResult<Array2<f32>> {
-        validate_profile::<T>(precision)?;
+        precision.ensure_matches(T::PROFILE, || WgpuError::InvalidPrecisionProfile)?;
         let expected_len = plan.len();
         if flat_image.len() != expected_len {
             return Err(WgpuError::ShapeMismatch {
@@ -270,7 +270,7 @@ impl ProjectionExecution for RadonWgpuBackend {
         flat_sinogram: &[T],
         angles: &[f32],
     ) -> WgpuResult<Array2<f32>> {
-        validate_profile::<T>(precision)?;
+        precision.ensure_matches(T::PROFILE, || WgpuError::InvalidPrecisionProfile)?;
         let expected_len = plan.output_len();
         if flat_sinogram.len() != expected_len {
             return Err(WgpuError::ShapeMismatch {
@@ -334,14 +334,6 @@ impl ProjectionExecution for RadonWgpuBackend {
                 .to_owned(),
         })
     }
-}
-
-fn validate_profile<T: GpuStorage>(precision: PrecisionProfile) -> WgpuResult<()> {
-    let expected = T::PROFILE;
-    if precision.storage != expected.storage || precision.compute != expected.compute {
-        return Err(WgpuError::InvalidPrecisionProfile);
-    }
-    Ok(())
 }
 
 /// Promote typed storage into an f32 matrix without the double-rounding

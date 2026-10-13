@@ -234,7 +234,7 @@ pub trait GftStorage: CpuStorage {
         output: &mut Array1<Self>,
         profile: PrecisionProfile,
     ) -> GftResult<()> {
-        validate_profile(profile, Self::PROFILE)?;
+        profile.ensure_matches(Self::PROFILE, || GftError::PrecisionMismatch)?;
         if signal.size() != plan.n || output.size() != plan.n {
             return Err(GftError::LengthMismatch);
         }
@@ -262,7 +262,7 @@ pub trait GftStorage: CpuStorage {
         output: &mut Array1<Self>,
         profile: PrecisionProfile,
     ) -> GftResult<()> {
-        validate_profile(profile, Self::PROFILE)?;
+        profile.ensure_matches(Self::PROFILE, || GftError::PrecisionMismatch)?;
         if spectrum.size() != plan.n || output.size() != plan.n {
             return Err(GftError::LengthMismatch);
         }
@@ -291,7 +291,7 @@ impl GftStorage for f64 {
         output: &mut Array1<Self>,
         profile: PrecisionProfile,
     ) -> GftResult<()> {
-        validate_profile(profile, Self::PROFILE)?;
+        profile.ensure_matches(Self::PROFILE, || GftError::PrecisionMismatch)?;
         plan.forward_into(signal, output)
     }
 
@@ -301,7 +301,7 @@ impl GftStorage for f64 {
         output: &mut Array1<Self>,
         profile: PrecisionProfile,
     ) -> GftResult<()> {
-        validate_profile(profile, Self::PROFILE)?;
+        profile.ensure_matches(Self::PROFILE, || GftError::PrecisionMismatch)?;
         plan.inverse_into(spectrum, output)
     }
 }
@@ -309,14 +309,6 @@ impl GftStorage for f64 {
 impl GftStorage for f32 {}
 
 impl GftStorage for F16 {}
-
-fn validate_profile(actual: PrecisionProfile, expected: PrecisionProfile) -> GftResult<()> {
-    if actual.matches_storage_and_compute(expected) {
-        Ok(())
-    } else {
-        Err(GftError::PrecisionMismatch)
-    }
-}
 
 fn with_f64_workspaces<R>(n: usize, f: impl FnOnce(&mut [f64], &mut [f64]) -> R) -> R {
     TYPED_INPUT64_SCRATCH.with(|in_pool| {

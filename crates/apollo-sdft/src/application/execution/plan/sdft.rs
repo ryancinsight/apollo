@@ -164,8 +164,8 @@ impl SdftPlan {
         output: &mut [O],
         profile: PrecisionProfile,
     ) -> SdftResult<()> {
-        validate_profile(profile, T::PROFILE)?;
-        validate_profile(profile, O::PROFILE)?;
+        profile.ensure_matches(T::PROFILE, || SdftError::PrecisionMismatch)?;
+        profile.ensure_matches(O::PROFILE, || SdftError::PrecisionMismatch)?;
         if window.len() != self.window_len() {
             return Err(SdftError::InitialWindowLengthMismatch);
         }
@@ -214,14 +214,6 @@ fn typed_direct_workspace_capacities() -> (usize, usize) {
         f64::scratch_capacities().0,
         Complex64::scratch_capacities().1,
     )
-}
-
-fn validate_profile(actual: PrecisionProfile, expected: PrecisionProfile) -> SdftResult<()> {
-    if actual.matches_storage_and_compute(expected) {
-        Ok(())
-    } else {
-        Err(SdftError::PrecisionMismatch)
-    }
 }
 
 /// Stateful sliding DFT stream.

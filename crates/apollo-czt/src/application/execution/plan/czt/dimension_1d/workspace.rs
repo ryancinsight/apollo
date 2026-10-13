@@ -1,7 +1,5 @@
 //! Thread-local scratch pools and interop/validation helpers for 1D CZT.
 
-use crate::domain::contracts::error::CztError;
-use apollo_fft::PrecisionProfile;
 use eunomia::Complex64;
 use mnemosyne::scratch::ScratchPool;
 thread_local! {
@@ -21,18 +19,6 @@ pub(crate) fn with_forward_workspace<R>(len: usize, f: impl FnOnce(&mut [Complex
 #[inline]
 pub fn is_valid_length(n: usize) -> bool {
     n > 0
-}
-
-#[inline]
-pub(crate) fn validate_profile(
-    actual: PrecisionProfile,
-    expected: PrecisionProfile,
-) -> Result<(), CztError> {
-    if actual.matches_storage_and_compute(expected) {
-        Ok(())
-    } else {
-        Err(CztError::PrecisionMismatch)
-    }
 }
 
 #[inline]

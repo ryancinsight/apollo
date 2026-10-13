@@ -338,7 +338,7 @@ pub trait MellinStorage: CpuStorage {
         output: &mut [Self],
         profile: PrecisionProfile,
     ) -> MellinResult<()> {
-        validate_profile(profile, Self::PROFILE)?;
+        profile.ensure_matches(Self::PROFILE, || MellinError::PrecisionMismatch)?;
         validate_signal_domain_typed(signal, signal_min, signal_max)?;
         validate_output_len(output.len(), plan.config.samples())?;
         let input64: Vec<f64> = signal.iter().copied().map(CpuStorage::to_cpu).collect();
@@ -359,7 +359,7 @@ pub trait MellinStorage: CpuStorage {
         exponent: f64,
         profile: PrecisionProfile,
     ) -> MellinResult<f64> {
-        validate_profile(profile, Self::PROFILE)?;
+        profile.ensure_matches(Self::PROFILE, || MellinError::PrecisionMismatch)?;
         validate_signal_domain_typed(signal, signal_min, signal_max)?;
         let input64: Vec<f64> = signal.iter().copied().map(CpuStorage::to_cpu).collect();
         plan.moment(&input64, signal_min, signal_max, exponent)
@@ -373,7 +373,7 @@ pub trait MellinStorage: CpuStorage {
         signal_max: f64,
         profile: PrecisionProfile,
     ) -> MellinResult<MellinSpectrum> {
-        validate_profile(profile, Self::PROFILE)?;
+        profile.ensure_matches(Self::PROFILE, || MellinError::PrecisionMismatch)?;
         validate_signal_domain_typed(signal, signal_min, signal_max)?;
         let input64: Vec<f64> = signal.iter().copied().map(CpuStorage::to_cpu).collect();
         plan.forward_spectrum(&input64, signal_min, signal_max)
@@ -389,7 +389,7 @@ impl MellinStorage for f64 {
         output: &mut [Self],
         profile: PrecisionProfile,
     ) -> MellinResult<()> {
-        validate_profile(profile, Self::PROFILE)?;
+        profile.ensure_matches(Self::PROFILE, || MellinError::PrecisionMismatch)?;
         plan.forward_resample(signal, signal_min, signal_max, output)
     }
 
@@ -401,7 +401,7 @@ impl MellinStorage for f64 {
         exponent: f64,
         profile: PrecisionProfile,
     ) -> MellinResult<f64> {
-        validate_profile(profile, Self::PROFILE)?;
+        profile.ensure_matches(Self::PROFILE, || MellinError::PrecisionMismatch)?;
         plan.moment(signal, signal_min, signal_max, exponent)
     }
 
@@ -412,7 +412,7 @@ impl MellinStorage for f64 {
         signal_max: f64,
         profile: PrecisionProfile,
     ) -> MellinResult<MellinSpectrum> {
-        validate_profile(profile, Self::PROFILE)?;
+        profile.ensure_matches(Self::PROFILE, || MellinError::PrecisionMismatch)?;
         plan.forward_spectrum(signal, signal_min, signal_max)
     }
 }
@@ -505,14 +505,6 @@ fn validate_signal_domain_typed<T>(
         return Err(MellinError::InvalidSignalOrder);
     }
     Ok(())
-}
-
-fn validate_profile(actual: PrecisionProfile, expected: PrecisionProfile) -> MellinResult<()> {
-    if actual.matches_storage_and_compute(expected) {
-        Ok(())
-    } else {
-        Err(MellinError::PrecisionMismatch)
-    }
 }
 
 #[cfg(test)]

@@ -5,7 +5,6 @@ use crate::domain::contracts::error::{ShtError, ShtResult};
 use crate::domain::spectrum::coefficients::SphericalHarmonicCoefficients;
 #[cfg(test)]
 use crate::infrastructure::kernel::spherical_harmonic::spherical_harmonic;
-use apollo_fft::PrecisionProfile;
 use eunomia::Complex64;
 use leto::Array2;
 use mnemosyne::scratch::ScratchPool;
@@ -23,17 +22,6 @@ pub(super) const SHT_HERMES_DOT_LEN_THRESHOLD: usize = 256;
 thread_local! {
     pub(super) static SHT_WEIGHT_LANE_SCRATCH: ScratchPool<f64> = const { ScratchPool::new() };
     pub(super) static SHT_COEFF_LANE_SCRATCH: ScratchPool<f64> = const { ScratchPool::new() };
-}
-
-pub(super) fn validate_profile(
-    actual: PrecisionProfile,
-    expected: PrecisionProfile,
-) -> ShtResult<()> {
-    if actual.matches_storage_and_compute(expected) {
-        Ok(())
-    } else {
-        Err(ShtError::PrecisionMismatch)
-    }
 }
 
 pub(super) fn validate_sample_array_shape<T>(plan: &ShtPlan, samples: &Array2<T>) -> ShtResult<()> {

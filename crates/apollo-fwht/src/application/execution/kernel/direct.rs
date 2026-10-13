@@ -58,7 +58,7 @@ where
         // SAFETY: The TypeId check proves T is exactly f32, so the pointer cast
         // preserves element layout and length.
         let slice = unsafe { std::slice::from_raw_parts_mut(ptr, data.len()) };
-        wht_inplace_f32(slice, 1);
+        wht_inplace_simd::<f32, PreferredArch>(slice, 1);
     } else {
         wht_inplace_fallback(data);
     }
@@ -144,18 +144,6 @@ where
     }
 }
 
-/// Specialized in-place Fast Walsh-Hadamard Transform for f64 slices.
-///
-/// `start_step` specifies the initial step size (1 for real, 2 for complex-as-real).
-fn wht_inplace_f64(data: &mut [f64], start_step: usize) {
-    wht_inplace_simd::<f64, PreferredArch>(data, start_step);
-}
-
-/// Specialized in-place Fast Walsh-Hadamard Transform for f32 slices.
-fn wht_inplace_f32(data: &mut [f32], start_step: usize) {
-    wht_inplace_simd::<f32, PreferredArch>(data, start_step);
-}
-
 /// Fallback generic in-place transform.
 fn wht_inplace_fallback<T>(data: &mut [T])
 where
@@ -196,11 +184,11 @@ where
 
 /// In-place Walsh-Hadamard transform over a real slice.
 pub fn fwht_inplace(data: &mut [f64]) {
-    wht_inplace_f64(data, 1);
+    wht_inplace_simd::<f64, PreferredArch>(data, 1);
 }
 
 /// In-place Walsh-Hadamard transform over a complex slice.
 pub fn fwht_complex_inplace(data: &mut [Complex64]) {
     let slice_f64 = eunomia::layout::cast_slice_mut(data);
-    wht_inplace_f64(slice_f64, 2);
+    wht_inplace_simd::<f64, PreferredArch>(slice_f64, 2);
 }

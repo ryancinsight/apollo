@@ -245,7 +245,7 @@ pub trait RadonStorage: CpuStorage {
         output: &mut Array2<Self>,
         profile: PrecisionProfile,
     ) -> RadonResult<()> {
-        validate_profile(profile, Self::PROFILE)?;
+        profile.ensure_matches(Self::PROFILE, || RadonError::PrecisionMismatch)?;
         if image.shape() != [plan.geometry.rows(), plan.geometry.cols()] {
             return Err(RadonError::ImageShapeMismatch);
         }
@@ -274,7 +274,7 @@ pub trait RadonStorage: CpuStorage {
         output: &mut Array2<Self>,
         profile: PrecisionProfile,
     ) -> RadonResult<()> {
-        validate_profile(profile, Self::PROFILE)?;
+        profile.ensure_matches(Self::PROFILE, || RadonError::PrecisionMismatch)?;
         if sinogram.shape() != [plan.geometry.angle_count(), plan.geometry.detector_count()] {
             return Err(RadonError::SinogramShapeMismatch);
         }
@@ -304,7 +304,7 @@ impl RadonStorage for f64 {
         output: &mut Array2<Self>,
         profile: PrecisionProfile,
     ) -> RadonResult<()> {
-        validate_profile(profile, Self::PROFILE)?;
+        profile.ensure_matches(Self::PROFILE, || RadonError::PrecisionMismatch)?;
         plan.forward_into(image, output)
     }
 
@@ -314,7 +314,7 @@ impl RadonStorage for f64 {
         output: &mut Array2<Self>,
         profile: PrecisionProfile,
     ) -> RadonResult<()> {
-        validate_profile(profile, Self::PROFILE)?;
+        profile.ensure_matches(Self::PROFILE, || RadonError::PrecisionMismatch)?;
         if sinogram.shape() != [plan.geometry.angle_count(), plan.geometry.detector_count()] {
             return Err(RadonError::SinogramShapeMismatch);
         }
@@ -329,14 +329,6 @@ impl RadonStorage for f64 {
 impl RadonStorage for f32 {}
 
 impl RadonStorage for F16 {}
-
-fn validate_profile(actual: PrecisionProfile, expected: PrecisionProfile) -> RadonResult<()> {
-    if actual.matches_storage_and_compute(expected) {
-        Ok(())
-    } else {
-        Err(RadonError::PrecisionMismatch)
-    }
-}
 
 fn array2_from_leto_view<T: Copy>(view: leto::ArrayView2<'_, T>) -> Array2<T> {
     view.to_contiguous()

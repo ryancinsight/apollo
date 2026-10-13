@@ -56,7 +56,7 @@ thread_local! {
 }
 
 use crate::application::execution::transform::dimension_1d::{
-    validate_profile, write_typed_output, NufftComplexStorage,
+    write_typed_output, NufftComplexStorage,
 };
 use crate::domain::metadata::grid::UniformGrid3D;
 use crate::infrastructure::kernel::kaiser_bessel::{
@@ -477,7 +477,17 @@ impl NufftPlan3D {
         output: &mut Array3<T>,
         profile: PrecisionProfile,
     ) -> ApolloResult<()> {
-        validate_profile(profile, T::PROFILE)?;
+        profile.ensure_matches(T::PROFILE, || {
+            ApolloError::validation(
+                "precision_profile",
+                format!("{profile:?}"),
+                format!(
+                    "storage {:?} with compute {:?}",
+                    T::PROFILE.storage,
+                    T::PROFILE.compute
+                ),
+            )
+        })?;
         if positions.len() != values.len() {
             return Err(ApolloError::ShapeMismatch {
                 expected: positions.len().to_string(),
@@ -779,7 +789,17 @@ impl NufftPlan3D {
         output: &mut [T],
         profile: PrecisionProfile,
     ) -> ApolloResult<()> {
-        validate_profile(profile, T::PROFILE)?;
+        profile.ensure_matches(T::PROFILE, || {
+            ApolloError::validation(
+                "precision_profile",
+                format!("{profile:?}"),
+                format!(
+                    "storage {:?} with compute {:?}",
+                    T::PROFILE.storage,
+                    T::PROFILE.compute
+                ),
+            )
+        })?;
         if modes.shape() != [self.grid.nx, self.grid.ny, self.grid.nz]
             || output.len() != positions.len()
         {

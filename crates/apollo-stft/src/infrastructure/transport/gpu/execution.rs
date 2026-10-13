@@ -81,7 +81,8 @@ impl FramedExecution for StftWgpuBackend {
         I: GpuStorage,
         O: GpuStorage<Complex32>,
     {
-        validate_profiles(precision, I::PROFILE, O::PROFILE)?;
+        precision.ensure_matches(I::PROFILE, || WgpuError::InvalidPrecisionProfile)?;
+        precision.ensure_matches(O::PROFILE, || WgpuError::InvalidPrecisionProfile)?;
         let expected_output = forward_output_len(plan, signal.len())?;
         if output.len() != expected_output {
             return Err(WgpuError::LengthMismatch {
@@ -178,7 +179,8 @@ impl FramedExecution for StftWgpuBackend {
         I: GpuStorage<Complex32>,
         O: GpuStorage,
     {
-        validate_profiles(precision, I::PROFILE, O::PROFILE)?;
+        precision.ensure_matches(I::PROFILE, || WgpuError::InvalidPrecisionProfile)?;
+        precision.ensure_matches(O::PROFILE, || WgpuError::InvalidPrecisionProfile)?;
         if output.len() != signal_len {
             return Err(WgpuError::LengthMismatch {
                 expected: signal_len,
@@ -295,17 +297,4 @@ impl FramedExecution for StftWgpuBackend {
         }
         Kernel::execute_inverse_with_buffers(self.device(), spectrum, signal_len, buffers)
     }
-}
-
-fn validate_profiles(
-    precision: PrecisionProfile,
-    input_profile: PrecisionProfile,
-    output_profile: PrecisionProfile,
-) -> WgpuResult<()> {
-    for expected in [input_profile, output_profile] {
-        if precision.storage != expected.storage || precision.compute != expected.compute {
-            return Err(WgpuError::InvalidPrecisionProfile);
-        }
-    }
-    Ok(())
 }
