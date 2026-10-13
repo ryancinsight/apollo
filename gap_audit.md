@@ -1,5 +1,17 @@
 # Apollo gap audit
 
+## FFT121 row prologue and corrected benchmark baseline (2026-10-13) <a id="fft121-row-prologue-642"></a>
+
+Issue #642's approximately 28 ns scalar prologue premium is an isolated attribution,
+not a proven complete-transform gain. Main `aa5adba1` includes PR #649; the 291 ns /
+1.62x result predates controlled buffer lanes and requires remeasurement. The candidate
+vectorizes four step-one pairs within each of eight rows, transposes to the incumbent
+scratch layout, and preserves pair five, the three-stream tail, and scalar fallbacks.
+Native tests and counterbalanced measurements run in the scoped FFT121 CI workflow;
+the ARM64 development host supplies x86-64 compilation, not AVX2 timing evidence.
+Retention remains pending a supported complete-path improvement and stable controls.
+Re-open trigger: a new row packing strategy or a measured bound in the 11-point core.
+
 Open risks with their re-open triggers, and the findings the board, the ADRs
 and the session notes cite, one anchored section each. Compacted by
 `scripts/compact_gap_audit.py`: a section keeps its heading, its lead and its

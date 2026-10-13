@@ -6,6 +6,23 @@ Change-class tags: [patch] backward-compatible fix, [minor] additive non-breakin
 
 ---
 
+## [0.28.1] - Unreleased (apollo-fft)
+
+### Changed
+
+- [patch] Evaluate an AVX2 step-one row prologue for the separated-stream
+  N=121 transform. Pair formation uses vector loads and a register transpose;
+  summation order, sign operations, pair five, scalar stream tails, and
+  unsupported-layout fallback remain unchanged. Production retention awaits
+  native lane-controlled measurement against main `aa5adba1` and RustFFT.
+
+### Added
+
+- [patch] Forward/inverse bitwise layout verification across 25 arrangements,
+  offset/gap guards, finite-component scratch property checks, and no-mutation
+  dispatch rejection checks. A scoped CI campaign preserves release binaries'
+  identities and full ABBA/BAAB raw samples using the unchanged PR #649 harness.
+
 ## [Unreleased]
 
 ### Breaking

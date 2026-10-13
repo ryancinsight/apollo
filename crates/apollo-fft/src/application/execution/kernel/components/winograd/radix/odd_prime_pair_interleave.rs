@@ -9,6 +9,47 @@
 #[cfg(target_arch = "x86_64")]
 use core::arch::x86_64::__m256;
 
+/// Transpose eight packed rows: output lane `[column][row]` is input
+/// `[row][column]`. Each stage exchanges one coordinate bit (32-bit
+/// unpack, 64-bit shuffle, 128-bit exchange); no arithmetic occurs.
+///
+/// # Safety
+///
+/// The caller must have established AVX2 support.
+#[cfg(target_arch = "x86_64")]
+#[target_feature(enable = "avx2")]
+#[inline]
+pub(crate) unsafe fn transpose8(rows: [__m256; 8]) -> [__m256; 8] {
+    use core::arch::x86_64::{
+        _mm256_permute2f128_ps, _mm256_shuffle_ps, _mm256_unpackhi_ps, _mm256_unpacklo_ps,
+    };
+
+    let pairs: [__m256; 8] = core::array::from_fn(|i| {
+        let row = (i / 2) * 2;
+        if i % 2 == 0 {
+            _mm256_unpacklo_ps(rows[row], rows[row + 1])
+        } else {
+            _mm256_unpackhi_ps(rows[row], rows[row + 1])
+        }
+    });
+    let quads: [__m256; 8] = core::array::from_fn(|i| {
+        let pair = (i / 4) * 4 + (i % 4) / 2;
+        if i % 2 == 0 {
+            _mm256_shuffle_ps::<0x44>(pairs[pair], pairs[pair + 2])
+        } else {
+            _mm256_shuffle_ps::<0xEE>(pairs[pair], pairs[pair + 2])
+        }
+    });
+    core::array::from_fn(|column| {
+        let quad = column % 4;
+        if column < 4 {
+            _mm256_permute2f128_ps::<0x20>(quads[quad], quads[quad + 4])
+        } else {
+            _mm256_permute2f128_ps::<0x31>(quads[quad], quads[quad + 4])
+        }
+    })
+}
+
 /// Cross-lane 64-bit permute (`vpermq`) on packed floats.
 ///
 /// stdarch exposes this only as `_mm256_permute4x64_epi64`; the casts

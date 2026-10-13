@@ -1,5 +1,15 @@
 # Apollo Backlog
 
+<a id="apollo-fft121-row-prologue-642"></a>
+## APOLLO-FFT121-ROW-PROLOGUE-642 [patch] — in progress
+
+- Scope: AVX2 step-one row prologue in the existing separated-stream 11-point kernel; public FFT API and mathematical formulation stay unchanged.
+- Main baseline: `aa5adba1df3f318d47cb5e41770dff9d01099603`, containing PR #649's deterministic address lanes. Earlier 291 ns / 1.62x figures are historical, not the acceptance baseline.
+- Contract: pair positions `(m + 1, 10 - m)` for `m = 0..5`; ascending DC accumulation; exact sign flips; all input reads precede output writes; vector loads stay within each eleven-slot row. Other strides retain the scalar path.
+- Verification: 25 input/output layout combinations in both directions over six signal families, offset/gap guards, finite-component scratch equivalence, existing independent direct DFTs, native debug/release diagnostics.
+- Retention gate: native CI ABBA and BAAB with unchanged 100-sample, 26-size measurement closures and lanes. The existing replicated comparator must support the N=121 improvement; RustFFT and f64 controls must remain consistent. An unsupported candidate is removed.
+- Next increment: finish native measurement and compare the pair-basis operation/data-movement structure against the locked RustFFT 6.4.1 codelet before recommending a different formulation.
+
 <a id="apollo-121-f32-simd-leaf"></a>
 ## APOLLO-121-F32-SIMD-LEAF — Close the N=121 f32 gap with a dispatched SIMD dft11 [patch] [perf] — todo
 - **priority:** tightening. **needs:** none.

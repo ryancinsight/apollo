@@ -1,0 +1,122 @@
+name: FFT121 evaluation
+
+on:
+  push:
+    branches: [codex/apollo-row-prologue-642]
+  workflow_dispatch:
+    inputs:
+      baseline:
+        description: Exact main revision to compare
+        default: aa5adba1df3f318d47cb5e41770dff9d01099603
+        required: true
+
+permissions:
+  contents: read
+
+concurrency:
+  group: fft121-evaluation-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  evaluate:
+    name: Native AVX2 values and counterbalanced measurement
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    env:
+      BASELINE_REF: ${{ inputs.baseline || 'aa5adba1df3f318d47cb5e41770dff9d01099603' }}
+      CARGO_TARGET_DIR: ${{ github.workspace }}/target
+      CARGO_BUILD_JOBS: 2
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803
+        with:
+          fetch-depth: 0
+          path: candidate
+      - uses: dtolnay/rust-toolchain@889fac408b4da0905346410f253f0c55fbcb6613
+        with:
+          toolchain: 1.97.0
+          components: clippy, rustfmt
+      - uses: taiki-e/install-action@b20dedce73af6905cdc30d6611090c9b67557c8d
+        with:
+          tool: cargo-nextest@0.9.140
+      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6
+        with:
+          workspaces: candidate -> ../target
+          cache-targets: false
+      - name: Check native capabilities and export exact baseline
+        working-directory: candidate
+        run: |
+          set -euo pipefail
+          mkdir -p ../baseline ../evidence/bin
+          lscpu > ../evidence/cpu.txt
+          python3 - <<'PY'
+          import platform
+          from pathlib import Path
+          assert platform.machine() == "x86_64", "native x86-64 is required"
+          flags = Path("/proc/cpuinfo").read_text().split("flags", 1)[1].splitlines()[0].split()
+          assert {"avx2", "fma"} <= set(flags), "AVX2 and FMA are required"
+          PY
+          baseline=$(git rev-parse "${BASELINE_REF}^{commit}")
+          git archive "$baseline" | tar -x -C ../baseline
+          git rev-parse HEAD > ../evidence/candidate.sha
+          echo "$baseline" > ../evidence/baseline.sha
+          # No benchmark source or dependency changes may enter the A/B pair.
+          diff -r ../baseline/crates/apollo-bench/src crates/apollo-bench/src
+          diff -r ../baseline/crates/apollo-alloc/src crates/apollo-alloc/src
+          cmp ../baseline/crates/apollo-fft/benches/rustfft_comparison.rs crates/apollo-fft/benches/rustfft_comparison.rs
+          python3 - <<'PY'
+          import tomllib
+          from pathlib import Path
+          def contract(root, name):
+              value = tomllib.loads((Path(root) / name).read_text())
+              if name == "Cargo.lock":
+                  for package in value["package"]:
+                      if package["name"] == "apollo-fft":
+                          del package["version"]
+              else:
+                  del value["package"]["version"]
+              return value
+          for name in ("Cargo.lock", "crates/apollo-fft/Cargo.toml"):
+              assert contract("../baseline", name) == contract(".", name), name
+          PY
+      - name: Native debug and release value tests
+        working-directory: candidate
+        run: |
+          timeout 600 cargo nextest run --locked -p apollo-fft --lib -E 'test(chunked_)'
+          timeout 600 cargo nextest run --locked --release -p apollo-fft --lib -E 'test(chunked_)'
+      - name: Diagnostics and memory-contract comments
+        working-directory: candidate
+        run: |
+          cargo fmt -p apollo-fft -- --check
+          python3 scripts/safety_ratchet.py check
+          timeout 600 cargo clippy --locked -p apollo-fft --all-targets -- -D warnings
+      - name: Build unchanged release instruments for both revisions
+        run: |
+          set -euo pipefail
+          for revision in baseline candidate; do
+            (cd "$revision" && timeout 600 cargo bench --locked -p apollo-fft --bench rustfft_comparison --no-run --message-format=json) > "evidence/${revision}-build.jsonl"
+            python3 - "$revision" <<'PY'
+          import json, shutil, sys
+          from pathlib import Path
+          revision = sys.argv[1]
+          events = [json.loads(line) for line in Path(f"evidence/{revision}-build.jsonl").read_text().splitlines()]
+          executables = [event["executable"] for event in events if event.get("reason") == "compiler-artifact" and event.get("target", {}).get("name") == "rustfft_comparison" and event.get("executable")]
+          assert len(executables) == 1, executables
+          shutil.copy2(executables[0], f"evidence/bin/{revision}")
+          PY
+          done
+          (cd candidate && timeout 600 cargo build --locked --release -p apollo-bench --bin apollo-bench-compare)
+          cp target/release/apollo-bench-compare evidence/bin/compare
+      - name: Discard warm runs, measure ABBA and BAAB, compare both directions
+        run: |
+          timeout 360 python3 candidate/scripts/fft121_evaluate.py evidence
+          cat evidence/summary.md >> "$GITHUB_STEP_SUMMARY"
+      - name: Preserve raw samples, identities, diagnostics, and verdicts
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: fft121-evaluation-${{ github.sha }}
+          path: |
+            evidence
+            !evidence/bin
+          retention-days: 7
+          if-no-files-found: error

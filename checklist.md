@@ -1,5 +1,14 @@
 # Apollo Checklist
 
+## FFT121 row-prologue evaluation — target apollo-fft 0.28.1 [patch]
+
+- [x] [patch] Freeze main `aa5adba1` after PR #649; preserve benchmark sources and dependency graph.
+- [x] [patch] Implement step-one pair tiles with unchanged summation, sign operations, scalar tail, and fallback.
+- [x] [patch] Extend forward/inverse bitwise coverage to 25 layout combinations and untouched guards; add finite-component scratch property checks.
+- [ ] [patch] Pass native AVX2 debug/release tests and diagnostics in CI.
+- [ ] [patch] Revalidate main/RustFFT and candidate/RustFFT in lane-controlled ABBA/BAAB runs; retain the production path only on supported improvement with stable controls.
+- [ ] [patch] Record the measured verdict and audit whether a different 11-point formulation addresses the remaining bound.
+
 ## claude/fable — current execution
 - [ ] [Lane order inverse](backlog.md#apollo-planar-lane-order-inverse): PR enqueued; merged; PR 363 rebased and re-verified.
 - [ ] [Rectangular odd powers](backlog.md#apollo-planar-rectangular-odd-powers): ADR 0060 Accepted; PR enqueued; merged, lease discharged.
