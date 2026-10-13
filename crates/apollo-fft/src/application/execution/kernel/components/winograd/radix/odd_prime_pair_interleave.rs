@@ -9,9 +9,10 @@
 #[cfg(target_arch = "x86_64")]
 use core::arch::x86_64::__m256;
 
-/// Transpose eight packed rows: output lane `[column][row]` is input
-/// `[row][column]`. Each stage exchanges one coordinate bit (32-bit
-/// unpack, 64-bit shuffle, 128-bit exchange); no arithmetic occurs.
+/// Transpose four interleaved-pair rows. Result 2*m holds real components
+/// for pair m in its low half and pair m+2 in its high half; result 2*m+1
+/// holds the corresponding imaginary components, for m in 0..2. Only
+/// unpack and in-half shuffle operations occur; no arithmetic is performed.
 ///
 /// # Safety
 ///
@@ -19,35 +20,18 @@ use core::arch::x86_64::__m256;
 #[cfg(target_arch = "x86_64")]
 #[target_feature(enable = "avx2")]
 #[inline]
-pub(crate) unsafe fn transpose8(rows: [__m256; 8]) -> [__m256; 8] {
-    use core::arch::x86_64::{
-        _mm256_permute2f128_ps, _mm256_shuffle_ps, _mm256_unpackhi_ps, _mm256_unpacklo_ps,
-    };
-
-    let pairs: [__m256; 8] = core::array::from_fn(|i| {
-        let row = (i / 2) * 2;
-        if i % 2 == 0 {
-            _mm256_unpacklo_ps(rows[row], rows[row + 1])
-        } else {
-            _mm256_unpackhi_ps(rows[row], rows[row + 1])
-        }
-    });
-    let quads: [__m256; 8] = core::array::from_fn(|i| {
-        let pair = (i / 4) * 4 + (i % 4) / 2;
-        if i % 2 == 0 {
-            _mm256_shuffle_ps::<0x44>(pairs[pair], pairs[pair + 2])
-        } else {
-            _mm256_shuffle_ps::<0xEE>(pairs[pair], pairs[pair + 2])
-        }
-    });
-    core::array::from_fn(|column| {
-        let quad = column % 4;
-        if column < 4 {
-            _mm256_permute2f128_ps::<0x20>(quads[quad], quads[quad + 4])
-        } else {
-            _mm256_permute2f128_ps::<0x31>(quads[quad], quads[quad + 4])
-        }
-    })
+pub(crate) unsafe fn transpose_pairs(rows: [__m256; 4]) -> [__m256; 4] {
+    use core::arch::x86_64::{_mm256_shuffle_ps, _mm256_unpackhi_ps, _mm256_unpacklo_ps};
+    let lo01 = _mm256_unpacklo_ps(rows[0], rows[1]);
+    let hi01 = _mm256_unpackhi_ps(rows[0], rows[1]);
+    let lo23 = _mm256_unpacklo_ps(rows[2], rows[3]);
+    let hi23 = _mm256_unpackhi_ps(rows[2], rows[3]);
+    [
+        _mm256_shuffle_ps::<0x44>(lo01, lo23),
+        _mm256_shuffle_ps::<0xEE>(lo01, lo23),
+        _mm256_shuffle_ps::<0x44>(hi01, hi23),
+        _mm256_shuffle_ps::<0xEE>(hi01, hi23),
+    ]
 }
 
 /// Cross-lane 64-bit permute (`vpermq`) on packed floats.
@@ -61,7 +45,7 @@ pub(crate) unsafe fn transpose8(rows: [__m256; 8]) -> [__m256; 8] {
 #[cfg(target_arch = "x86_64")]
 #[target_feature(enable = "avx2")]
 #[inline]
-unsafe fn permute_qwords<const IMM8: i32>(v: __m256) -> __m256 {
+pub(crate) unsafe fn permute_qwords<const IMM8: i32>(v: __m256) -> __m256 {
     use core::arch::x86_64::{_mm256_castps_si256, _mm256_castsi256_ps, _mm256_permute4x64_epi64};
 
     // Pure register shuffle; the `unsafe fn` marker carries the caller's
