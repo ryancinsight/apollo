@@ -20,6 +20,25 @@ fn plans_are_cached_per_length_and_direction() {
 }
 
 #[test]
+fn caches_release_tables_when_operation_owners_drop() {
+    let plan = <f64 as BatchedPlanCache>::cached_plan::<false>(64);
+    let released_plan = std::sync::Arc::downgrade(&plan);
+    drop(plan);
+    assert!(
+        released_plan.upgrade().is_none(),
+        "the weak plan indexes must not own a table"
+    );
+
+    let fold = <f64 as BatchedPlanCache>::cached_four_step_fold(4096, 64, 64);
+    let released_fold = std::sync::Arc::downgrade(&fold);
+    drop(fold);
+    assert!(
+        released_fold.upgrade().is_none(),
+        "the weak fold indexes must not own a table"
+    );
+}
+
+#[test]
 fn batched_plans_and_planes_are_shared_across_threads() {
     // `FourStepFold` owns two-level tables, `m (F + m / F)` pairs, and the
     // caches

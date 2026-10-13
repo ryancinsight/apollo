@@ -3,7 +3,6 @@
 use super::super::lane_order::LaneOrder;
 use super::super::plane::{transpose_planes, transpose_planes_into, PlaneView};
 use super::super::{boundary, BatchedPlanCache};
-use eunomia::Complex;
 
 #[test]
 fn transpose_is_its_own_inverse_and_never_touches_the_pad() {
@@ -68,10 +67,7 @@ fn transpose_is_its_own_inverse_and_never_touches_the_pad() {
 /// puts it, on the dispatched width and the scalar reference alike.
 fn rectangular_transpose_matches_the_reference<T>()
 where
-    T: BatchedPlanCache<Complex = Complex<T>>
-        + eunomia::FloatElement
-        + PartialEq
-        + core::fmt::Debug,
+    T: BatchedPlanCache + eunomia::FloatElement + PartialEq + core::fmt::Debug,
 {
     // Shapes in tiles of the dispatched width, so the order the reference
     // relabels through divides them on every host (a sixteen-lane order

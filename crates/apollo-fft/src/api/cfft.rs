@@ -80,7 +80,8 @@ where
 /// Forward complex 1D FFT in-place for a compile-time-known length and scalar profile.
 ///
 /// `T` selects the concrete scalar implementation at compile time, so `f32`
-/// and `f64` callers monomorphize directly into their native kernels.
+/// and `f64` callers use their native kernels. Table-free codelets dispatch
+/// directly; other lengths reuse the bounded plan owner.
 pub fn fft_1d_complex_static_inplace<T, const N: usize>(data: &mut Array1<Complex<T>>)
 where
     T: MixedRadixScalar<Complex = Complex<T>>,

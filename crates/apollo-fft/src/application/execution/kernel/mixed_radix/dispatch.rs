@@ -14,7 +14,6 @@
 //! | `inverse_inplace`                | true    | true      |
 
 use super::super::precision_bridge::Complex32Bridge;
-use super::caches::{cached_coprime_factors, cached_is_prime, cached_prime23_radices};
 use super::scalar::MixedRadixScalar;
 use crate::application::execution::kernel::pot::StockhamAutosort;
 use crate::with_pot_zst;
@@ -66,15 +65,6 @@ pub(crate) fn static_coprime_factors(n: usize) -> Option<(usize, usize)> {
         200 => Some((8, 25)),
         511 => Some((73, 7)),
         _ => None,
-    }
-}
-
-#[inline]
-fn static_is_prime(n: usize) -> bool {
-    match n {
-        2 | 3 | 5 | 7 | 11 | 13 | 17 | 19 | 23 | 29 | 31 | 37 | 41 | 43 | 47 | 53 | 59 | 61
-        | 10007 => true,
-        _ => false,
     }
 }
 
@@ -285,83 +275,19 @@ pub(crate) fn dispatch_inplace<
         return;
     }
 
-    if n == 200 {
-        match (INVERSE, NORMALIZE) {
-            (false, _) => F::composite_forward(data, F::COMPOSITE_RADICES_200),
-            (true, false) => F::composite_inverse_unnorm(data, F::COMPOSITE_RADICES_200),
-            (true, true) => F::composite_inverse(data, F::COMPOSITE_RADICES_200),
-        }
-        return;
-    }
-
-    // Prefer composite mixed-radix (CT) for 2/3/5/7-smooth even if coprime factors exist,
-    // as GT PFA static impls have high overhead (perm, scratch, strided cols) for many sizes
-    // that benchmark >2x slower than RustFFT. GT only for non-smooth coprimes or explicit static wins.
-    // Check static table for ALL sizes first (zero-cost match), then fall back to cached Arc lookup.
-    if let Some(radices) = static_prime23_radices(n) {
-        match (INVERSE, NORMALIZE) {
-            (false, _) => F::composite_forward(data, radices),
-            (true, false) => F::composite_inverse_unnorm(data, radices),
-            (true, true) => F::composite_inverse(data, radices),
-        }
-        return;
-    }
-    if let Some(radices) = cached_prime23_radices(n) {
-        match (INVERSE, NORMALIZE) {
-            (false, _) => F::composite_forward(data, &radices),
-            (true, false) => F::composite_inverse_unnorm(data, &radices),
-            (true, true) => F::composite_inverse(data, &radices),
-        }
-        return;
-    }
-
-    // Note: 90 and 198 handled by static_prime23_radices (and explicit in plan FftPlan1D for guarantee before short-win f32 policy).
-    // 72 f32 now forced composite in plan (md 17x f32 via GT/Policy); static has [4,2,3,3]. Routing hardened per md-worst + "selection may not correct".
-
-    let coprime_factors = static_coprime_factors(n).or_else(|| {
-        if n > 64 {
-            cached_coprime_factors(n)
+    let plan = F::acquire_plan(
+        crate::domain::metadata::shape::Shape1D::new(n)
+            .expect("invariant: non-identity transforms have non-zero length"),
+    );
+    if INVERSE {
+        if NORMALIZE {
+            plan.inverse_complex_slice_inplace(data);
         } else {
-            None
+            plan.inverse_complex_slice_unnorm_inplace(data);
         }
-    });
-    if let Some((n1, n2)) = coprime_factors {
-        crate::application::execution::kernel::components::good_thomas::pfa_fft::<F, INVERSE>(
-            data, n1, n2,
-        );
-        if INVERSE && NORMALIZE {
-            F::normalize(data, n);
-        }
-        return;
-    }
-
-    let is_prime = if n <= 64 || n == 10007 {
-        static_is_prime(n)
     } else {
-        cached_is_prime(n)
-    };
-    if is_prime {
-        crate::application::execution::kernel::components::rader::rader_fft::<F, INVERSE>(data);
-        if INVERSE && NORMALIZE {
-            F::normalize(data, n);
-        }
-        return;
+        plan.forward_complex_slice_inplace(data);
     }
-
-    // Every shaped strategy has declined: `n` is composite, not smooth over
-    // the supported radices, and has no coprime split. Reaching the end of
-    // this function used to mean returning with `data` untouched — the
-    // identity, presented as a transform, with no diagnostic. Lengths of the
-    // form `p^2` for a prime `p` outside the radix set (361, 841, 961, ...)
-    // land here, and so did every composite built from them, because
-    // Good-Thomas routes its row transforms back through this dispatcher.
-    // Bluestein serves any length, so the terminal case is now a correct
-    // transform rather than a silent no-op.
-    crate::application::execution::kernel::components::bluestein::bluestein_fft::<
-        F,
-        INVERSE,
-        NORMALIZE,
-    >(data);
 }
 
 #[inline]
@@ -384,93 +310,42 @@ fn try_power_of_two_fast_path<
     // LOG2 4-6 delegate to small_pot_inplace_sized which ignores twiddles,
     // so we pass an empty slice to avoid unnecessary twiddle cache lookups.
     //
-    // try_pot_zst! reduces 7 identical match arms (4-10) to a single macro invocation.
-    // Uses the shared with_pot_zst! from pot for ZST construction.
-    macro_rules! try_pot_zst {
-        ($log2:literal, $needs_twiddle:expr) => {
+    macro_rules! run_pot {
+        ($log2:literal, $twiddles:expr) => {
             with_pot_zst!($log2, _s, {
-                if $needs_twiddle {
-                    if let Some(tw) = twiddles {
-                        F::pot_inplace_sized::<INVERSE, NORMALIZE, StockhamAutosort, $log2>(
-                            data, tw, _s,
-                        );
-                    } else if INVERSE {
-                        F::with_twiddle_inv(n, |tw| {
-                            F::pot_inplace_sized::<INVERSE, NORMALIZE, StockhamAutosort, $log2>(
-                                data, tw, _s,
-                            );
-                        });
-                    } else {
-                        F::with_twiddle_fwd(n, |tw| {
-                            F::pot_inplace_sized::<INVERSE, NORMALIZE, StockhamAutosort, $log2>(
-                                data, tw, _s,
-                            );
-                        });
-                    }
-                } else {
-                    F::pot_inplace_sized::<INVERSE, NORMALIZE, StockhamAutosort, $log2>(
-                        data,
-                        &[],
-                        _s,
-                    );
-                }
+                F::pot_inplace_sized::<INVERSE, NORMALIZE, StockhamAutosort, $log2>(
+                    data, $twiddles, _s,
+                );
                 return true;
             })
         };
     }
     let log2 = n.trailing_zeros();
     match log2 {
-        4 => try_pot_zst!(4, false),
-        5 => try_pot_zst!(5, false),
-        6 => try_pot_zst!(6, false),
-        7 => try_pot_zst!(7, true),
-        8 => try_pot_zst!(8, true),
-        9 => try_pot_zst!(9, true),
-        10 => try_pot_zst!(10, true),
+        4 => run_pot!(4, &[]),
+        5 => run_pot!(5, &[]),
+        6 => run_pot!(6, &[]),
         _ => {}
     }
 
-    if crate::application::execution::kernel::components::four_step::try_four_step::<
-        F,
-        INVERSE,
-        NORMALIZE,
-    >(
-        data,
-        crate::application::execution::kernel::tuning::FOUR_STEP_THRESHOLD,
-    ) {
-        return true;
+    let Some(twiddles) = twiddles else {
+        return false;
+    };
+    match log2 {
+        7 => run_pot!(7, twiddles),
+        8 => run_pot!(8, twiddles),
+        9 => run_pot!(9, twiddles),
+        10 => run_pot!(10, twiddles),
+        _ => {}
     }
 
-    match twiddles {
-        Some(tw) => {
-            <F as MixedRadixScalar>::with_scratch(n, |scratch| {
-                if INVERSE && NORMALIZE {
-                    F::stockham_forward_normalized(data, scratch, tw, n);
-                } else {
-                    F::stockham_forward(data, scratch, tw);
-                }
-            });
+    <F as MixedRadixScalar>::with_scratch(n, |scratch| {
+        if INVERSE && NORMALIZE {
+            F::stockham_forward_normalized(data, scratch, twiddles, n);
+        } else {
+            F::stockham_forward(data, scratch, twiddles);
         }
-        None => {
-            if INVERSE {
-                F::with_twiddle_inv(n, |tw| {
-                    <F as MixedRadixScalar>::with_scratch(n, |scratch| {
-                        if NORMALIZE {
-                            F::stockham_forward_normalized(data, scratch, tw, n);
-                        } else {
-                            F::stockham_forward(data, scratch, tw);
-                        }
-                    });
-                });
-            } else {
-                F::with_twiddle_fwd(n, |tw| {
-                    <F as MixedRadixScalar>::with_scratch(n, |scratch| {
-                        F::stockham_forward(data, scratch, tw);
-                    });
-                });
-            }
-        }
-    }
+    });
     true
 }
 

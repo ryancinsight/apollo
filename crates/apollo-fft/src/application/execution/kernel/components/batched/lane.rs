@@ -14,9 +14,7 @@ use core::ops::{Add, Mul, Sub};
 use hermes_simd::{LaneScalar, SimdArch, SimdKernel, Vector};
 
 /// One lane of butterfly arithmetic: a SIMD vector or a scalar element.
-pub(crate) trait Lane:
-    Copy + Add<Output = Self> + Sub<Output = Self> + Mul<Output = Self>
-{
+pub trait Lane: Copy + Add<Output = Self> + Sub<Output = Self> + Mul<Output = Self> {
     /// `self * b + c`.
     fn fma(self, b: Self, c: Self) -> Self;
     /// `self * b - c`.

@@ -1,4 +1,5 @@
 use crate::application::execution::kernel::mixed_radix::MixedRadixScalar;
+use std::sync::{Arc, OnceLock};
 
 /// Primes handled by two_by_prime dispatch that also appear in the
 /// fixed Good-Thomas `short_sizes` list (producing dead-code canonical
@@ -36,8 +37,41 @@ pub(super) fn try_fft<F: MixedRadixScalar<Complex = eunomia::Complex<F>>, const 
     n1: usize,
     n2: usize,
 ) -> bool {
+    try_fft_with_state::<F, INVERSE>(data, n1, n2, None, None)
+}
+
+pub(super) fn try_fft_with_owner<
+    F: MixedRadixScalar<Complex = eunomia::Complex<F>>,
+    const INVERSE: bool,
+>(
+    data: &mut [F::Complex],
+    n1: usize,
+    n2: usize,
+    owner: &OnceLock<crate::application::execution::kernel::components::rader::RaderState<F>>,
+    twiddles: &OnceLock<Arc<[F::Complex]>>,
+) -> bool {
+    try_fft_with_state::<F, INVERSE>(data, n1, n2, Some(owner), Some(twiddles))
+}
+
+fn try_fft_with_state<F: MixedRadixScalar<Complex = eunomia::Complex<F>>, const INVERSE: bool>(
+    data: &mut [F::Complex],
+    n1: usize,
+    n2: usize,
+    owner: Option<
+        &OnceLock<crate::application::execution::kernel::components::rader::RaderState<F>>,
+    >,
+    twiddle_owner: Option<&OnceLock<Arc<[F::Complex]>>>,
+) -> bool {
     let Some(config) = two_by_prime_n1_config(n1, n2) else {
         return false;
+    };
+
+    let local_twiddles;
+    let twiddles = if let Some(owner) = twiddle_owner {
+        owner.get_or_init(|| F::cached_four_step_twiddles(n1, 2))
+    } else {
+        local_twiddles = F::cached_four_step_twiddles(n1, 2);
+        &local_twiddles
     };
 
     match config {
@@ -45,10 +79,27 @@ pub(super) fn try_fft<F: MixedRadixScalar<Complex = eunomia::Complex<F>>, const 
             generator,
             generator_inverse,
         } => {
-            two_by_prime_ordered_rader::<F, INVERSE>(data, n1, generator, generator_inverse);
+            if let Some(owner) = owner {
+                let state = owner.get_or_init(|| {
+                    crate::application::execution::kernel::components::rader::RaderState::from_generator(
+                        n1,
+                        generator,
+                        generator_inverse,
+                    )
+                });
+                two_by_prime_ordered_rader_with::<F, INVERSE>(data, n1, state, twiddles);
+            } else {
+                two_by_prime_ordered_rader::<F, INVERSE>(
+                    data,
+                    n1,
+                    generator,
+                    generator_inverse,
+                    twiddles,
+                );
+            }
         }
         TwoByPrimeConfig::NaturalPrime => {
-            two_by_prime_natural_prime::<F, INVERSE>(data, n1);
+            two_by_prime_natural_prime::<F, INVERSE>(data, n1, twiddles);
         }
     }
     true
@@ -86,6 +137,25 @@ fn two_by_prime_ordered_rader<
     prime: usize,
     generator: usize,
     generator_inverse: usize,
+    twiddles: &[F::Complex],
+) {
+    let state =
+        crate::application::execution::kernel::components::rader::RaderState::from_generator(
+            prime,
+            generator,
+            generator_inverse,
+        );
+    two_by_prime_ordered_rader_with::<F, INVERSE>(data, prime, &state, twiddles);
+}
+
+fn two_by_prime_ordered_rader_with<
+    F: MixedRadixScalar<Complex = eunomia::Complex<F>>,
+    const INVERSE: bool,
+>(
+    data: &mut [F::Complex],
+    prime: usize,
+    rader: &crate::application::execution::kernel::components::rader::RaderState<F>,
+    twiddles: &[F::Complex],
 ) {
     let n = prime * 2;
     // The load and combine passes below index `data` unchecked; its length is
@@ -96,31 +166,21 @@ fn two_by_prime_ordered_rader<
         data.len()
     );
 
-    let twiddles = F::cached_four_step_twiddles(prime, 2);
-    let input_order =
-        crate::application::execution::kernel::components::rader::cached_generator_order(
-            prime, generator,
-        );
+    let input_order = rader.order();
 
     F::with_pfa_scratch(n, |scratch| {
         let (even, odd) = scratch[..n].split_at_mut(prime);
-        load_even_odd_ordered::<F>(data, even, odd, prime, input_order.as_ref());
+        load_even_odd_ordered::<F>(data, even, odd, prime, input_order);
 
-        crate::application::execution::kernel::components::rader::ordered::rader_ordered_impl::<
-            F,
-            INVERSE,
-        >(even, prime, generator_inverse);
-        crate::application::execution::kernel::components::rader::ordered::rader_ordered_impl::<
-            F,
-            INVERSE,
-        >(odd, prime, generator_inverse);
+        rader.execute_ordered::<INVERSE>(even);
+        rader.execute_ordered::<INVERSE>(odd);
 
         combine_two_prime_ordered::<F, INVERSE>(
             data,
             even,
             odd,
             &twiddles[prime..prime + prime],
-            input_order.as_ref(),
+            input_order,
             prime,
         );
     });
@@ -132,6 +192,7 @@ fn two_by_prime_natural_prime<
 >(
     data: &mut [F::Complex],
     prime: usize,
+    twiddles: &[F::Complex],
 ) {
     let n = prime * 2;
     // The load and combine passes below index `data` unchecked; its length is
@@ -146,7 +207,6 @@ fn two_by_prime_natural_prime<
         return;
     }
 
-    let twiddles = F::cached_four_step_twiddles(prime, 2);
     F::with_pfa_scratch(prime, |scratch| {
         let even = &mut scratch[..prime];
         load_even_compact_odd_natural(data, even, prime);

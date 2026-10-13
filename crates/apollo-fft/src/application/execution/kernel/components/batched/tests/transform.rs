@@ -1,6 +1,6 @@
 //! The assembled transform against the direct DFT and against RustFFT.
 
-use super::super::{four_step_batched, planar_applies, scratch_len};
+use super::super::{planar_applies, scratch_len, PlanarState};
 use super::oracle::{dft, signal, tolerance};
 use eunomia::{Complex, Complex32, Complex64};
 
@@ -13,7 +13,7 @@ fn forward_matches_the_direct_transform() {
         let expected = dft(&src, false);
         let mut data = src.clone();
         let mut scratch = vec![Complex64::default(); scratch_len(n)];
-        four_step_batched::<f64, false>(&mut data, &mut scratch);
+        PlanarState::<f64>::new(n).execute::<false>(&mut data, &mut scratch);
 
         let bound = tolerance(n, &src);
         let worst = data
@@ -36,7 +36,7 @@ fn inverse_matches_the_direct_transform() {
         let expected = dft(&src, true);
         let mut data = src.clone();
         let mut scratch = vec![Complex64::default(); scratch_len(n)];
-        four_step_batched::<f64, true>(&mut data, &mut scratch);
+        PlanarState::<f64>::new(n).execute::<true>(&mut data, &mut scratch);
 
         let bound = tolerance(n, &src);
         let worst = data
@@ -58,8 +58,9 @@ fn forward_then_inverse_recovers_the_input() {
         let src = signal(n);
         let mut data = src.clone();
         let mut scratch = vec![Complex64::default(); scratch_len(n)];
-        four_step_batched::<f64, false>(&mut data, &mut scratch);
-        four_step_batched::<f64, true>(&mut data, &mut scratch);
+        let state = PlanarState::<f64>::new(n);
+        state.execute::<false>(&mut data, &mut scratch);
+        state.execute::<true>(&mut data, &mut scratch);
 
         // The unnormalized round trip scales by N.
         let bound = tolerance(n, &src) * n as f64;
@@ -87,7 +88,7 @@ fn f32_forward_matches_the_direct_transform() {
         let expected = dft(&src64, false);
         let mut data = src.clone();
         let mut scratch = vec![Complex32::default(); scratch_len(n)];
-        four_step_batched::<f32, false>(&mut data, &mut scratch);
+        PlanarState::<f32>::new(n).execute::<false>(&mut data, &mut scratch);
 
         let l1: f64 = src64.iter().map(|v| v.re.hypot(v.im)).sum();
         let stages = f64::from(u32::try_from(n.trailing_zeros()).expect("fits u32"));
@@ -121,7 +122,7 @@ fn odd_lengths_match_the_direct_transform() {
         let input = signal(n);
         let mut data = input.clone();
         let mut scratch = vec![Complex64::default(); scratch_len(n)];
-        four_step_batched::<f64, false>(&mut data, &mut scratch);
+        PlanarState::<f64>::new(n).execute::<false>(&mut data, &mut scratch);
         let expected = dft(&input, false);
         let err = data
             .iter()

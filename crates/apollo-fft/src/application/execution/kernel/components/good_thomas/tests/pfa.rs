@@ -38,7 +38,8 @@ fn natural_pfa_inplace_matches_direct_forward() {
     let input = signal(n, 0.19, 0.31);
     let mut got = input.clone();
 
-    pfa_fft_natural_inplace::<f64, false>(&mut got, n1, n2);
+    let tables = cached_pfa_perm(n1, n2);
+    pfa_fft_natural_inplace::<f64, false>(&mut got, n1, n2, &tables);
 
     let expected = dft_forward(&input);
     let err = max_abs_err_64(&got, &expected);
@@ -56,7 +57,8 @@ fn natural_pfa_inplace_matches_direct_inverse_unnormalized() {
     let input = signal(n, 0.23, 0.17);
     let mut got = input.clone();
 
-    pfa_fft_natural_inplace::<f64, true>(&mut got, n1, n2);
+    let tables = cached_pfa_perm(n1, n2);
+    pfa_fft_natural_inplace::<f64, true>(&mut got, n1, n2, &tables);
 
     let expected = dft_inverse(&input)
         .into_iter()
@@ -85,7 +87,8 @@ fn natural_pfa_inplace_matches_direct_forward_various_sizes() {
         let input = signal(n, 0.19, 0.31);
         let mut got = input.clone();
 
-        pfa_fft_natural_inplace::<f64, false>(&mut got, n1, n2);
+        let tables = cached_pfa_perm(n1, n2);
+        pfa_fft_natural_inplace::<f64, false>(&mut got, n1, n2, &tables);
 
         let expected = dft_forward(&input);
         let err = max_abs_err_64(&got, &expected);
@@ -215,7 +218,8 @@ proptest! {
 #[should_panic(expected = "invariant: the PFA buffer and permutation tables cover n")]
 fn natural_pfa_rejects_a_short_buffer_in_release() {
     let mut short = vec![Complex64::new(0.0, 0.0); 3 * 5 - 1];
-    pfa_fft_natural_inplace::<f64, false>(&mut short, 3, 5);
+    let tables = cached_pfa_perm(3, 5);
+    pfa_fft_natural_inplace::<f64, false>(&mut short, 3, 5, &tables);
 }
 
 /// Both PFA permutations index `n`-sample buffers unchecked, so every entry
@@ -224,8 +228,11 @@ fn natural_pfa_rejects_a_short_buffer_in_release() {
 fn pfa_permutations_are_bijections_below_n() {
     for (n1, n2) in [(3usize, 5usize), (4, 9), (7, 8), (5, 11), (9, 16)] {
         let n = n1 * n2;
-        let (input, output) = cached_pfa_perm(n1, n2);
-        for (label, perm) in [("input", &input), ("output", &output)] {
+        let tables = cached_pfa_perm(n1, n2);
+        for (label, perm) in [
+            ("input", tables.input.as_ref()),
+            ("output", tables.output.as_ref()),
+        ] {
             assert_eq!(perm.len(), n, "{label} perm length for {n1}x{n2}");
             let mut seen = vec![false; n];
             for &index in perm.iter() {

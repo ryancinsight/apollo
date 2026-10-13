@@ -139,7 +139,7 @@ fn matches_the_planar_kernel_within_rounding() {
 
         let mut theirs = src.clone();
         let mut scratch = vec![Complex64::default(); batched::scratch_len(n)];
-        batched::four_step_batched::<f64, false>(&mut theirs, &mut scratch);
+        batched::PlanarState::<f64>::new(n).execute::<false>(&mut theirs, &mut scratch);
 
         // Different evaluation shapes (interleaved FMA order against planar),
         // each inside the stage bound, so the differential carries both.

@@ -4,6 +4,7 @@
 
 pub(crate) mod dynamic_impl;
 pub(crate) mod executors;
+pub(crate) mod owner;
 pub(crate) mod static_impl;
 pub(crate) mod strategy;
 

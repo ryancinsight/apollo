@@ -1,5 +1,10 @@
 use crate::application::execution::kernel::components::butterflies;
+use crate::application::execution::kernel::components::good_thomas::PfaState;
+use crate::application::execution::kernel::components::radix_composite::CompositeState;
 use crate::application::execution::kernel::mixed_radix::MixedRadixScalar;
+use crate::application::execution::plan::fft::dimension_1d::FftPlan1D;
+use crate::domain::metadata::shape::Shape1D;
+use std::sync::{Arc, OnceLock};
 
 /// Winograd-pair fused forward+pointwise dispatch.
 ///
@@ -65,6 +70,91 @@ macro_rules! with_winograd_pair_primes {
     }};
 }
 
+/// Reusable owner for the transform tables used inside one Rader convolution.
+pub(super) enum ConvolutionState<F: MixedRadixScalar> {
+    Direct,
+    Composite(CompositeState<F>),
+    Pfa(Box<PfaState<F>>),
+    Plan {
+        len: usize,
+        owner: OnceLock<Arc<FftPlan1D<F>>>,
+    },
+}
+
+impl<F: MixedRadixScalar<Complex = eunomia::Complex<F>>> ConvolutionState<F> {
+    pub(super) fn new(len: usize) -> Self {
+        if crate::application::execution::kernel::mixed_radix::traits::is_short_winograd_size(len)
+            && (len <= 64 || F::use_generated_codelet_plan(len))
+        {
+            Self::Direct
+        } else if let Some(radices) =
+            crate::application::execution::kernel::radix_shape::factorize_composite(len)
+        {
+            Self::Composite(CompositeState::new(&radices))
+        } else if let Some((n1, n2)) =
+            crate::application::execution::kernel::radix_shape::coprime_factors(len)
+        {
+            Self::Pfa(Box::new(PfaState::new(n1, n2)))
+        } else {
+            Self::Plan {
+                len,
+                owner: OnceLock::new(),
+            }
+        }
+    }
+
+    fn forward_with_pointwise(&self, data: &mut [F::Complex], spectrum: &[F::Complex]) {
+        match self {
+            Self::Direct => {
+                if !try_winograd_pair_forward_with_pointwise!(F, data, spectrum) {
+                    assert!(
+                        F::short_winograd::<false, false>(data),
+                        "invariant: direct Rader convolution lengths have a static kernel"
+                    );
+                    F::pointwise_mul(data, spectrum);
+                }
+            }
+            Self::Composite(state) => state.forward_with_pointwise(data, spectrum),
+            Self::Pfa(state) => {
+                state.execute::<false>(data);
+                F::pointwise_mul(data, spectrum);
+            }
+            Self::Plan { len, owner } => {
+                let plan = owner.get_or_init(|| {
+                    F::acquire_plan(
+                        Shape1D::new(*len)
+                            .expect("invariant: a Rader convolution length is non-zero"),
+                    )
+                });
+                plan.forward_complex_slice_inplace(data);
+                F::pointwise_mul(data, spectrum);
+            }
+        }
+    }
+
+    fn inverse(&self, data: &mut [F::Complex]) {
+        match self {
+            Self::Direct => assert!(
+                F::short_winograd::<true, true>(data),
+                "invariant: direct Rader convolution lengths have a static kernel"
+            ),
+            Self::Composite(state) => state.inverse(data),
+            Self::Pfa(state) => {
+                state.execute::<true>(data);
+                F::normalize(data, data.len());
+            }
+            Self::Plan { len, owner } => owner
+                .get_or_init(|| {
+                    F::acquire_plan(
+                        Shape1D::new(*len)
+                            .expect("invariant: a Rader convolution length is non-zero"),
+                    )
+                })
+                .inverse_complex_slice_inplace(data),
+        }
+    }
+}
+
 /// In-place circular convolution via forward FFT -> pointwise multiply -> inverse FFT.
 ///
 /// `padded` holds the input sequence on entry and the convolution result on exit.
@@ -91,48 +181,17 @@ pub(super) fn rader_convolve_inplace<F: MixedRadixScalar<Complex = eunomia::Comp
     padded: &mut [F::Complex],
     kernel_spectrum: &[F::Complex],
 ) {
-    let len = padded.len();
+    let state = ConvolutionState::<F>::new(padded.len());
+    rader_convolve_with_state(padded, kernel_spectrum, &state);
+}
 
-    // Fast-path: Winograd pair primes with fused forward+pointwise.
-    // Covers N = 11, 13, 17, 19, 23, 29, 31, 37, 41, 43, 47, 53.
-    // The forward Winograd DFT is fused with kernel-spectrum multiplication,
-    // eliminating the separate pointwise_mul pass.
-    if try_winograd_pair_forward_with_pointwise!(F, padded, kernel_spectrum) {
-        F::short_winograd::<true, true>(padded); // inverse + 1/N normalize
-        return;
-    }
-
-    // Fast-path: const-generic short Winograd codelet (other N ≤ 128).
-    // Covers small composites (6, 10, 12, 14, 64, 128, …) with zero dispatch-chain overhead.
-    if F::short_winograd::<false, false>(padded) {
-        F::pointwise_mul(padded, kernel_spectrum);
-        F::short_winograd::<true, true>(padded); // inverse + 1/N normalize
-        return;
-    }
-
-    if let Some(radices) =
-        crate::application::execution::kernel::mixed_radix::caches::cached_prime23_radices(len)
-    {
-        F::composite_forward_with_pointwise(padded, &radices, kernel_spectrum);
-        F::composite_inverse(padded, &radices);
-    } else if let Some((n1, n2)) =
-        crate::application::execution::kernel::mixed_radix::caches::cached_coprime_factors(len)
-    {
-        crate::application::execution::kernel::components::good_thomas::pfa_fft::<F, false>(
-            padded, n1, n2,
-        );
-        F::pointwise_mul(padded, kernel_spectrum);
-        crate::application::execution::kernel::components::good_thomas::pfa_fft::<F, true>(
-            padded, n1, n2,
-        );
-        F::normalize(padded, len);
-    } else {
-        // Trampoline: recursive dispatch for prime sub-convolution lengths
-        // that are too large for short Winograd and not prime23-composite.
-        rader_subconv_forward_inplace::<F>(padded);
-        F::pointwise_mul(padded, kernel_spectrum);
-        rader_subconv_inverse_inplace::<F>(padded);
-    }
+pub(super) fn rader_convolve_with_state<F: MixedRadixScalar<Complex = eunomia::Complex<F>>>(
+    padded: &mut [F::Complex],
+    kernel_spectrum: &[F::Complex],
+    state: &ConvolutionState<F>,
+) {
+    state.forward_with_pointwise(padded, kernel_spectrum);
+    state.inverse(padded);
 }
 
 /// In-place circular convolution via half-cyclic Winograd/Nussbaumer CRT split.
@@ -151,6 +210,25 @@ pub(super) fn rader_negacyclic_convolve_inplace<
     kernel_cyc_spectrum: &[F::Complex],
     kernel_neg_spectrum: &[F::Complex],
     twiddles: &[F::Complex],
+) {
+    let state = ConvolutionState::<F>::new(padded.len() / 2);
+    rader_negacyclic_convolve_with_state(
+        padded,
+        kernel_cyc_spectrum,
+        kernel_neg_spectrum,
+        twiddles,
+        &state,
+    );
+}
+
+pub(super) fn rader_negacyclic_convolve_with_state<
+    F: MixedRadixScalar<Complex = eunomia::Complex<F>>,
+>(
+    padded: &mut [F::Complex],
+    kernel_cyc_spectrum: &[F::Complex],
+    kernel_neg_spectrum: &[F::Complex],
+    twiddles: &[F::Complex],
+    state: &ConvolutionState<F>,
 ) {
     let m = padded.len() / 2;
     debug_assert_eq!(padded.len(), 2 * m);
@@ -196,47 +274,10 @@ pub(super) fn rader_negacyclic_convolve_inplace<
         j += 1;
     }
 
-    // --- Cyclic convolution of length m (modulo x^m - 1) ---
-    // Dispatch order: Winograd pair (fused) → short Winograd → prime23 composite (fused) → trampoline.
-    if !try_winograd_pair_forward_with_pointwise!(F, first, kernel_cyc_spectrum) {
-        if F::short_winograd::<false, false>(first) {
-            F::pointwise_mul(first, kernel_cyc_spectrum);
-        } else if let Some(radices) =
-            crate::application::execution::kernel::mixed_radix::caches::cached_prime23_radices(
-                first.len(),
-            )
-        {
-            F::composite_forward_with_pointwise(first, &radices, kernel_cyc_spectrum);
-        } else {
-            rader_subconv_forward_inplace::<F>(first);
-            F::pointwise_mul(first, kernel_cyc_spectrum);
-        }
-    }
-    // Inverse: short Winograd (normalized) → trampoline full dispatch.
-    if !F::short_winograd::<true, true>(first) {
-        rader_subconv_inverse_inplace::<F>(first);
-    }
-
-    // --- Negacyclic convolution of length m (modulo x^m + 1) ---
-    // Dispatch order: Winograd pair (fused) → short Winograd → prime23 composite (fused) → trampoline.
-    if !try_winograd_pair_forward_with_pointwise!(F, second, kernel_neg_spectrum) {
-        if F::short_winograd::<false, false>(second) {
-            F::pointwise_mul(second, kernel_neg_spectrum);
-        } else if let Some(radices) =
-            crate::application::execution::kernel::mixed_radix::caches::cached_prime23_radices(
-                second.len(),
-            )
-        {
-            F::composite_forward_with_pointwise(second, &radices, kernel_neg_spectrum);
-        } else {
-            rader_subconv_forward_inplace::<F>(second);
-            F::pointwise_mul(second, kernel_neg_spectrum);
-        }
-    }
-    // Inverse: short Winograd (normalized) → trampoline full dispatch.
-    if !F::short_winograd::<true, true>(second) {
-        rader_subconv_inverse_inplace::<F>(second);
-    }
+    state.forward_with_pointwise(first, kernel_cyc_spectrum);
+    state.inverse(first);
+    state.forward_with_pointwise(second, kernel_neg_spectrum);
+    state.inverse(second);
 
     // --- CRT recombination ---
     // The negacyclic half is untwisted here, eliminating a separate full pass.
@@ -269,24 +310,4 @@ pub(super) fn rader_negacyclic_convolve_inplace<
         second[j] = (c - n) * half;
         j += 1;
     }
-}
-
-/// Trampoline: keep recursive sub-convolution dispatch out of this frame.
-///
-/// When the sub-convolution length is prime, `forward_inplace` re-enters the
-/// full dispatch chain which may call back into Rader. `inline(never)` prevents
-/// debug builds from accumulating a large monomorphized stack frame.
-#[inline(never)]
-fn rader_subconv_forward_inplace<F: MixedRadixScalar<Complex = eunomia::Complex<F>>>(
-    data: &mut [F::Complex],
-) {
-    crate::application::execution::kernel::mixed_radix::forward_inplace::<F>(data);
-}
-
-/// Trampoline: keep recursive sub-convolution dispatch out of this frame.
-#[inline(never)]
-fn rader_subconv_inverse_inplace<F: MixedRadixScalar<Complex = eunomia::Complex<F>>>(
-    data: &mut [F::Complex],
-) {
-    crate::application::execution::kernel::mixed_radix::inverse_inplace::<F>(data);
 }

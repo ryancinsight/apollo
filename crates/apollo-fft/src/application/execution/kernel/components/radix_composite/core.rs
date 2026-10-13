@@ -1,7 +1,7 @@
 use eunomia::Complex;
 
 use super::arity::dispatch_radix_stage;
-use super::cache::CompositeCache;
+use super::cache::{CompositeCache, CompositeTables};
 use super::flat_pass::{FlatPassR2, FlatPassR3, FlatPassR4, FlatPassR5, FlatPassR7};
 use super::stockham_stage_fused_adaptive;
 use crate::application::execution::kernel::components::winograd::ShortWinogradScalar;
@@ -22,6 +22,7 @@ pub(super) fn composite_core_with_radices<
 >(
     data: &mut [Complex<F>],
     radices: &[usize],
+    tables: &CompositeTables<Complex<F>>,
     pointwise_spectrum: Option<&[Complex<F>]>,
 ) {
     let n = data.len();
@@ -35,7 +36,8 @@ pub(super) fn composite_core_with_radices<
         "composite radices must be lowered before execution"
     );
 
-    let (all_twiddles, stage_offsets) = F::cached_twiddles::<INVERSE>(radices);
+    let all_twiddles = &tables.twiddles;
+    let stage_offsets = &tables.offsets;
 
     // When n ≤ FUSE_THRESHOLD every stage is fused into one block (accumulated
     // radix product = n ≤ FUSE_THRESHOLD). Use the flat iterative Stockham path

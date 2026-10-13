@@ -54,6 +54,7 @@ fn interleaved_against_planar_by_core_type() {
                 .collect();
             let mut work = src.clone();
             let mut scratch = vec![Complex64::default(); batched::scratch_len(n)];
+            let planar_state = batched::PlanarState::<f64>::new(n);
             let blocks = if n <= 4096 { 4096u32 } else { 256 };
             let planar = {
                 let mut best = f64::INFINITY;
@@ -61,10 +62,8 @@ fn interleaved_against_planar_by_core_type() {
                     let t = std::time::Instant::now();
                     for _ in 0..blocks {
                         work.copy_from_slice(&src);
-                        batched::four_step_batched::<f64, false>(
-                            std::hint::black_box(&mut work),
-                            &mut scratch,
-                        );
+                        planar_state
+                            .execute::<false>(std::hint::black_box(&mut work), &mut scratch);
                     }
                     best = best.min(t.elapsed().as_nanos() as f64 / f64::from(blocks));
                 }
@@ -128,12 +127,10 @@ fn mid_sizes_against_the_batched_four_step_by_core_type() {
                 plan.forward_complex_slice_inplace(std::hint::black_box(&mut work));
             });
             let mut scratch = vec![Complex64::default(); batched::scratch_len(n)];
+            let planar_state = batched::PlanarState::<f64>::new(n);
             let four_step = best_block(|| {
                 work.copy_from_slice(&src);
-                batched::four_step_batched::<f64, false>(
-                    std::hint::black_box(&mut work),
-                    &mut scratch,
-                );
+                planar_state.execute::<false>(std::hint::black_box(&mut work), &mut scratch);
             });
             println!(
                 "MID cpu={landed:<2} ({}) n={n:<5} route={route:>9.1}ns batched={four_step:>9.1}ns ratio={:.2}",

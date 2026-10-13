@@ -286,7 +286,7 @@ where
 /// Runs the stage set over rows the caller has already bit-reversed.
 fn run_stages<T>(data: &mut [Complex<T>], plan: &BatchedPlan<T>)
 where
-    T: BatchedPlanCache<Complex = Complex<T>>,
+    T: BatchedPlanCache + crate::application::execution::kernel::mixed_radix::MixedRadixScalar,
 {
     let flat: &mut [T] = eunomia::layout::cast_slice_mut(data);
     hermes_simd::vectorize(InterleavedStages {
@@ -306,7 +306,7 @@ where
 /// callers admit lengths through the same gate as the planar sibling.
 pub(crate) fn four_step_interleaved<T, const INVERSE: bool>(data: &mut [Complex<T>])
 where
-    T: BatchedPlanCache<Complex = Complex<T>>,
+    T: crate::application::execution::kernel::mixed_radix::MixedRadixScalar<Complex = Complex<T>>,
 {
     let n = data.len();
     let k = n.trailing_zeros();

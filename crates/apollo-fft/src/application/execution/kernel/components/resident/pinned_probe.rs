@@ -59,10 +59,11 @@ fn resident_against_batched_and_the_references_by_core_type() {
         assert_eq!(landed, cpu, "processor binding must remain exact");
         let mut work = src.clone();
         let mut scratch = vec![Complex64::default(); batched::scratch_len(n)];
+        let planar_state = batched::PlanarState::<f64>::new(n);
 
         let batched_ns = best_block(|| {
             work.copy_from_slice(&src);
-            batched::four_step_batched::<f64, false>(std::hint::black_box(&mut work), &mut scratch);
+            planar_state.execute::<false>(std::hint::black_box(&mut work), &mut scratch);
         });
         let resident_ns = best_block(|| {
             work.copy_from_slice(&src);

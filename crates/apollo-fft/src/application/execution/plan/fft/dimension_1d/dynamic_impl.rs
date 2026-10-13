@@ -31,6 +31,10 @@ use super::executors::{
 use super::strategy::{arc_to_cow, generic_four_step_applies, PlanStrategy};
 use crate::application::execution::kernel::components::bluestein::BluesteinState;
 use crate::application::execution::kernel::components::column_route::State180;
+use crate::application::execution::kernel::components::four_step::FourStepState;
+use crate::application::execution::kernel::components::good_thomas::PfaState;
+use crate::application::execution::kernel::components::rader::RaderState;
+use crate::application::execution::kernel::components::radix_composite::CompositeState;
 use crate::application::execution::kernel::mixed_radix::scalar::plan_scratch::PlanScratch;
 use crate::application::execution::plan::fft::layout::with_c_order_view;
 
@@ -43,7 +47,12 @@ pub struct FftPlan1D<F: MixedRadixScalar> {
     // Cached variables to completely bypass enum matching in the hot path:
     pub(crate) n1: usize,
     pub(crate) n2: usize,
-    pub(crate) radices: Option<Cow<'static, [usize]>>,
+    /// Permutation tables retained by a reusable Good-Thomas route.
+    pub(crate) pfa: Option<Arc<PfaState<F>>>,
+    /// Stage tables retained by a reusable composite radix route.
+    pub(crate) composite: Option<Arc<CompositeState<F>>>,
+    /// Permutation and convolution tables retained by a reusable Rader route.
+    pub(crate) rader: Option<Arc<RaderState<F>>>,
     /// Complete forward table for Stockham or a split base route above 128.
     pub(crate) twiddle_fwd: Option<Arc<[F::Complex]>>,
     /// Inverse table, built on the first inverse execution rather than at
@@ -71,7 +80,9 @@ pub struct FftPlan1D<F: MixedRadixScalar> {
     /// holds four complexes a register.
     pub(crate) column180: Option<Arc<State180<F>>>,
     /// The chirp-z tables for a length every shaped route declines.
-    pub(crate) bluestein: Option<Arc<BluesteinState<F::Complex>>>,
+    pub(crate) bluestein: Option<Arc<BluesteinState<F>>>,
+    /// Tables retained by a reusable four-step route.
+    pub(crate) four_step: Option<Arc<FourStepState<F>>>,
 
     // Function pointers for execution routing, selected at construction for
     // this length on this host. The framed small power-of-two executors carry
@@ -90,7 +101,9 @@ impl<F: MixedRadixScalar> Clone for FftPlan1D<F> {
             strategy: self.strategy.clone(),
             n1: self.n1,
             n2: self.n2,
-            radices: self.radices.clone(),
+            pfa: self.pfa.clone(),
+            composite: self.composite.clone(),
+            rader: self.rader.clone(),
             twiddle_fwd: self.twiddle_fwd.clone(),
             twiddle_inv: self.twiddle_inv.clone(),
             base128: self.base128.clone(),
@@ -99,6 +112,7 @@ impl<F: MixedRadixScalar> Clone for FftPlan1D<F> {
             base64: self.base64.clone(),
             column180: self.column180.clone(),
             bluestein: self.bluestein.clone(),
+            four_step: self.four_step.clone(),
             // `OnceLock: Clone` clones the initialized state, so a clone of a
             // plan that has run an inverse keeps the table handle.
             forward_impl: self.forward_impl,
@@ -181,10 +195,28 @@ impl<F: MixedRadixScalar<Complex = Complex<F>>> FftPlan1D<F> {
             .expect("invariant: base-128 executor requires its plan state")
     }
 
-    pub(super) fn bluestein_state(&self) -> &BluesteinState<F::Complex> {
+    pub(super) fn bluestein_state(&self) -> &BluesteinState<F> {
         self.bluestein
             .as_deref()
             .expect("invariant: the Bluestein executor requires its plan state")
+    }
+
+    pub(super) fn composite_state(&self) -> &CompositeState<F> {
+        self.composite
+            .as_deref()
+            .expect("invariant: a composite executor requires its plan state")
+    }
+
+    pub(super) fn pfa_state(&self) -> &PfaState<F> {
+        self.pfa
+            .as_deref()
+            .expect("invariant: a Good-Thomas executor requires its plan state")
+    }
+
+    pub(super) fn rader_state(&self) -> &RaderState<F> {
+        self.rader
+            .as_deref()
+            .expect("invariant: a Rader executor requires its plan state")
     }
 
     pub(super) fn column180_state(&self) -> &State180<F> {
@@ -365,12 +397,16 @@ impl<F: MixedRadixScalar<Complex = Complex<F>>> FftPlan1D<F> {
         // Cache parameters and assign specialized function pointers
         let mut n1 = 0;
         let mut n2 = 0;
-        let mut radices_field = None;
+        let mut pfa = None;
+        let mut composite = None;
+        let mut rader = None;
         let mut twiddle_fwd = None;
         // Lazy: no strategy populates the inverse table at construction.
         let twiddle_inv = std::sync::OnceLock::new();
 
         let mut bluestein = None;
+        let four_step =
+            matches!(strategy, PlanStrategy::FourStep).then(|| Arc::new(FourStepState::new(n)));
         let mut forward_impl: unsafe fn(&Self, &mut [F::Complex]) = exec_identity::<F>;
         let mut inverse_impl: unsafe fn(&Self, &mut [F::Complex]) = exec_identity::<F>;
         let mut inverse_unnorm_impl: unsafe fn(&Self, &mut [F::Complex]) = exec_identity::<F>;
@@ -585,12 +621,12 @@ impl<F: MixedRadixScalar<Complex = Complex<F>>> FftPlan1D<F> {
             } => {
                 n1 = factor1;
                 n2 = factor2;
+                pfa = Some(Arc::new(PfaState::new(factor1, factor2)));
                 forward_impl = exec_good_thomas_forward::<F>;
                 inverse_impl = exec_good_thomas_inverse::<F>;
                 inverse_unnorm_impl = exec_good_thomas_inverse_unnorm::<F>;
             }
             PlanStrategy::Composite { radices } => {
-                radices_field = Some(Cow::clone(radices));
                 if column180.is_some() {
                     forward_impl = exec_column180_forward::<F>;
                     inverse_impl = exec_column180_inverse::<F>;
@@ -600,12 +636,14 @@ impl<F: MixedRadixScalar<Complex = Complex<F>>> FftPlan1D<F> {
                     inverse_impl = exec_base128_inverse::<F>;
                     inverse_unnorm_impl = exec_base128_inverse_unnorm::<F>;
                 } else {
+                    composite = Some(Arc::new(CompositeState::new(radices)));
                     forward_impl = exec_composite_forward::<F>;
                     inverse_impl = exec_composite_inverse::<F>;
                     inverse_unnorm_impl = exec_composite_inverse_unnorm::<F>;
                 }
             }
             PlanStrategy::Rader => {
+                rader = Some(Arc::new(RaderState::new(n)));
                 forward_impl = exec_rader_forward::<F>;
                 inverse_impl = exec_rader_inverse::<F>;
                 inverse_unnorm_impl = exec_rader_inverse_unnorm::<F>;
@@ -624,7 +662,9 @@ impl<F: MixedRadixScalar<Complex = Complex<F>>> FftPlan1D<F> {
             strategy,
             n1,
             n2,
-            radices: radices_field,
+            pfa,
+            composite,
+            rader,
             twiddle_fwd,
             twiddle_inv,
             base128,
@@ -633,6 +673,7 @@ impl<F: MixedRadixScalar<Complex = Complex<F>>> FftPlan1D<F> {
             base64,
             column180,
             bluestein,
+            four_step,
             forward_impl,
             inverse_impl,
             inverse_unnorm_impl,
