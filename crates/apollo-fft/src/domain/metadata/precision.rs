@@ -134,4 +134,16 @@ impl PrecisionProfile {
         storage: StoragePrecision::F16,
         compute: ComputePrecision::F64,
     };
+
+    /// High-accuracy-storage profile with `f32` compute.
+    ///
+    /// The accelerator typed paths narrow `f64`/`Complex64` storage into
+    /// `Complex32` device buffers and accumulate in `f32`, so the storage
+    /// records the caller's element while the compute records the
+    /// arithmetic the device actually executed.
+    pub const F64_STORAGE_F32_COMPUTE: Self = Self {
+        mode: PrecisionMode::HighAccuracy,
+        storage: StoragePrecision::F64,
+        compute: ComputePrecision::F32,
+    };
 }

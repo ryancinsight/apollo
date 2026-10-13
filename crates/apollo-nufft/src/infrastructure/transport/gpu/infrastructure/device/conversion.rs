@@ -14,7 +14,7 @@ pub(crate) fn validate_pair_lengths(expected: usize, actual: usize) -> NufftWgpu
 pub(crate) fn validate_typed_profile<T: NufftComplexStorage>(
     actual: PrecisionProfile,
 ) -> NufftWgpuResult<()> {
-    let expected = T::PROFILE;
+    let expected = T::DEVICE_PROFILE;
     if actual.storage == expected.storage && actual.compute == expected.compute {
         Ok(())
     } else {
