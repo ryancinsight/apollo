@@ -119,3 +119,8 @@ mod tests {
         assert_eq!(core::mem::size_of::<PreferredArch>(), 0);
     }
 }
+
+/// Release this module's Hartley-row thread-local scratch pool on the calling thread.
+pub fn release_direct_scratch() {
+    HARTLEY_ROW_SCRATCH.with(|pool| pool.release());
+}

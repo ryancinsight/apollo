@@ -48,3 +48,8 @@ pub fn dht_fast(signal: &[f64], output: &mut [f64]) {
         });
     });
 }
+
+/// Release this module's complex thread-local scratch pool on the calling thread.
+pub fn release_fast_scratch() {
+    COMPLEX_SCRATCH_POOL.with(|pool| pool.release());
+}
