@@ -6,13 +6,16 @@ use super::butterfly::{
     hybrid_radix8x512_precise_avx_fma, hybrid_radix8x512_reduced_avx_fma,
     stockham_mixed_twiddle_precise, stockham_mixed_twiddle_reduced,
 };
+#[cfg(target_arch = "x86_64")]
 use super::butterfly::{stage_quad_impl, stage_triple_impl};
 use super::precision::{PreciseStockham, ReducedStockham, StockhamPrecision};
 #[cfg(target_arch = "x86_64")]
 use super::precision::{PreciseStockhamAvxFma, ReducedStockhamAvxFma};
+#[cfg(target_arch = "x86_64")]
 use super::*;
 #[cfg(target_arch = "x86_64")]
 use crate::application::execution::kernel::components::stockham::butterfly::stage_triple_groups_eight_lanes;
+#[cfg(target_arch = "x86_64")]
 use eunomia::{Complex32, Complex64};
 
 #[cfg(target_arch = "x86_64")]

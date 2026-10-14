@@ -154,7 +154,7 @@ where
             reference[(k * BLOCKS + q) * 2 + 1] = lanes[(q * 256 + k) * 2 + 1];
         }
     }
-    let mut narrow = vec![T::from_precise(0.0); 2 * n];
+    let mut narrow = vec![T::from_precise(-17.0); 2 * n];
     let mut wide = vec![T::from_precise(0.0); 2 * n];
     let narrow_handled =
         hermes_simd::vectorize_lanes::<4, T, _>(super::super::split_boundary::InterleaveBlocks::<
@@ -176,8 +176,17 @@ where
             block_lanes: 512,
         })
         .unwrap_or(false);
-    assert!(narrow_handled, "four-lane interleave must be handled");
-    assert_eq!(narrow, reference, "four-lane interleave output mismatch");
+    let available = super::super::super::lane_capability::exact_lanes_supported::<4, T>();
+    assert_eq!(narrow_handled, available, "four-lane interleave capability");
+    if available {
+        assert_eq!(narrow, reference, "four-lane interleave output mismatch");
+    } else {
+        assert_eq!(
+            narrow,
+            vec![T::from_precise(-17.0); 2 * n],
+            "decline preserves output"
+        );
+    }
     let plan_is_wide = super::super::instance_major::Plan8x16::<T>::new_if_supported::<false>()
         .is_some_and(|plan| plan.native_eight_lanes());
     if plan_is_wide {

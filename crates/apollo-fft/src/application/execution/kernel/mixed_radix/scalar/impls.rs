@@ -14,6 +14,7 @@ use super::small_pot::{
     small_pot_inplace_sized_precise_framed, small_pot_inplace_sized_reduced,
     small_pot_inplace_sized_reduced_framed,
 };
+use super::trait_def::private::Sealed;
 use super::trait_def::MixedRadixScalar;
 use super::twiddle_constants::{
     TWIDDLES_FWD_PRECISE, TWIDDLES_FWD_REDUCED, TWIDDLES_INV_PRECISE, TWIDDLES_INV_REDUCED,
@@ -578,7 +579,7 @@ impl MixedRadixScalar for f64 {
         // route from N = 256 upward — 1.5x on an E-core, 5 to 6x on a P-core —
         // so admissible sizes at or past the crossover leave the sized path.
         // The f32 impl keeps the incumbent route until measured on its own.
-        if one_dimensional_uses_four_step(data.len()) {
+        if Self::SIZED_FOUR_STEP && one_dimensional_uses_four_step(data.len()) {
             FourStep::run::<Self, INVERSE, NORMALIZE>(data, twiddles);
             return;
         }

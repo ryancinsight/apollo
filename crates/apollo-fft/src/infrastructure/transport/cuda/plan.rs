@@ -234,6 +234,20 @@ mod tests {
 
     use super::{validate_length, CudaFft1d};
 
+    #[cfg(all(target_os = "macos", target_arch = "aarch64"))]
+    #[test]
+    fn missing_native_cuda_driver_retains_typed_absence_diagnostics() {
+        let error = CudaDevice::try_default().expect_err("Apple Silicon has no CUDA driver");
+        let HephaestusError::AdapterUnavailable { message } = error else {
+            panic!("missing CUDA driver must retain adapter-unavailable identity: {error}");
+        };
+        assert!(message.starts_with("CUDA driver library libcuda.so.1:"));
+        assert!(
+            message.contains("tried:"),
+            "dyld attempted-path diagnostic: {message}"
+        );
+    }
+
     fn cuda_or_skip() -> Option<CudaDevice> {
         match CudaDevice::try_default() {
             Ok(device) => Some(device),

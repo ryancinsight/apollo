@@ -91,7 +91,7 @@ where
     // 2048 to 32768 are column-first chains over the width's base where it
     // builds, and 131072 at four lanes (ADR 0061); the four-step route
     // serves the rest past 4096.
-    if N == 1024
+    if N <= 1024
         || ((N == 2048 || N == 8192 || N == 16384 || N == 131_072) && dynamic.base256.is_some())
         || ((N == 4096 || N == 32_768 || N == 262_144) && dynamic.base512.is_some())
     {
@@ -158,4 +158,32 @@ fn four_step_plan_past_planar_domain_owns_generic_state() {
 fn generic_four_step_plans_match_sparse_fourier_series() {
     check_routes::<f32>(f64::from(f32::EPSILON) / 2.0);
     check_routes::<f64>(f64::EPSILON / 2.0);
+}
+
+#[test]
+fn sized_plan_fallback_retains_its_owner_and_exact_spectrum() {
+    for n in [256, 512, 1024] {
+        let plan = FftPlan1D::<f64>::new(Shape1D::new(n).expect("nonzero"));
+        if plan.base256.is_none() && plan.base512.is_none() {
+            assert!(matches!(plan.strategy, PlanStrategy::PowerOfTwo { .. }));
+            let cloned = plan.clone();
+            assert!(std::sync::Arc::ptr_eq(
+                plan.four_step
+                    .as_ref()
+                    .expect("fallback owns prepared state"),
+                cloned
+                    .four_step
+                    .as_ref()
+                    .expect("clone retains prepared state"),
+            ));
+            assert_eq!(plan.twiddle_fwd.as_deref().map_or(0, <[_]>::len), 0);
+        } else {
+            assert!(matches!(plan.strategy, PlanStrategy::PowerOfTwo { .. }));
+        }
+    }
+    // Both plan forms execute all three directions against the existing
+    // exact dyadic/fourth-root oracle on every host, with its original bound.
+    check_length::<f64, 256>(f64::EPSILON / 2.0);
+    check_length::<f64, 512>(f64::EPSILON / 2.0);
+    check_length::<f64, 1024>(f64::EPSILON / 2.0);
 }

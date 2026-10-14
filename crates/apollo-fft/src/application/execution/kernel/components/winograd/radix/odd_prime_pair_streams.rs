@@ -14,8 +14,10 @@
 //! multiply-add rounding changes (one FMA rounding instead of two),
 //! within the same f32 tolerance the single-call leaf documents.
 
+#[cfg(any(test, target_arch = "x86_64"))]
 use eunomia::Complex32;
 
+#[cfg(target_arch = "x86_64")]
 use super::odd_prime_pair::PrimePairTable;
 #[cfg(target_arch = "x86_64")]
 use super::odd_prime_pair_interleave::{deinterleave8, store_interleaved8};
@@ -53,11 +55,13 @@ pub(crate) fn try_dft11_streams<const INVERSE: bool>(
 
 /// Pair tables in (m, k) orientation for stream-major dots: `cos_mk[m][k]`
 /// is `cos_table[k][m]`, so the inner k loop walks one contiguous row.
+#[cfg(target_arch = "x86_64")]
 struct PairTablesMk {
     cos_mk: [[f32; 5]; 5],
     sin_mk: [[f32; 5]; 5],
 }
 
+#[cfg(target_arch = "x86_64")]
 static PAIR11_MK: std::sync::LazyLock<PairTablesMk> = std::sync::LazyLock::new(|| {
     let cos = <f32 as PrimePairTable<11, 5>>::cos_table();
     let sin = <f32 as PrimePairTable<11, 5>>::sin_table();

@@ -35,6 +35,7 @@ pub(crate) fn try_dft121_chunked<const INVERSE: bool>(data: &mut [Complex32; 121
 ///
 /// Computed once from f64 sin/cos, matching the generated codelet's
 /// `from_precise` constants; the inverse pass conjugates on load.
+#[cfg(target_arch = "x86_64")]
 static TWIDDLES121: std::sync::LazyLock<[[Complex32; 11]; 11]> = std::sync::LazyLock::new(|| {
     core::array::from_fn(|k1| {
         core::array::from_fn(|j| {
@@ -129,6 +130,78 @@ mod tests {
     use crate::application::execution::kernel::direct::{dft_forward, dft_inverse};
     use eunomia::{Complex32, Complex64};
 
+    fn chunked_available() -> bool {
+        #[cfg(target_arch = "x86_64")]
+        {
+            std::arch::is_x86_feature_detected!("avx2")
+                && std::arch::is_x86_feature_detected!("fma")
+        }
+        #[cfg(not(target_arch = "x86_64"))]
+        {
+            false
+        }
+    }
+
+    fn bits(values: &[Complex32]) -> Vec<(u32, u32)> {
+        values
+            .iter()
+            .map(|x| (x.re.to_bits(), x.im.to_bits()))
+            .collect()
+    }
+
+    /// Assert exact dispatch admission. An unsupported leaf must preserve all
+    /// bits; the public route then executes the same mathematical workload.
+    fn exercise_stream_route<const INVERSE: bool>(
+        base: &mut [Complex32],
+        in_starts: &[usize; 11],
+        in_step: usize,
+        out_starts: &[usize; 11],
+        out_step: usize,
+    ) {
+        let original = base.to_vec();
+        let handled = try_dft11_streams::<INVERSE>(base, in_starts, in_step, out_starts, out_step);
+        assert_eq!(handled, chunked_available(), "AVX2/FMA admission");
+        if !handled {
+            assert_eq!(
+                bits(base),
+                bits(&original),
+                "decline preserves every input bit"
+            );
+            let plan = crate::FftPlan1D::<f32>::new(crate::Shape1D::new(11).expect("nonzero"));
+            for stream in 0..11 {
+                let mut values =
+                    core::array::from_fn::<_, 11, _>(|i| original[in_starts[stream] + i * in_step]);
+                if INVERSE {
+                    plan.inverse_complex_slice_unnorm_inplace(&mut values);
+                } else {
+                    plan.forward_complex_slice_inplace(&mut values);
+                }
+                for (i, value) in values.into_iter().enumerate() {
+                    base[out_starts[stream] + i * out_step] = value;
+                }
+            }
+        }
+    }
+
+    fn exercise_transform_route<const INVERSE: bool>(base: &mut [Complex32; 121]) {
+        let original = *base;
+        let handled = try_dft121_chunked::<INVERSE>(base);
+        assert_eq!(handled, chunked_available(), "AVX2/FMA admission");
+        if !handled {
+            assert_eq!(
+                bits(base),
+                bits(&original),
+                "decline preserves every input bit"
+            );
+            let plan = crate::FftPlan1D::<f32>::new(crate::Shape1D::new(121).expect("nonzero"));
+            if INVERSE {
+                plan.inverse_complex_slice_unnorm_inplace(base);
+            } else {
+                plan.forward_complex_slice_inplace(base);
+            }
+        }
+    }
+
     fn input_11(kind: usize) -> [Complex32; 11] {
         match kind {
             0 => [Complex32::new(0.0, 0.0); 11],
@@ -183,10 +256,7 @@ mod tests {
                 .collect();
             let starts: [usize; 11] = core::array::from_fn(|s| s * 11);
             let mut candidate = flat.clone();
-            assert!(
-                try_dft11_streams::<false>(&mut candidate, &starts, 1, &starts, 1),
-                "chunked streams require AVX2+FMA on this host"
-            );
+            exercise_stream_route::<false>(&mut candidate, &starts, 1, &starts, 1);
             let err = max_err(&as_f64(&candidate), &expected);
             assert!(err < 1e-5, "streams forward kind={kind} max_err={err:.2e}");
 
@@ -195,10 +265,7 @@ mod tests {
                 .flat_map(|stream| dft_inverse(&as_f64(stream)).into_iter().map(|x| x * 11.0))
                 .collect();
             let mut candidate_inv = flat;
-            assert!(
-                try_dft11_streams::<true>(&mut candidate_inv, &starts, 1, &starts, 1),
-                "chunked streams require AVX2+FMA on this host"
-            );
+            exercise_stream_route::<true>(&mut candidate_inv, &starts, 1, &starts, 1);
             let err_inv = max_err(&as_f64(&candidate_inv), &expected_inv);
             assert!(
                 err_inv < 1e-5,
@@ -220,10 +287,7 @@ mod tests {
                 base[in_starts[s] + i * in_step] = streams[s][i];
             }
         }
-        assert!(
-            try_dft11_streams::<INVERSE>(&mut base, in_starts, in_step, out_starts, out_step),
-            "chunked streams require AVX2+FMA on this host"
-        );
+        exercise_stream_route::<INVERSE>(&mut base, in_starts, in_step, out_starts, out_step);
         let mut bits = Vec::with_capacity(121);
         for s in 0..11 {
             for i in 0..11 {
@@ -275,10 +339,7 @@ mod tests {
             let signal64 = as_f64(&signal);
             let expected = dft_forward(&signal64);
             let mut candidate = signal;
-            assert!(
-                try_dft121_chunked::<false>(&mut candidate),
-                "chunked 121 requires AVX2+FMA on this host"
-            );
+            exercise_transform_route::<false>(&mut candidate);
             let err = max_err(&as_f64(&candidate), &expected);
             assert!(err < 1e-4, "121 forward kind={kind} max_err={err:.2e}");
 
@@ -287,10 +348,7 @@ mod tests {
                 .map(|x| x * 121.0)
                 .collect();
             let mut candidate_inv = signal;
-            assert!(
-                try_dft121_chunked::<true>(&mut candidate_inv),
-                "chunked 121 requires AVX2+FMA on this host"
-            );
+            exercise_transform_route::<true>(&mut candidate_inv);
             let err_inv = max_err(&as_f64(&candidate_inv), &expected_inv);
             assert!(
                 err_inv < 1e-4,

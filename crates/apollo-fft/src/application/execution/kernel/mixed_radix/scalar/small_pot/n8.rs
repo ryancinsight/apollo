@@ -41,6 +41,7 @@
 //! radix-2, but the outputs then need the same four permutes *and* a third
 //! twiddled register, so it trades one multiply in for nothing.
 
+#[cfg(any(test, target_arch = "x86_64"))]
 use eunomia::Complex64;
 
 #[cfg(target_arch = "x86_64")]

@@ -6,6 +6,22 @@ Change-class tags: [patch] backward-compatible fix, [minor] additive non-breakin
 
 ---
 
+## [apollo-fft 0.28.2]
+
+### Fixed
+
+- [patch] Reusable power-of-two plans retain the four-step state used by the
+  scalar-specific sized policy. Warmed real-half, inverse, static, and QFT
+  execution keeps its zero-allocation contract on hosts without native bases.
+- Native-width and AVX2/FMA tests validate exact admission and unchanged
+  operands on decline, then exercise the public fallback under the existing
+  direct-transform and bitwise-layout oracles. No numerical bounds change.
+- Architecture-private tables, imports, and codelets compile only with their
+  users; ARM warning-denied lint has no blanket diagnostic waivers.
+- The lock adopts compatible Hephaestus 0.20.4 at PR #465's reviewed merge,
+  preserving every other provider pin. Missing dyld images retain typed CUDA
+  adapter absence instead of reporting a present-but-broken driver.
+
 ## [Unreleased]
 
 ### Breaking

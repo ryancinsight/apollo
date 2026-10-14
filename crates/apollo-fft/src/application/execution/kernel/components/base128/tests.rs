@@ -137,7 +137,7 @@ fn assert_base64_matches_direct<const INVERSE: bool>() {
 
 fn assert_base256_matches_direct<T, const INVERSE: bool>(unit_roundoff: f64, must_run: bool)
 where
-    T: crate::application::execution::kernel::mixed_radix::MixedRadixScalar
+    T: crate::application::execution::kernel::mixed_radix::MixedRadixScalar<Complex = Complex<T>>
         + eunomia::FloatElement
         + Into<f64>,
     Complex<T>: eunomia::layout::Pod,
@@ -147,21 +147,24 @@ where
         .iter()
         .map(|c| Complex::new(T::from_f64(c.re), T::from_f64(c.im)))
         .collect();
-    let Some(plan) = Plan256::<T>::new_if_supported::<INVERSE>() else {
-        assert!(
-            !must_run,
-            "the pinned host must provide a native base capability"
-        );
-        return;
-    };
     let untouched = actual.clone();
-    if !transform_256::<T, INVERSE, false>(&mut actual, &plan) {
-        assert!(!must_run, "either native width must run the 32-sample rows");
+    let handled = Plan256::<T>::new_if_supported::<INVERSE>()
+        .is_some_and(|plan| transform_256::<T, INVERSE, false>(&mut actual, &plan));
+    assert_eq!(
+        handled, must_run,
+        "base capability must match native dispatch"
+    );
+    if !handled {
         assert_eq!(
             actual, untouched,
             "a width decline must not mutate the input"
         );
-        return;
+        let fallback = crate::FftPlan1D::<T>::new(crate::Shape1D::new(256).expect("nonzero"));
+        if INVERSE {
+            fallback.inverse_complex_slice_unnorm_inplace(&mut actual);
+        } else {
+            fallback.forward_complex_slice_inplace(&mut actual);
+        }
     }
     let expected = dft(&source, INVERSE);
     let actual: Vec<Complex64> = actual
@@ -237,10 +240,13 @@ fn base512_matches_the_direct_transform_in_both_precisions_and_directions() {
 
 #[test]
 fn base256_matches_the_direct_transform_in_both_precisions_and_directions() {
-    assert_base256_matches_direct::<f64, false>(f64::EPSILON, true);
-    assert_base256_matches_direct::<f64, true>(f64::EPSILON, true);
-    assert_base256_matches_direct::<f32, false>(f64::from(f32::EPSILON), true);
-    assert_base256_matches_direct::<f32, true>(f64::from(f32::EPSILON), true);
+    use crate::application::execution::kernel::components::lane_capability::native_lanes_supported;
+    let precise = native_lanes_supported::<4, f64>();
+    let reduced = native_lanes_supported::<4, f32>() || native_lanes_supported::<8, f32>();
+    assert_base256_matches_direct::<f64, false>(f64::EPSILON, precise);
+    assert_base256_matches_direct::<f64, true>(f64::EPSILON, precise);
+    assert_base256_matches_direct::<f32, false>(f64::from(f32::EPSILON), reduced);
+    assert_base256_matches_direct::<f32, true>(f64::from(f32::EPSILON), reduced);
 }
 
 #[test]
@@ -1155,7 +1161,7 @@ where
             reference[(row * 128 + j) * 2 + 1] = lanes[(j * BLOCKS + b) * 2 + 1];
         }
     }
-    let mut narrow = vec![T::from_precise(0.0); 2 * n];
+    let mut narrow = vec![T::from_precise(-17.0); 2 * n];
     let mut wide = vec![T::from_precise(0.0); 2 * n];
     let narrow_handled =
         hermes_simd::vectorize_lanes::<4, T, _>(super::split_boundary::GatherBlocks::<
@@ -1180,8 +1186,17 @@ where
     // The four-lane request lands on a native or emulated four-lane frame
     // everywhere this suite runs; it must handle and match bit-exactly
     // (the pass moves values, computing nothing).
-    assert!(narrow_handled, "four-lane gather must be handled");
-    assert_eq!(narrow, reference, "four-lane gather output mismatch");
+    let available = super::super::lane_capability::exact_lanes_supported::<4, T>();
+    assert_eq!(narrow_handled, available, "four-lane gather capability");
+    if available {
+        assert_eq!(narrow, reference, "four-lane gather output mismatch");
+    } else {
+        assert_eq!(
+            narrow,
+            vec![T::from_precise(-17.0); 2 * n],
+            "decline preserves output"
+        );
+    }
     // The eight-lane request is handled exactly where the base plan selects
     // the eight-lane layout; there it must match the same reference.
     let plan_is_wide = super::instance_major::Plan8x16::<T>::new_if_supported::<false>()
