@@ -215,6 +215,26 @@ fn with_observable_analytic_workspace<R>(
     OBSERVABLE_ANALYTIC_SCRATCH.with(|scratch| scratch.with_scratch(len, f))
 }
 
+/// Release this module's three thread-local workspace pools on the calling
+/// thread: capacities return to their recorded provisions (zero unless a
+/// bounded provision was recorded). Called by the crate-level release;
+/// the eighth slice of APOLLO-MEM-SIBLING-THREAD-SCRATCH.
+pub fn release_workspace_scratch() {
+    TYPED_INPUT64_SCRATCH.with(|pool| pool.release());
+    TYPED_OUTPUT64_SCRATCH.with(|pool| pool.release());
+    OBSERVABLE_ANALYTIC_SCRATCH.with(|pool| pool.release());
+}
+
+/// Release every thread-local scratch pool this crate owns on the calling
+/// thread: the plan workspaces and the direct quadrature pool. The eighth
+/// slice of APOLLO-MEM-SIBLING-THREAD-SCRATCH, following the apollo-fwht,
+/// apollo-gft, apollo-dctdst, apollo-czt, apollo-nufft, apollo-dht, and
+/// apollo-frft precedents.
+pub fn release_scratch() {
+    release_workspace_scratch();
+    crate::infrastructure::kernel::direct::release_direct_scratch();
+}
+
 #[cfg(test)]
 fn typed_workspace_capacities() -> (usize, usize) {
     TYPED_INPUT64_SCRATCH
@@ -443,6 +463,20 @@ mod tests {
         for (actual, expected) in second.iter().zip(first.iter()) {
             assert_eq!(actual.to_bits(), expected.to_bits());
         }
+
+        release_scratch();
+        assert_eq!(
+            typed_workspace_capacities(),
+            (0, 0),
+            "release must return every typed pool to baseline"
+        );
+        plan.transform_typed_into(&signal, &mut second, PrecisionProfile::LOW_PRECISION_F32)
+            .expect("typed transform after release");
+        assert_eq!(
+            typed_workspace_capacities(),
+            after_second,
+            "the pools must serve after release"
+        );
     }
 
     #[test]

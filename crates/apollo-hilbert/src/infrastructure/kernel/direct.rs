@@ -110,6 +110,14 @@ fn with_quadrature_analytic_workspace<R>(
     QUADRATURE_ANALYTIC_SCRATCH.with(|pool| pool.with_scratch(len, f))
 }
 
+/// Release this module's thread-local quadrature scratch pool on the calling
+/// thread: capacity returns to its recorded provision (zero unless a
+/// bounded provision was recorded). Called by the crate-level release;
+/// the eighth slice of APOLLO-MEM-SIBLING-THREAD-SCRATCH.
+pub fn release_direct_scratch() {
+    QUADRATURE_ANALYTIC_SCRATCH.with(|pool| pool.release());
+}
+
 #[cfg(test)]
 fn quadrature_analytic_workspace_capacity() -> usize {
     QUADRATURE_ANALYTIC_SCRATCH.with(|pool| pool.capacity())
