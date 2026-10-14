@@ -11,7 +11,7 @@
 use super::plan::{frft, frft_leto, FrftPlan};
 use crate::domain::contracts::error::FrftError;
 use apollo_fft::{PrecisionProfile, F16};
-use eunomia::{Complex32, Complex64};
+use eunomia::{Complex32, Complex64, FloatElement};
 use leto::Array1;
 
 #[test]
@@ -27,7 +27,7 @@ fn leto_forward_and_inverse_match_leto_path() {
     let n = 8;
     let plan = FrftPlan::new(n, 0.75).expect("valid plan");
     let signal = (0..n)
-        .map(|i| Complex64::new((i as f64 * 0.17).cos(), (i as f64 * 0.23).sin()))
+        .map(|i| Complex64::new((f64::from_count(i) * 0.17).cos(), (f64::from_count(i) * 0.23).sin()))
         .collect::<Vec<_>>();
     let owned_input = Array1::from(signal.clone());
     let leto_input = leto::Array1::from_shape_vec([n], signal).expect("leto input");
@@ -64,7 +64,7 @@ fn leto_forward_accepts_strided_logical_view() {
 
     let n = 8;
     let logical = (0..n)
-        .map(|i| Complex64::new((i as f64 * 0.19).sin(), (i as f64 * 0.29).cos()))
+        .map(|i| Complex64::new((f64::from_count(i) * 0.19).sin(), (f64::from_count(i) * 0.29).cos()))
         .collect::<Vec<_>>();
     let interleaved = logical
         .iter()
