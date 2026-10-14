@@ -5,17 +5,17 @@ through `apollo-wavelet`.
 
 ## Discrete Wavelet Transform (DWT)
 
-```rust,ignore
-use apollo_wavelet::{DwtPlan, DiscreteWavelet};
+```rust
+{{#include ../../crates/apollo-wavelet/examples/book_wavelet_dwt.rs}}
+```
 
-let plan = DwtPlan::new(
-    wavelet: DiscreteWavelet::Daubechies4,
-    levels:  5,
-    signal_length: 1024,
-)?;
+### Haar Closed Form
 
-let coeffs = plan.forward(&signal)?;  // DwtCoefficients
-let reconstructed = plan.inverse(&coeffs)?;
+The orthonormal Haar stage maps each sample pair to its scaled sum and
+difference, which the coefficients expose directly:
+
+```rust
+{{#include ../../crates/apollo-wavelet/examples/book_dwt_haar.rs}}
 ```
 
 ### Supported Wavelets
@@ -27,18 +27,8 @@ let reconstructed = plan.inverse(&coeffs)?;
 
 ## Continuous Wavelet Transform (CWT)
 
-```rust,ignore
-use apollo_wavelet::{CwtPlan, ContinuousWavelet};
-
-let plan = CwtPlan::new(
-    wavelet:     ContinuousWavelet::Morlet,
-    scale_min:   1.0,
-    scale_max:   128.0,
-    num_scales:  64,
-    signal_length: 1024,
-)?;
-
-let scalogram = plan.forward(&signal)?;  // CwtCoefficients: [scales, time]
+```rust
+{{#include ../../crates/apollo-wavelet/examples/book_wavelet_cwt.rs}}
 ```
 
 ### Supported Analysis Wavelets
@@ -46,7 +36,7 @@ let scalogram = plan.forward(&signal)?;  // CwtCoefficients: [scales, time]
 | Wavelet | Description |
 |---------|-------------|
 | `Ricker` | Mexican hat / Ricker wavelet |
-| `Morlet` | Complex Morlet; frequency-localized |
+| `Morlet { omega0 }` | Real Morlet with angular carrier frequency `omega0` |
 
 ## Storage
 

@@ -16,25 +16,14 @@ inverse transform.
 
 ## `Normalization` Mode
 
-The `PrecisionProfile` carries a `Normalization` enum:
-
-| Mode | Forward | Inverse | Use |
-|------|---------|---------|-----|
-| `Backward` (default) | none | 1/N | Standard convention |
-| `Forward` | 1/N | none | Analysis-first workflows |
-| `Ortho` | 1/√N | 1/√N | Unitary; Parseval without factor |
+Backends advertise `Normalization::FftwCompatible`: the forward transform
+is unnormalized and the inverse carries the `1/N` volume factor, so the
+time-domain energy equals the spectral energy divided by `N`.
 
 ## Energy Verification
 
-```rust,ignore
-use apollo_fft::{fft_1d_array, PrecisionProfile, Normalization};
-
-let profile = PrecisionProfile::with_normalization(Normalization::Ortho);
-let spectrum = fft_1d_array_with_profile(&signal, profile)?;
-
-let time_energy:  f64 = signal.iter().map(|x| x * x).sum();
-let freq_energy: f64 = spectrum.iter().map(|c| c.norm_sqr()).sum();
-assert!((time_energy - freq_energy).abs() < 1e-10);
+```rust
+{{#include ../../crates/apollo-fft/examples/book_fft_parseval_energy.rs}}
 ```
 
 ## Importance for kwavers and ritk
