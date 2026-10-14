@@ -32,5 +32,7 @@ jobs:
       output-path: target/book/apollo
       mdbook-test: true
       rust-toolchain: "1.97.0"
-      cargo-package: apollo-fft
-      cargo-crate: apollo_fft
+      # apollo-validation depends on every transform crate, so building it
+      # stages all sibling rlibs for `mdbook test --library-path`.
+      cargo-package: apollo-validation
+      cargo-crate: apollo_validation
