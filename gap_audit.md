@@ -17,6 +17,22 @@
 - The SemVer comparison is being repaired in Atlas to build both committed
   source graphs under `--locked`; fresh provider resolution is not a verdict.
 
+<a id="apollo-lane-buffer-safety"></a>
+## APOLLO-LANE-BUFFER-SAFETY — Safe deterministic-lane element ownership [major] — implemented
+
+- Current main `d5e83ca8` retains unrestricted byte-zero initialization after PR #651.
+- Baseline reproduction: safe `NonZeroU8::zeros` compiles; Miri rejects reading
+  its invalid zero value. Independent native checks fail the allocation's
+  8192-byte alignment guarantee and observe zero of three required ZST drops.
+- `apollo-alloc` 0.17.0 constrains only `zeros` by `bytemuck::Zeroable`, copies
+  initialized `Copy` values into raw storage, aligns to both T and the page,
+  and destroys all elements before freeing storage, including on unwinding.
+- Acceptance: 12 allocator value/boundary/drop tests, two compile-fail doctests,
+  Miri including leak checks, unchanged numeric/complex measurement lanes and
+  timed closures, strict workspace lint, and repository CI on the final head.
+- Next review: Mnemosyne's aligned-buffer construction and Leto's host-output
+  initialization boundaries. No further defect in those providers is claimed.
+
 
 Open risks with their re-open triggers, and the findings the board, the ADRs
 and the session notes cite, one anchored section each. Compacted by

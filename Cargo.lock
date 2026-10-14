@@ -91,7 +91,10 @@ checksum = "330a5ed07fa54e4702c9d6c4174f74427fc0ef6e214bbd677ae50a5099946470"
 
 [[package]]
 name = "apollo-alloc"
-version = "0.16.0"
+version = "0.17.0"
+dependencies = [
+ "bytemuck",
+]
 
 [[package]]
 name = "apollo-bench"
@@ -182,6 +185,7 @@ dependencies = [
  "leto-ops",
  "mnemosyne-memory",
  "moirai-runtime",
+ "num-complex",
  "once_cell",
  "parking_lot",
  "phastft",
@@ -1567,6 +1571,7 @@ version = "0.4.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "73f88a1307638156682bada9d7604135552957b7818057dcef22705b4d509495"
 dependencies = [
+ "bytemuck",
  "num-traits",
 ]
 

@@ -76,6 +76,11 @@ Mixed precision is now a first-class Apollo concept:
   satisfies `ShaderF16`; Apollo defines no parallel feature or plan wrapper.
 - The authoritative per-crate precision surface is documented in `docs/architecture.md` under the Mixed-Precision Capability Table.
 
+`apollo-alloc` provides deterministic in-page measurement buffers. Zeroed
+construction requires `bytemuck::Zeroable`; copied construction accepts any
+initialized `Copy` values. Buffers honor element alignment and own element
+destruction. See [ADR 0073](docs/adr/0073-lane-buffer-initialization.md).
+
 ## Crates
 
 - `apollo-fft`: CPU FFT plans, cache management, shared types, and backend abstractions.

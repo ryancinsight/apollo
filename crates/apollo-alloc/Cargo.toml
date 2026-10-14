@@ -1,6 +1,6 @@
 [package]
 name = "apollo-alloc"
-version.workspace = true
+version = "0.17.0"
 rust-version.workspace = true
 edition.workspace = true
 license.workspace = true
@@ -8,6 +8,9 @@ authors.workspace = true
 repository.workspace = true
 description = "Deterministic-lane heap allocation for Apollo measurement"
 publish = false
+
+[dependencies]
+bytemuck = "1.25.2"
 
 [lints]
 workspace = true

@@ -19,6 +19,7 @@
 //! sharing a measurement window must take distinct lanes (a multiple of 512
 //! keeps L1 sets disjoint too); roles in disjoint windows may reuse lanes.
 
+mod allocation;
 mod lane_buffer;
 
 pub use lane_buffer::LaneBuffer;

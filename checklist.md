@@ -17,6 +17,14 @@
 - The SemVer comparison is being repaired in Atlas to build both committed
   source graphs under `--locked`; fresh provider resolution is not a verdict.
 
+## APOLLO-LANE-BUFFER-SAFETY — `apollo-alloc` 0.17.0 [major]
+
+- [x] Check current main, active PR ownership, initialization, alignment, and destruction contracts.
+- [x] Reproduce invalid zero values in Miri and layout/destructor failures without native undefined behavior.
+- [x] Implement Zeroable initialization, raw copied initialization, element alignment, and unwind-safe ownership (ADR 0073).
+- [x] Verify allocator values, bounds, mutation, copied references/nonzero values, zero-sized and panicking destruction, and compile-fail contracts.
+- [ ] Verify final-revision workspace gates and benchmark consumers, publish a draft PR, and merge only with all applicable checks green.
+
 
 Active increment target: `apollo-fft` 0.28.1 [patch].
 
