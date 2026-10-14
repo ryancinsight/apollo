@@ -1,6 +1,8 @@
 # Apollo Backlog
 
-## APOLLO-NATIVE-GATE-REPAIR — retained fallback ownership and exact admission [patch]
+<a id="apollo-native-gate-repair"></a>
+## APOLLO-NATIVE-GATE-REPAIR — retained fallback ownership and exact admission [patch] — todo
+- **priority:** verification.
 
 - Baseline `d5e83ca8`: 16 native failures and 14 distinct ARM lint sites.
 - The allocation trace identifies per-call four-step state and expired weak
@@ -16,45 +18,6 @@
   all-target workspace Clippy passes. Final revision and hosted gates pending.
 - The SemVer comparison is being repaired in Atlas to build both committed
   source graphs under `--locked`; fresh provider resolution is not a verdict.
-
-<a id="apollo-lane-buffer-safety"></a>
-## APOLLO-LANE-BUFFER-SAFETY — Safe deterministic-lane element ownership [major] — implemented
-
-- Current main `d5e83ca8` retains unrestricted byte-zero initialization after PR #651.
-- Baseline reproduction: safe `NonZeroU8::zeros` compiles; Miri rejects reading
-  its invalid zero value. Independent native checks fail the allocation's
-  8192-byte alignment guarantee and observe zero of three required ZST drops.
-- `apollo-alloc` 0.17.0 constrains only `zeros` by `bytemuck::Zeroable`, copies
-  initialized `Copy` values into raw storage, aligns to both T and the page,
-  and destroys all elements before freeing storage, including on unwinding.
-- Acceptance: 12 allocator value/boundary/drop tests, two compile-fail doctests,
-  Miri including leak checks, unchanged numeric/complex measurement lanes and
-  timed closures, strict workspace lint, and repository CI on the final head.
-- [PR #663](https://github.com/ryancinsight/apollo/pull/663) carries the fix.
-  Native workspace Nextest: 1613 passed, 16 failed, 15 skipped. All 16 failing
-  cases also fail unchanged main `d5e83ca8` in an exact-name reproduction.
-  Fourteen are FFT/QFT dispatch, cache, or allocation assertions; two require
-  a CUDA driver unavailable on this Mac. Full warning-denied Clippy has the
-  same 14 diagnostic sites on baseline and candidate. These are unresolved
-  gates, not accepted passes. Allocator coverage has zero skipped cases.
-- Native workspace format, Rustdoc, doctests, lockfile integrity, SAFETY ratchet,
-  provider audit, and dependency policy pass; hosted CI is pending. No merge
-  occurs until applicable gates are green. Cross-platform FFT repair is a
-  separate increment; it must retain direct-value and zero-allocation assertions.
-- Next review: Mnemosyne's aligned-buffer construction and Leto's host-output
-  initialization boundaries. No further defect in those providers is claimed.
-
-
-<a id="apollo-fft-test-isolation"></a>
-## APOLLO-FFT-TEST-ISOLATION — Isolate process-global test state [patch]
-- **Target:** `apollo-fft` 0.28.1; [issue #644](https://github.com/ryancinsight/apollo/issues/644).
-- **Contract:** a registry-exhaustion test consumes slots only in its child process; production hook admission and every existing assertion remain unchanged.
-- **Scope:** the exhaustion test, worker-idle allocation submissions, and tests that measure shared cache ownership or invalidate the shared plan epoch.
-- **Decision:** rerun each affected test by its exact name in the same test executable; propagate child failure and reject an empty selection. A mutex cannot release permanent hook slots or exclude unrelated transforms from process-wide allocation windows.
-- **Acceptance:** parent registration survives child exhaustion; affected tests pass with parallel libtest, serialized libtest, and Nextest; CI retains both library execution modes.
-- **Verification:** 22/22 focused tests pass with parallel libtest, serialized libtest, and Nextest; the worker-idle probe passes. All 18 isolated bodies and three production hook bodies compare byte-for-byte with main after removing test dispatch. Format, locked resolution, and the safety ratchet pass.
-- **Residual:** AArch64 full suites each pass 599 tests and retain the same eight independent baseline failures (parallel main: 16 failures; serialized main: 10). Strict Clippy has the same diagnostic inventory as main. Linux CI verifies both all-feature library execution modes before merge.
-- **Delivery:** [PR #654](https://github.com/ryancinsight/apollo/pull/654), `codex/apollo-644-test-isolation`; implementation and local verification complete, hosted CI pending.
 
 <a id="apollo-121-f32-simd-leaf"></a>
 ## APOLLO-121-F32-SIMD-LEAF — Close the N=121 f32 gap with a dispatched SIMD dft11 [patch] [perf] — todo
@@ -76,7 +39,8 @@
 - **Next step:** claim #596 through the APOLLO-MEM-CACHE-BOUNDS integrator, diff its head against the fetched default, port the unlanded hunks, run the gate.
 
 <a id="apollo-dht-verification-split"></a>
-## APOLLO-DHT-VERIFICATION-SPLIT — Restore the DHT source-size ratchet [patch]
+## APOLLO-DHT-VERIFICATION-SPLIT — Restore the DHT source-size ratchet [patch] — todo
+- **priority:** tightening.
 - **Integrator:** Codex `/root/apollo_verification_split`; branch `refactor/apollo-dht-verification-split`.
 - **Scope:** `crates/apollo-dht/src/verification/` and this item only; public APIs, formulas, fixtures, and assertions remain unchanged.
 - **Outcome:** keep the verification module root as a manifest and partition its tests by one-dimensional laws and multidimensional behavior.
@@ -85,7 +49,8 @@
 - **Verification:** the moved bodies compare exactly after de-indentation; Nextest passes 30/30; strict all-target Clippy, doctests, warning-denied Rustdoc, format, and the Atlas origin-baseline conformance gate pass with `oversized_files = 37` and zero regressions.
 
 <a id="apollo-raster-pointer-conformance"></a>
-## APOLLO-RASTER-POINTER-CONFORMANCE — Restore the Atlas source-size ratchet [patch]
+## APOLLO-RASTER-POINTER-CONFORMANCE — Restore the Atlas source-size ratchet [patch] — todo
+- **priority:** tightening.
 - **Integrator:** Codex `/root/fit`; branch `refactor/apollo-pointer-conformance`.
 - **Scope:** `real_storage/{mod.rs,dimension_1d.rs,half_volume.rs,half_volume/routed.rs}`, `api/irfft/`, `dimension_1d/tests.rs`, and cohesive test sidecars; live Stockham and `Cargo.lock` edits are excluded.
 - **Outcome:** partition the two real-storage operation families and the STFT value-test families without changing public APIs, formulas, routing, fixtures, or assertions.
