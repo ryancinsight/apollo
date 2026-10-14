@@ -14,6 +14,14 @@ thread_local! {
     static HARTLEY_ROW_SCRATCH: mnemosyne::scratch::ScratchPool<f64> = const { mnemosyne::scratch::ScratchPool::new() };
 }
 
+/// Release this module's thread-local Hartley-row scratch pool on the
+/// calling thread: capacity returns to its recorded provision (zero unless
+/// a bounded provision was recorded). Called by the crate-level release;
+/// the sixth slice of APOLLO-MEM-SIBLING-THREAD-SCRATCH.
+pub fn release_direct_scratch() {
+    HARTLEY_ROW_SCRATCH.with(|pool| pool.release());
+}
+
 /// Compute the Hartley cas (cosine+sine) coefficient: cas(theta) = cos(theta) + sin(theta).
 #[must_use]
 pub fn hartley_cas(theta: f64) -> f64 {

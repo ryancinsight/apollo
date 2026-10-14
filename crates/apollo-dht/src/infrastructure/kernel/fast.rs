@@ -8,6 +8,14 @@ thread_local! {
     static COMPLEX_SCRATCH_POOL: ScratchPool<Complex64> = const { ScratchPool::new() };
 }
 
+/// Release this module's thread-local complex scratch pool on the calling
+/// thread: capacity returns to its recorded provision (zero unless a
+/// bounded provision was recorded). Called by the crate-level release;
+/// the sixth slice of APOLLO-MEM-SIBLING-THREAD-SCRATCH.
+pub fn release_fast_scratch() {
+    COMPLEX_SCRATCH_POOL.with(|pool| pool.release());
+}
+
 /// Computes the unnormalized DHT via an O(N log N) FFT mapped path using caller-owned scratch.
 ///
 /// `scratch.len()` must equal `signal.len()`.

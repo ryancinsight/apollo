@@ -50,6 +50,42 @@ fn typed_paths_support_f64_f32_and_mixed_f16_storage() {
 }
 
 #[test]
+fn release_scratch_returns_lane_pools_to_baseline_and_serves_again() {
+    use super::workspace::{lane_scratch_capacities, release_scratch};
+    let plan = DhtPlan::new(4).expect("valid plan");
+    let input = Array2::from_shape_vec(
+        [4, 4],
+        vec![
+            1.0, -2.0, 0.5, 4.0, 0.25, -1.5, 2.0, 3.0, -0.75, 1.25, -0.125, 0.375, 2.5, -3.0,
+            0.875, -1.125,
+        ],
+    )
+    .expect("leto input");
+    let first = plan
+        .forward_2d(&input)
+        .expect("2-D forward grows the lanes");
+    assert!(
+        lane_scratch_capacities().0 >= plan.len(),
+        "the 2-D forward must retain its lane workspace"
+    );
+    release_scratch();
+    assert_eq!(
+        lane_scratch_capacities(),
+        (0, 0),
+        "release must return every lane pool to baseline"
+    );
+    let second = plan.forward_2d(&input).expect("2-D forward after release");
+    assert!(
+        lane_scratch_capacities().0 >= plan.len(),
+        "the pools must serve after release"
+    );
+    assert_eq!(first.shape(), second.shape());
+    for (actual, expected) in second.iter().zip(first.iter()) {
+        assert_eq!(actual, expected, "post-release output must match");
+    }
+}
+
+#[test]
 fn typed_path_rejects_profile_storage_mismatch() {
     let plan = DhtPlan::new(4).expect("valid plan");
     let signal = [1.0_f32, 2.0, 3.0, 4.0];
