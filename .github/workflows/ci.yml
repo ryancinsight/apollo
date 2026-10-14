@@ -108,10 +108,14 @@ jobs:
     needs: scope
     if: ${{ !cancelled() && (github.event_name != 'pull_request' || !github.event.pull_request.draft) && needs.scope.outputs.code != 'false' }}
     name: SemVer gate
-    uses: ryancinsight/atlas/.github/workflows/semver-gate.yml@50802ef4c975bdb1e668b94a700d8310f0348e9c
+    uses: ryancinsight/atlas/.github/workflows/semver-gate.yml@7a5a1036973b81dee0e20321942ce0c7e2bf9f9b
     with:
-      package: apollo-czt,apollo-dctdst,apollo-dht,apollo-fft,apollo-fft-macros,apollo-frft,apollo-fwht,apollo-gft,apollo-hilbert,apollo-leto-interop,apollo-mellin,apollo-ntt,apollo-nufft,apollo-qft,apollo-radon,apollo-sdft,apollo-sft,apollo-sht,apollo-stft,apollo-validation,apollo-wavelet
+      # Library APIs include the allocator; proc-macro protocols are covered
+      # by compilation/tests because Rustdoc JSON has no library API for them.
+      package: apollo-alloc,apollo-czt,apollo-dctdst,apollo-dht,apollo-fft,apollo-frft,apollo-fwht,apollo-gft,apollo-hilbert,apollo-leto-interop,apollo-mellin,apollo-ntt,apollo-nufft,apollo-qft,apollo-radon,apollo-sdft,apollo-sft,apollo-sht,apollo-stft,apollo-validation,apollo-wavelet
       rust-toolchain: 1.97.0
+      dependency-contract: locked
+      atlas-ref: 7a5a1036973b81dee0e20321942ce0c7e2bf9f9b
     permissions:
       contents: read
 
@@ -250,6 +254,37 @@ jobs:
   # member list from cargo metadata at run time, so a new crate is covered
   # without editing this file, and each shard documents its group into its
   # own doc directory.
+  native-arm:
+    name: native ARM correctness
+    needs: scope
+    if: ${{ !cancelled() && (github.event_name != 'pull_request' || !github.event.pull_request.draft) && needs.scope.outputs.code != 'false' }}
+    runs-on: macos-14
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+      - uses: dtolnay/rust-toolchain@889fac408b4da0905346410f253f0c55fbcb6613
+        with:
+          toolchain: 1.97.0
+          components: clippy, rustfmt
+      - uses: taiki-e/install-action@b20dedce73af6905cdc30d6611090c9b67557c8d
+        with:
+          tool: cargo-nextest@0.9.140
+      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6
+        with:
+          cache-targets: false
+      - name: Verify native target and exact revision
+        env:
+          EXPECTED: ${{ github.event.pull_request.head.sha || github.sha }}
+        run: |
+          test "$(uname -m)" = arm64
+          test "$(git rev-parse HEAD)" = "$EXPECTED"
+      - name: Warning-denied ARM lint
+        run: cargo clippy --locked --workspace --all-targets --all-features -- -D warnings
+      - name: Native admission, ownership, values, and allocation contracts
+        run: cargo nextest run --locked --profile ci --workspace --all-features --exclude apollo-python
+
   docs-plan:
     # A draft pull request is visibility, not a verification event: its pushes
     # queue nothing, and marking it ready runs the one pull-request verification.

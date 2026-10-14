@@ -20,17 +20,21 @@
 //! [`dft11_dispatched`]; other targets run the scalar pair form.
 
 use eunomia::Complex32;
+#[cfg(target_arch = "x86_64")]
 use std::sync::LazyLock;
 
+#[cfg(target_arch = "x86_64")]
 use super::odd_prime_pair::PrimePairTable;
 
 /// Pair tables transposed for 8-wide k dots: `cos_t[m][k]` is
 /// `cos_table[k][m]` for k < 5 with three zero lanes, likewise `sin_t`.
+#[cfg(target_arch = "x86_64")]
 struct PairTablesT {
     cos_t: [[f32; 8]; 5],
     sin_t: [[f32; 8]; 5],
 }
 
+#[cfg(target_arch = "x86_64")]
 static PAIR11_T: LazyLock<PairTablesT> = LazyLock::new(|| {
     let cos = <f32 as PrimePairTable<11, 5>>::cos_table();
     let sin = <f32 as PrimePairTable<11, 5>>::sin_table();

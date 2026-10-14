@@ -213,6 +213,7 @@ where
     reason = "the codelet must remain in the selected target-feature frame"
 )]
 #[inline(always)]
+#[cfg(target_arch = "x86_64")]
 fn dft16_kernel<A, const INVERSE: bool>(simd: Simd<f32, A>, data: &mut [Complex32; 16])
 where
     A: SimdArch + SimdKernel<f32>,

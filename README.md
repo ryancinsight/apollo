@@ -2,6 +2,10 @@
 
 Apollo is a standalone workspace for reusable Fourier transform planning, execution, validation, backend adapters, and Python bindings.
 
+Warm FFT execution retains the tables required by its selected native route.
+CI checks that ownership and exact SIMD admission on ARM as well as x86, and
+compares committed library APIs against their compatible locked providers.
+
 ## Release contract
 
 Apollo releases from Git tags with its committed `Cargo.lock`, pinned Rust

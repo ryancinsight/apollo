@@ -16,6 +16,15 @@ pub(in crate::application::execution::plan::fft) fn generic_four_step_applies(n:
         && crate::application::execution::kernel::pot::one_dimensional_uses_four_step(n)
 }
 
+/// Includes scalar-specific sized routes that execute four-step internally.
+/// Their tables need the same operation owner as larger generic routes.
+#[inline]
+pub(super) fn plan_four_step_applies<F: MixedRadixScalar>(n: usize) -> bool {
+    generic_four_step_applies(n)
+        || (F::SIZED_FOUR_STEP
+            && crate::application::execution::kernel::pot::one_dimensional_uses_four_step(n))
+}
+
 pub(crate) type CompositeRadices = Cow<'static, [usize]>;
 
 #[inline]

@@ -78,3 +78,4 @@
 | [0070](0070-one-window-for-both-stft-passes.md) | One window for both STFT passes | Accepted |
 | [0071](0071-fft-backend-execution-seam.md) | `FftBackend` becomes an execution seam | Proposed |
 | [0072](0072-fallible-public-fft-api.md) | Fallible public FFT API | Proposed |
+| [0074](0074-sized-fallback-table-ownership.md) | Sized fallback table ownership | Accepted |

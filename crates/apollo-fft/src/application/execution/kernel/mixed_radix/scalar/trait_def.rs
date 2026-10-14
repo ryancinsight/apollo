@@ -6,9 +6,16 @@ use crate::application::execution::plan::fft::dimension_1d::owner::PlanOwner;
 use std::sync::{Arc, Weak};
 
 pub(crate) mod private {
-    pub trait Sealed {}
-    impl Sealed for f64 {}
-    impl Sealed for f32 {}
+    pub trait Sealed {
+        /// Whether sized transforms use the measured four-step crossover.
+        const SIZED_FOUR_STEP: bool;
+    }
+    impl Sealed for f64 {
+        const SIZED_FOUR_STEP: bool = true;
+    }
+    impl Sealed for f32 {
+        const SIZED_FOUR_STEP: bool = false;
+    }
 }
 
 /// Bluestein cache key: (m, inverse_flag, generator_inverse).

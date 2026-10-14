@@ -101,6 +101,7 @@ fn stockham_validate_layout<C>(data: &[C], scratch: &[C], twiddles: &[C], n: usi
     debug_assert!(n.is_power_of_two());
 }
 
+#[cfg(target_arch = "x86_64")]
 macro_rules! stockham_try_forward_avx {
     ($n:expr, $call:expr, [$($fixed:expr),+ $(,)?]) => {{
         let stockham_n = $n;
@@ -246,7 +247,7 @@ impl StockhamKernel for f64 {
         }
         #[cfg(not(target_arch = "x86_64"))]
         {
-            let log2 = data.len().trailing_zeros() as u32;
+            let log2 = data.len().trailing_zeros();
             zst_stockham_dispatch!(log2, precision::PreciseStockham, data, scratch, twiddles);
         }
     }
@@ -399,7 +400,7 @@ impl StockhamKernel for f32 {
         }
         #[cfg(not(target_arch = "x86_64"))]
         {
-            let log2 = data.len().trailing_zeros() as u32;
+            let log2 = data.len().trailing_zeros();
             zst_stockham_dispatch!(log2, precision::ReducedStockham, data, scratch, twiddles);
         }
     }

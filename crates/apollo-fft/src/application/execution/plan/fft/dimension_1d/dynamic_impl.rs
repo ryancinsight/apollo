@@ -28,7 +28,9 @@ use super::executors::{
     exec_winograd_inverse, exec_winograd_inverse_unnorm, pot_executors_16, pot_executors_32,
     pot_executors_64, pot_executors_8, runtime_tiny_direct_dispatch,
 };
-use super::strategy::{arc_to_cow, generic_four_step_applies, PlanStrategy};
+use super::strategy::{
+    arc_to_cow, generic_four_step_applies, plan_four_step_applies, PlanStrategy,
+};
 use crate::application::execution::kernel::components::bluestein::BluesteinState;
 use crate::application::execution::kernel::components::column_route::State180;
 use crate::application::execution::kernel::components::four_step::FourStepState;
@@ -296,6 +298,8 @@ impl<F: MixedRadixScalar<Complex = Complex<F>>> FftPlan1D<F> {
         // The four-step route starts above the sized plans; the base
         // routes reach 2048 as blocks under a radix step and take that
         // length where they built (ADR 0061).
+        let owns_four_step_route =
+            base512.is_none() && base256.is_none() && plan_four_step_applies::<F>(n);
         let strategy: PlanStrategy<F> = if n <= 1 {
             PlanStrategy::Identity
         } else if base512.is_none() && base256.is_none() && generic_four_step_applies(n) {
@@ -303,7 +307,7 @@ impl<F: MixedRadixScalar<Complex = Complex<F>>> FftPlan1D<F> {
         } else if n.is_power_of_two() {
             let log2 = n.trailing_zeros();
             PlanStrategy::PowerOfTwo {
-                twiddle_fwd: (base256.is_none()
+                twiddle_fwd: (!owns_four_step_route && base256.is_none()
                     && base512.is_none()
                     && base64.is_none()
                     && base128.is_none())
@@ -413,7 +417,8 @@ impl<F: MixedRadixScalar<Complex = Complex<F>>> FftPlan1D<F> {
         // every length their gate admits, including the base-route lengths
         // whose own 1-D execution never touches it. The slots initialize
         // lazily, so an unborrowed owner costs the slots alone.
-        let four_step = generic_four_step_applies(n).then(|| Arc::new(FourStepState::new(n)));
+        let four_step = (generic_four_step_applies(n) || owns_four_step_route)
+            .then(|| Arc::new(FourStepState::new(n)));
         let mut forward_impl: unsafe fn(&Self, &mut [F::Complex]) = exec_identity::<F>;
         let mut inverse_impl: unsafe fn(&Self, &mut [F::Complex]) = exec_identity::<F>;
         let mut inverse_unnorm_impl: unsafe fn(&Self, &mut [F::Complex]) = exec_identity::<F>;
@@ -527,98 +532,110 @@ impl<F: MixedRadixScalar<Complex = Complex<F>>> FftPlan1D<F> {
                 pot: _,
             } => {
                 twiddle_fwd.clone_from(fwd);
-                match *log2 {
-                    1 => {
-                        forward_impl = exec_pot_forward_2::<F>;
-                        inverse_impl = exec_pot_inverse_2::<F>;
-                        inverse_unnorm_impl = exec_pot_inverse_unnorm_2::<F>;
-                    }
-                    2 => {
-                        forward_impl = exec_pot_forward_4::<F>;
-                        inverse_impl = exec_pot_inverse_4::<F>;
-                        inverse_unnorm_impl = exec_pot_inverse_unnorm_4::<F>;
-                    }
-                    3 => {
-                        [forward_impl, inverse_impl, inverse_unnorm_impl] = pot_executors_8::<F>();
-                    }
-                    4 => {
-                        [forward_impl, inverse_impl, inverse_unnorm_impl] = pot_executors_16::<F>();
-                    }
-                    5 => {
-                        [forward_impl, inverse_impl, inverse_unnorm_impl] = pot_executors_32::<F>();
-                    }
-                    6 => {
-                        if base64.is_some() {
-                            forward_impl = exec_base64_forward::<F>;
-                            inverse_impl = exec_base64_inverse::<F>;
-                            inverse_unnorm_impl = exec_base64_inverse_unnorm::<F>;
-                        } else {
+                if owns_four_step_route {
+                    // Preserve the sized power-of-two classification while
+                    // running the same four-step policy through its retained
+                    // owner, rather than constructing state inside execution.
+                    forward_impl = exec_four_step::<F, false, false>;
+                    inverse_impl = exec_four_step::<F, true, true>;
+                    inverse_unnorm_impl = exec_four_step::<F, true, false>;
+                } else {
+                    match *log2 {
+                        1 => {
+                            forward_impl = exec_pot_forward_2::<F>;
+                            inverse_impl = exec_pot_inverse_2::<F>;
+                            inverse_unnorm_impl = exec_pot_inverse_unnorm_2::<F>;
+                        }
+                        2 => {
+                            forward_impl = exec_pot_forward_4::<F>;
+                            inverse_impl = exec_pot_inverse_4::<F>;
+                            inverse_unnorm_impl = exec_pot_inverse_unnorm_4::<F>;
+                        }
+                        3 => {
                             [forward_impl, inverse_impl, inverse_unnorm_impl] =
-                                pot_executors_64::<F>();
+                                pot_executors_8::<F>();
                         }
-                    }
-                    7 => {
-                        if base128.is_some() {
-                            forward_impl = exec_base128_forward::<F>;
-                            inverse_impl = exec_base128_inverse::<F>;
-                            inverse_unnorm_impl = exec_base128_inverse_unnorm::<F>;
-                        } else {
-                            forward_impl = exec_pot_forward_sized::<F, 7>;
-                            inverse_impl = exec_pot_inverse_sized::<F, 7>;
-                            inverse_unnorm_impl = exec_pot_inverse_unnorm_sized::<F, 7>;
+                        4 => {
+                            [forward_impl, inverse_impl, inverse_unnorm_impl] =
+                                pot_executors_16::<F>();
                         }
-                    }
-                    8 => {
-                        if base256.is_some() {
+                        5 => {
+                            [forward_impl, inverse_impl, inverse_unnorm_impl] =
+                                pot_executors_32::<F>();
+                        }
+                        6 => {
+                            if base64.is_some() {
+                                forward_impl = exec_base64_forward::<F>;
+                                inverse_impl = exec_base64_inverse::<F>;
+                                inverse_unnorm_impl = exec_base64_inverse_unnorm::<F>;
+                            } else {
+                                [forward_impl, inverse_impl, inverse_unnorm_impl] =
+                                    pot_executors_64::<F>();
+                            }
+                        }
+                        7 => {
+                            if base128.is_some() {
+                                forward_impl = exec_base128_forward::<F>;
+                                inverse_impl = exec_base128_inverse::<F>;
+                                inverse_unnorm_impl = exec_base128_inverse_unnorm::<F>;
+                            } else {
+                                forward_impl = exec_pot_forward_sized::<F, 7>;
+                                inverse_impl = exec_pot_inverse_sized::<F, 7>;
+                                inverse_unnorm_impl = exec_pot_inverse_unnorm_sized::<F, 7>;
+                            }
+                        }
+                        8 => {
+                            if base256.is_some() {
+                                forward_impl = exec_base256_forward::<F>;
+                                inverse_impl = exec_base256_inverse::<F>;
+                                inverse_unnorm_impl = exec_base256_inverse_unnorm::<F>;
+                            } else {
+                                forward_impl = exec_pot_forward_sized::<F, 8>;
+                                inverse_impl = exec_pot_inverse_sized::<F, 8>;
+                                inverse_unnorm_impl = exec_pot_inverse_unnorm_sized::<F, 8>;
+                            }
+                        }
+                        9 => {
+                            if base512.is_some() {
+                                forward_impl = exec_base512_forward::<F>;
+                                inverse_impl = exec_base512_inverse::<F>;
+                                inverse_unnorm_impl = exec_base512_inverse_unnorm::<F>;
+                            } else if base256.is_some() {
+                                forward_impl = exec_base256_forward::<F>;
+                                inverse_impl = exec_base256_inverse::<F>;
+                                inverse_unnorm_impl = exec_base256_inverse_unnorm::<F>;
+                            } else {
+                                forward_impl = exec_pot_forward_512::<F>;
+                                inverse_impl = exec_pot_inverse_512::<F>;
+                                inverse_unnorm_impl = exec_pot_inverse_unnorm_512::<F>;
+                            }
+                        }
+                        10 => {
+                            if base256.is_some() {
+                                forward_impl = exec_base256_forward::<F>;
+                                inverse_impl = exec_base256_inverse::<F>;
+                                inverse_unnorm_impl = exec_base256_inverse_unnorm::<F>;
+                            } else {
+                                forward_impl = exec_pot_forward_sized::<F, 10>;
+                                inverse_impl = exec_pot_inverse_sized::<F, 10>;
+                                inverse_unnorm_impl = exec_pot_inverse_unnorm_sized::<F, 10>;
+                            }
+                        }
+                        11 | 13 | 14 | 17 if base256.is_some() => {
                             forward_impl = exec_base256_forward::<F>;
                             inverse_impl = exec_base256_inverse::<F>;
                             inverse_unnorm_impl = exec_base256_inverse_unnorm::<F>;
-                        } else {
-                            forward_impl = exec_pot_forward_sized::<F, 8>;
-                            inverse_impl = exec_pot_inverse_sized::<F, 8>;
-                            inverse_unnorm_impl = exec_pot_inverse_unnorm_sized::<F, 8>;
                         }
-                    }
-                    9 => {
-                        if base512.is_some() {
+                        11 | 12 | 15 | 18 if base512.is_some() => {
                             forward_impl = exec_base512_forward::<F>;
                             inverse_impl = exec_base512_inverse::<F>;
                             inverse_unnorm_impl = exec_base512_inverse_unnorm::<F>;
-                        } else if base256.is_some() {
-                            forward_impl = exec_base256_forward::<F>;
-                            inverse_impl = exec_base256_inverse::<F>;
-                            inverse_unnorm_impl = exec_base256_inverse_unnorm::<F>;
-                        } else {
-                            forward_impl = exec_pot_forward_512::<F>;
-                            inverse_impl = exec_pot_inverse_512::<F>;
-                            inverse_unnorm_impl = exec_pot_inverse_unnorm_512::<F>;
                         }
-                    }
-                    10 => {
-                        if base256.is_some() {
-                            forward_impl = exec_base256_forward::<F>;
-                            inverse_impl = exec_base256_inverse::<F>;
-                            inverse_unnorm_impl = exec_base256_inverse_unnorm::<F>;
-                        } else {
-                            forward_impl = exec_pot_forward_sized::<F, 10>;
-                            inverse_impl = exec_pot_inverse_sized::<F, 10>;
-                            inverse_unnorm_impl = exec_pot_inverse_unnorm_sized::<F, 10>;
+                        _ => {
+                            forward_impl = exec_pot_forward_generic::<F>;
+                            inverse_impl = exec_pot_inverse_generic::<F>;
+                            inverse_unnorm_impl = exec_pot_inverse_unnorm_generic::<F>;
                         }
-                    }
-                    11 | 13 | 14 | 17 if base256.is_some() => {
-                        forward_impl = exec_base256_forward::<F>;
-                        inverse_impl = exec_base256_inverse::<F>;
-                        inverse_unnorm_impl = exec_base256_inverse_unnorm::<F>;
-                    }
-                    11 | 12 | 15 | 18 if base512.is_some() => {
-                        forward_impl = exec_base512_forward::<F>;
-                        inverse_impl = exec_base512_inverse::<F>;
-                        inverse_unnorm_impl = exec_base512_inverse_unnorm::<F>;
-                    }
-                    _ => {
-                        forward_impl = exec_pot_forward_generic::<F>;
-                        inverse_impl = exec_pot_inverse_generic::<F>;
-                        inverse_unnorm_impl = exec_pot_inverse_unnorm_generic::<F>;
                     }
                 }
             }
