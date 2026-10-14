@@ -25,6 +25,26 @@ thread_local! {
     static LOG_FREQUENCY_WEIGHT_LANE_SCRATCH: mnemosyne::scratch::ScratchPool<f64> = const { mnemosyne::scratch::ScratchPool::new() };
 }
 
+/// Release this module's two thread-local weight scratch pools on the
+/// calling thread: capacities return to their recorded provisions (zero
+/// unless a bounded provision was recorded), so a thread that ran a Mellin
+/// kernel no longer holds its high-water mark for its life. The ninth
+/// slice of APOLLO-MEM-SIBLING-THREAD-SCRATCH, following the apollo-fwht,
+/// apollo-gft, apollo-dctdst, apollo-czt, apollo-nufft, apollo-dht,
+/// apollo-frft, and apollo-hilbert precedents.
+pub fn release_scratch() {
+    MOMENT_WEIGHT_SCRATCH.with(|pool| pool.release());
+    LOG_FREQUENCY_WEIGHT_LANE_SCRATCH.with(|pool| pool.release());
+}
+
+#[cfg(test)]
+pub(crate) fn weight_scratch_capacities() -> (usize, usize) {
+    MOMENT_WEIGHT_SCRATCH.with(|moment_pool| {
+        LOG_FREQUENCY_WEIGHT_LANE_SCRATCH
+            .with(|lane_pool| (moment_pool.capacity(), lane_pool.capacity()))
+    })
+}
+
 /// Interpolate a positive-domain signal onto logarithmically spaced samples.
 ///
 /// The output sample `i` evaluates the input at
