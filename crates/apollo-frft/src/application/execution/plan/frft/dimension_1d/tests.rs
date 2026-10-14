@@ -285,6 +285,20 @@ fn typed_complex32_path_reuses_complex64_workspaces() {
         assert!((actual.re - expected.re).abs() < 1.0e-7);
         assert!((actual.im - expected.im).abs() < 1.0e-7);
     }
+
+    crate::application::execution::plan::frft::storage::release_scratch();
+    assert_eq!(
+        crate::application::execution::plan::frft::storage::typed_scratch_capacities(),
+        (0, 0),
+        "release must return every typed pool to baseline"
+    );
+    plan.forward_typed_into(&input, &mut second, PrecisionProfile::LOW_PRECISION_F32)
+        .expect("typed forward after release");
+    assert_eq!(
+        crate::application::execution::plan::frft::storage::typed_scratch_capacities(),
+        second_caps,
+        "the pools must serve after release"
+    );
 }
 
 #[test]
