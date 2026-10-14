@@ -22,6 +22,23 @@ Change-class tags: [patch] backward-compatible fix, [minor] additive non-breakin
   preserving every other provider pin. Missing dyld images retain typed CUDA
   adapter absence instead of reporting a present-but-broken driver.
 
+## [apollo-alloc 0.17.0]
+
+### Breaking
+
+- [major] `LaneBuffer::zeros` now requires `bytemuck::Zeroable`; `Copy` or
+  `Default` alone cannot justify all-zero initialization. Numeric zero-valid
+  callers retain the same values and address lanes. Enable num-complex's
+  `bytemuck` feature for complex scratch, or use `from_slice` with initialized
+  values when zero bytes are invalid (ADR 0073).
+
+### Fixed
+
+- `from_slice` copies into raw storage before exposing typed references.
+- Backing allocations honor element alignment above 4096 bytes.
+- All owned elements, including zero-sized elements, are dropped; backing
+  storage is released even when an element destructor unwinds.
+
 ## [Unreleased]
 
 ### Breaking

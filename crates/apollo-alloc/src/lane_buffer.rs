@@ -1,95 +1,102 @@
-﻿use std::alloc::{alloc, dealloc, Layout};
 use std::marker::PhantomData;
 use std::ptr::NonNull;
 
-/// Page alignment for the backing allocation, pinning the low 12 bits.
-const PAGE_ALIGNMENT: usize = 4096;
+use bytemuck::Zeroable;
+
+use crate::allocation::Allocation;
 
 /// A heap buffer starting at a deterministic in-page lane.
 ///
-/// The backing allocation is page-aligned with room for any lane; the
-/// exposed slice starts at `base + lane`, so
-/// `as_ptr() as usize % 4096 == lane` on every run of one binary.
+/// The backing allocation is aligned to both 4096 bytes and `T`; the
+/// exposed slice starts at `base + lane`, so `addr() % 4096 == lane`.
+/// All exposed elements are initialized and are dropped with the buffer.
 pub struct LaneBuffer<T> {
     data: NonNull<T>,
     len: usize,
-    alloc: NonNull<u8>,
-    layout: Layout,
+    allocation: Allocation,
     _marker: PhantomData<T>,
 }
 
 impl<T> LaneBuffer<T> {
     /// Allocates `len` zeroed elements starting at in-page byte `lane`.
     ///
+    /// `T: Zeroable` guarantees the all-zero representation is valid. This
+    /// does not follow from `Default` or `Copy` alone.
+    ///
+    /// ```compile_fail
+    /// use apollo_alloc::LaneBuffer;
+    /// use std::num::NonZeroU8;
+    /// let _ = LaneBuffer::<NonZeroU8>::zeros(1, 0);
+    /// ```
+    ///
+    /// ```compile_fail
+    /// use apollo_alloc::LaneBuffer;
+    /// let _ = LaneBuffer::<&u8>::zeros(1, 0);
+    /// ```
+    ///
     /// # Panics
     ///
-    /// Panics when `lane` reaches the page size, is misaligned for `T`, or
-    /// the allocator fails.
+    /// Panics when `lane` reaches 4096, is misaligned for `T`, the allocation
+    /// size exceeds the allocator layout limit, or allocation fails.
     #[must_use]
-    pub fn zeros(len: usize, lane: usize) -> Self {
-        assert!(
-            lane < PAGE_ALIGNMENT,
-            "invariant: lane {lane} fits in one page"
-        );
-        assert_eq!(
-            lane % core::mem::align_of::<T>(),
-            0,
-            "invariant: lane {lane} aligns {}",
-            core::mem::align_of::<T>()
-        );
-        let bytes = len
-            .checked_mul(core::mem::size_of::<T>())
-            .expect("invariant: lane buffer size fits usize");
-        let layout = Layout::from_size_align(
-            bytes
-                .checked_add(PAGE_ALIGNMENT)
-                .expect("invariant: lane overallocation fits usize"),
-            PAGE_ALIGNMENT,
-        )
-        .expect("invariant: page alignment is a power of two");
-        // SAFETY: `layout` has non-zero size with a valid power-of-two
-        // alignment; on success `base` is a live `layout` allocation.
-        let base = unsafe { alloc(layout) };
-        let alloc = NonNull::new(base).expect("invariant: lane backing allocation succeeds");
-        // SAFETY: `lane < 4096 <= layout.size()`, so `base + lane` stays in
-        // bounds and keeps `T` alignment (the base is page-aligned and
-        // `lane` is a multiple of `align_of::<T>()`); the full allocation
-        // is zeroed before any element is read.
+    pub fn zeros(len: usize, lane: usize) -> Self
+    where
+        T: Zeroable,
+    {
+        let (allocation, data) = Allocation::for_elements::<T>(len, lane);
+        // SAFETY: the allocation is live and entirely writable; Zeroable
+        // guarantees that zeroing it initializes every T, including ZSTs.
         unsafe {
-            base.write_bytes(0, layout.size());
-            let data = base.add(lane).cast::<T>();
-            Self {
-                data: NonNull::new(data).expect("invariant: lane pointer is non-null"),
-                len,
-                alloc,
-                layout,
-                _marker: PhantomData,
-            }
+            allocation
+                .base
+                .as_ptr()
+                .write_bytes(0, allocation.layout.size())
+        };
+        Self {
+            data,
+            len,
+            allocation,
+            _marker: PhantomData,
         }
     }
 
     /// Allocates a lane buffer holding a copy of `src`.
+    ///
+    /// Values need not have a valid all-zero representation: raw storage is
+    /// initialized from `src` before any typed slice is formed.
+    ///
+    /// # Panics
+    ///
+    /// Panics under the same lane, size, and allocation conditions as `zeros`.
     #[must_use]
     pub fn from_slice(src: &[T], lane: usize) -> Self
     where
         T: Copy,
     {
-        let mut buffer = Self::zeros(src.len(), lane);
-        buffer.as_mut_slice().copy_from_slice(src);
-        buffer
+        let (allocation, data) = Allocation::for_elements::<T>(src.len(), lane);
+        // SAFETY: source contains src.len() initialized T values; destination
+        // is aligned raw storage of sufficient size in a distinct allocation.
+        // Copy initializes all elements without creating uninitialized &mut T.
+        unsafe { std::ptr::copy_nonoverlapping(src.as_ptr(), data.as_ptr(), src.len()) };
+        Self {
+            data,
+            len: src.len(),
+            allocation,
+            _marker: PhantomData,
+        }
     }
 
     /// Returns the lane contents.
     #[must_use]
     pub fn as_slice(&self) -> &[T] {
-        // SAFETY: `data` points at `len` initialized elements (zeroed at
-        // allocation, wholly owned by this buffer) and outlives `&self`.
+        // SAFETY: data is non-null/aligned and spans len initialized elements
+        // within the retained allocation, whose total size fits isize.
         unsafe { std::slice::from_raw_parts(self.data.as_ptr().cast_const(), self.len) }
     }
 
     /// Returns the lane contents mutably.
     pub fn as_mut_slice(&mut self) -> &mut [T] {
-        // SAFETY: as above, with exclusive access through `&mut self`.
+        // SAFETY: as above, with exclusive access through &mut self.
         unsafe { std::slice::from_raw_parts_mut(self.data.as_ptr(), self.len) }
     }
 
@@ -102,21 +109,28 @@ impl<T> LaneBuffer<T> {
 
 impl<T> Drop for LaneBuffer<T> {
     fn drop(&mut self) {
-        // SAFETY: `alloc`/`layout` are the pair returned by the allocation
-        // call, deallocated exactly once here.
-        unsafe { dealloc(self.alloc.as_ptr(), self.layout) };
+        debug_assert!(self.len * core::mem::size_of::<T>() < self.allocation.layout.size());
+        // SAFETY: data spans exactly len initialized elements exclusively
+        // owned here. Drop the elements once; allocation's field destructor
+        // frees their storage afterward, including on unwinding.
+        unsafe {
+            std::ptr::drop_in_place(std::ptr::slice_from_raw_parts_mut(
+                self.data.as_ptr(),
+                self.len,
+            ))
+        };
     }
 }
 
-// SAFETY: `LaneBuffer` owns its allocation exclusively; `&LaneBuffer<T>`
-// exposes only shared element access, like `Vec<T>`.
+// SAFETY: LaneBuffer exclusively owns its allocation and elements, like Vec.
 unsafe impl<T: Send> Send for LaneBuffer<T> {}
-// SAFETY: as above; `&mut` access is exclusive, like `Vec<T>`.
+// SAFETY: shared access exposes shared T only; mutable access is exclusive.
 unsafe impl<T: Sync> Sync for LaneBuffer<T> {}
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::allocation::PAGE_ALIGNMENT;
 
     #[test]
     fn lanes_pin_low_address_bits() {
@@ -135,6 +149,8 @@ mod tests {
             re: f64,
             im: f64,
         }
+        // SAFETY: both fields are f64, whose all-zero representation is valid.
+        unsafe impl Zeroable for Complex64Like {}
         assert_eq!(core::mem::size_of::<Complex64Like>(), 16);
         assert_eq!(core::mem::align_of::<Complex64Like>(), 8);
         for lane in [0usize, 512, 2048] {
@@ -175,3 +191,6 @@ mod tests {
         assert_eq!(buffer.addr() % PAGE_ALIGNMENT, 512);
     }
 }
+
+#[cfg(test)]
+mod safety_tests;
