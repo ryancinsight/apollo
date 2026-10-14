@@ -29,7 +29,10 @@ fn main() {
             if degree == 0 && order == 0 {
                 continue;
             }
-            let value = coefficients.get(usize::try_from(degree).expect("invariant: loop degree is non-negative"), order);
+            let value = coefficients.get(
+                usize::try_from(degree).expect("invariant: loop degree is non-negative"),
+                order,
+            );
             assert!(
                 value.norm() < 1e-12,
                 "constant field has no Y_{degree}{order}, got {value}"

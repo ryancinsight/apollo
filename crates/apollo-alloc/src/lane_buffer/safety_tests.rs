@@ -112,7 +112,11 @@ fn rejects_invalid_lanes_and_sizes_before_allocating() {
         assert!(std::panic::catch_unwind(|| LaneBuffer::from_slice(&[7u64], lane)).is_err());
     }
     assert!(std::panic::catch_unwind(|| LaneBuffer::<Overaligned>::zeros(0, 512)).is_err());
-    for len in [usize::MAX, usize::MAX / 8, usize::try_from(isize::MAX).expect("invariant: isize::MAX fits usize") / 8] {
+    for len in [
+        usize::MAX,
+        usize::MAX / 8,
+        usize::try_from(isize::MAX).expect("invariant: isize::MAX fits usize") / 8,
+    ] {
         assert!(std::panic::catch_unwind(|| LaneBuffer::<u64>::zeros(len, 0)).is_err());
     }
 }
