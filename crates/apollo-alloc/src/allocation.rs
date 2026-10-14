@@ -10,7 +10,7 @@ pub(crate) struct Allocation {
 }
 
 impl Allocation {
-    pub(crate) fn for_elements<T>(len: usize, lane: usize) -> Self {
+    pub(crate) fn for_elements<T>(len: usize, lane: usize) -> (Self, NonNull<T>) {
         assert!(
             lane < PAGE_ALIGNMENT,
             "invariant: lane {lane} fits in one page"
@@ -34,17 +34,16 @@ impl Allocation {
         // SAFETY: `layout` has non-zero size and valid alignment. Successful
         // allocation is exclusively owned here until deallocated by Drop.
         let base = unsafe { alloc(layout) };
-        Self {
+        let allocation = Self {
             base: NonNull::new(base).expect("invariant: lane backing allocation succeeds"),
             layout,
-        }
-    }
-
-    pub(crate) fn data<T>(&self, lane: usize) -> NonNull<T> {
-        // SAFETY: callers use the lane validated at construction, which is
-        // within the allocation and divisible by T's alignment. The base
-        // alignment is at least T's; adding the lane preserves it.
-        unsafe { self.base.add(lane).cast() }
+        };
+        // SAFETY: lane < 4096 and len * size_of::<T>() + 4096 is the layout
+        // size, so both the start and the full element span stay in bounds.
+        // Rust alignments are powers of two: max(page, T alignment) is a
+        // multiple of both, and lane is a multiple of T's alignment.
+        let data = unsafe { allocation.base.add(lane).cast() };
+        (allocation, data)
     }
 }
 

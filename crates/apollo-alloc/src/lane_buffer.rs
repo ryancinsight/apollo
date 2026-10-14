@@ -43,8 +43,7 @@ impl<T> LaneBuffer<T> {
     where
         T: Zeroable,
     {
-        let allocation = Allocation::for_elements::<T>(len, lane);
-        let data = allocation.data(lane);
+        let (allocation, data) = Allocation::for_elements::<T>(len, lane);
         // SAFETY: the allocation is live and entirely writable; Zeroable
         // guarantees that zeroing it initializes every T, including ZSTs.
         unsafe {
@@ -74,8 +73,7 @@ impl<T> LaneBuffer<T> {
     where
         T: Copy,
     {
-        let allocation = Allocation::for_elements::<T>(src.len(), lane);
-        let data = allocation.data(lane);
+        let (allocation, data) = Allocation::for_elements::<T>(src.len(), lane);
         // SAFETY: source contains src.len() initialized T values; destination
         // is aligned raw storage of sufficient size in a distinct allocation.
         // Copy initializes all elements without creating uninitialized &mut T.

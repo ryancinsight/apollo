@@ -30,6 +30,17 @@
 - Acceptance: 12 allocator value/boundary/drop tests, two compile-fail doctests,
   Miri including leak checks, unchanged numeric/complex measurement lanes and
   timed closures, strict workspace lint, and repository CI on the final head.
+- [PR #663](https://github.com/ryancinsight/apollo/pull/663) carries the fix.
+  Native workspace Nextest: 1613 passed, 16 failed, 15 skipped. All 16 failing
+  cases also fail unchanged main `d5e83ca8` in an exact-name reproduction.
+  Fourteen are FFT/QFT dispatch, cache, or allocation assertions; two require
+  a CUDA driver unavailable on this Mac. Full warning-denied Clippy has the
+  same 14 diagnostic sites on baseline and candidate. These are unresolved
+  gates, not accepted passes. Allocator coverage has zero skipped cases.
+- Native workspace format, Rustdoc, doctests, lockfile integrity, SAFETY ratchet,
+  provider audit, and dependency policy pass; hosted CI is pending. No merge
+  occurs until applicable gates are green. Cross-platform FFT repair is a
+  separate increment; it must retain direct-value and zero-allocation assertions.
 - Next review: Mnemosyne's aligned-buffer construction and Leto's host-output
   initialization boundaries. No further defect in those providers is claimed.
 
