@@ -76,3 +76,5 @@
 | [0068](0068-bounded-plan-and-table-caches.md) | Bounded, clearable plan and table caches | Accepted |
 | [0069](0069-lightweight-direct-dct-kernel.md) | Lightweight direct DCT kernel ownership | Accepted |
 | [0070](0070-one-window-for-both-stft-passes.md) | One window for both STFT passes | Accepted |
+| [0071](0071-fft-backend-execution-seam.md) | `FftBackend` becomes an execution seam | Proposed |
+| [0072](0072-fallible-public-fft-api.md) | Fallible public FFT API | Proposed |
