@@ -53,6 +53,14 @@ thread_local! {
     static UNITARY_COEFF_SCRATCH: mnemosyne::scratch::ScratchPool<Complex64> = const { mnemosyne::scratch::ScratchPool::new() };
 }
 
+/// Release this module's thread-local unitary-coefficient scratch pool on
+/// the calling thread: capacity returns to its recorded provision (zero
+/// unless a bounded provision was recorded). Called by the crate-level
+/// release; the seventh slice of APOLLO-MEM-SIBLING-THREAD-SCRATCH.
+pub fn release_unitary_scratch() {
+    UNITARY_COEFF_SCRATCH.with(|pool| pool.release());
+}
+
 /// Sorted orthonormal eigenvector basis of the Grünbaum commuting matrix.
 ///
 /// Column k corresponds to Hermite-Gauss order k; decreasing-eigenvalue sort

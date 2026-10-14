@@ -10,6 +10,14 @@ thread_local! {
     static DIRECT_WEIGHT_LANE_SCRATCH: ScratchPool<f64> = const { ScratchPool::new() };
 }
 
+/// Release this module's thread-local weight-lane scratch pool on the
+/// calling thread: capacity returns to its recorded provision (zero unless
+/// a bounded provision was recorded). Called by the crate-level release;
+/// the seventh slice of APOLLO-MEM-SIBLING-THREAD-SCRATCH.
+pub fn release_direct_scratch() {
+    DIRECT_WEIGHT_LANE_SCRATCH.with(|pool| pool.release());
+}
+
 /// Evaluate the direct $O(N^2)$ fractional Fourier kernel on a centered grid into a user-provided buffer.
 #[allow(clippy::similar_names)]
 pub fn direct_frft_forward_into(
