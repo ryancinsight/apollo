@@ -12,31 +12,28 @@ NTT is used in:
 
 ## API
 
-```rust,ignore
-use apollo_ntt::{NttPlan, ntt_forward, ntt_inverse};
+`NttPlan::new` builds the twiddle tables for a power-of-two length over
+the crate default prime; `with_modulus` takes an explicit prime `p` with
+`p ≡ 1 (mod n)` and primitive root.
 
-// Choose a prime p with p ≡ 1 (mod 2^k) so 2^k-th roots of unity exist
-let plan = NttPlan::new(length, modulus)?;
-
-// Forward NTT: [u64] -> [u64] (mod p)
-let transformed = ntt_forward(&input, &plan)?;
-
-// Inverse NTT
-let original = ntt_inverse(&transformed, &plan)?;
+```rust
+{{#include ../../crates/apollo-ntt/examples/book_ntt_roundtrip.rs}}
 ```
 
 ## Polynomial Multiplication
 
-```rust,ignore
-let product = apollo_ntt::polymul_ntt(&poly_a, &poly_b, modulus)?;
+```rust
+{{#include ../../crates/apollo-ntt/examples/book_ntt_polymul.rs}}
 ```
 
-Internally: forward NTT of both inputs → pointwise multiply → inverse NTT.
+The flow is forward NTT of both inputs → pointwise multiply modulo the
+prime → inverse NTT.
 
 ## Supported Moduli
 
-Apollo uses NIST-recommended 64-bit NTT-friendly primes with sufficient
-bit-width for typical polynomial multiplication without intermediate overflow.
+`NttPlan::new` uses the crate default prime `DEFAULT_MODULUS` (998244353);
+`with_modulus` takes an explicit prime with `modulus ≡ 1 (mod n)` and
+primitive root, and `MERSENNE31` covers the circle-plan path.
 
 ## Relation to FFT
 

@@ -5,23 +5,20 @@ frames and applies a windowed FFT to each, producing a time-frequency representa
 
 ## `StftPlan`
 
-```rust,ignore
-use apollo_stft::StftPlan;
-
-let plan = StftPlan::new(512, 256)?;
+```rust
+{{#include ../../crates/apollo-stft/examples/book_stft_plan.rs}}
 ```
 
 ## Forward Transform
 
-```rust,ignore
-// signal: [f64] -> frame_count * frame_len complex bins
-let spectrum = plan.forward(&signal)?;
+```rust
+{{#include ../../crates/apollo-stft/examples/book_stft_forward.rs}}
 ```
 
 ## Inverse Transform
 
-```rust,ignore
-let reconstructed = plan.inverse(&spectrum, signal.len())?;
+```rust
+{{#include ../../crates/apollo-stft/examples/book_stft_inverse.rs}}
 ```
 
 The inverse uses weighted overlap-add: each sample is the overlap of the
