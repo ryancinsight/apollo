@@ -1,32 +1,5 @@
 # Apollo Backlog
 
-<a id="apollo-python-native-link"></a>
-## APOLLO-PYTHON-NATIVE-LINK — Restore embedded native-test linking [patch] — done
-
-- Outcome: native Cargo tests link the interpreter, Maturin selects extension
-  mode, and the optimized release wheel imports with all 35 smoke cases passing.
-  Its aligned Mach-O string table and absent libpython dependency are verified.
-- Delivered by [PR #669](https://github.com/ryancinsight/apollo/pull/669), with
-  all 14 actual final-head hosted checks and the complete tracked source gate
-  passing. Both native CI lanes execute the existing NumPy boundary regression.
-  All 1634 native cases pass with the same 15 existing skips. No PyPI upload.
-
-<a id="apollo-provider-release-prerequisites"></a>
-## APOLLO-PROVIDER-RELEASE-PREREQUISITES — Validate the coordinated provider versions [patch] — done
-
-- Outcome: preserve the Moirai 0.9 migration, select published Hephaestus
-  0.21.0, and publish all 19 planned Apollo libraries after complete native,
-  API and standard package verification. Tests, fixtures and limits are retained.
-- Final reviewed source [validated head](https://github.com/ryancinsight/apollo/commit/b33d00325892b205939af3933cb9e7488db62c02)
-  and [guarded merge](https://github.com/ryancinsight/apollo/commit/97236f7db26d579aecdb5aaf1134ef0fb0dc88ed)
-  have identical trees. The full API comparison uses buildable baselines and
-  passes directly; its unavailable-baseline probe is skipped.
-- Registry receipts for all 19 versions are not yanked and identify that merge
-  and [publisher run](https://github.com/ryancinsight/apollo/actions/runs/38681655413).
-  Requested consumer versions are FFT 0.28.2, SHT 0.8.1 and DCT/DST 0.11.1.
-  [ADR 0075](docs/adr/0075-provider-release-receipts.md) records the version and
-  checksum receipts. Miri and the held task remain deferred and unverified.
-
 <a id="apollo-native-gate-repair"></a>
 ## APOLLO-NATIVE-GATE-REPAIR — retained fallback ownership and exact admission [patch] — todo
 - **priority:** verification.
