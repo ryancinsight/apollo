@@ -104,7 +104,10 @@ once_cell = "1.21.4"
 parking_lot = "0.12.5"
 proptest = "1.11.0"
 quote = "1.0.46"
-pyo3 = { version = "0.29.0", features = ["extension-module", "abi3-py38"] }
+# Rust tests embed the interpreter. Maturin >= 1.9.4 selects extension
+# linking through PYO3_BUILD_EXTENSION_MODULE for wheel builds.
+pyo3 = { version = "0.29.0", features = ["abi3-py38"] }
+pyo3-build-config = "0.29.0"
 # Dev-only comparison baseline for `docs/benchmark_results.md`. Its default features
 # are SIMD (avx/sse/neon) with no rayon edge, so it does not reintroduce the
 # transitive parallelism ADR 0011 removed with Criterion.

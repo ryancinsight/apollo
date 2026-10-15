@@ -347,7 +347,7 @@ dependencies = [
 
 [[package]]
 name = "apollo-python"
-version = "0.2.0"
+version = "0.2.1"
 dependencies = [
  "apollo-dctdst",
  "apollo-dctdst-core",
@@ -360,6 +360,7 @@ dependencies = [
  "hephaestus-wgpu",
  "leto",
  "pyo3",
+ "pyo3-build-config",
 ]
 
 [[package]]

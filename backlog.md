@@ -1,5 +1,26 @@
 # Apollo Backlog
 
+<a id="apollo-python-native-link"></a>
+## APOLLO-PYTHON-NATIVE-LINK — Restore embedded native-test linking [patch] — blocked
+- **priority:** verification.
+- **Evidence:** the unchanged trusted push gate and a direct Python native
+  test build fail at the linker because workspace-wide extension-module
+  mode omits the interpreter library. CI previously excluded this package.
+- **Outcome:** use interpreter linking for Cargo tests, Maturin-selected
+  extension linking for wheels, and PyO3's target-specific cdylib helper.
+  Require Maturin >= 1.9.4 and advance the binding patch version to 0.2.1.
+- **Acceptance:** execute the existing NumPy shape/value regression in both
+  native CI lanes, retain every existing test and timeout, verify a real wheel
+  import/value smoke, and pass the unchanged trusted gate before integration.
+- **Local evidence:** all 1633 native workspace tests pass with the same
+  15 existing skips, strict all-feature Clippy and doctests pass, and the
+  existing NumPy boundary test executes under interpreter linking. A real
+  ABI3 ARM wheel imports and passes all 35 smoke cases; its extension has
+  no libpython dependency. Hosted native lanes and the trusted gate remain
+  separate acceptance checks. No Python upload or deployment is requested.
+  Miri remains deferred and unverified.
+
+
 <a id="apollo-provider-release-prerequisites"></a>
 ## APOLLO-PROVIDER-RELEASE-PREREQUISITES — Validate the coordinated provider versions [patch] — blocked
 - **priority:** verification.

@@ -1,5 +1,13 @@
 # Changelog
 
+## [apollo-python 0.2.1] - 2026-10-15
+
+- Restore native interpreter linking for Rust binding tests; retain Maturin's
+  extension-only wheel mode and use the PyO3 cdylib helper. Raise Maturin's
+  minimum to 1.9.4 and execute the existing NumPy boundary regression in
+  both native CI lanes without changing coverage, fixtures, or time limits.
+
+
 All notable changes to the Apollo workspace are documented in this file.
 Versioning follows [Semantic Versioning 2.0.0](https://semver.org/spec/v2.0.0.html).
 Change-class tags: [patch] backward-compatible fix, [minor] additive non-breaking, [major] breaking, [arch] cross-cutting redesign.
