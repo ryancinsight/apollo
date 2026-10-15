@@ -1,75 +1,31 @@
 # Apollo Backlog
 
 <a id="apollo-python-native-link"></a>
-## APOLLO-PYTHON-NATIVE-LINK — Restore embedded native-test linking [patch] — blocked
-- **priority:** verification.
-- **Evidence:** the unchanged trusted push gate and a direct Python native
-  test build fail at the linker because workspace-wide extension-module
-  mode omits the interpreter library. CI previously excluded this package.
-- **Outcome:** use interpreter linking for Cargo tests, Maturin-selected
-  extension linking for wheels, and PyO3's target-specific cdylib helper.
-  Require Maturin >= 1.9.4 and advance the binding patch version to 0.2.1.
-- **Release loader finding:** the optimized wheel at [pre-correction source](https://github.com/ryancinsight/apollo/commit/fd700c29cb0b2ea39e54b2f54f49786d354d066b) builds but
-  fails import: its Mach-O string table offset is `10004140` (4 modulo 8).
-  This matches [Rust #157750](https://github.com/rust-lang/rust/issues/157750).
-  Retain the Python extension symbol table with a package-specific release
-  profile; keep release optimization, all smoke cases and test limits. The
-  corrected optimized wheel passes all 35 import/value smoke cases, has an
-  8-byte-aligned string table and retains no libpython dependency. The failed
-  release artifact and logs remain part of the before/after evidence.
-- **Acceptance:** execute the existing NumPy shape/value regression in both
-  native CI lanes, retain every existing test and timeout, verify a real wheel
-  import/value smoke, and pass the unchanged trusted gate before integration.
-- **Local evidence:** all 1634 native workspace tests pass with the same
-  15 existing skips, strict all-feature Clippy and doctests pass, and the
-  existing NumPy boundary test executes under interpreter linking. A real
-  ABI3 ARM wheel imports and passes all 35 smoke cases; its extension has
-  no libpython dependency. Hosted native lanes and the trusted gate remain
-  separate acceptance checks. No Python upload or deployment is requested.
-  Miri remains deferred and unverified.
+## APOLLO-PYTHON-NATIVE-LINK — Restore embedded native-test linking [patch] — done
 
+- Outcome: native Cargo tests link the interpreter, Maturin selects extension
+  mode, and the optimized release wheel imports with all 35 smoke cases passing.
+  Its aligned Mach-O string table and absent libpython dependency are verified.
+- Delivered by [PR #669](https://github.com/ryancinsight/apollo/pull/669), with
+  all 14 actual final-head hosted checks and the complete tracked source gate
+  passing. Both native CI lanes execute the existing NumPy boundary regression.
+  All 1634 native cases pass with the same 15 existing skips. No PyPI upload.
 
 <a id="apollo-provider-release-prerequisites"></a>
-## APOLLO-PROVIDER-RELEASE-PREREQUISITES — Validate the coordinated provider versions [patch] — blocked
-- **priority:** verification.
-- **Outcome:** preserve the existing Moirai 0.9 migration and FFT 0.28.2,
-  advancing the three Hephaestus requirements together to its corrected 0.21 line.
-- **Evidence:** PR #668 at its initial migration head passes ordinary CI;
-  671 local FFT native tests pass with the same 15 existing skips. The real
-  release API gate passes, then its package dry-run waits on missing Hephaestus.
-  Upstream 0.20.4 separately fails its aggregate API gate on existing breaks;
-  its 0.21 correction changes version metadata and documentation only.
-- **Integrated source evidence:** all 1632 enabled native workspace tests pass
-  with the same 15 existing skips; strict all-feature/all-target Clippy and
-  ordinary workspace doctests pass against Hephaestus 0.21 at the reviewed
-  version-correction head. No transform algorithm or fixture changes.
-- **Merged-owner conversion closure:** retain the delivered Mellin scratch
-  test and replace its two usize-to-float casts with the canonical count
-  conversion. The fixture domain is below 2^53; every value, threshold and
-  assertion stays unchanged.
-- **Final provider source evidence:** select Hephaestus [reviewed provider source](https://github.com/ryancinsight/hephaestus/commit/63cdd65303a7bb1c8c1a4e1417ba8dba37c2355a) and current
-  reviewed Eunomia, Hermes, Leto, Moirai, Aequitas and Themis defaults. All
-  1634 native workspace tests pass with the same 15 existing skips; strict
-  all-feature Clippy, warning-denied docs and doctests pass. Source and
-  published registry graphs require their own exact-head validation.
-- **Registry prerequisite closure:** all six Hephaestus 0.21.0 packages
-  are present and not yanked, with trusted publisher source
-  [the guarded merge](https://github.com/ryancinsight/hephaestus/commit/2f3f6dd04e79f84631acf837b561a24f34e43e2b).
-  Standard verification of all 19 pending Apollo packages passes after that
-  release. The blocking final-head API gate remains a separate pending verdict.
-- **Hosted verification:** the one authorized readiness retry succeeded.
-  Collect all required final-head CI and blocking API/package verdicts
-  before merging; no Apollo publication is claimed yet. The interrupted
-  local API comparison did not produce a complete verdict.
-- **Dependency order:** compatible Eunomia 0.9.2 Bessel maintenance release,
-  Hephaestus core/backend packages, then Apollo FFT. Confirm registry receipts
-  and exact-head package/API/native gates before publication.
-- **Merge side effect:** the pinned default-branch planner selects 19 pending
-  Apollo packages, beyond the FFT prerequisite. Retain this PR until the
-  intended release set is verified; do not trigger an unverified broad publish.
-- **Constraints:** existing coverage/timeouts remain unchanged; Miri and the
-  separate held row-prologue task remain deferred and unverified.
+## APOLLO-PROVIDER-RELEASE-PREREQUISITES — Validate the coordinated provider versions [patch] — done
 
+- Outcome: preserve the Moirai 0.9 migration, select published Hephaestus
+  0.21.0, and publish all 19 planned Apollo libraries after complete native,
+  API and standard package verification. Tests, fixtures and limits are retained.
+- Final reviewed source [validated head](https://github.com/ryancinsight/apollo/commit/b33d00325892b205939af3933cb9e7488db62c02)
+  and [guarded merge](https://github.com/ryancinsight/apollo/commit/97236f7db26d579aecdb5aaf1134ef0fb0dc88ed)
+  have identical trees. The full API comparison uses buildable baselines and
+  passes directly; its unavailable-baseline probe is skipped.
+- Registry receipts for all 19 versions are not yanked and identify that merge
+  and [publisher run](https://github.com/ryancinsight/apollo/actions/runs/38681655413).
+  Requested consumer versions are FFT 0.28.2, SHT 0.8.1 and DCT/DST 0.11.1.
+  [ADR 0075](docs/adr/0075-provider-release-receipts.md) records the version and
+  checksum receipts. Miri and the held task remain deferred and unverified.
 
 <a id="apollo-native-gate-repair"></a>
 ## APOLLO-NATIVE-GATE-REPAIR — retained fallback ownership and exact admission [patch] — todo

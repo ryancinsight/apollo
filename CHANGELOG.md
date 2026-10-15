@@ -29,9 +29,12 @@ Change-class tags: [patch] backward-compatible fix, [minor] additive non-breakin
   direct-transform and bitwise-layout oracles. No numerical bounds change.
 - Architecture-private tables, imports, and codelets compile only with their
   users; ARM warning-denied lint has no blanket diagnostic waivers.
-- The lock adopts compatible Hephaestus 0.20.4 at PR #465's reviewed merge,
-  preserving every other provider pin. Missing dyld images retain typed CUDA
-  adapter absence instead of reporting a present-but-broken driver.
+- The final coordinated release selects published Hephaestus 0.21.0, Moirai
+  0.9.2 and the reviewed provider graph. All 19 planned Apollo libraries are
+  published from the verified PR #669 merge. [ADR 0075](docs/adr/0075-provider-release-receipts.md)
+  records exact source identity, final gates and immutable registry receipts.
+  Missing dyld images retain typed CUDA adapter absence instead of reporting
+  a present-but-broken driver.
 
 ## [apollo-alloc 0.17.0]
 
