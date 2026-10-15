@@ -1,5 +1,29 @@
 # Apollo Backlog
 
+<a id="apollo-provider-release-prerequisites"></a>
+## APOLLO-PROVIDER-RELEASE-PREREQUISITES — Validate the coordinated provider versions [patch] — blocked
+- **priority:** verification.
+- **Outcome:** preserve the existing Moirai 0.9 migration and FFT 0.28.2,
+  advancing the three Hephaestus requirements together to its corrected 0.21 line.
+- **Evidence:** PR #668 at its initial migration head passes ordinary CI;
+  671 local FFT native tests pass with the same 15 existing skips. The real
+  release API gate passes, then its package dry-run waits on missing Hephaestus.
+  Upstream 0.20.4 separately fails its aggregate API gate on existing breaks;
+  its 0.21 correction changes version metadata and documentation only.
+- **Integrated source evidence:** all 1632 enabled native workspace tests pass
+  with the same 15 existing skips; strict all-feature/all-target Clippy and
+  ordinary workspace doctests pass against Hephaestus 0.21 at the reviewed
+  version-correction head. No transform algorithm or fixture changes.
+- **Dependency order:** compatible Eunomia 0.9.2 Bessel maintenance release,
+  Hephaestus core/backend packages, then Apollo FFT. Confirm registry receipts
+  and exact-head package/API/native gates before publication.
+- **Merge side effect:** the pinned default-branch planner selects 19 pending
+  Apollo packages, beyond the FFT prerequisite. Retain this PR until the
+  intended release set is verified; do not trigger an unverified broad publish.
+- **Constraints:** existing coverage/timeouts remain unchanged; Miri and the
+  separate held row-prologue task remain deferred and unverified.
+
+
 <a id="apollo-native-gate-repair"></a>
 ## APOLLO-NATIVE-GATE-REPAIR — retained fallback ownership and exact admission [patch] — todo
 - **priority:** verification.
