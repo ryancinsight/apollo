@@ -13,7 +13,7 @@ The binding 0.2.1 remains unpublished on PyPI.
 
 [Reviewed head](https://github.com/ryancinsight/apollo/commit/b33d00325892b205939af3933cb9e7488db62c02)
 and [published merge](https://github.com/ryancinsight/apollo/commit/97236f7db26d579aecdb5aaf1134ef0fb0dc88ed)
-share tree `5622e19abe5b2cf6386393e01ef76712c8e1cba7`.
+share an [identical source tree](https://github.com/ryancinsight/apollo/tree/5622e19abe5b2cf6386393e01ef76712c8e1cba7).
 All 14 actual hosted checks and the complete unchanged tracked source gate pass.
 The blocking [release validation](https://github.com/ryancinsight/apollo/actions/runs/38680459498)
 passes the direct full API comparison and FFT package dry-run. Baselines build;
