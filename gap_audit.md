@@ -1,5 +1,12 @@
 # Apollo gap audit
 
+## APOLLO-LETO-047-COMPAT — additive provider rejection [patch]
+
+- Finding: `^0.46.0` excludes Leto's compatible 0.47 borrowed-CSR addition and prevents one source identity across the Coeus/array/device graph.
+- Resolution: a bounded compatible interval on both Leto layers, preserving the currently merged graph and every Rust implementation/test byte.
+- Source acceptance closes: exact-base hosted native/API gates, fresh unseeded review consumers and the real downstream 0.47 graph pass. Default/registry availability remains provider-first; [the record](docs/verification/leto-borrowed-csr-compatibility.md) separates those claims.
+
+
 ## N=121 layout coverage stranded in #655 <a id="apollo-fft121-layout-recovery"></a>
 
 - **Finding:** baseline `ae8b0b49` covers four dense pairs. Draft #655 at `222a3f10` adds 25 offset/permuted/padded pairs but assumes mandatory AVX2/FMA, rejecting ARM.

@@ -1,6 +1,6 @@
 [package]
 name = "apollo-leto-interop"
-version = "0.20.0"
+version = "0.20.1"
 rust-version.workspace = true
 edition.workspace = true
 license.workspace = true

@@ -1,5 +1,15 @@
 # Apollo Backlog
 
+<a id="apollo-leto-047-compat"></a>
+## APOLLO-LETO-047-COMPAT — Accept the additive borrowed-CSR provider [patch] — review
+
+- Outcome: retain Leto 0.46 compatibility and admit 0.47 through one canonical provider identity, without Rust or backend changes.
+- Target: apollo-fft 0.29.2; affected family patches in CHANGELOG.md. Coeus recovery #533 needs this binding after Leto #362.
+- Acceptance: unchanged Rust/source identities; canonical locked resolution; native, strict Clippy, exact API and fresh-consumer checks; real 0.47 downstream integration.
+- Evidence: all actual hosted/source API and fresh review-consumer checks pass; the real Coeus 0.47 graph passes native/strict/memory gates.
+- Boundary: no main merge, registry publication or Pages authorization. See [verification](docs/verification/leto-borrowed-csr-compatibility.md).
+
+
 <a id="apollo-fft121-layout-recovery"></a>
 ## APOLLO-FFT121-LAYOUT-RECOVERY — recover #655 correctness coverage [patch] — verified
 
