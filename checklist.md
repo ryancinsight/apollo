@@ -8,14 +8,15 @@ Active sprint target: `apollo-fft` 0.29.1 [patch], above provider PR #672.
 - [x] [patch] Recover every layout/direction/fixture and bitwise guard through the existing admission-aware routes.
 - [x] [patch] Preserve kernel bytes, numerical bounds and draft #655's history.
 - [x] [patch] Rebase onto reviewed provider `e29a25ac`; retain all external lock records and a seven-file diff.
-- [ ] [patch] Pass all five recovered tests, strict workspace Clippy and formatting on this provider graph.
-- [ ] [patch] Pass complete native ARM and hosted x86/ARM suites under existing timeouts.
-- [ ] [patch] Pass all 21 exact-source API comparisons and remaining applicable hosted gates.
+- [x] [patch] Pass all five recovered tests, strict workspace Clippy and formatting on this provider graph.
+- [x] [patch] Pass complete native ARM (1,636 cases; 15 existing ignored instruments) and hosted x86/ARM suites under existing timeouts.
+- [x] [patch] Pass all 21 patch API comparisons (223 applicable checks each) and remaining hosted gates on runtime `446fc891` ([run](https://github.com/ryancinsight/apollo/actions/runs/38763466751)).
 - [ ] [patch] Integrate the approved provider chain, verify fresh source/package availability and retain the focused PR.
 
-Previous-provider CI remains historical evidence; the rebased candidate needs
-its own results. Default-branch merges invoke pending-crate publishing and
-Leto/Apollo Pages, so approval must cover those side effects.
+Runtime source `446fc891` has complete rebased evidence. This closure changes
+only board records; Rust, manifests and lock blobs stay identical. Its hosted
+checks must also pass before integration. Default merges invoke pending-crate
+publishing and Leto/Apollo Pages; approval must cover those side effects.
 
 Provider-cohort versions and acceptance remain tracked by PR #672.
 
