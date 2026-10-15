@@ -24,7 +24,10 @@ fn main() {
             .expect("contiguous")
             .iter()
             .zip(ntt_b.as_slice().expect("contiguous").iter())
-            .map(|(a, b)| ((u128::from(*a) * u128::from(*b)) % u128::from(modulus)) as u64)
+            .map(|(a, b)| {
+                u64::try_from((u128::from(*a) * u128::from(*b)) % u128::from(modulus))
+                    .expect("invariant: remainder below u64 modulus")
+            })
             .collect::<Vec<_>>(),
     );
     let product = plan.inverse(&product_ntt).expect("inverse");
