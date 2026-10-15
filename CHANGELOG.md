@@ -1,6 +1,6 @@
 # Changelog
 
-## [apollo-fft 0.29.1] - Unreleased
+## [apollo-fft 0.29.1] - 2026-10-15
 
 ### Added
 
@@ -12,7 +12,7 @@
   Test-local tracing captures arrange/act/assert spans on failure. Experimental
   benchmarks, reports and workflow remain in the historical draft #655.
 
-## [Provider cohort] - Unreleased
+## [Provider cohort] - 2026-10-15
 
 ### Breaking
 

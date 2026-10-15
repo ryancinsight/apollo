@@ -1,36 +1,33 @@
 # Apollo Checklist
 
-Active sprint target: `apollo-fft` 0.29.1 [patch], above provider PR #672.
+Active sprint target: `apollo-fft` 0.29.1 [patch], above published provider cohort 0.29.0.
 
 ## APOLLO-FFT121-LAYOUT-RECOVERY [patch]
 
 - [x] [patch] Audit main/#655/#664 and reproduce the historical ARM/oracle failures.
-- [x] [patch] Recover every layout/direction/fixture and bitwise guard through the existing admission-aware routes.
-- [x] [patch] Preserve kernel bytes, numerical bounds and draft #655's history.
-- [x] [patch] Integrate provider `8198d42d`; retain all of its refreshed external lock records and a seven-file diff.
-- [x] [patch] Pass all five recovered tests, strict workspace Clippy and formatting on this provider graph.
-- [x] [patch] Pass complete native ARM (1,636 cases; 15 existing ignored instruments) and hosted x86/ARM suites under existing timeouts.
-- [x] [patch] Pass all 21 patch API comparisons (223 applicable checks each) and remaining hosted gates on runtime `446fc891` ([run](https://github.com/ryancinsight/apollo/actions/runs/38763466751)).
-- [ ] [patch] Integrate the approved provider chain, verify fresh source/package availability and retain the focused PR.
+- [x] [patch] Recover all 25 layout pairs, six input families and both directions through admission-aware execution; preserve bitwise outputs and guards.
+- [x] [patch] Preserve production kernel bytes, numerical bounds and draft #655's history.
+- [x] [patch] Integrate current main `730f6262`; retain every external lock record and a seven-file correctness diff.
+- [x] [patch] Pass all five focused native ARM tests, formatting, strict all-feature/all-target workspace Clippy and doctests on runtime `eb8184b7`.
+- [x] [patch] Pass all 1,679 hosted x86 and 1,636 hosted ARM cases, retaining 15 existing ignored instruments; both FFT library modes pass 664 tests.
+- [x] [patch] Pass all 22 Rust library patch API comparisons, with 223 applicable checks each, plus every configured hosted gate ([runtime run](https://github.com/ryancinsight/apollo/actions/runs/38774215093)).
+- [x] [patch] Integrate the approved provider chain, verify its published archives and fresh source values, and retain focused PR #671.
 
-Runtime source `446fc891` has complete rebased evidence. This closure changes
-only board records; Rust, manifests and lock blobs stay identical. Its hosted
-checks must also pass before integration. Moirai, Leto and Hephaestus are integrated at `44a962f0`, `8b4ab407` and
-`672c5abc`. The final source graph follows their current defaults. Ordered
-integration, automatic publication and Pages effects have user approval;
-refreshed-head native/API/hosted gates remain required in PR #671.
+This closure changes records only: Rust, manifests and lock blobs remain
+identical to runtime `eb8184b7`. Its own final hosted checks must pass before
+merging. [PR #671](https://github.com/ryancinsight/apollo/pull/671) records the
+resulting merge, 0.29.1 registry receipt, fresh registry consumer and Pages run.
+Integration, automatic publication and Pages deployment have user approval.
 
-Provider-cohort versions and acceptance remain tracked by PR #672.
+## APOLLO-EUNOMIA-010-COHORT [minor] — done
 
-## APOLLO-EUNOMIA-010-COHORT [minor]
-
-- [x] Audit provider ownership, default resolution failures and ADR 0047's single-identity rule.
-- [x] Align all affected public pre-1.0 families and internal requirements; preserve Rust algorithm/test bytes.
-- [x] Verify nine canonical default provider identities, all 209 unchanged registry records and byte-identical Rust sources.
-- [x] Establish native formatting, strict Clippy and all 1,634 numerical passes (15 existing ignored instruments) at runtime `e29a25ac`; repeat the refreshed graph before merge.
-- [x] Complete all 21 committed API graph builds and every applicable x86/ARM hosted gate at `e29a25ac`; require the refreshed head's checks in PR #672.
-- [ ] Integrate provider prerequisites in order, refresh the final lock and execute an unseeded standalone consumer without path/patch overrides.
-- [x] Deliver focused dependency PR #672 independently of FFT correctness PR #671 and historical experiment #655.
+- [x] Audit ownership, nominal type identity and ADR 0047; align all affected public families/internal requirements without Rust implementation changes.
+- [x] Verify nine current provider defaults, all 209 unchanged registry records and byte-identical Rust sources.
+- [x] Pass native formatting, strict Clippy, all 1,634 numerical cases (15 existing ignored instruments) and doctests at `8198d42d`.
+- [x] Build all 22 library API pairs and pass all applicable x86/ARM hosted gates at `8198d42d`; retain the pre-1.0 breaking-boundary policy distinction.
+- [x] Merge Moirai #623, Leto #363, Hephaestus #493 and Apollo #672 in order; refresh the final lock and execute unseeded source consumers without path/patch overrides.
+- [x] Verify all 21 intended Apollo cohort archives identify merge `730f6262`, match registry checksums and are not yanked; verify upstream Moirai/Leto/Hephaestus receipts.
+- [x] Keep [provider PR #672](https://github.com/ryancinsight/apollo/pull/672) separate from FFT correctness #671 and experiment #655; record publisher/Pages evidence there.
 
 ## Coordinated provider release closure [patch] — 2026-10-15
 
