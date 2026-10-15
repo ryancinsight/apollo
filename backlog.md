@@ -35,6 +35,10 @@
   with the same 15 existing skips; strict all-feature/all-target Clippy and
   ordinary workspace doctests pass against Hephaestus 0.21 at the reviewed
   version-correction head. No transform algorithm or fixture changes.
+- **Merged-owner conversion closure:** retain the delivered Mellin scratch
+  test and replace its two usize-to-float casts with the canonical count
+  conversion. The fixture domain is below 2^53; every value, threshold and
+  assertion stays unchanged.
 - **Dependency order:** compatible Eunomia 0.9.2 Bessel maintenance release,
   Hephaestus core/backend packages, then Apollo FFT. Confirm registry receipts
   and exact-head package/API/native gates before publication.

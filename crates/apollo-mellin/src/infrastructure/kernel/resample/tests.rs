@@ -114,12 +114,13 @@ fn hermes_log_frequency_rows_match_scalar_formulas_at_threshold() {
 fn release_scratch_returns_weight_pools_to_baseline_and_serves_again() {
     const LEN: usize = PAR_THRESHOLD;
     let thread = std::thread::spawn(|| {
-        let factor = -std::f64::consts::TAU / LEN as f64;
+        // LEN and every index are below 2^53, so count conversion is exact.
+        let factor = -std::f64::consts::TAU / <f64 as eunomia::FloatElement>::from_count(LEN);
         let scale = 0.125_f64;
         let row = 17usize;
         let samples = (0..LEN)
             .map(|index| {
-                let x = index as f64;
+                let x = <f64 as eunomia::FloatElement>::from_count(index);
                 (x * 0.03125).sin() + (x * 0.015625).cos()
             })
             .collect::<Vec<_>>();
