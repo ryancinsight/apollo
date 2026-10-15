@@ -1,5 +1,25 @@
 # Apollo Backlog
 
+<a id="apollo-fft121-layout-recovery"></a>
+## APOLLO-FFT121-LAYOUT-RECOVERY — recover #655 correctness coverage [patch] — verified
+
+- **Owner:** Codex, `codex/recover-fft121-layout-tests`; current main/provider base `730f6262` from PR #672.
+- **Scope:** 25 layout pairs × six input families × forward/unnormalized inverse, exact result/guard bits, finite/equal-length direct-DFT oracles, exact CPU admission and actual fallback execution.
+- **Version:** `apollo-fft` 0.29.1 is the correctness-only patch over published 0.29.0. Production kernels and numerical bounds remain unchanged; #655 retains its experiments/reports/workflow at `222a3f10`.
+- **Regression:** unchanged ARM baseline passes three focused cases; the historical AVX assertion and missing oracle guards produce three expected failures; the adaptation passes all five.
+- **Current evidence:** runtime `eb8184b7` passes the five focused native ARM tests, formatting, strict workspace Clippy and doctests. All 22 patch API pairs pass 223 applicable checks each. [Hosted run 38774215093](https://github.com/ryancinsight/apollo/actions/runs/38774215093) passes 1,679 x86 and 1,636 ARM cases (15 existing ignored instruments), both 664-case FFT library modes and every remaining configured gate.
+- **Availability:** provider owners are merged/published at Moirai `44a962f0`, Leto `8b4ab407`, Hephaestus `672c5abc` and Apollo `730f6262`. All intended archive checksums and source identities pass; fresh default-source N=121 consumers compute the analytic values and preserve input bits.
+- **Integration:** this records-only closure retains runtime Rust/manifests/lock blobs and the seven-file diff. Its own final hosted checks remain required. [PR #671](https://github.com/ryancinsight/apollo/pull/671) records the approved merge, resulting 0.29.1 publication, final registry/source consumers and Pages deployment.
+
+<a id="apollo-eunomia-010-cohort"></a>
+## APOLLO-EUNOMIA-010-COHORT — restore clean provider resolution [minor] — done
+
+- **Scope:** canonical provider/internal requirements, source lock and pre-1.0 migration records. Rust implementations, numerical bounds and benchmark methods remain unchanged.
+- **Delivered:** one Eunomia 0.10/Mnemosyne 0.10/Hermes 0.9/Leto 0.46/Hephaestus 0.22/Moirai 0.9.3 graph; all nine providers select integrated defaults and all 209 registry records are preserved.
+- **Evidence:** `8198d42d` passes strict all-feature/all-target Clippy, 1,634 native cases, doctests, all 22 API graph pairs and applicable hosted x86/ARM gates. Pre-1.0 minor provider boundaries policy-skip compatibility rules; unchanged allocator 0.17 passes actual patch rules.
+- **Integration:** [PR #672](https://github.com/ryancinsight/apollo/pull/672) merges as `730f6262` with the tested tree. Its [publisher](https://github.com/ryancinsight/apollo/actions/runs/38776177645) and [Pages](https://github.com/ryancinsight/apollo/actions/runs/38776174688) succeed; all 21 intended not-yanked archives identify that merge and match their checksums. The fresh unseeded default-source consumer computes all N=121 bins for two analytic impulses with unchanged input bits.
+- **Boundary:** source/version compatibility remains separate from correctness #671 and experiment #655. Ordered integration and automatic publication/Pages effects have explicit user approval; final default-branch check results and registry consumer evidence remain linked from PR #672.
+
 <a id="apollo-native-gate-repair"></a>
 ## APOLLO-NATIVE-GATE-REPAIR — retained fallback ownership and exact admission [patch] — todo
 - **priority:** verification.

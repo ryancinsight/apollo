@@ -172,19 +172,18 @@ jobs:
         run: python3 -m unittest discover -s scripts/tests -v
       - name: SAFETY ratchet
         run: python scripts/safety_ratchet.py check
+      # Native tests embed Python; Maturin selects extension-only linking.
+      - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1
+        with:
+          python-version: "3.14"
+      - name: Install native Python boundary dependency
+        run: python -m pip install numpy==2.5.1
       - name: Clippy
         if: needs.scope.outputs.code != 'false'
         run: cargo clippy --locked --workspace --all-targets --all-features -- -D warnings
-      # apollo-python builds pyo3 with the "extension-module" feature, which
-      # deliberately omits linking against libpython (Python dynamically
-      # loads the .so and supplies those symbols at runtime). A `cargo test`
-      # binary is a normal executable that needs those symbols itself, so it
-      # cannot link — apollo-python is exercised by the separate "python
-      # bindings" job instead (maturin develop + pytest).
-      #
       - name: Tests
         if: needs.scope.outputs.code != 'false'
-        run: cargo nextest run --locked --profile ci --workspace --all-features --exclude apollo-python
+        run: cargo nextest run --locked --profile ci --workspace --all-features
       - name: FFT library test isolation
         if: needs.scope.outputs.code != 'false'
         # Budgets cover test execution only (the --no-run build warms the
@@ -235,7 +234,7 @@ jobs:
           --bench buffer_reuse
       - name: Doctests
         if: needs.scope.outputs.code != 'false'
-        run: cargo test --locked --doc --workspace --exclude apollo-python
+        run: cargo test --locked --doc --workspace
       - name: Provider audit
         if: needs.scope.outputs.code != 'false'
         run: cargo run --locked -p xtask -- provider-audit
@@ -280,10 +279,15 @@ jobs:
         run: |
           test "$(uname -m)" = arm64
           test "$(git rev-parse HEAD)" = "$EXPECTED"
+      - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1
+        with:
+          python-version: "3.14"
+      - name: Install native Python boundary dependency
+        run: python -m pip install numpy==2.5.1
       - name: Warning-denied ARM lint
         run: cargo clippy --locked --workspace --all-targets --all-features -- -D warnings
       - name: Native admission, ownership, values, and allocation contracts
-        run: cargo nextest run --locked --profile ci --workspace --all-features --exclude apollo-python
+        run: cargo nextest run --locked --profile ci --workspace --all-features
 
   docs-plan:
     # A draft pull request is visibility, not a verification event: its pushes

@@ -62,6 +62,12 @@ codegen-units = 1
 # the full compilation overhead of fat LTO.
 lto = "thin"
 
+# Rust/LLVM stripping can misalign Mach-O LINKEDIT on macOS 27
+# (rust-lang/rust#157750). Keep the extension symbol table; optimization stays
+# identical to the release profile used by the transform libraries.
+[profile.release.package.apollo-python]
+strip = "none"
+
 [profile.bench-quick]
 inherits = "release"
 codegen-units = 16
@@ -75,7 +81,7 @@ inherits = "release"
 
 
 [workspace.package]
-version = "0.16.0"
+version = "0.17.0"
 edition = "2021"
 rust-version = "1.95"
 license = "MIT"
@@ -83,7 +89,7 @@ authors = ["Ryan Clanton PhD <ryanclanton@outlook.com>"]
 repository = "https://github.com/ryancinsight/apollo"
 
 [workspace.dependencies]
-apollo-dctdst-core = { version = "0.16.0", path = "crates/apollo-dctdst-core" }
+apollo-dctdst-core = { version = "0.17.0", path = "crates/apollo-dctdst-core" }
 anyhow = "1.0.103"
 csv = "1.4.0"
 # Eunomia PR #87 is merged; Cargo.lock records the reviewed default source.
@@ -92,7 +98,7 @@ eunomia = { version = "0.10.0", git = "https://github.com/ryancinsight/eunomia",
 mnemosyne = { package = "mnemosyne-memory", version = "0.10.0", git = "https://github.com/ryancinsight/Mnemosyne.git", features = ["eunomia"] }
 melinoe = { version = "0.10.0", git = "https://github.com/ryancinsight/melinoe.git", default-features = false, features = ["alloc"] }
 # Hermes PR #156 and Leto PR #168 are merged; Cargo.lock records their reviewed
-# default sources.
+# default sources. origin/main
 hermes-simd = { version = "0.9.0", git = "https://github.com/ryancinsight/hermes.git" }
 leto = { version = "0.46.0", git = "https://github.com/ryancinsight/leto.git" }
 leto-ops = { version = "0.46.0", git = "https://github.com/ryancinsight/leto.git" }
@@ -104,7 +110,10 @@ once_cell = "1.21.4"
 parking_lot = "0.12.5"
 proptest = "1.11.0"
 quote = "1.0.46"
-pyo3 = { version = "0.29.0", features = ["extension-module", "abi3-py38"] }
+# Rust tests embed the interpreter. Maturin >= 1.9.4 selects extension
+# linking through PYO3_BUILD_EXTENSION_MODULE for wheel builds.
+pyo3 = { version = "0.29.0", features = ["abi3-py38"] }
+pyo3-build-config = "0.29.0"
 # Dev-only comparison baseline for `docs/benchmark_results.md`. Its default features
 # are SIMD (avx/sse/neon) with no rayon edge, so it does not reintroduce the
 # transitive parallelism ADR 0011 removed with Criterion.
@@ -118,14 +127,14 @@ phastft = { version = "0.4.1", default-features = false }
 # exploits real-input symmetry over rustfft: a size-N real transform costs about
 # half a size-N complex one and yields N/2+1 bins instead of N.
 realfft = "3.5.0"
-moirai = { package = "moirai-runtime", version = "0.9.0", git = "https://github.com/ryancinsight/Moirai.git", features = ["melinoe"] }
+moirai = { package = "moirai-runtime", version = "0.9.3", git = "https://github.com/ryancinsight/Moirai.git", features = ["melinoe"] }
 serde = { version = "1.0.228", features = ["derive"] }
 serde_json = "1.0.150"
 syn = { version = "2.0.118", features = ["full"] }
 # themis owns CPU topology across the stack: NUMA nodes, cache levels, and the
 # per-processor efficiency class the pinned measurement instruments select on
 # (ADR 0043). `std` supplies the platform detection backends.
-themis = { package = "themis-topology", version = "0.11.0", git = "https://github.com/ryancinsight/themis", default-features = false, features = ["std"] }
+themis = { package = "themis-topology", version = "0.11.1", git = "https://github.com/ryancinsight/themis", default-features = false, features = ["std"] }
 thiserror = "2.0.18"
 # Hephaestus 0.15 owns Apollo's WGPU 30 device contract.
 

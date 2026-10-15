@@ -130,6 +130,16 @@ mod tests {
     use crate::application::execution::kernel::direct::{dft_forward, dft_inverse};
     use eunomia::{Complex32, Complex64};
 
+    fn trace() -> tracing::subscriber::DefaultGuard {
+        tracing::subscriber::set_default(
+            tracing_subscriber::fmt()
+                .without_time()
+                .with_test_writer()
+                .with_span_events(tracing_subscriber::fmt::format::FmtSpan::FULL)
+                .finish(),
+        )
+    }
+
     fn chunked_available() -> bool {
         #[cfg(target_arch = "x86_64")]
         {
@@ -158,6 +168,13 @@ mod tests {
         out_starts: &[usize; 11],
         out_step: usize,
     ) {
+        let _span = tracing::info_span!(
+            "act",
+            route = "streams",
+            inverse = INVERSE,
+            accelerated = chunked_available()
+        )
+        .entered();
         let original = base.to_vec();
         let handled = try_dft11_streams::<INVERSE>(base, in_starts, in_step, out_starts, out_step);
         assert_eq!(handled, chunked_available(), "AVX2/FMA admission");
@@ -184,6 +201,13 @@ mod tests {
     }
 
     fn exercise_transform_route<const INVERSE: bool>(base: &mut [Complex32; 121]) {
+        let _span = tracing::info_span!(
+            "act",
+            route = "transform",
+            inverse = INVERSE,
+            accelerated = chunked_available()
+        )
+        .entered();
         let original = *base;
         let handled = try_dft121_chunked::<INVERSE>(base);
         assert_eq!(handled, chunked_available(), "AVX2/FMA admission");
@@ -203,6 +227,7 @@ mod tests {
     }
 
     fn input_11(kind: usize) -> [Complex32; 11] {
+        let _span = tracing::info_span!("arrange", kind).entered();
         match kind {
             0 => [Complex32::new(0.0, 0.0); 11],
             1 => {
@@ -235,7 +260,19 @@ mod tests {
     }
 
     fn max_err(got: &[Complex64], expected: &[Complex64]) -> f64 {
+        let _span = tracing::info_span!("assert", values = got.len()).entered();
+        assert_eq!(got.len(), expected.len());
         got.iter().zip(expected).fold(0.0f64, |acc, (g, e)| {
+            // These bounded input families have finite analytical outputs.
+            // Reject non-finite values before max: float::max ignores NaN.
+            assert!(
+                g.re.is_finite() && g.im.is_finite(),
+                "non-finite DFT value {g:?}"
+            );
+            assert!(
+                e.re.is_finite() && e.im.is_finite(),
+                "non-finite oracle value {e:?}"
+            );
             let d = ((g.re - e.re) * (g.re - e.re) + (g.im - e.im) * (g.im - e.im)).sqrt();
             acc.max(d)
         })
@@ -243,6 +280,8 @@ mod tests {
 
     #[test]
     fn chunked_streams_match_direct_within_tolerance() {
+        let _trace = trace();
+        let _span = tracing::info_span!("streams_direct").entered();
         for kind in 0..6 {
             // 11 distinct streams: contiguous layout, stride 11.
             let mut streams = [[Complex32::new(0.0, 0.0); 11]; 11];
@@ -281,18 +320,52 @@ mod tests {
         out_starts: &[usize; 11],
         out_step: usize,
     ) -> Vec<(u32, u32)> {
-        let mut base = [Complex32::new(0.0, 0.0); 121];
+        let _layout = tracing::info_span!(
+            "layout",
+            inverse = INVERSE,
+            ?in_starts,
+            in_step,
+            ?out_starts,
+            out_step
+        )
+        .entered();
+        let arrange = tracing::info_span!("arrange").entered();
+        // Offsets, gaps, and guards must survive every in-place layout.
+        let last_input = in_starts.iter().max().expect("eleven input starts") + 10 * in_step;
+        let last_output = out_starts.iter().max().expect("eleven output starts") + 10 * out_step;
+        let mut base = vec![Complex32::new(0.125, -0.375); last_input.max(last_output) + 2];
         for s in 0..11 {
             for i in 0..11 {
                 base[in_starts[s] + i * in_step] = streams[s][i];
             }
         }
+        let before = base.clone();
+        drop(arrange);
         exercise_stream_route::<INVERSE>(&mut base, in_starts, in_step, out_starts, out_step);
+        let _assert = tracing::info_span!("assert").entered();
         let mut bits = Vec::with_capacity(121);
+        let mut written = vec![false; base.len()];
         for s in 0..11 {
             for i in 0..11 {
-                let x = base[out_starts[s] + i * out_step];
+                let slot = out_starts[s] + i * out_step;
+                assert!(!written[slot], "output slots must be disjoint");
+                written[slot] = true;
+                let x = base[slot];
                 bits.push((x.re.to_bits(), x.im.to_bits()));
+            }
+        }
+        for (slot, (&actual, &original)) in base.iter().zip(&before).enumerate() {
+            if !written[slot] {
+                assert_eq!(
+                    actual.re.to_bits(),
+                    original.re.to_bits(),
+                    "re guard {slot}"
+                );
+                assert_eq!(
+                    actual.im.to_bits(),
+                    original.im.to_bits(),
+                    "im guard {slot}"
+                );
             }
         }
         bits
@@ -300,11 +373,17 @@ mod tests {
 
     #[test]
     fn chunked_streams_layouts_are_bitwise_identical() {
-        // Scalar stages run every layout; the vector stages run step 11
-        // with consecutive starts. All four stage combos must compute
-        // each lane identically, bit for bit.
-        let scalar: [usize; 11] = core::array::from_fn(|s| s * 11);
-        let vector: [usize; 11] = core::array::from_fn(|s| s);
+        let _trace = trace();
+        let _span = tracing::info_span!("streams_layout_matrix").entered();
+        // Reversed columns force the scalar prologue; consecutive columns
+        // vectorize across streams. Permuted rows and padding vary addressing.
+        let layouts: [([usize; 11], usize); 5] = [
+            (core::array::from_fn(|s| 3 + s * 11), 1),
+            (core::array::from_fn(|s| 3 + s), 11),
+            (core::array::from_fn(|s| 3 + 10 - s), 11),
+            (core::array::from_fn(|s| 3 + ((s * 7) % 11) * 11), 1),
+            (core::array::from_fn(|s| 3 + s * 23), 2),
+        ];
         for kind in 0..6 {
             let mut streams = [[Complex32::new(0.0, 0.0); 11]; 11];
             for (s, stream) in streams.iter_mut().enumerate() {
@@ -318,19 +397,24 @@ mod tests {
                         layout_bits::<false>(&streams, i, is, o, os)
                     }
                 };
-                let ss = run(&scalar, 1, &scalar, 1);
-                let vv = run(&vector, 11, &vector, 11);
-                let vs = run(&vector, 11, &scalar, 1);
-                let sv = run(&scalar, 1, &vector, 11);
-                assert_eq!(vv, ss, "vec/vec vs scalar kind={kind} inverse={inverse}");
-                assert_eq!(vs, ss, "vec/scalar vs scalar kind={kind} inverse={inverse}");
-                assert_eq!(sv, ss, "scalar/vec vs scalar kind={kind} inverse={inverse}");
+                let reference = run(&layouts[2].0, layouts[2].1, &layouts[0].0, layouts[0].1);
+                for (input, (i, is)) in layouts.iter().enumerate() {
+                    for (output, (o, os)) in layouts.iter().enumerate() {
+                        assert_eq!(
+                            run(i, *is, o, *os),
+                            reference,
+                            "kind={kind} inverse={inverse} input={input} output={output}"
+                        );
+                    }
+                }
             }
         }
     }
 
     #[test]
     fn chunked_121_matches_direct_within_tolerance() {
+        let _trace = trace();
+        let _span = tracing::info_span!("transform_direct").entered();
         for kind in 0..6 {
             let mut signal = [Complex32::new(0.0, 0.0); 121];
             for (s, chunk) in signal.chunks_exact_mut(11).enumerate() {
@@ -354,6 +438,35 @@ mod tests {
                 err_inv < 1e-4,
                 "121 inverse kind={kind} max_err={err_inv:.2e}"
             );
+        }
+    }
+
+    #[test]
+    fn error_oracle_rejects_nonfinite_components() {
+        let _trace = trace();
+        let _span = tracing::info_span!("oracle_nonfinite").entered();
+        let finite = tracing::info_span!("arrange").in_scope(|| [Complex64::new(1.0, -1.0)]);
+        for value in [f64::NAN, f64::INFINITY, f64::NEG_INFINITY] {
+            for invalid in [Complex64::new(value, 0.0), Complex64::new(0.0, value)] {
+                for (got, expected) in [([invalid], finite), (finite, [invalid])] {
+                    let rejected = tracing::info_span!("act", ?got, ?expected).in_scope(|| {
+                        std::panic::catch_unwind(|| max_err(&got, &expected)).is_err()
+                    });
+                    tracing::info_span!("assert").in_scope(|| assert!(rejected));
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn error_oracle_rejects_unequal_lengths() {
+        let _trace = trace();
+        let _span = tracing::info_span!("oracle_lengths").entered();
+        let values = tracing::info_span!("arrange").in_scope(|| [Complex64::new(1.0, -1.0)]);
+        for (got, expected) in [(values.as_slice(), &[][..]), (&[][..], values.as_slice())] {
+            let rejected = tracing::info_span!("act")
+                .in_scope(|| std::panic::catch_unwind(|| max_err(got, expected)).is_err());
+            tracing::info_span!("assert").in_scope(|| assert!(rejected));
         }
     }
 }

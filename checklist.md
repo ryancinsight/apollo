@@ -1,5 +1,47 @@
 # Apollo Checklist
 
+Active sprint target: `apollo-fft` 0.29.1 [patch], above published provider cohort 0.29.0.
+
+## APOLLO-FFT121-LAYOUT-RECOVERY [patch]
+
+- [x] [patch] Audit main/#655/#664 and reproduce the historical ARM/oracle failures.
+- [x] [patch] Recover all 25 layout pairs, six input families and both directions through admission-aware execution; preserve bitwise outputs and guards.
+- [x] [patch] Preserve production kernel bytes, numerical bounds and draft #655's history.
+- [x] [patch] Integrate current main `730f6262`; retain every external lock record and a seven-file correctness diff.
+- [x] [patch] Pass all five focused native ARM tests, formatting, strict all-feature/all-target workspace Clippy and doctests on runtime `eb8184b7`.
+- [x] [patch] Pass all 1,679 hosted x86 and 1,636 hosted ARM cases, retaining 15 existing ignored instruments; both FFT library modes pass 664 tests.
+- [x] [patch] Pass all 22 Rust library patch API comparisons, with 223 applicable checks each, plus every configured hosted gate ([runtime run](https://github.com/ryancinsight/apollo/actions/runs/38774215093)).
+- [x] [patch] Integrate the approved provider chain, verify its published archives and fresh source values, and retain focused PR #671.
+
+This closure changes records only: Rust, manifests and lock blobs remain
+identical to runtime `eb8184b7`. Its own final hosted checks must pass before
+merging. [PR #671](https://github.com/ryancinsight/apollo/pull/671) records the
+resulting merge, 0.29.1 registry receipt, fresh registry consumer and Pages run.
+Integration, automatic publication and Pages deployment have user approval.
+
+## APOLLO-EUNOMIA-010-COHORT [minor] — done
+
+- [x] Audit ownership, nominal type identity and ADR 0047; align all affected public families/internal requirements without Rust implementation changes.
+- [x] Verify nine current provider defaults, all 209 unchanged registry records and byte-identical Rust sources.
+- [x] Pass native formatting, strict Clippy, all 1,634 numerical cases (15 existing ignored instruments) and doctests at `8198d42d`.
+- [x] Build all 22 library API pairs and pass all applicable x86/ARM hosted gates at `8198d42d`; retain the pre-1.0 breaking-boundary policy distinction.
+- [x] Merge Moirai #623, Leto #363, Hephaestus #493 and Apollo #672 in order; refresh the final lock and execute unseeded source consumers without path/patch overrides.
+- [x] Verify all 21 intended Apollo cohort archives identify merge `730f6262`, match registry checksums and are not yanked; verify upstream Moirai/Leto/Hephaestus receipts.
+- [x] Keep [provider PR #672](https://github.com/ryancinsight/apollo/pull/672) separate from FFT correctness #671 and experiment #655; record publisher/Pages evidence there.
+
+## Coordinated provider release closure [patch] — 2026-10-15
+
+- [x] Merge reviewed PR #669 with all required exact-head checks passing.
+- [x] Pass the complete blocking API/FFT dry-run and standard verification of
+      all 19 intended packages before triggering the existing publisher.
+- [x] Verify all 19 not-yanked registry receipts identify the guarded merge
+      and publisher run; retain versions/checksums in ADR 0075.
+- [x] Execute both native Python CI lanes and all 35 optimized-wheel smoke
+      cases without publishing the Python binding.
+- [x] Remove the two completed owned backlog items; retain Miri and held-task
+      work as explicitly deferred and unverified.
+
+
 ## APOLLO-NATIVE-GATE-REPAIR — retained fallback ownership and exact admission [patch]
 
 - Baseline `d5e83ca8`: 16 native failures and 14 distinct ARM lint sites.
@@ -28,7 +70,7 @@
 - [ ] Complete final-revision workspace gates and benchmark consumer validation; merge only with all applicable checks green.
 
 
-Active increment target: `apollo-fft` 0.28.1 [patch].
+Historical increment target: `apollo-fft` 0.28.1 [patch].
 
 ## Apollo #644 — process-global test isolation [patch]
 

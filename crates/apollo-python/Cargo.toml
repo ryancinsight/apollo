@@ -1,6 +1,6 @@
 [package]
 name = "apollo-python"
-version = "0.2.0"
+version = "0.2.2"
 rust-version.workspace = true
 edition = "2021"
 license = "MIT"
@@ -31,6 +31,9 @@ eunomia = { workspace = true }
 hephaestus-core = { workspace = true }
 hephaestus-wgpu = { workspace = true }
 pyo3 = { workspace = true }
+
+[build-dependencies]
+pyo3-build-config = { workspace = true }
 
 [lints]
 workspace = true

@@ -1,5 +1,74 @@
 # Changelog
 
+## [apollo-fft 0.29.1] - 2026-10-15
+
+### Added
+
+- [patch] Recover #655's 25 stream-layout combinations with offset, gap and
+  bitwise guard checks in both directions. Existing admission-aware helpers
+  verify unchanged input on unsupported CPUs and execute the public fallback.
+- Reject unequal reference lengths and non-finite direct-DFT values before
+  reducing numerical error; retain the original numerical bounds and kernels.
+  Test-local tracing captures arrange/act/assert spans on failure. Experimental
+  benchmarks, reports and workflow remain in the historical draft #655.
+
+## [Provider cohort] - 2026-10-15
+
+### Breaking
+
+- [minor] Align the shared Rust provider boundary with Eunomia 0.10,
+  Mnemosyne-memory 0.10, Hermes 0.9, Leto/Leto-ops 0.46, Hephaestus 0.22
+  and Moirai 0.9.3. Direct Rust consumers advance those requirements and the
+  Apollo families below together, preserving one nominal type identity.
+  All Rust algorithm/test bytes, numerical bounds and public operation
+  signatures remain unchanged (ADR 0047).
+
+| Package | Previous | Cohort |
+| --- | --- | --- |
+| apollo-czt | 0.11.1 | 0.12.0 |
+| apollo-dctdst | 0.11.1 | 0.12.0 |
+| apollo-dctdst-core | 0.16.0 | 0.17.0 |
+| apollo-dht | 0.11.1 | 0.12.0 |
+| apollo-fft | 0.28.2 | 0.29.0 |
+| apollo-frft | 0.10.1 | 0.11.0 |
+| apollo-fwht | 0.10.1 | 0.11.0 |
+| apollo-gft | 0.11.1 | 0.12.0 |
+| apollo-hilbert | 0.13.1 | 0.14.0 |
+| apollo-leto-interop | 0.19.0 | 0.20.0 |
+| apollo-mellin | 0.12.1 | 0.13.0 |
+| apollo-ntt | 0.10.1 | 0.11.0 |
+| apollo-nufft | 0.8.1 | 0.9.0 |
+| apollo-qft | 0.10.1 | 0.11.0 |
+| apollo-radon | 0.11.1 | 0.12.0 |
+| apollo-sdft | 0.9.1 | 0.10.0 |
+| apollo-sft | 0.10.1 | 0.11.0 |
+| apollo-sht | 0.8.1 | 0.9.0 |
+| apollo-stft | 0.10.1 | 0.11.0 |
+| apollo-validation | 0.4.1 | 0.5.0 |
+| apollo-wavelet | 0.11.1 | 0.12.0 |
+
+### Changed
+
+- [patch] Private benchmark and Python packages advance to 0.17.0 and 0.2.2;
+  their dependencies follow the cohort without changing benchmark methods or
+  Python behavior. FFT macros and the private allocator retain their versions.
+- Canonical Git URLs remain unpinned in manifests. The committed lock records
+  reviewed provider sources; provider-first integration precedes final fresh
+  consumer verification and any separately authorized registry release.
+- The N=121 layout correctness recovery remains in separate PR #671; the
+  historical AVX2 experiment remains in draft PR #655.
+
+## [apollo-python 0.2.1] - 2026-10-15
+
+- Restore native interpreter linking for Rust binding tests; retain Maturin's
+  extension-only wheel mode and use the PyO3 cdylib helper. Raise Maturin's
+  minimum to 1.9.4 and execute the existing NumPy boundary regression in
+  both native CI lanes without changing coverage, fixtures, or time limits.
+- Retain the Python release extension symbol table to avoid malformed
+  Mach-O output from affected Rust/LLVM stripping; release optimization is
+  unchanged. The installed release wheel must pass all existing smoke cases.
+
+
 All notable changes to the Apollo workspace are documented in this file.
 Versioning follows [Semantic Versioning 2.0.0](https://semver.org/spec/v2.0.0.html).
 Change-class tags: [patch] backward-compatible fix, [minor] additive non-breaking, [major] breaking, [arch] cross-cutting redesign.
@@ -18,9 +87,12 @@ Change-class tags: [patch] backward-compatible fix, [minor] additive non-breakin
   direct-transform and bitwise-layout oracles. No numerical bounds change.
 - Architecture-private tables, imports, and codelets compile only with their
   users; ARM warning-denied lint has no blanket diagnostic waivers.
-- The lock adopts compatible Hephaestus 0.20.4 at PR #465's reviewed merge,
-  preserving every other provider pin. Missing dyld images retain typed CUDA
-  adapter absence instead of reporting a present-but-broken driver.
+- The final coordinated release selects published Hephaestus 0.21.0, Moirai
+  0.9.2 and the reviewed provider graph. All 19 planned Apollo libraries are
+  published from the verified PR #669 merge. [ADR 0075](docs/adr/0075-provider-release-receipts.md)
+  records exact source identity, final gates and immutable registry receipts.
+  Missing dyld images retain typed CUDA adapter absence instead of reporting
+  a present-but-broken driver.
 
 ## [apollo-alloc 0.17.0]
 

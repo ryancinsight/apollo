@@ -157,3 +157,20 @@ WGPU mentions, `Arc`, `Mutex`, `dyn`, clone-to-`Vec`, and `Cow` usage by crate.
 The evidence tier is static source analysis; performance claims still require
 the native `apollo-bench` runner or a domain-specific benchmark with a recorded
 baseline comparison.
+
+## Eunomia 0.10 provider-cohort migration
+
+Apollo FFT 0.29 and the corresponding family versions in CHANGELOG.md consume
+Eunomia 0.10, Mnemosyne-memory 0.10, Hermes 0.9, Leto/Leto-ops 0.46,
+Hephaestus 0.22 and Moirai 0.9.3. Direct Rust consumers update these compatible
+provider requirements together to preserve one scalar/layout/device identity.
+Operation signatures, arithmetic, tolerances and test domains stay unchanged.
+
+A review lock may name actual reviewed upstream commits. Such a locked build
+proves source compatibility, not the availability of an unmerged default or
+an unpublished registry package. Merge the owning provider increments first,
+refresh the final lock outside the Atlas development overlay, then execute
+an unseeded external consumer with canonical Git sources and no path/patch
+substitutions. Registry publication retains its separate dependency order and
+release authority. The FFT correctness recovery and historical experiment
+remain independently reviewable in PRs #671 and #655.
