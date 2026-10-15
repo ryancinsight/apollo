@@ -2,52 +2,15 @@
 
 ## N=121 layout coverage stranded in #655 <a id="apollo-fft121-layout-recovery"></a>
 
-- **Finding:** main `ae8b0b49` covers four dense layout pairs. Committed #655
-  `222a3f10` adds 25 offset/permuted/padded pairs and non-output bit guards,
-  but its mandatory AVX2/FMA assertion prevents native ARM execution.
-- **Contract:** `L(s,i) = start[s] + i * step` is injective for each layout.
-  Eleven rows and columns permute 121 slots; multiplying stream indices by
-  seven permutes residues modulo eleven. Padded streams use 23-slot pitch
-  and two-slot step, so their 21-slot extents cannot overlap. All outputs
-  must match the scalar-prologue reference bitwise within each host; every
-  slot outside the output image must retain both component bits.
-- **Numerics:** retain the existing forward and unnormalized inverse DFT
-  comparisons at 11 and 121 points and their original bounds. Reject unequal
-  oracle lengths and non-finite components before the maximum reduction,
-  because floating-point `max` can discard NaN.
-- **Resolution:** use `exercise_stream_route` for every matrix
-  case; retain `exercise_transform_route` for the full transform. Declined
-  leaves must preserve every bit before the supported public fallback runs.
-  Exclude #655's redundant decline test, benchmarks, workflow and reports.
-- **Verification:** unchanged native ARM baseline passes 3/3 focused tests.
-  The historical mandatory AVX2 assertion and NaN/length oracle regressions
-  produce the expected three failures before adaptation; the candidate passes
-  5/5. Workspace format, warning-denied all-target/all-feature Clippy, locked
-  source resolution (271 packages, 36 git packages), 39 script tests (one
-  pre-existing skip) and safety ratchet pass. Full ARM Nextest passes 1,636
-  tests with 15 existing ignored instruments under the configured per-test
-  timeout. [Hosted run 38743691154](https://github.com/ryancinsight/apollo/actions/runs/38743691154)
-  passes on `7af4f641`: x86 Nextest 1,679 passed, ARM Nextest 1,636 passed,
-  with 15 existing ignored instruments in each lane; parallel and serial x86
-  FFT libtest each pass 664 tests. All 21 exact locked-source API comparisons
-  pass; FFT 0.28.2 to 0.28.3 passes all 223 applicable checks (30 inapplicable).
-  Strict Clippy, format, four Rustdoc shards, doctests, Python, benchmark smoke,
-  provider audit, RustSec, dependency policy, ADR index, lock and version guards
-  pass. Release/informational API jobs are skipped by policy; the actual locked
-  API job executes. X86 synthetic merge `c355a1b4` and head share tree
-  `d0f334f8e0fe740ee1b310abdfe333cabd00325d`; ARM verifies the exact head.
-  Production source before `cfg(test)` matches the base byte-for-byte; closure
-  changes only board records and leaves all tested code and lock blobs intact.
-- **Downstream limit:** fresh consumers outside Atlas, without path patches or
-  a copied lockfile, fail on both unchanged main `ae8b0b49` (0.28.2) and
-  candidate `7af4f641` (0.28.3). Eunomia's Git default supplies 0.10.0 while
-  Apollo requires `^0.9.1`; therefore downstream numerical execution does not
-  run. Reproduce with a consumer depending on Apollo by Git and exact revision,
-  then `cargo +1.97.0 metadata --format-version=1`. Compatible source selection
-  or a provider migration belongs to a separate change; locked validation
-  remains reproducible and this recovery changes no provider requirements.
-- **Re-open:** any missing layout/direction, changed numerical bound, guard
-  mutation, incorrect admission, skipped fallback or failed architecture gate.
+- **Finding:** main `ae8b0b49` covers four dense pairs. Draft #655 at `222a3f10` adds 25 offset/permuted/padded pairs but asserts mandatory AVX2/FMA, rejecting native ARM.
+- **Layout proof:** `L(s,i) = start[s] + i * step` is injective in each layout. Eleven rows/columns permute 121 slots; multiplication by seven permutes residues modulo eleven. Padded streams use pitch 23 and step two, so their 21-slot extents cannot overlap. Every output matches the scalar-prologue reference bitwise within its host; every slot outside the output image retains both component bits.
+- **Numerical contract:** retain forward and unnormalized inverse DFT comparisons at 11/121 points and their existing bounds. Require equal oracle lengths and finite components before the maximum reduction, because floating-point `max` can discard NaN.
+- **Execution contract:** `exercise_stream_route` verifies exact admission, unchanged bits on decline, and the supported public fallback for each matrix case. Retain `exercise_transform_route` for complete transforms. The redundant historical decline test adds no independent contract.
+- **Regression evidence:** the historical ARM baseline passes three focused tests; the transplanted mandatory-AVX assertion and two missing oracle guards fail before adaptation, then all five pass. Production kernel bytes match that baseline and provider parent `e29a25ac`.
+- **Historical CI:** [run 38743691154](https://github.com/ryancinsight/apollo/actions/runs/38743691154) at `7af4f641` passes 1,679 x86 and 1,636 ARM cases, 664 FFT library tests in both execution modes, and 21 API comparisons. This is previous-provider evidence; it does not establish this rebased head.
+- **Current boundary:** PR #672 supplies the reviewed Eunomia 0.10 cohort and has 1,634 native ARM passes, strict Clippy, doctests and 21 committed API graph builds. This test-only 0.29.1 patch retains that entire external lock graph; all five focused cases pass, with full native and hosted gates pending.
+- **Availability:** Moirai #623, Leto #363, Hephaestus #493 and Apollo #672 require ordered integration before fresh defaults can resolve the cohort. The original fresh-consumer failure on `^0.9.1` motivates those separate fixes. Reviewed locked success does not establish registry publication. Default merges publish pending crates and Leto/Apollo Pages; approval must cover those automatic effects.
+- **Re-open:** missing layout/direction, changed bound, guard mutation, incorrect admission, skipped fallback or a failed architecture gate. #655 remains the historical experiment; no benchmark/report/workflow enters this recovery.
 
 ## APOLLO-EUNOMIA-010-COHORT — source/default availability [minor]
 

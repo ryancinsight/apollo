@@ -1,32 +1,16 @@
 # Apollo Backlog
 
 <a id="apollo-fft121-layout-recovery"></a>
-## APOLLO-FFT121-LAYOUT-RECOVERY — recover #655 correctness coverage [patch] — complete
+## APOLLO-FFT121-LAYOUT-RECOVERY — recover #655 correctness coverage [patch] — in progress
 
-- **Owner:** Codex, `codex/recover-fft121-layout-tests`; base `ae8b0b49`.
-- **Scope:** recover the five-by-five stream-layout matrix, bitwise guards and
-  finite direct-DFT assertions from #655 through main's admission-aware helpers.
-- **Acceptance:** six input families, both directions, all 25 layout pairs,
-  unchanged non-output bits, exact CPU admission and real fallback execution;
-  native ARM and hosted x86/ARM tests, format and warning-denied Clippy.
-- **Version:** `apollo-fft` 0.29.1; 0.28.2 is already published. Production
-  kernels, numerical bounds, experiment reports and workflows stay unchanged.
-- **Evidence:** unchanged ARM baseline passes 3/3 focused tests. The recovered
-  AVX2 assertion and two oracle-rejection regressions fail as expected before
-  adaptation; all 5/5 pass afterward. Workspace format, strict all-target/
-  all-feature Clippy, locked-source resolution and the safety ratchet pass;
-  full ARM Nextest passes 1,636 tests with 15 pre-existing ignored instruments.
-- **Hosted:** [run 38743691154](https://github.com/ryancinsight/apollo/actions/runs/38743691154)
-  passes on implementation `7af4f641`: x86 Nextest 1,679; ARM Nextest 1,636;
-  x86 FFT library 664 each in parallel and serial execution. All 21 locked API
-  comparisons, strict Clippy, formatting, docs, smoke and supply-chain gates pass.
-- **Downstream:** clean Git consumers of unchanged main `ae8b0b49` and
-  candidate `7af4f641` both fail resolution: Eunomia's default Git ref now
-  supplies 0.10.0, outside Apollo's `^0.9.1`. Repair compatible provider source
-  selection in a separate increment; this PR's committed locked graph passes.
-- **Next:** review [PR #671](https://github.com/ryancinsight/apollo/pull/671) and
-  address provider source drift independently. #655 remains an unchanged draft
-  at `222a3f10`. No merge or publication is part of this increment.
+- **Owner:** Codex, `codex/recover-fft121-layout-tests`; provider base `e29a25ac` (PR #672), transitively main `ae8b0b49`.
+- **Scope:** all 25 stream-layout pairs, six input families, both directions, bitwise output/non-output guards, finite direct-DFT oracles, exact CPU admission and real fallback execution.
+- **Version:** `apollo-fft` 0.29.1 is the test-only patch over the 0.29.0 provider cohort. Production kernels and original numerical bounds remain unchanged; #655 retains its experiments/reports/workflow.
+- **Historical regression:** unchanged ARM source passes 3/3 focused cases; transplanting the mandatory AVX2 assertion plus NaN/length rejection cases produces three expected failures. The adaptation passes all five. Parent #672 preserves those original production/test bytes before recovery.
+- **Historical gates:** source `7af4f641` passes [hosted x86/ARM run 38743691154](https://github.com/ryancinsight/apollo/actions/runs/38743691154); that evidence belongs to the previous provider graph, not this rebased head.
+- **Current gates:** the reviewed parent graph passes 1,634 ARM tests, strict Clippy, doctests and all 21 committed API graph builds. All five recovered tests pass after rebasing; full native, strict workspace and hosted x86/ARM gates must pass on this exact candidate.
+- **Dependency:** provider PRs Moirai #623, Leto #363, Hephaestus #493 and Apollo #672 own source availability; this PR remains the seven-file correctness increment above them. Integrate providers first, then refresh and verify an unseeded consumer.
+- **Next:** complete the rebased exact-head gates and obtain approval for integration's automatic package/Pages side effects. Draft #655 stays at `222a3f10`.
 
 <a id="apollo-eunomia-010-cohort"></a>
 ## APOLLO-EUNOMIA-010-COHORT — restore clean provider resolution [minor] — todo
