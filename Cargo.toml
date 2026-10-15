@@ -92,12 +92,13 @@ repository = "https://github.com/ryancinsight/apollo"
 apollo-dctdst-core = { version = "0.17.0", path = "crates/apollo-dctdst-core" }
 anyhow = "1.0.103"
 csv = "1.4.0"
-# The shared numeric, allocator and SIMD providers advance as one cohort.
-# Canonical Git URLs remain unpinned; Cargo.lock owns exact source identity.
+# Eunomia PR #87 is merged; Cargo.lock records the reviewed default source.
 eunomia = { version = "0.10.0", git = "https://github.com/ryancinsight/eunomia", default-features = false, features = ["std"] }
+# Mnemosyne 0.10 is the Eunomia-0.10 allocator cohort line.
 mnemosyne = { package = "mnemosyne-memory", version = "0.10.0", git = "https://github.com/ryancinsight/Mnemosyne.git", features = ["eunomia"] }
 melinoe = { version = "0.10.0", git = "https://github.com/ryancinsight/melinoe.git", default-features = false, features = ["alloc"] }
-# Leto and Hephaestus own their transitive provider edges (ADR 0047).
+# Hermes PR #156 and Leto PR #168 are merged; Cargo.lock records their reviewed
+# default sources. origin/main
 hermes-simd = { version = "0.9.0", git = "https://github.com/ryancinsight/hermes.git" }
 leto = { version = "0.46.0", git = "https://github.com/ryancinsight/leto.git" }
 leto-ops = { version = "0.46.0", git = "https://github.com/ryancinsight/leto.git" }
