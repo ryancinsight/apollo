@@ -71,3 +71,13 @@ The workspace tests cover Python binding compilation, backend capability
 metadata shape, full-spectrum `rfft3`/`irfft3` value semantics, contiguity
 rejection paths, and delegated CPU/WGPU/NUFFT API compatibility.
 
+
+## Native Rust tests and wheel linking
+
+Cargo tests embed the interpreter and execute the NumPy shape/value boundary
+regression. Install NumPy for the selected interpreter, then run
+`cargo test --locked -p apollo-python --lib` from the workspace root.
+Maturin >= 1.9.4 selects extension-only linking for wheels through PyO3's
+build environment; the build helper supplies the platform cdylib arguments.
+The native CI lanes exercise the same boundary test alongside all existing
+workspace tests. Wheel smoke tests retain their existing coverage.
