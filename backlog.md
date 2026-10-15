@@ -1,5 +1,15 @@
 # Apollo Backlog
 
+<a id="apollo-eunomia-010-cohort"></a>
+## APOLLO-EUNOMIA-010-COHORT — restore clean provider resolution [minor] — todo
+
+- **priority:** correctness.
+- **Scope:** provider/internal version constraints, canonical source lock and pre-1.0 migration records; no Rust implementation, test, benchmark or historical-report changes.
+- **Outcome:** one Eunomia 0.10/Mnemosyne 0.10/Hermes 0.9/Leto 0.46/Hephaestus 0.22/Moirai 0.9.3 source cohort that supports the independently reviewed N=121 correctness increment.
+- **Acceptance:** strict all-feature/all-target Clippy, complete native values and docs, exact committed API checks, zero excess provider identities, applicable x86/ARM hosted CI, and an unseeded standalone consumer after provider-first integration.
+- **Dependency:** Mnemosyne #237 and Aequitas 0.3 are integrated/published. Hermes #260, Moirai #623 and the focused Leto/Hephaestus compatibility increments own the remaining provider edges.
+- **Next step:** finish source-cohort validation and submit this dependency-only PR; refresh and rerun consumer verification after the upstream merges. Registry publication requires separate release authority.
+
 <a id="apollo-native-gate-repair"></a>
 ## APOLLO-NATIVE-GATE-REPAIR — retained fallback ownership and exact admission [patch] — todo
 - **priority:** verification.

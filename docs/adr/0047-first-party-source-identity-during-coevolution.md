@@ -66,6 +66,15 @@ public API or numerical kernels.
 
 ## Revisions
 
+- **2026-10-15.** Apply the same source-ownership rule to Eunomia 0.10,
+  Mnemosyne-memory 0.10, Hermes 0.9, Leto/Leto-ops 0.46, Hephaestus 0.22
+  and Moirai 0.9.3. Public Rust consumers advance their pre-1.0 provider and
+  Apollo requirements together; the changelog records each family boundary.
+  Canonical manifest sources follow defaults; the lock alone records exact
+  reviewed revisions during integration. Upstream providers merge before the
+  final default-source refresh. No numerical operation, Rust implementation,
+  fixture, error bound, revision pin or downstream adapter changes.
+
 - **2026-09-17.** The last fork closed: Moirai dropped its Melinoe revision pin
   (Moirai#393) and Apollo its matching quarantine pin, so every first-party
   provider resolves through one source and `.provider-identity-baseline` is 0.

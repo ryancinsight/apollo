@@ -1,5 +1,11 @@
 # Apollo gap audit
 
+## APOLLO-EUNOMIA-010-COHORT — source/default availability [minor]
+
+- Finding: Apollo main requires Eunomia 0.9 and allocator 0.9 while current provider defaults expose 0.10. A historical locked-source pass cannot establish fresh consumer resolution.
+- Correction: provider owners advance their own constraints, then Apollo consumes one reviewed 0.10 cohort with pre-1.0 family bumps. Manifests gain no revision pin, local path patch or conversion adapter; numerical kernels and tests remain unchanged.
+- Boundary: native/API/hosted passes against reviewed upstream commits establish source acceptance. Fresh-default and registry availability require provider-first integration and separately authorized publication. PR #671 owns the N=121 layout tests; #655 remains the historical experiment.
+
 ## APOLLO-NATIVE-GATE-REPAIR — retained fallback ownership and exact admission [patch]
 
 - Baseline `d5e83ca8`: 16 native failures and 14 distinct ARM lint sites.

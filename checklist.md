@@ -1,5 +1,16 @@
 # Apollo Checklist
 
+**Target Version**: apollo-fft 0.29.0 and the provider-cohort versions in CHANGELOG.md.
+
+## APOLLO-EUNOMIA-010-COHORT [minor]
+
+- [x] Audit provider ownership, default resolution failures and ADR 0047's single-identity rule.
+- [x] Align all affected public pre-1.0 families and internal requirements; preserve Rust algorithm/test bytes.
+- [ ] Validate one canonical provider source, formatting, strict Clippy and complete native numerical contracts.
+- [ ] Pass exact base/head API comparison and all applicable x86/ARM hosted jobs.
+- [ ] Integrate provider prerequisites in order, refresh the final lock and execute an unseeded standalone consumer without path/patch overrides.
+- [ ] Deliver the focused dependency PR independently of FFT correctness PR #671 and historical experiment #655.
+
 ## Coordinated provider release closure [patch] — 2026-10-15
 
 - [x] Merge reviewed PR #669 with all required exact-head checks passing.

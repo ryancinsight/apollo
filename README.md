@@ -6,6 +6,13 @@ Warm FFT execution retains the tables required by its selected native route.
 CI checks that ownership and exact SIMD admission on ARM as well as x86, and
 compares committed library APIs against their compatible locked providers.
 
+Apollo's next Rust provider cohort uses Eunomia 0.10 and FFT 0.29. Direct
+consumers align numeric, array and device-provider requirements together;
+transform implementations and numerical contracts remain unchanged. The
+[provider contract](docs/provider_contract.md) defines source identity and
+provider-first integration. This dependency increment remains separate from
+the N=121 correctness tests recovered in PR #671 and experiment record #655.
+
 ## Release contract
 
 Apollo releases from Git tags with its committed `Cargo.lock`, pinned Rust

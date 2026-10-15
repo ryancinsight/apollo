@@ -1,5 +1,51 @@
 # Changelog
 
+## [Provider cohort] - Unreleased
+
+### Breaking
+
+- [minor] Align the shared Rust provider boundary with Eunomia 0.10,
+  Mnemosyne-memory 0.10, Hermes 0.9, Leto/Leto-ops 0.46, Hephaestus 0.22
+  and Moirai 0.9.3. Direct Rust consumers advance those requirements and the
+  Apollo families below together, preserving one nominal type identity.
+  All Rust algorithm/test bytes, numerical bounds and public operation
+  signatures remain unchanged (ADR 0047).
+
+| Package | Previous | Cohort |
+| --- | --- | --- |
+| apollo-czt | 0.11.1 | 0.12.0 |
+| apollo-dctdst | 0.11.1 | 0.12.0 |
+| apollo-dctdst-core | 0.16.0 | 0.17.0 |
+| apollo-dht | 0.11.1 | 0.12.0 |
+| apollo-fft | 0.28.2 | 0.29.0 |
+| apollo-frft | 0.10.1 | 0.11.0 |
+| apollo-fwht | 0.10.1 | 0.11.0 |
+| apollo-gft | 0.11.1 | 0.12.0 |
+| apollo-hilbert | 0.13.1 | 0.14.0 |
+| apollo-leto-interop | 0.19.0 | 0.20.0 |
+| apollo-mellin | 0.12.1 | 0.13.0 |
+| apollo-ntt | 0.10.1 | 0.11.0 |
+| apollo-nufft | 0.8.1 | 0.9.0 |
+| apollo-qft | 0.10.1 | 0.11.0 |
+| apollo-radon | 0.11.1 | 0.12.0 |
+| apollo-sdft | 0.9.1 | 0.10.0 |
+| apollo-sft | 0.10.1 | 0.11.0 |
+| apollo-sht | 0.8.1 | 0.9.0 |
+| apollo-stft | 0.10.1 | 0.11.0 |
+| apollo-validation | 0.4.1 | 0.5.0 |
+| apollo-wavelet | 0.11.1 | 0.12.0 |
+
+### Changed
+
+- [patch] Private benchmark and Python packages advance to 0.17.0 and 0.2.2;
+  their dependencies follow the cohort without changing benchmark methods or
+  Python behavior. FFT macros and the private allocator retain their versions.
+- Canonical Git URLs remain unpinned in manifests. The committed lock records
+  reviewed provider sources; provider-first integration precedes final fresh
+  consumer verification and any separately authorized registry release.
+- The N=121 layout correctness recovery remains in separate PR #671; the
+  historical AVX2 experiment remains in draft PR #655.
+
 ## [apollo-python 0.2.1] - 2026-10-15
 
 - Restore native interpreter linking for Rust binding tests; retain Maturin's
