@@ -9,10 +9,18 @@
 - **Outcome:** use interpreter linking for Cargo tests, Maturin-selected
   extension linking for wheels, and PyO3's target-specific cdylib helper.
   Require Maturin >= 1.9.4 and advance the binding patch version to 0.2.1.
+- **Release loader finding:** the optimized wheel at `fd700c29` builds but
+  fails import: its Mach-O string table offset is `10004140` (4 modulo 8).
+  This matches [Rust #157750](https://github.com/rust-lang/rust/issues/157750).
+  Retain the Python extension symbol table with a package-specific release
+  profile; keep release optimization, all smoke cases and test limits. The
+  corrected optimized wheel passes all 35 import/value smoke cases, has an
+  8-byte-aligned string table and retains no libpython dependency. The failed
+  release artifact and logs remain part of the before/after evidence.
 - **Acceptance:** execute the existing NumPy shape/value regression in both
   native CI lanes, retain every existing test and timeout, verify a real wheel
   import/value smoke, and pass the unchanged trusted gate before integration.
-- **Local evidence:** all 1633 native workspace tests pass with the same
+- **Local evidence:** all 1634 native workspace tests pass with the same
   15 existing skips, strict all-feature Clippy and doctests pass, and the
   existing NumPy boundary test executes under interpreter linking. A real
   ABI3 ARM wheel imports and passes all 35 smoke cases; its extension has

@@ -62,6 +62,12 @@ codegen-units = 1
 # the full compilation overhead of fat LTO.
 lto = "thin"
 
+# Rust/LLVM stripping can misalign Mach-O LINKEDIT on macOS 27
+# (rust-lang/rust#157750). Keep the extension symbol table; optimization stays
+# identical to the release profile used by the transform libraries.
+[profile.release.package.apollo-python]
+strip = "none"
+
 [profile.bench-quick]
 inherits = "release"
 codegen-units = 16

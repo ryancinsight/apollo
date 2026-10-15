@@ -6,6 +6,9 @@
   extension-only wheel mode and use the PyO3 cdylib helper. Raise Maturin's
   minimum to 1.9.4 and execute the existing NumPy boundary regression in
   both native CI lanes without changing coverage, fixtures, or time limits.
+- Retain the Python release extension symbol table to avoid malformed
+  Mach-O output from affected Rust/LLVM stripping; release optimization is
+  unchanged. The installed release wheel must pass all existing smoke cases.
 
 
 All notable changes to the Apollo workspace are documented in this file.
