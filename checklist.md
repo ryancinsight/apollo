@@ -6,7 +6,7 @@
 
 - [x] Audit current defaults, active ownership and the unchanged public provider vocabulary.
 - [x] Retain 0.46 and admit 0.47 with matching canonical Leto constraints; update affected package versions and migration records.
-- [ ] Verify the exact committed 0.46 source graph, strict diagnostics, native values, API compatibility and unseeded consumers.
+- [x] Verify the exact committed 0.46 source graph, strict diagnostics, native values, API compatibility and unseeded review-source consumers.
 - [ ] Verify the real Coeus 0.47 review graph and hosted candidate checks before integration approval.
 
 

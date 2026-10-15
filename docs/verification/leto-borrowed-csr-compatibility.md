@@ -23,13 +23,31 @@ A separate review consumer must exercise Leto 0.47 and both matching provider
 bindings before Coeus claims its complete graph. This source compatibility
 change does not authorize provider merge, registry publication or Pages.
 
-## Verification state
+## Executed source evidence
 
-The original Rust implementation/test tree is unchanged. Native, strict
-Clippy, exact-source API, fresh-consumer and hosted checks remain required on
-the committed candidate. The 0.46 committed-graph result and the 0.47 review
-consumer result are separate gates; neither substitutes for actual GPU
-hardware execution or publication receipts.
+Runtime source: `f8fa292ce86315875adaf2eeb365ef862aba63f4`. All Rust implementation/test files and
+all external locked packages remain byte-identical to the recorded current
+base. Manifest resolution and `metadata --offline --locked` pass without local
+path/patch overrides or manifest revision pins.
 
-Main merges FFT-layout recovery #671 and publishes FFT 0.29.1 during review.
-This candidate retains that complete source as its base and targets 0.29.2.
+All actual hosted candidate checks pass. The exact-source API/dependency/
+version/lock/ADR gates pass; configured release/informational jobs remain
+separate from a release authorization. CI evidence:
+[run 38784268681](https://github.com/ryancinsight/apollo/actions/runs/38784268681).
+Native x86/ARM correctness, strict all-feature/all-target diagnostics,
+all documentation shards and Python bindings pass. A fresh unseeded
+review-source consumer resolves nine canonical providers with zero excess
+identities. Main's independently recovered FFT 0.29.1 remains the base; this
+compatible line targets FFT 0.29.2 and retains its complete test source.
+
+The actual Coeus 0.47 review graph passes 1272 native cases, strict workspace
+Clippy, 159 doctests and thirteen strict/isolation memory cases in each borrow
+model. These establish the real matching provider boundary, independently of
+the committed 0.46 graph. Coeus's new hosted memory job is being rechecked after
+correcting its interpreter installer. Its unseeded defaults still require the
+provider reviews to integrate first.
+
+No main merge, tag, registry publication or Pages deployment occurs in this
+compatibility review. Those external outcomes require their own actual checks
+and authorization. This closure changes records only; runtime source above
+remains the reproducible implementation reference.
