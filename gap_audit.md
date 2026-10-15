@@ -1,5 +1,12 @@
 # Apollo gap audit
 
+## APOLLO-EUNOMIA-010-COHORT — source/default availability [minor]
+
+- Finding: Apollo main requires Eunomia 0.9 and allocator 0.9 while current provider defaults expose 0.10. A historical locked-source pass cannot establish fresh consumer resolution.
+- Correction: provider owners advance their own constraints, then Apollo consumes one reviewed 0.10 cohort with pre-1.0 family bumps. Manifests gain no revision pin, local path patch or conversion adapter; numerical kernels and tests remain unchanged.
+- Integration: Moirai `44a962f0`, Leto `8b4ab407` and Hephaestus `672c5abc` are merged; all nine provider identities select current defaults. All 209 registry records and every Rust source remain unchanged. Moirai/Leto registry receipts pass; Hephaestus's automatic publisher precedes downstream publication.
+- Boundary: final-head native/API/hosted acceptance, unseeded-source values and actual ordered publication receipts are recorded in [PR #672](https://github.com/ryancinsight/apollo/pull/672). Ordered integration and automatic publication/Pages deployment have explicit user approval. PR #671 owns the N=121 layout tests; #655 remains the historical experiment.
+
 ## APOLLO-NATIVE-GATE-REPAIR — retained fallback ownership and exact admission [patch]
 
 - Baseline `d5e83ca8`: 16 native failures and 14 distinct ARM lint sites.

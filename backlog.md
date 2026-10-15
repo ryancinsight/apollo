@@ -1,5 +1,16 @@
 # Apollo Backlog
 
+<a id="apollo-eunomia-010-cohort"></a>
+## APOLLO-EUNOMIA-010-COHORT — restore clean provider resolution [minor] — source complete
+
+- **priority:** correctness.
+- **Scope:** provider/internal version constraints, canonical source lock and pre-1.0 migration records; no Rust implementation, test, benchmark or historical-report changes.
+- **Outcome:** one Eunomia 0.10/Mnemosyne 0.10/Hermes 0.9/Leto 0.46/Hephaestus 0.22/Moirai 0.9.3 source cohort that supports the independently reviewed N=121 correctness increment.
+- **Acceptance:** strict all-feature/all-target Clippy, complete native values and docs, exact committed API checks, zero excess provider identities, applicable x86/ARM hosted CI, and an unseeded standalone consumer after provider-first integration.
+- **Dependency:** Moirai #623, Leto #363 and Hephaestus #493 are merged at `44a962f0`, `8b4ab407` and `672c5abc`; the other provider prerequisites are integrated. All 17 intended Moirai and both Leto archives have verified registry/source receipts. Hephaestus publication runs before downstream publication.
+- **Source proof:** the final lock selects all nine current defaults, preserves all 209 registry records and leaves every Rust source identical to main.
+- **Integration:** [PR #672](https://github.com/ryancinsight/apollo/pull/672) records final-head native/API/x86/ARM, unseeded-consumer and publication evidence. Ordered integration, automatic publication and Pages deployment have explicit user approval; all applicable checks and upstream receipts precede merging.
+
 <a id="apollo-native-gate-repair"></a>
 ## APOLLO-NATIVE-GATE-REPAIR — retained fallback ownership and exact admission [patch] — todo
 - **priority:** verification.
