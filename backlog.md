@@ -9,7 +9,7 @@
 - **Outcome:** use interpreter linking for Cargo tests, Maturin-selected
   extension linking for wheels, and PyO3's target-specific cdylib helper.
   Require Maturin >= 1.9.4 and advance the binding patch version to 0.2.1.
-- **Release loader finding:** the optimized wheel at `fd700c29` builds but
+- **Release loader finding:** the optimized wheel at [pre-correction source](https://github.com/ryancinsight/apollo/commit/fd700c29cb0b2ea39e54b2f54f49786d354d066b) builds but
   fails import: its Mach-O string table offset is `10004140` (4 modulo 8).
   This matches [Rust #157750](https://github.com/rust-lang/rust/issues/157750).
   Retain the Python extension symbol table with a package-specific release
@@ -47,7 +47,7 @@
   test and replace its two usize-to-float casts with the canonical count
   conversion. The fixture domain is below 2^53; every value, threshold and
   assertion stays unchanged.
-- **Final provider source evidence:** select Hephaestus `63cdd653` and current
+- **Final provider source evidence:** select Hephaestus [reviewed provider source](https://github.com/ryancinsight/hephaestus/commit/63cdd65303a7bb1c8c1a4e1417ba8dba37c2355a) and current
   reviewed Eunomia, Hermes, Leto, Moirai, Aequitas and Themis defaults. All
   1634 native workspace tests pass with the same 15 existing skips; strict
   all-feature Clippy, warning-denied docs and doctests pass. Source and
