@@ -1,5 +1,18 @@
 # Apollo Checklist
 
+## Coordinated provider release closure [patch] — 2026-10-15
+
+- [x] Merge reviewed PR #669 with all required exact-head checks passing.
+- [x] Pass the complete blocking API/FFT dry-run and standard verification of
+      all 19 intended packages before triggering the existing publisher.
+- [x] Verify all 19 not-yanked registry receipts identify the guarded merge
+      and publisher run; retain versions/checksums in ADR 0075.
+- [x] Execute both native Python CI lanes and all 35 optimized-wheel smoke
+      cases without publishing the Python binding.
+- [x] Remove the two completed owned backlog items; retain Miri and held-task
+      work as explicitly deferred and unverified.
+
+
 ## APOLLO-NATIVE-GATE-REPAIR — retained fallback ownership and exact admission [patch]
 
 - Baseline `d5e83ca8`: 16 native failures and 14 distinct ARM lint sites.
