@@ -1,5 +1,34 @@
 # Apollo gap audit
 
+## N=121 layout coverage stranded in #655 <a id="apollo-fft121-layout-recovery"></a>
+
+- **Finding:** main `ae8b0b49` covers four dense layout pairs. Committed #655
+  `222a3f10` adds 25 offset/permuted/padded pairs and non-output bit guards,
+  but its mandatory AVX2/FMA assertion prevents native ARM execution.
+- **Contract:** `L(s,i) = start[s] + i * step` is injective for each layout.
+  Eleven rows and columns permute 121 slots; multiplying stream indices by
+  seven permutes residues modulo eleven. Padded streams use 23-slot pitch
+  and two-slot step, so their 21-slot extents cannot overlap. All outputs
+  must match the scalar-prologue reference bitwise within each host; every
+  slot outside the output image must retain both component bits.
+- **Numerics:** retain the existing forward and unnormalized inverse DFT
+  comparisons at 11 and 121 points and their original bounds. Reject unequal
+  oracle lengths and non-finite components before the maximum reduction,
+  because floating-point `max` can discard NaN.
+- **Resolution:** use `exercise_stream_route` for every matrix
+  case; retain `exercise_transform_route` for the full transform. Declined
+  leaves must preserve every bit before the supported public fallback runs.
+  Exclude #655's redundant decline test, benchmarks, workflow and reports.
+- **Verification:** unchanged native ARM baseline passes 3/3 focused tests.
+  The historical mandatory AVX2 assertion and NaN/length oracle regressions
+  produce the expected three failures before adaptation; the candidate passes
+  5/5. Workspace format, warning-denied all-target/all-feature Clippy, locked
+  source resolution (271 packages, 36 git packages), 39 script tests (one
+  pre-existing skip) and safety ratchet pass. Full ARM and hosted gates pending.
+  Production source before `cfg(test)` matches the base byte-for-byte.
+- **Re-open:** any missing layout/direction, changed numerical bound, guard
+  mutation, incorrect admission, skipped fallback or failed architecture gate.
+
 ## APOLLO-EUNOMIA-010-COHORT — source/default availability [minor]
 
 - Finding: Apollo main requires Eunomia 0.9 and allocator 0.9 while current provider defaults expose 0.10. A historical locked-source pass cannot establish fresh consumer resolution.

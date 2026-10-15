@@ -1,5 +1,23 @@
 # Apollo Backlog
 
+<a id="apollo-fft121-layout-recovery"></a>
+## APOLLO-FFT121-LAYOUT-RECOVERY — recover #655 correctness coverage [patch] — in progress
+
+- **Owner:** Codex, `codex/recover-fft121-layout-tests`; base `ae8b0b49`.
+- **Scope:** recover the five-by-five stream-layout matrix, bitwise guards and
+  finite direct-DFT assertions from #655 through main's admission-aware helpers.
+- **Acceptance:** six input families, both directions, all 25 layout pairs,
+  unchanged non-output bits, exact CPU admission and real fallback execution;
+  native ARM and hosted x86/ARM tests, format and warning-denied Clippy.
+- **Version:** `apollo-fft` 0.29.1; 0.28.2 is already published. Production
+  kernels, numerical bounds, experiment reports and workflows stay unchanged.
+- **Evidence:** unchanged ARM baseline passes 3/3 focused tests. The recovered
+  AVX2 assertion and two oracle-rejection regressions fail as expected before
+  adaptation; all 5/5 pass afterward. Workspace format, strict all-target/
+  all-feature Clippy, locked-source resolution and the safety ratchet pass.
+- **Next:** finish native workspace and hosted x86/ARM gates on the independent
+  PR; retain #655 as history. No merge or publication is part of this increment.
+
 <a id="apollo-eunomia-010-cohort"></a>
 ## APOLLO-EUNOMIA-010-COHORT — restore clean provider resolution [minor] — todo
 

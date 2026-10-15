@@ -1,5 +1,17 @@
 # Changelog
 
+## [apollo-fft 0.29.1] - Unreleased
+
+### Added
+
+- [patch] Recover #655's 25 stream-layout combinations with offset, gap and
+  bitwise guard checks in both directions. Existing admission-aware helpers
+  verify unchanged input on unsupported CPUs and execute the public fallback.
+- Reject unequal reference lengths and non-finite direct-DFT values before
+  reducing numerical error; retain the original numerical bounds and kernels.
+  Test-local tracing captures arrange/act/assert spans on failure. Experimental
+  benchmarks, reports and workflow remain in the historical draft #655.
+
 ## [Provider cohort] - Unreleased
 
 ### Breaking

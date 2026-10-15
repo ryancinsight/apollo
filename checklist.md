@@ -1,6 +1,18 @@
 # Apollo Checklist
 
-**Target Version**: apollo-fft 0.29.0 and the provider-cohort versions in CHANGELOG.md.
+Active sprint target: `apollo-fft` 0.29.1 [patch].
+
+## APOLLO-FFT121-LAYOUT-RECOVERY [patch]
+
+- [x] [patch] Isolate current main `ae8b0b49` and inspect committed #655/#664.
+- [x] [patch] Define bitwise layout/guard, admission and numerical contracts.
+- [x] [patch] Recover 25 layout pairs and finite-value guards using existing routes.
+- [x] [patch] Verify historical ARM failure and oracle-rejection regressions.
+- [x] [patch] Pass all five focused ARM tests, workspace format and strict Clippy.
+- [ ] [patch] Pass the full native ARM workspace suite under existing timeouts.
+- [ ] [patch] Open a focused PR and verify applicable hosted x86/ARM CI.
+
+Provider-cohort versions and acceptance remain tracked by PR #672.
 
 ## APOLLO-EUNOMIA-010-COHORT [minor]
 
@@ -52,7 +64,7 @@
 - [ ] Complete final-revision workspace gates and benchmark consumer validation; merge only with all applicable checks green.
 
 
-Active increment target: `apollo-fft` 0.28.1 [patch].
+Historical increment target: `apollo-fft` 0.28.1 [patch].
 
 ## Apollo #644 — process-global test isolation [patch]
 
