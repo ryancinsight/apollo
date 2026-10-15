@@ -1,5 +1,11 @@
 # Apollo gap audit
 
+## APOLLO-LETO-047-COMPAT — additive provider rejection [patch]
+
+- Finding: `^0.46.0` excludes Leto's compatible 0.47 borrowed-CSR addition and prevents one source identity across the Coeus/array/device graph.
+- Resolution: a bounded compatible interval on both Leto layers, preserving the currently merged graph and every Rust implementation/test byte.
+- Verification: exact-base native/API/default-consumer gates and the downstream 0.47 review graph remain pending; [the record](docs/verification/leto-borrowed-csr-compatibility.md) separates these claims.
+
 ## APOLLO-EUNOMIA-010-COHORT — source/default availability [minor]
 
 - Finding: Apollo main requires Eunomia 0.9 and allocator 0.9 while current provider defaults expose 0.10. A historical locked-source pass cannot establish fresh consumer resolution.

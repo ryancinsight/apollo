@@ -1,5 +1,42 @@
 # Changelog
 
+## [Leto 0.47 compatibility] - Unreleased
+
+### Fixed
+
+- [patch] Accept both Leto layers from `>=0.46.0, <0.48.0`, retaining the current
+  cohort and admitting the additive checked-CSR provider. Canonical Git sources,
+  all Rust APIs/implementations/tests, backend features and numeric contracts
+  stay unchanged. Hephaestus 0.22.1 supplies the matching compatible interval
+  for a 0.47 downstream graph; the existing `^0.22.0` bound accepts that patch.
+- Patch only packages whose dependency closure changes. Allocator, FFT macros,
+  direct DCT core and the independent benchmark library retain their versions.
+
+| Package | Previous | Compatibility patch |
+| --- | --- | --- |
+| apollo-czt | 0.12.0 | 0.12.1 |
+| apollo-dctdst | 0.12.0 | 0.12.1 |
+| apollo-dht | 0.12.0 | 0.12.1 |
+| apollo-fft | 0.29.0 | 0.29.1 |
+| apollo-frft | 0.11.0 | 0.11.1 |
+| apollo-fwht | 0.11.0 | 0.11.1 |
+| apollo-gft | 0.12.0 | 0.12.1 |
+| apollo-hilbert | 0.14.0 | 0.14.1 |
+| apollo-leto-interop | 0.20.0 | 0.20.1 |
+| apollo-mellin | 0.13.0 | 0.13.1 |
+| apollo-ntt | 0.11.0 | 0.11.1 |
+| apollo-nufft | 0.9.0 | 0.9.1 |
+| apollo-python | 0.2.2 | 0.2.3 |
+| apollo-qft | 0.11.0 | 0.11.1 |
+| apollo-radon | 0.12.0 | 0.12.1 |
+| apollo-sdft | 0.10.0 | 0.10.1 |
+| apollo-sft | 0.11.0 | 0.11.1 |
+| apollo-sht | 0.9.0 | 0.9.1 |
+| apollo-stft | 0.11.0 | 0.11.1 |
+| apollo-validation | 0.5.0 | 0.5.1 |
+| apollo-wavelet | 0.12.0 | 0.12.1 |
+
+
 ## [Provider cohort] - Unreleased
 
 ### Breaking

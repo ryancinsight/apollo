@@ -99,8 +99,8 @@ mnemosyne = { package = "mnemosyne-memory", version = "0.10.0", git = "https://g
 melinoe = { version = "0.10.0", git = "https://github.com/ryancinsight/melinoe.git", default-features = false, features = ["alloc"] }
 # Leto and Hephaestus own their transitive provider edges (ADR 0047).
 hermes-simd = { version = "0.9.0", git = "https://github.com/ryancinsight/hermes.git" }
-leto = { version = "0.46.0", git = "https://github.com/ryancinsight/leto.git" }
-leto-ops = { version = "0.46.0", git = "https://github.com/ryancinsight/leto.git" }
+leto = { version = ">=0.46.0, <0.48.0", git = "https://github.com/ryancinsight/leto.git" }
+leto-ops = { version = ">=0.46.0, <0.48.0", git = "https://github.com/ryancinsight/leto.git" }
 hephaestus-wgpu = { version = "0.22.0", git = "https://github.com/ryancinsight/hephaestus.git" }
 hephaestus-core = { version = "0.22.0", git = "https://github.com/ryancinsight/hephaestus.git" }
 hephaestus-cuda = { version = "0.22.0", git = "https://github.com/ryancinsight/hephaestus.git" }

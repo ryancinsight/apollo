@@ -1,6 +1,16 @@
 # Apollo Checklist
 
-**Target Version**: apollo-fft 0.29.0 and the provider-cohort versions in CHANGELOG.md.
+**Target Version**: apollo-fft 0.29.1; affected family patches in CHANGELOG.md
+
+## APOLLO-LETO-047-COMPAT [patch]
+
+- [x] Audit current defaults, active ownership and the unchanged public provider vocabulary.
+- [x] Retain 0.46 and admit 0.47 with matching canonical Leto constraints; update affected package versions and migration records.
+- [ ] Verify the exact committed 0.46 source graph, strict diagnostics, native values, API compatibility and unseeded consumers.
+- [ ] Verify the real Coeus 0.47 review graph and hosted candidate checks before integration approval.
+
+
+**Previous cohort target**: apollo-fft 0.29.0 and the provider-cohort versions in CHANGELOG.md.
 
 ## APOLLO-EUNOMIA-010-COHORT [minor]
 

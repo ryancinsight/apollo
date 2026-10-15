@@ -1,5 +1,13 @@
 # Apollo Backlog
 
+<a id="apollo-leto-047-compat"></a>
+## APOLLO-LETO-047-COMPAT — Accept the additive borrowed-CSR provider [patch] — verification
+
+- Outcome: retain Leto 0.46 compatibility and admit 0.47 through one canonical provider identity, without Rust or backend changes.
+- Target: apollo-fft 0.29.1; affected family patches in CHANGELOG.md. Coeus recovery #533 needs this binding after Leto #362.
+- Acceptance: unchanged Rust/source identities; canonical locked resolution; native, strict Clippy, exact API and fresh-consumer checks; real 0.47 downstream integration.
+- Boundary: no main merge, registry publication or Pages authorization. See [verification](docs/verification/leto-borrowed-csr-compatibility.md).
+
 <a id="apollo-eunomia-010-cohort"></a>
 ## APOLLO-EUNOMIA-010-COHORT — restore clean provider resolution [minor] — source complete
 
