@@ -77,6 +77,11 @@ pub fn calculate_log_resample(
         return;
     }
 
+    // Convert input-domain shape constants once instead of recasting them on
+    // every output lane. The loop variable remains an index and is converted
+    // at its single use below.
+    let signal_len_f64 = signal_len as f64;
+    let signal_last_index = signal_len - 1;
     let domain_width = signal_max - signal_min;
 
     let eval = |i: usize| -> f64 {
@@ -87,10 +92,10 @@ pub fn calculate_log_resample(
         }
 
         let fraction = (current_scale - signal_min) / domain_width;
-        let exact_idx = fraction * (signal_len as f64 - 1.0);
+        let exact_idx = fraction * (signal_len_f64 - 1.0);
 
         let lower_idx = exact_idx.floor() as usize;
-        let upper_idx = (lower_idx + 1).min(signal_len - 1);
+        let upper_idx = (lower_idx + 1).min(signal_last_index);
 
         let weight = exact_idx - lower_idx as f64;
 
