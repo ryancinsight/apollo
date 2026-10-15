@@ -1,6 +1,6 @@
 # Leto 0.47 compatibility for borrowed CSR consumers
 
-Base: `730f6262e3faca0a1a57644f2049634fa812ddfe`. Target: apollo-fft 0.29.1; affected family patches in CHANGELOG.md. Classification: [patch].
+Base: `f266bb0b319cda8dccde6090936967130f5af7da`. Target: apollo-fft 0.29.2; affected family patches in CHANGELOG.md. Classification: [patch].
 This isolated export leaves every existing checkout and its owner untouched.
 
 ## Contract
@@ -30,3 +30,6 @@ Clippy, exact-source API, fresh-consumer and hosted checks remain required on
 the committed candidate. The 0.46 committed-graph result and the 0.47 review
 consumer result are separate gates; neither substitutes for actual GPU
 hardware execution or publication receipts.
+
+Main merges FFT-layout recovery #671 and publishes FFT 0.29.1 during review.
+This candidate retains that complete source as its base and targets 0.29.2.

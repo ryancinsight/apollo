@@ -6,7 +6,7 @@ Warm FFT execution retains the tables required by its selected native route.
 CI checks that ownership and exact SIMD admission on ARM as well as x86, and
 compares committed library APIs against their compatible locked providers.
 
-Apollo's Rust provider cohort uses Eunomia 0.10 and FFT 0.29. Its 0.29.1
+Apollo's Rust provider cohort uses Eunomia 0.10 and FFT 0.29. Its 0.29.2
 compatibility patch admits both Leto 0.46 and the additive 0.47 line. Direct
 consumers align numeric, array and device-provider requirements together;
 transform implementations and numerical contracts remain unchanged. The

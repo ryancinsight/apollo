@@ -17,7 +17,7 @@
 | apollo-czt | 0.12.0 | 0.12.1 |
 | apollo-dctdst | 0.12.0 | 0.12.1 |
 | apollo-dht | 0.12.0 | 0.12.1 |
-| apollo-fft | 0.29.0 | 0.29.1 |
+| apollo-fft | 0.29.1 | 0.29.2 |
 | apollo-frft | 0.11.0 | 0.11.1 |
 | apollo-fwht | 0.11.0 | 0.11.1 |
 | apollo-gft | 0.12.0 | 0.12.1 |
@@ -37,7 +37,20 @@
 | apollo-wavelet | 0.12.0 | 0.12.1 |
 
 
-## [Provider cohort] - Unreleased
+
+## [apollo-fft 0.29.1] - 2026-10-15
+
+### Added
+
+- [patch] Recover #655's 25 stream-layout combinations with offset, gap and
+  bitwise guard checks in both directions. Existing admission-aware helpers
+  verify unchanged input on unsupported CPUs and execute the public fallback.
+- Reject unequal reference lengths and non-finite direct-DFT values before
+  reducing numerical error; retain the original numerical bounds and kernels.
+  Test-local tracing captures arrange/act/assert spans on failure. Experimental
+  benchmarks, reports and workflow remain in the historical draft #655.
+
+## [Provider cohort] - 2026-10-15
 
 ### Breaking
 
