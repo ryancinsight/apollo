@@ -52,6 +52,15 @@
   1634 native workspace tests pass with the same 15 existing skips; strict
   all-feature Clippy, warning-denied docs and doctests pass. Source and
   published registry graphs require their own exact-head validation.
+- **Registry prerequisite closure:** all six Hephaestus 0.21.0 packages
+  are present and not yanked, with trusted publisher source
+  [the guarded merge](https://github.com/ryancinsight/hephaestus/commit/2f3f6dd04e79f84631acf837b561a24f34e43e2b).
+  Standard verification of all 19 pending Apollo packages passes after that
+  release. The blocking final-head API gate remains a separate pending verdict.
+- **Hosted verification:** the one authorized readiness retry succeeded.
+  Collect all required final-head CI and blocking API/package verdicts
+  before merging; no Apollo publication is claimed yet. The interrupted
+  local API comparison did not produce a complete verdict.
 - **Dependency order:** compatible Eunomia 0.9.2 Bessel maintenance release,
   Hephaestus core/backend packages, then Apollo FFT. Confirm registry receipts
   and exact-head package/API/native gates before publication.
