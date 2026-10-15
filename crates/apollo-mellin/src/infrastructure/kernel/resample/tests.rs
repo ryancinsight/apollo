@@ -111,6 +111,41 @@ fn hermes_log_frequency_rows_match_scalar_formulas_at_threshold() {
 }
 
 #[test]
+fn release_scratch_returns_weight_pools_to_baseline_and_serves_again() {
+    const LEN: usize = PAR_THRESHOLD;
+    let thread = std::thread::spawn(|| {
+        let factor = -std::f64::consts::TAU / LEN as f64;
+        let scale = 0.125_f64;
+        let row = 17usize;
+        let samples = (0..LEN)
+            .map(|index| {
+                let x = index as f64;
+                (x * 0.03125).sin() + (x * 0.015625).cos()
+            })
+            .collect::<Vec<_>>();
+        let first = log_frequency_coeff_hermes(&samples, factor, scale, row);
+        assert!(
+            super::weight_scratch_capacities().1 >= LEN * 2,
+            "the Hermes row must retain its weight lanes"
+        );
+        super::release_scratch();
+        assert_eq!(
+            super::weight_scratch_capacities(),
+            (0, 0),
+            "release must return every weight pool to baseline"
+        );
+        let second = log_frequency_coeff_hermes(&samples, factor, scale, row);
+        assert!(
+            super::weight_scratch_capacities().1 >= LEN * 2,
+            "the pools must serve after release"
+        );
+        (first, second)
+    });
+    let (first, second) = thread.join().expect("release census thread panicked");
+    assert_eq!(first, second, "post-release output must match");
+}
+
+#[test]
 fn hermes_log_frequency_row_first_use_retains_only_weight_lanes() {
     const LEN: usize = PAR_THRESHOLD;
     let thread = std::thread::spawn(|| {
