@@ -39,6 +39,11 @@
   test and replace its two usize-to-float casts with the canonical count
   conversion. The fixture domain is below 2^53; every value, threshold and
   assertion stays unchanged.
+- **Final provider source evidence:** select Hephaestus `63cdd653` and current
+  reviewed Eunomia, Hermes, Leto, Moirai, Aequitas and Themis defaults. All
+  1634 native workspace tests pass with the same 15 existing skips; strict
+  all-feature Clippy, warning-denied docs and doctests pass. Source and
+  published registry graphs require their own exact-head validation.
 - **Dependency order:** compatible Eunomia 0.9.2 Bessel maintenance release,
   Hephaestus core/backend packages, then Apollo FFT. Confirm registry receipts
   and exact-head package/API/native gates before publication.
