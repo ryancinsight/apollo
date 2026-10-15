@@ -9,8 +9,16 @@ Active sprint target: `apollo-fft` 0.29.1 [patch].
 - [x] [patch] Recover 25 layout pairs and finite-value guards using existing routes.
 - [x] [patch] Verify historical ARM failure and oracle-rejection regressions.
 - [x] [patch] Pass all five focused ARM tests, workspace format and strict Clippy.
-- [ ] [patch] Pass the full native ARM workspace suite under existing timeouts.
-- [ ] [patch] Open a focused PR and verify applicable hosted x86/ARM CI.
+- [x] [patch] Pass full ARM Nextest: 1,636 tests; 15 existing ignored instruments.
+- [x] [patch] Confirm fresh-consumer provider drift also fails unchanged main.
+- [x] [patch] Open [PR #671](https://github.com/ryancinsight/apollo/pull/671) and
+  pass hosted x86/ARM CI on `7af4f641` ([run](https://github.com/ryancinsight/apollo/actions/runs/38743691154)).
+- [x] [patch] Record 1,679 x86 and 1,636 ARM passes; 664 FFT library passes
+  in each execution mode; 21 API comparisons and all remaining applicable gates.
+- [x] [patch] Retain #655 unchanged; exclude its experiments and stale version/workflow edits.
+
+Closure records change only these board files; implementation, manifests and
+lockfile remain identical to the fully verified implementation commit.
 
 Provider-cohort versions and acceptance remain tracked by PR #672.
 

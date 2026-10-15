@@ -1,7 +1,7 @@
 # Apollo Backlog
 
 <a id="apollo-fft121-layout-recovery"></a>
-## APOLLO-FFT121-LAYOUT-RECOVERY — recover #655 correctness coverage [patch] — in progress
+## APOLLO-FFT121-LAYOUT-RECOVERY — recover #655 correctness coverage [patch] — complete
 
 - **Owner:** Codex, `codex/recover-fft121-layout-tests`; base `ae8b0b49`.
 - **Scope:** recover the five-by-five stream-layout matrix, bitwise guards and
@@ -14,9 +14,19 @@
 - **Evidence:** unchanged ARM baseline passes 3/3 focused tests. The recovered
   AVX2 assertion and two oracle-rejection regressions fail as expected before
   adaptation; all 5/5 pass afterward. Workspace format, strict all-target/
-  all-feature Clippy, locked-source resolution and the safety ratchet pass.
-- **Next:** finish native workspace and hosted x86/ARM gates on the independent
-  PR; retain #655 as history. No merge or publication is part of this increment.
+  all-feature Clippy, locked-source resolution and the safety ratchet pass;
+  full ARM Nextest passes 1,636 tests with 15 pre-existing ignored instruments.
+- **Hosted:** [run 38743691154](https://github.com/ryancinsight/apollo/actions/runs/38743691154)
+  passes on implementation `7af4f641`: x86 Nextest 1,679; ARM Nextest 1,636;
+  x86 FFT library 664 each in parallel and serial execution. All 21 locked API
+  comparisons, strict Clippy, formatting, docs, smoke and supply-chain gates pass.
+- **Downstream:** clean Git consumers of unchanged main `ae8b0b49` and
+  candidate `7af4f641` both fail resolution: Eunomia's default Git ref now
+  supplies 0.10.0, outside Apollo's `^0.9.1`. Repair compatible provider source
+  selection in a separate increment; this PR's committed locked graph passes.
+- **Next:** review [PR #671](https://github.com/ryancinsight/apollo/pull/671) and
+  address provider source drift independently. #655 remains an unchanged draft
+  at `222a3f10`. No merge or publication is part of this increment.
 
 <a id="apollo-eunomia-010-cohort"></a>
 ## APOLLO-EUNOMIA-010-COHORT — restore clean provider resolution [minor] — todo

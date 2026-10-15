@@ -24,8 +24,28 @@
   produce the expected three failures before adaptation; the candidate passes
   5/5. Workspace format, warning-denied all-target/all-feature Clippy, locked
   source resolution (271 packages, 36 git packages), 39 script tests (one
-  pre-existing skip) and safety ratchet pass. Full ARM and hosted gates pending.
-  Production source before `cfg(test)` matches the base byte-for-byte.
+  pre-existing skip) and safety ratchet pass. Full ARM Nextest passes 1,636
+  tests with 15 existing ignored instruments under the configured per-test
+  timeout. [Hosted run 38743691154](https://github.com/ryancinsight/apollo/actions/runs/38743691154)
+  passes on `7af4f641`: x86 Nextest 1,679 passed, ARM Nextest 1,636 passed,
+  with 15 existing ignored instruments in each lane; parallel and serial x86
+  FFT libtest each pass 664 tests. All 21 exact locked-source API comparisons
+  pass; FFT 0.28.2 to 0.28.3 passes all 223 applicable checks (30 inapplicable).
+  Strict Clippy, format, four Rustdoc shards, doctests, Python, benchmark smoke,
+  provider audit, RustSec, dependency policy, ADR index, lock and version guards
+  pass. Release/informational API jobs are skipped by policy; the actual locked
+  API job executes. X86 synthetic merge `c355a1b4` and head share tree
+  `d0f334f8e0fe740ee1b310abdfe333cabd00325d`; ARM verifies the exact head.
+  Production source before `cfg(test)` matches the base byte-for-byte; closure
+  changes only board records and leaves all tested code and lock blobs intact.
+- **Downstream limit:** fresh consumers outside Atlas, without path patches or
+  a copied lockfile, fail on both unchanged main `ae8b0b49` (0.28.2) and
+  candidate `7af4f641` (0.28.3). Eunomia's Git default supplies 0.10.0 while
+  Apollo requires `^0.9.1`; therefore downstream numerical execution does not
+  run. Reproduce with a consumer depending on Apollo by Git and exact revision,
+  then `cargo +1.97.0 metadata --format-version=1`. Compatible source selection
+  or a provider migration belongs to a separate change; locked validation
+  remains reproducible and this recovery changes no provider requirements.
 - **Re-open:** any missing layout/direction, changed numerical bound, guard
   mutation, incorrect admission, skipped fallback or failed architecture gate.
 
