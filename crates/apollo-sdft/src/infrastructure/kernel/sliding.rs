@@ -57,6 +57,12 @@ thread_local! {
     static DIRECT_BIN_WEIGHT_SCRATCH: ScratchPool<f64> = const { ScratchPool::new() };
 }
 
+/// Release scratch pools held by the sliding SDFT kernel on the calling thread.
+#[inline]
+pub fn release_scratch() {
+    DIRECT_BIN_WEIGHT_SCRATCH.with(|pool| pool.release());
+}
+
 /// The modulation table `E[q] = exp(-2πi q/N)` for `q` in `0..N`.
 ///
 /// Every twiddle a bin ever needs is one of these `N` entries, indexed by

@@ -297,6 +297,24 @@ impl SdftState {
 }
 
 #[cfg(test)]
+#[allow(dead_code)]
+fn release_scratch_returns_pools_to_zero_capacities() {
+    use crate::infrastructure::kernel::sliding;
+
+    let plan = SdftPlan::new(128, 64).expect("plan");
+    let window = vec![0.0_f32; 128];
+    let mut first = vec![eunomia::Complex32::new(0.0, 0.0); 64];
+    let mut second = vec![eunomia::Complex32::new(0.0, 0.0); 64];
+
+    plan.direct_bins_typed_into(&window, &mut first, PrecisionProfile::LOW_PRECISION_F32)
+        .expect("first typed direct");
+    sliding::release_scratch();
+    plan.direct_bins_typed_into(&window, &mut second, PrecisionProfile::LOW_PRECISION_F32)
+        .expect("second typed direct");
+    sliding::release_scratch();
+}
+
+#[cfg(test)]
 mod tests {
     use super::*;
     use apollo_fft::F16;
