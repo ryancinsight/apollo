@@ -15,6 +15,20 @@ thread_local! {
     static QFT_TWIDDLE_LANE_SCRATCH: ScratchPool<f64> = const { ScratchPool::new() };
 }
 
+/// Release this module's thread-local twiddle-lane scratch pool on the
+/// calling thread: capacity returns to its recorded provision (zero unless
+/// a bounded provision was recorded), so a thread that ran a QFT no longer
+/// holds its high-water mark for its life. The tenth slice of
+/// APOLLO-MEM-SIBLING-THREAD-SCRATCH, following the nine landed precedents.
+pub fn release_scratch() {
+    QFT_TWIDDLE_LANE_SCRATCH.with(|pool| pool.release());
+}
+
+#[cfg(test)]
+pub(crate) fn twiddle_lane_capacity() -> usize {
+    QFT_TWIDDLE_LANE_SCRATCH.with(|pool| pool.capacity())
+}
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 enum QftDirection {
     Forward,
@@ -250,6 +264,32 @@ mod tests {
             let expected = qft_row(&input, &twiddles, row, QftDirection::Inverse, scale);
             assert_qft_row_close(actual, expected, &input, scale, row);
         }
+    }
+
+    #[test]
+    fn release_scratch_returns_twiddle_pool_to_baseline_and_serves_again() {
+        let n = 128;
+        let input = input(n);
+        let twiddles = twiddles(n);
+        let input_lanes = interleaved_lanes(&input);
+        let scale = 1.0 / (n as f64).sqrt();
+        let first = qft_row_hermes(input_lanes, &twiddles, 17, QftDirection::Forward, scale);
+        assert!(
+            super::twiddle_lane_capacity() >= n * 2,
+            "the Hermes row must retain its twiddle lanes"
+        );
+        super::release_scratch();
+        assert_eq!(
+            super::twiddle_lane_capacity(),
+            0,
+            "release must return the pool to baseline"
+        );
+        let second = qft_row_hermes(input_lanes, &twiddles, 17, QftDirection::Forward, scale);
+        assert!(
+            super::twiddle_lane_capacity() >= n * 2,
+            "the pool must serve after release"
+        );
+        assert_eq!(first, second, "post-release output must match");
     }
 
     #[test]
