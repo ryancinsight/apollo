@@ -4,6 +4,7 @@ use super::execute::{
 };
 use super::*;
 use crate::DEFAULT_NUFFT_KERNEL_WIDTH;
+use apollo_fft::{ComputePrecision, StoragePrecision};
 use eunomia::assert_abs_diff_eq;
 #[test]
 fn release_scratch_returns_pools_to_baseline_and_serves_again() {
@@ -509,4 +510,50 @@ fn typed_1d_paths_reject_profile_and_shape_mismatch() {
         )
         .expect_err("shape mismatch");
     assert!(matches!(err, ApolloError::ShapeMismatch { .. }));
+}
+
+/// The two tiers must disagree where the arithmetic disagrees.
+///
+/// `CpuStorage::PROFILE` describes the widening arithmetic the CPU
+/// typed plans execute; `DEVICE_PROFILE` describes the native
+/// arithmetic the accelerator typed paths execute over `Complex32`
+/// device buffers. Conflating them rejects every caller whose profile
+/// matches the device, which only a host with an adapter observes.
+#[test]
+fn device_profiles_record_native_arithmetic_not_cpu_widening() {
+    assert_eq!(
+        <[F16; 2] as NufftComplexStorage>::DEVICE_PROFILE,
+        PrecisionProfile::MIXED_PRECISION_F16_F32
+    );
+    assert_eq!(
+        <Complex32 as NufftComplexStorage>::DEVICE_PROFILE,
+        PrecisionProfile::LOW_PRECISION_F32
+    );
+    assert_eq!(
+        <Complex64 as NufftComplexStorage>::DEVICE_PROFILE,
+        PrecisionProfile::F64_STORAGE_F32_COMPUTE
+    );
+
+    // The CPU tier keeps describing its own arithmetic; only the
+    // `Complex64` storage tier narrows on the device.
+    assert_eq!(
+        <[F16; 2] as CpuStorage<Complex64>>::PROFILE,
+        PrecisionProfile::MIXED_PRECISION_F16_F32
+    );
+    assert_eq!(
+        <Complex32 as CpuStorage<Complex64>>::PROFILE,
+        PrecisionProfile::LOW_PRECISION_F32
+    );
+    assert_eq!(
+        <Complex64 as CpuStorage<Complex64>>::PROFILE,
+        PrecisionProfile::HIGH_ACCURACY_F64
+    );
+}
+
+/// The narrow device profile carries the narrowing the device performs.
+#[test]
+fn narrow_device_profile_declares_f64_storage_over_f32_compute() {
+    let profile = PrecisionProfile::F64_STORAGE_F32_COMPUTE;
+    assert_eq!(profile.storage, StoragePrecision::F64);
+    assert_eq!(profile.compute, ComputePrecision::F32);
 }
