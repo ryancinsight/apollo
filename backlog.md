@@ -5,7 +5,7 @@
 
 - **Owner:** Codex, `codex/recover-fft121-layout-tests`; current main/provider base `730f6262` from PR #672.
 - **Scope:** 25 layout pairs × six input families × forward/unnormalized inverse, exact result/guard bits, finite/equal-length direct-DFT oracles, exact CPU admission and actual fallback execution.
-- **Version:** `apollo-fft` 0.29.1 is the correctness-only patch over published 0.29.0. Production kernels and numerical bounds remain unchanged; #655 retains its experiments/reports/workflow at `222a3f10`.
+- **Version:** `apollo-fft` 0.29.1 is the correctness-only patch over published 0.29.0. Production kernels and numerical bounds remain unchanged; #655 retains its experiments/reports/workflow.
 - **Regression:** unchanged ARM baseline passes three focused cases; the historical AVX assertion and missing oracle guards produce three expected failures; the adaptation passes all five.
 - **Current evidence:** runtime `eb8184b7` passes the five focused native ARM tests, formatting, strict workspace Clippy and doctests. All 22 patch API pairs pass 223 applicable checks each. [Hosted run 38774215093](https://github.com/ryancinsight/apollo/actions/runs/38774215093) passes 1,679 x86 and 1,636 ARM cases (15 existing ignored instruments), both 664-case FFT library modes and every remaining configured gate.
 - **Availability:** provider owners are merged/published at Moirai `44a962f0`, Leto `8b4ab407`, Hephaestus `672c5abc` and Apollo `730f6262`. All intended archive checksums and source identities pass; fresh default-source N=121 consumers compute the analytic values and preserve input bits.
