@@ -297,7 +297,7 @@ impl SdftState {
 }
 
 #[cfg(test)]
-#[allow(dead_code)]
+#[test]
 fn release_scratch_returns_pools_to_zero_capacities() {
     use crate::infrastructure::kernel::sliding;
 
@@ -308,10 +308,24 @@ fn release_scratch_returns_pools_to_zero_capacities() {
 
     plan.direct_bins_typed_into(&window, &mut first, PrecisionProfile::LOW_PRECISION_F32)
         .expect("first typed direct");
+    assert!(
+        sliding::direct_bin_weight_scratch_capacity() >= window.len(),
+        "the typed direct path must retain its weight lanes"
+    );
     sliding::release_scratch();
+    assert_eq!(
+        sliding::direct_bin_weight_scratch_capacity(),
+        0,
+        "release must return the pool to baseline"
+    );
     plan.direct_bins_typed_into(&window, &mut second, PrecisionProfile::LOW_PRECISION_F32)
         .expect("second typed direct");
+    assert!(
+        sliding::direct_bin_weight_scratch_capacity() >= window.len(),
+        "the pool must serve after release"
+    );
     sliding::release_scratch();
+    assert_eq!(first, second, "post-release output must match");
 }
 
 #[cfg(test)]
