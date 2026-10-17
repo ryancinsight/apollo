@@ -63,6 +63,11 @@ pub fn release_scratch() {
     DIRECT_BIN_WEIGHT_SCRATCH.with(|pool| pool.release());
 }
 
+#[cfg(test)]
+pub(crate) fn direct_bin_weight_scratch_capacity() -> usize {
+    DIRECT_BIN_WEIGHT_SCRATCH.with(|pool| pool.capacity())
+}
+
 /// The modulation table `E[q] = exp(-2πi q/N)` for `q` in `0..N`.
 ///
 /// Every twiddle a bin ever needs is one of these `N` entries, indexed by
