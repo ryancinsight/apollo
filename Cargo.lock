@@ -171,7 +171,7 @@ dependencies = [
 
 [[package]]
 name = "apollo-fft"
-version = "0.29.1"
+version = "0.29.2"
 dependencies = [
  "apollo-bench",
  "apollo-fft-macros",
@@ -330,7 +330,7 @@ dependencies = [
 
 [[package]]
 name = "apollo-nufft"
-version = "0.9.0"
+version = "0.10.0"
 dependencies = [
  "apollo-bench",
  "apollo-fft",
@@ -480,7 +480,7 @@ dependencies = [
 
 [[package]]
 name = "apollo-validation"
-version = "0.5.0"
+version = "0.5.1"
 dependencies = [
  "apollo-czt",
  "apollo-dctdst",

@@ -1,6 +1,6 @@
 [package]
 name = "apollo-validation"
-version = "0.5.0"
+version = "0.5.1"
 rust-version.workspace = true
 edition = "2021"
 license = "MIT"
@@ -49,7 +49,7 @@ mnemosyne-memory = [
 
 [dependencies]
 apollo-fft = { version = "0.29.0", path = "../apollo-fft" }
-apollo-nufft = { version = "0.9.0", path = "../apollo-nufft", features = ["wgpu"] }
+apollo-nufft = { version = "0.10.0", path = "../apollo-nufft", features = ["wgpu"] }
 apollo-dctdst = { version = "0.12.0", path = "../apollo-dctdst" }
 apollo-dht = { version = "0.12.0", path = "../apollo-dht" }
 apollo-ntt = { version = "0.11.0", path = "../apollo-ntt" }
