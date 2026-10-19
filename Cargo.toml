@@ -99,9 +99,9 @@ mnemosyne = { package = "mnemosyne-memory", version = "0.10.0", git = "https://g
 melinoe = { version = "0.10.0", git = "https://github.com/ryancinsight/melinoe.git", default-features = false, features = ["alloc"] }
 # Hermes PR #156 and Leto PR #168 are merged; Cargo.lock records their reviewed
 # default sources. origin/main
-hermes-simd = { version = "0.9.0", git = "https://github.com/ryancinsight/hermes.git" }
-leto = { version = ">=0.46.0, <0.48.0", git = "https://github.com/ryancinsight/leto.git" }
-leto-ops = { version = ">=0.46.0, <0.48.0", git = "https://github.com/ryancinsight/leto.git" }
+hermes-simd = { version = "0.9.1", git = "https://github.com/ryancinsight/hermes.git" }
+leto = { version = ">=0.46.1, <0.48.0", git = "https://github.com/ryancinsight/leto.git" }
+leto-ops = { version = ">=0.46.1, <0.48.0", git = "https://github.com/ryancinsight/leto.git" }
 hephaestus-wgpu = { version = "0.22.0", git = "https://github.com/ryancinsight/hephaestus.git" }
 hephaestus-core = { version = "0.22.0", git = "https://github.com/ryancinsight/hephaestus.git" }
 hephaestus-cuda = { version = "0.22.0", git = "https://github.com/ryancinsight/hephaestus.git" }

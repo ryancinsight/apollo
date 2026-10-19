@@ -4,7 +4,9 @@
 
 ### Changed
 
-- [patch] Retain Leto/Leto-ops 0.46 while admitting the reviewed 0.47 provider.
+- [patch] Require Leto/Leto-ops 0.46.1 while admitting the reviewed 0.47 provider.
+  The 0.46.0 normalized packages fail against Eunomia 0.11.
+- [patch] Require Hermes 0.9.1; its 0.9.0 family fails against Eunomia 0.11.
 - [patch] Admit Eunomia 0.10 and 0.11 during the coordinated provider transition.
   Keep the current locked 0.10 graph buildable; tighten final provider floors
   after the approved releases and canonical consumer checks complete.
