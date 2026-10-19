@@ -242,17 +242,19 @@ fn fill_linear_sample_weight(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use eunomia::assert_abs_diff_eq;
+    use eunomia::{assert_abs_diff_eq, FloatElement};
 
     #[test]
     fn hermes_backproject_pixel_matches_scalar_formula_at_threshold() {
         let angles = (0..RADON_HERMES_BACKPROJECT_ANGLE_THRESHOLD)
-            .map(|index| std::f64::consts::PI * index as f64 / 511.0)
+            .map(|index| std::f64::consts::PI * f64::from_count(index) / 511.0)
             .collect::<Vec<_>>();
         let geometry = ParallelBeamGeometry::new(3, 3, angles, 7, 0.75).expect("valid geometry");
         let sinogram = Array2::from_shape_fn(
             [geometry.angle_count(), geometry.detector_count()],
-            |[angle, detector]| (angle as f64 * 0.017).sin() + (detector as f64 * 0.031).cos(),
+            |[angle, detector]| {
+                (f64::from_count(angle) * 0.017).sin() + (f64::from_count(detector) * 0.031).cos()
+            },
         );
 
         for (x, y) in [(-0.5, -0.25), (0.0, 0.0), (0.75, 0.5)] {
@@ -265,12 +267,14 @@ mod tests {
     #[test]
     fn release_scratch_returns_backproject_pools_to_baseline_and_serves_again() {
         let angles = (0..RADON_HERMES_BACKPROJECT_ANGLE_THRESHOLD)
-            .map(|index| std::f64::consts::PI * index as f64 / 511.0)
+            .map(|index| std::f64::consts::PI * f64::from_count(index) / 511.0)
             .collect::<Vec<_>>();
         let geometry = ParallelBeamGeometry::new(3, 3, angles, 7, 0.75).expect("valid geometry");
         let sinogram = Array2::from_shape_fn(
             [geometry.angle_count(), geometry.detector_count()],
-            |[angle, detector]| (angle as f64 * 0.017).sin() + (detector as f64 * 0.031).cos(),
+            |[angle, detector]| {
+                (f64::from_count(angle) * 0.017).sin() + (f64::from_count(detector) * 0.031).cos()
+            },
         );
         let first = backproject_pixel_hermes(0.25, -0.5, &sinogram, &geometry);
         let lane_len = geometry.angle_count() * 2;

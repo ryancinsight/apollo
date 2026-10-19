@@ -109,7 +109,7 @@ dependencies = [
 
 [[package]]
 name = "apollo-czt"
-version = "0.12.0"
+version = "0.12.1"
 dependencies = [
  "apollo-fft",
  "apollo-leto-interop",
@@ -127,7 +127,7 @@ dependencies = [
 
 [[package]]
 name = "apollo-dctdst"
-version = "0.12.0"
+version = "0.12.1"
 dependencies = [
  "apollo-dctdst-core",
  "apollo-fft",
@@ -153,7 +153,7 @@ dependencies = [
 
 [[package]]
 name = "apollo-dht"
-version = "0.12.0"
+version = "0.12.1"
 dependencies = [
  "apollo-fft",
  "apollo-leto-interop",
@@ -211,7 +211,7 @@ dependencies = [
 
 [[package]]
 name = "apollo-frft"
-version = "0.11.0"
+version = "0.11.1"
 dependencies = [
  "apollo-fft",
  "apollo-leto-interop",
@@ -230,7 +230,7 @@ dependencies = [
 
 [[package]]
 name = "apollo-fwht"
-version = "0.11.0"
+version = "0.11.1"
 dependencies = [
  "apollo-fft",
  "apollo-leto-interop",
@@ -248,7 +248,7 @@ dependencies = [
 
 [[package]]
 name = "apollo-gft"
-version = "0.12.0"
+version = "0.12.1"
 dependencies = [
  "apollo-fft",
  "apollo-leto-interop",
@@ -267,7 +267,7 @@ dependencies = [
 
 [[package]]
 name = "apollo-hilbert"
-version = "0.14.0"
+version = "0.14.1"
 dependencies = [
  "apollo-fft",
  "apollo-leto-interop",
@@ -311,7 +311,7 @@ dependencies = [
 
 [[package]]
 name = "apollo-ntt"
-version = "0.11.0"
+version = "0.11.1"
 dependencies = [
  "apollo-bench",
  "apollo-fft",
@@ -367,7 +367,7 @@ dependencies = [
 
 [[package]]
 name = "apollo-qft"
-version = "0.11.1"
+version = "0.11.2"
 dependencies = [
  "apollo-bench",
  "apollo-fft",
@@ -387,7 +387,7 @@ dependencies = [
 
 [[package]]
 name = "apollo-radon"
-version = "0.12.1"
+version = "0.12.2"
 dependencies = [
  "apollo-bench",
  "apollo-fft",
@@ -443,7 +443,7 @@ dependencies = [
 
 [[package]]
 name = "apollo-sht"
-version = "0.9.0"
+version = "0.9.1"
 dependencies = [
  "apollo-fft",
  "apollo-leto-interop",
@@ -461,7 +461,7 @@ dependencies = [
 
 [[package]]
 name = "apollo-stft"
-version = "0.11.0"
+version = "0.11.1"
 dependencies = [
  "apollo-bench",
  "apollo-fft",
@@ -513,7 +513,7 @@ dependencies = [
 
 [[package]]
 name = "apollo-wavelet"
-version = "0.12.0"
+version = "0.12.1"
 dependencies = [
  "apollo-bench",
  "apollo-fft",
