@@ -81,7 +81,7 @@ pub fn calculate_log_resample(
     // Convert input-domain shape constants once instead of recasting them on
     // every output lane. The loop variable remains an index and is converted
     // at its single use below.
-    let signal_len_f64 = signal_len as f64;
+    let signal_len_f64 = f64::from_count(signal_len);
     let signal_last_index = signal_len - 1;
     let domain_width = signal_max - signal_min;
 
