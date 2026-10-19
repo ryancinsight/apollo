@@ -4,6 +4,8 @@
 
 ### Changed
 
+- [patch] Require the Hephaestus core/CUDA/WGPU 0.22.2 compatibility bridge.
+  Align the optional backend scalar boundary with Leto before admitting Eunomia 0.11.
 - [patch] Require Leto/Leto-ops 0.46.1 while admitting the reviewed 0.47 provider.
   The 0.46.0 normalized packages fail against Eunomia 0.11.
 - [patch] Require Hermes 0.9.1; its 0.9.0 family fails against Eunomia 0.11.
