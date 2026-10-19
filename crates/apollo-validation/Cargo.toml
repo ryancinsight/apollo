@@ -1,6 +1,6 @@
 [package]
 name = "apollo-validation"
-version = "0.5.1"
+version = "0.5.2"
 rust-version.workspace = true
 edition = "2021"
 license = "MIT"
@@ -48,24 +48,24 @@ mnemosyne-memory = [
 ]
 
 [dependencies]
-apollo-fft = { version = "0.29.0", path = "../apollo-fft" }
-apollo-nufft = { version = "0.10.0", path = "../apollo-nufft", features = ["wgpu"] }
-apollo-dctdst = { version = "0.12.0", path = "../apollo-dctdst" }
-apollo-dht = { version = "0.12.0", path = "../apollo-dht" }
-apollo-ntt = { version = "0.11.0", path = "../apollo-ntt" }
-apollo-czt = { version = "0.12.0", path = "../apollo-czt" }
-apollo-frft = { version = "0.11.0", path = "../apollo-frft" }
-apollo-sdft = { version = "0.10.0", path = "../apollo-sdft" }
-apollo-wavelet = { version = "0.12.0", path = "../apollo-wavelet" }
-apollo-fwht = { version = "0.11.0", path = "../apollo-fwht" }
-apollo-qft = { version = "0.11.0", path = "../apollo-qft" }
-apollo-gft = { version = "0.12.0", path = "../apollo-gft" }
-apollo-hilbert = { version = "0.14.0", path = "../apollo-hilbert" }
-apollo-mellin = { version = "0.13.0", path = "../apollo-mellin" }
-apollo-radon = { version = "0.12.0", path = "../apollo-radon" }
-apollo-sft = { version = "0.11.0", path = "../apollo-sft" }
-apollo-sht = { version = "0.9.0", path = "../apollo-sht" }
-apollo-stft = { version = "0.11.0", path = "../apollo-stft" }
+apollo-fft = { version = "0.29.3", path = "../apollo-fft" }
+apollo-nufft = { version = "0.10.1", path = "../apollo-nufft", features = ["wgpu"] }
+apollo-dctdst = { version = "0.12.1", path = "../apollo-dctdst" }
+apollo-dht = { version = "0.12.1", path = "../apollo-dht" }
+apollo-ntt = { version = "0.11.1", path = "../apollo-ntt" }
+apollo-czt = { version = "0.12.1", path = "../apollo-czt" }
+apollo-frft = { version = "0.11.1", path = "../apollo-frft" }
+apollo-sdft = { version = "0.10.2", path = "../apollo-sdft" }
+apollo-wavelet = { version = "0.12.1", path = "../apollo-wavelet" }
+apollo-fwht = { version = "0.11.1", path = "../apollo-fwht" }
+apollo-qft = { version = "0.11.2", path = "../apollo-qft" }
+apollo-gft = { version = "0.12.1", path = "../apollo-gft" }
+apollo-hilbert = { version = "0.14.1", path = "../apollo-hilbert" }
+apollo-mellin = { version = "0.13.2", path = "../apollo-mellin" }
+apollo-radon = { version = "0.12.2", path = "../apollo-radon" }
+apollo-sft = { version = "0.11.2", path = "../apollo-sft" }
+apollo-sht = { version = "0.9.1", path = "../apollo-sht" }
+apollo-stft = { version = "0.11.1", path = "../apollo-stft" }
 serde = { workspace = true }
 serde_json.workspace = true
 melinoe = { workspace = true }

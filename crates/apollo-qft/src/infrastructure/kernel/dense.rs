@@ -164,6 +164,7 @@ fn fill_twiddle_lanes(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use eunomia::FloatElement;
 
     fn twiddles(n: usize) -> Vec<Complex64> {
         (0..n)
@@ -272,7 +273,7 @@ mod tests {
         let input = input(n);
         let twiddles = twiddles(n);
         let input_lanes = interleaved_lanes(&input);
-        let scale = 1.0 / (n as f64).sqrt();
+        let scale = 1.0 / f64::from_count(n).sqrt();
         let first = qft_row_hermes(input_lanes, &twiddles, 17, QftDirection::Forward, scale);
         assert!(
             super::twiddle_lane_capacity() >= n * 2,

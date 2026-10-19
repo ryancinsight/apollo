@@ -1,6 +1,6 @@
 [package]
 name = "apollo-stft"
-version = "0.11.0"
+version = "0.11.1"
 rust-version.workspace = true
 edition = "2021"
 license = "MIT"
@@ -22,8 +22,8 @@ mnemosyne-memory = []
 [dependencies]
 hephaestus-core = { workspace = true, optional = true }
 hephaestus-wgpu = { workspace = true, optional = true }
-apollo-fft = { version = "0.29.0", path = "../apollo-fft" }
-apollo-leto-interop = { version = "0.20.0", path = "../apollo-leto-interop" }
+apollo-fft = { version = "0.29.3", path = "../apollo-fft" }
+apollo-leto-interop = { version = "0.20.1", path = "../apollo-leto-interop" }
 hermes-simd = { workspace = true }
 leto = { workspace = true }
 eunomia = { workspace = true, features = ["serde"] }

@@ -1,5 +1,20 @@
 # Changelog
 
+## [Dependency compatibility bridge] - Unreleased
+
+### Changed
+
+- [patch] Retain Leto/Leto-ops 0.46 while admitting the reviewed 0.47 provider.
+- [patch] Admit Eunomia 0.10 and 0.11 during the coordinated provider transition.
+  Keep the current locked 0.10 graph buildable; tighten final provider floors
+  after the approved releases and canonical consumer checks complete.
+- Align stale direct Moirai requirements with the canonical 0.10 provider so
+  fresh default-source resolution can proceed; preserve numerical implementations.
+- Advance each existing Apollo package by one patch version; public operation
+  signatures remain unchanged.
+- Use Eunomia's existing count conversion in the five Mellin/QFT/Radon sites
+  rejected by the unchanged cast gate; preserve arithmetic order and test bounds.
+
 ## [apollo-fft 0.29.1] - 2026-10-15
 
 ### Added
