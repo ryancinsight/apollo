@@ -11,6 +11,25 @@ thread_local! {
     static BACKPROJECT_WEIGHT_SCRATCH: ScratchPool<f64> = const { ScratchPool::new() };
 }
 
+/// Release this module's two thread-local backprojection scratch pools on
+/// the calling thread: capacities return to their recorded provisions
+/// (zero unless a bounded provision was recorded), so a thread that ran a
+/// backprojection no longer holds its high-water mark for its life. The
+/// eleventh slice of APOLLO-MEM-SIBLING-THREAD-SCRATCH, following the ten
+/// landed precedents.
+pub fn release_scratch() {
+    BACKPROJECT_SAMPLE_SCRATCH.with(|pool| pool.release());
+    BACKPROJECT_WEIGHT_SCRATCH.with(|pool| pool.release());
+}
+
+#[cfg(test)]
+pub(crate) fn backproject_scratch_capacities() -> (usize, usize) {
+    BACKPROJECT_SAMPLE_SCRATCH.with(|sample_pool| {
+        BACKPROJECT_WEIGHT_SCRATCH
+            .with(|weight_pool| (sample_pool.capacity(), weight_pool.capacity()))
+    })
+}
+
 /// Execute the forward discrete Radon projection.
 ///
 /// Embarrassingly parallel over the angle dimension: each angle writes to a
@@ -223,17 +242,19 @@ fn fill_linear_sample_weight(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use eunomia::assert_abs_diff_eq;
+    use eunomia::{assert_abs_diff_eq, FloatElement};
 
     #[test]
     fn hermes_backproject_pixel_matches_scalar_formula_at_threshold() {
         let angles = (0..RADON_HERMES_BACKPROJECT_ANGLE_THRESHOLD)
-            .map(|index| std::f64::consts::PI * index as f64 / 511.0)
+            .map(|index| std::f64::consts::PI * f64::from_count(index) / 511.0)
             .collect::<Vec<_>>();
         let geometry = ParallelBeamGeometry::new(3, 3, angles, 7, 0.75).expect("valid geometry");
         let sinogram = Array2::from_shape_fn(
             [geometry.angle_count(), geometry.detector_count()],
-            |[angle, detector]| (angle as f64 * 0.017).sin() + (detector as f64 * 0.031).cos(),
+            |[angle, detector]| {
+                (f64::from_count(angle) * 0.017).sin() + (f64::from_count(detector) * 0.031).cos()
+            },
         );
 
         for (x, y) in [(-0.5, -0.25), (0.0, 0.0), (0.75, 0.5)] {
@@ -241,6 +262,38 @@ mod tests {
             let actual = backproject_pixel_hermes(x, y, &sinogram, &geometry);
             assert_abs_diff_eq!(actual, expected, epsilon = 1.0e-11);
         }
+    }
+
+    #[test]
+    fn release_scratch_returns_backproject_pools_to_baseline_and_serves_again() {
+        let angles = (0..RADON_HERMES_BACKPROJECT_ANGLE_THRESHOLD)
+            .map(|index| std::f64::consts::PI * f64::from_count(index) / 511.0)
+            .collect::<Vec<_>>();
+        let geometry = ParallelBeamGeometry::new(3, 3, angles, 7, 0.75).expect("valid geometry");
+        let sinogram = Array2::from_shape_fn(
+            [geometry.angle_count(), geometry.detector_count()],
+            |[angle, detector]| {
+                (f64::from_count(angle) * 0.017).sin() + (f64::from_count(detector) * 0.031).cos()
+            },
+        );
+        let first = backproject_pixel_hermes(0.25, -0.5, &sinogram, &geometry);
+        let lane_len = geometry.angle_count() * 2;
+        assert!(
+            super::backproject_scratch_capacities().0 >= lane_len,
+            "the Hermes backprojection must retain its sample lanes"
+        );
+        super::release_scratch();
+        assert_eq!(
+            super::backproject_scratch_capacities(),
+            (0, 0),
+            "release must return every pool to baseline"
+        );
+        let second = backproject_pixel_hermes(0.25, -0.5, &sinogram, &geometry);
+        assert!(
+            super::backproject_scratch_capacities().0 >= lane_len,
+            "the pools must serve after release"
+        );
+        assert_eq!(first, second, "post-release output must match");
     }
 
     #[test]

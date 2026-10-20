@@ -297,6 +297,38 @@ impl SdftState {
 }
 
 #[cfg(test)]
+#[test]
+fn release_scratch_returns_pools_to_zero_capacities() {
+    use crate::infrastructure::kernel::sliding;
+
+    let plan = SdftPlan::new(128, 64).expect("plan");
+    let window = vec![0.0_f32; 128];
+    let mut first = vec![eunomia::Complex32::new(0.0, 0.0); 64];
+    let mut second = vec![eunomia::Complex32::new(0.0, 0.0); 64];
+
+    plan.direct_bins_typed_into(&window, &mut first, PrecisionProfile::LOW_PRECISION_F32)
+        .expect("first typed direct");
+    assert!(
+        sliding::direct_bin_weight_scratch_capacity() >= window.len(),
+        "the typed direct path must retain its weight lanes"
+    );
+    sliding::release_scratch();
+    assert_eq!(
+        sliding::direct_bin_weight_scratch_capacity(),
+        0,
+        "release must return the pool to baseline"
+    );
+    plan.direct_bins_typed_into(&window, &mut second, PrecisionProfile::LOW_PRECISION_F32)
+        .expect("second typed direct");
+    assert!(
+        sliding::direct_bin_weight_scratch_capacity() >= window.len(),
+        "the pool must serve after release"
+    );
+    sliding::release_scratch();
+    assert_eq!(first, second, "post-release output must match");
+}
+
+#[cfg(test)]
 mod tests {
     use super::*;
     use apollo_fft::F16;

@@ -5,7 +5,7 @@
 //! (`O(N log N)`) instead. This module is preserved as a ground-truth reference
 //! for verification cross-checks.
 #[cfg(test)]
-use eunomia::Complex64;
+use eunomia::{Complex64, F64};
 #[cfg(test)]
 use mnemosyne::scratch::ScratchPool;
 
@@ -16,6 +16,23 @@ const DFT_HERMES_ROW_LEN_THRESHOLD: usize = 256;
 #[cfg(test)]
 thread_local! {
     static DFT_TWIDDLE_LANE_SCRATCH: ScratchPool<f64> = const { ScratchPool::new() };
+}
+
+/// Release the SFT reference kernel's thread-local twiddle-lane scratch pool
+/// on the calling thread: capacity returns to its recorded provision (zero
+/// unless a bounded provision was recorded), so a thread that ran the
+/// reference DFT no longer holds its high-water mark for its life. The
+/// thirteenth slice of APOLLO-MEM-SIBLING-THREAD-SCRATCH, following the
+/// twelve landed precedents.
+#[cfg(test)]
+#[inline]
+pub(crate) fn release_scratch() {
+    DFT_TWIDDLE_LANE_SCRATCH.with(|pool| pool.release());
+}
+
+#[cfg(test)]
+pub(crate) fn dft_twiddle_scratch_capacity() -> usize {
+    DFT_TWIDDLE_LANE_SCRATCH.with(|pool| pool.capacity())
 }
 
 /// Execute the dense DFT or inverse DFT over a complex slice.
@@ -136,5 +153,33 @@ mod tests {
             assert_eq!(lane_pair[0].to_bits(), angle.cos().to_bits());
             assert_eq!(lane_pair[1].to_bits(), angle.sin().to_bits());
         }
+    }
+
+    #[test]
+    fn release_scratch_returns_twiddle_pool_to_baseline_and_serves_again() {
+        let input = (0..DFT_HERMES_ROW_LEN_THRESHOLD)
+            .map(|index| {
+                let t = F64::from_count(index).0;
+                Complex64::new((t * 0.013).sin() + 0.25, (t * 0.017).cos() - 0.5)
+            })
+            .collect::<Vec<_>>();
+        let first = dft(&input, false);
+        let lane_len = input.len() * 2;
+        assert!(
+            super::dft_twiddle_scratch_capacity() >= lane_len,
+            "the Hermes DFT must retain its twiddle lanes"
+        );
+        super::release_scratch();
+        assert_eq!(
+            super::dft_twiddle_scratch_capacity(),
+            0,
+            "release must return the pool to baseline"
+        );
+        let second = dft(&input, false);
+        assert!(
+            super::dft_twiddle_scratch_capacity() >= lane_len,
+            "the pool must serve after release"
+        );
+        assert_eq!(first, second, "post-release output must match");
     }
 }

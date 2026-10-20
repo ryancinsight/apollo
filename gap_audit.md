@@ -9,7 +9,7 @@
 
 ## N=121 layout coverage stranded in #655 <a id="apollo-fft121-layout-recovery"></a>
 
-- **Finding:** baseline `ae8b0b49` covers four dense pairs. Draft #655 at `222a3f10` adds 25 offset/permuted/padded pairs but assumes mandatory AVX2/FMA, rejecting ARM.
+- **Finding:** baseline `ae8b0b49` covers four dense pairs. Draft #655 adds 25 offset/permuted/padded pairs but assumes mandatory AVX2/FMA, rejecting ARM.
 - **Layout proof:** `L(s,i) = start[s] + i * step` is injective in each layout. Eleven rows/columns permute 121 slots; multiplication by seven permutes residues modulo eleven. Padded streams have pitch 23 and step two, so 21-slot extents do not overlap. Outputs match the host's scalar-prologue reference bitwise; every slot outside the output image retains both component bits.
 - **Contracts:** preserve forward and unnormalized inverse comparisons at 11/121 points and their original bounds. Require equal oracle lengths and finite components before the maximum reduction; floating-point `max` can discard NaN. Existing execution helpers verify exact admission, unchanged bits on decline and real supported fallback execution. Omit the redundant historical unsupported-host test.
 - **Regression:** baseline ARM passes three focused cases; the historical AVX assertion and missing oracle guards fail in three expected cases; all five adapted tests pass. Production kernel bytes match baseline and current main `730f6262`.

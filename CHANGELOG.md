@@ -1,6 +1,30 @@
 # Changelog
 
-## [Leto 0.47 compatibility] - Unreleased
+## [Dependency compatibility bridge] - Unreleased
+
+### Changed
+
+- [patch] Require the Hephaestus core/CUDA/WGPU 0.22.2 compatibility bridge.
+  Align the optional backend scalar boundary with Leto before admitting Eunomia 0.11.
+- [patch] Require Leto/Leto-ops 0.46.1 while admitting the reviewed 0.47 provider.
+  The 0.46.0 normalized packages fail against Eunomia 0.11.
+- [patch] Require Hermes 0.9.1; its 0.9.0 family fails against Eunomia 0.11.
+- [patch] Admit Eunomia 0.10 and 0.11 during the coordinated provider transition.
+  Keep the current locked 0.10 graph buildable; tighten final provider floors
+  after the approved releases and canonical consumer checks complete.
+- Align stale direct Moirai requirements with the canonical 0.10 provider so
+  fresh default-source resolution can proceed; preserve numerical implementations.
+- Advance each existing Apollo package by one patch version; public operation
+  signatures remain unchanged.
+- Use Eunomia's existing count conversion in the five Mellin/QFT/Radon sites
+  rejected by the unchanged cast gate; preserve arithmetic order and test bounds.
+
+## [Leto 0.47 compatibility] - Earlier source qualification
+
+This section records PR #674 at `2b1bad5e`. Its native version proposals are
+historical: PR #690 ships the compatibility admission and stricter published
+provider floors. They do not request republishing consumed native versions.
+The Python FFI renewal remains separate.
 
 ### Fixed
 

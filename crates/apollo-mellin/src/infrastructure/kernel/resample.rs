@@ -13,7 +13,7 @@
 //! transform of the log-resampled signal. calculate_log_resample performs the
 //! r to e^u substitution; log_frequency_spectrum then applies the discrete Fourier sum.
 
-use eunomia::Complex64;
+use eunomia::{Complex64, FloatElement};
 use moirai::ParallelSliceMut;
 
 const PAR_THRESHOLD: usize = 256;
@@ -63,10 +63,11 @@ pub fn calculate_log_resample(
         return;
     }
 
+    let sample_count_f64 = f64::from_count(samples);
     let log_min = min_scale.ln();
     let log_max = max_scale.ln();
     let step = if samples > 1 {
-        (log_max - log_min) / (samples as f64 - 1.0)
+        (log_max - log_min) / (sample_count_f64 - 1.0)
     } else {
         0.0
     };
@@ -77,6 +78,11 @@ pub fn calculate_log_resample(
         return;
     }
 
+    // Convert input-domain shape constants once instead of recasting them on
+    // every output lane. The loop variable remains an index and is converted
+    // at its single use below.
+    let signal_len_f64 = f64::from_count(signal_len);
+    let signal_last_index = signal_len - 1;
     let domain_width = signal_max - signal_min;
 
     let eval = |i: usize| -> f64 {
@@ -87,10 +93,10 @@ pub fn calculate_log_resample(
         }
 
         let fraction = (current_scale - signal_min) / domain_width;
-        let exact_idx = fraction * (signal_len as f64 - 1.0);
+        let exact_idx = fraction * (signal_len_f64 - 1.0);
 
         let lower_idx = exact_idx.floor() as usize;
-        let upper_idx = (lower_idx + 1).min(signal_len - 1);
+        let upper_idx = (lower_idx + 1).min(signal_last_index);
 
         let weight = exact_idx - lower_idx as f64;
 
@@ -118,7 +124,8 @@ pub fn mellin_moment(signal: &[f64], signal_min: f64, signal_max: f64, exponent:
         return signal[0] * moment_antiderivative(signal_min, signal_max, exponent);
     }
 
-    let step = (signal_max - signal_min) / (signal.len() as f64 - 1.0);
+    let signal_len_f64 = f64::from_count(signal.len());
+    let step = (signal_max - signal_min) / (signal_len_f64 - 1.0);
     if signal.len() >= HERMES_MOMENT_LEN_THRESHOLD {
         return mellin_moment_hermes(signal, signal_min, exponent, step) * step;
     }
@@ -175,8 +182,9 @@ pub fn log_frequency_spectrum(log_samples: &[f64], log_min: f64, log_max: f64) -
     if len == 0 {
         return Vec::new();
     }
+    let sample_count_f64 = f64::from_count(len);
     let du = if len > 1 {
-        (log_max - log_min) / (len as f64 - 1.0)
+        (log_max - log_min) / (sample_count_f64 - 1.0)
     } else {
         1.0
     };
@@ -243,8 +251,9 @@ pub fn inverse_log_frequency_spectrum(
     if len == 0 {
         return Vec::new();
     }
+    let sample_count_f64 = f64::from_count(len);
     let du = if len > 1 {
-        (log_max - log_min) / (len as f64 - 1.0)
+        (log_max - log_min) / (sample_count_f64 - 1.0)
     } else {
         1.0
     };
@@ -336,13 +345,15 @@ pub fn exp_resample(
         return;
     }
 
+    let input_count_f64 = f64::from_count(n);
     let du = if n > 1 {
-        (log_max - log_min) / (n as f64 - 1.0)
+        (log_max - log_min) / (input_count_f64 - 1.0)
     } else {
         0.0
     };
+    let output_count_f64 = f64::from_count(out_len);
     let out_step = if out_len > 1 {
-        (output_max - output_min) / (out_len as f64 - 1.0)
+        (output_max - output_min) / (output_count_f64 - 1.0)
     } else {
         0.0
     };

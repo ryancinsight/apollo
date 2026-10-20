@@ -9,7 +9,7 @@
 
 use apollo_bench::{BenchmarkCase, BenchmarkConfig, BenchmarkMode, BenchmarkSuite};
 use apollo_mellin::{MellinPlan, MellinSpectrum};
-use eunomia::Complex64;
+use eunomia::{Complex64, FloatElement};
 use std::hint::black_box;
 use std::time::{Duration, Instant};
 
@@ -20,21 +20,22 @@ const SIGNAL_MAX: f64 = 4.0;
 const BUDGET_SECS: u64 = 30;
 
 fn linear_signal(len: usize) -> Vec<f64> {
-    let step = (SIGNAL_MAX - SIGNAL_MIN) / (len as f64 - 1.0);
+    let step = (SIGNAL_MAX - SIGNAL_MIN) / (f64::from_count(len) - 1.0);
     (0..len)
-        .map(|index| 0.5 + 0.125 * (SIGNAL_MIN + index as f64 * step))
+        .map(|index| 0.5 + 0.125 * (SIGNAL_MIN + f64::from_count(index) * step))
         .collect()
 }
 
 fn direct_log_frequency_bin(len: usize, bin: usize) -> Complex64 {
     let log_min = SIGNAL_MIN.ln();
     let log_max = SIGNAL_MAX.ln();
-    let du = (log_max - log_min) / (len as f64 - 1.0);
+    let du = (log_max - log_min) / (f64::from_count(len) - 1.0);
     (0..len)
         .map(|index| {
-            let u = log_min + index as f64 * du;
+            let u = log_min + f64::from_count(index) * du;
             let sample = 0.5 + 0.125 * u.exp();
-            let angle = -std::f64::consts::TAU * bin as f64 * index as f64 / len as f64;
+            let angle = -std::f64::consts::TAU * f64::from_count(bin) * f64::from_count(index)
+                / f64::from_count(len);
             Complex64::new(sample * angle.cos(), sample * angle.sin())
         })
         .sum::<Complex64>()
@@ -45,17 +46,17 @@ fn assert_matches_direct(spectrum: &MellinSpectrum, len: usize) {
     let bin = 7;
     let expected = direct_log_frequency_bin(len, bin);
     let actual = spectrum.values()[bin];
-    let du = (SIGNAL_MAX.ln() - SIGNAL_MIN.ln()) / (len as f64 - 1.0);
+    let du = (SIGNAL_MAX.ln() - SIGNAL_MIN.ln()) / (f64::from_count(len) - 1.0);
     let l1 = (0..len)
         .map(|index| {
-            let u = SIGNAL_MIN.ln() + index as f64 * du;
+            let u = SIGNAL_MIN.ln() + f64::from_count(index) * du;
             (0.5 + 0.125 * u.exp()).abs()
         })
         .sum::<f64>()
         * du;
     // Linear interpolation is exact for this signal. The remaining direct-sum
     // and coordinate-evaluation error grows as O(N*u).
-    let tolerance = 64.0 * len as f64 * f64::EPSILON * l1.max(1.0);
+    let tolerance = 64.0 * f64::from_count(len) * f64::EPSILON * l1.max(1.0);
     assert!(
         (actual - expected).norm() <= tolerance,
         "N={len} bin={bin}: {actual:?} differs from {expected:?} by {}, bound {tolerance}",

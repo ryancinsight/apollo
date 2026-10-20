@@ -14,7 +14,7 @@ pub(crate) fn validate_pair_lengths(expected: usize, actual: usize) -> NufftWgpu
 pub(crate) fn validate_typed_profile<T: NufftComplexStorage>(
     actual: PrecisionProfile,
 ) -> NufftWgpuResult<()> {
-    let expected = T::PROFILE;
+    let expected = T::DEVICE_PROFILE;
     if actual.storage == expected.storage && actual.compute == expected.compute {
         Ok(())
     } else {
@@ -103,5 +103,40 @@ pub(crate) fn array3_from_leto_view<T: Copy>(view: leto::ArrayView3<'_, T>) -> A
 pub(crate) fn host_array_error() -> NufftWgpuError {
     NufftWgpuError::HostArrayLayout {
         message: "failed to allocate Mnemosyne-backed Leto NUFFT-WGPU 1D output".to_string(),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::validate_typed_profile;
+    use crate::NufftComplexStorage;
+    use apollo_fft::{CpuStorage, PrecisionProfile, F16};
+    use eunomia::{Complex32, Complex64};
+
+    /// The device validator accepts the native device tier, not the CPU tier.
+    ///
+    /// The accelerator narrows every storage into `Complex32` device buffers
+    /// and accumulates in `f32` ([`super::typed_to_complex32`]), so a caller
+    /// passing the truthful device profile must validate, while the
+    /// widening `Complex64` CPU profile must not.
+    #[test]
+    fn device_validator_accepts_native_arithmetic_and_rejects_cpu_widening() {
+        validate_typed_profile::<Complex64>(PrecisionProfile::F64_STORAGE_F32_COMPUTE)
+            .expect("the device profile the accelerator advertises");
+        validate_typed_profile::<Complex32>(PrecisionProfile::LOW_PRECISION_F32)
+            .expect("the Complex32 device profile");
+        validate_typed_profile::<[F16; 2]>(PrecisionProfile::MIXED_PRECISION_F16_F32)
+            .expect("the F16 device profile");
+
+        assert!(
+            validate_typed_profile::<Complex64>(<Complex64 as CpuStorage<Complex64>>::PROFILE)
+                .is_err(),
+            "the widening CPU descriptor must not pass the device validator"
+        );
+        assert!(
+            <Complex64 as NufftComplexStorage>::DEVICE_PROFILE
+                != <Complex64 as CpuStorage<Complex64>>::PROFILE,
+            "the Complex64 tiers must disagree where the arithmetic disagrees"
+        );
     }
 }
