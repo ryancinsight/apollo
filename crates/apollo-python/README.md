@@ -1,6 +1,7 @@
 # apollo-python
 
-PyO3 bindings for the Apollo workspace.
+PyO3 0.30 bindings for Python 3.9 or newer. The module requires the GIL;
+free-threaded operation remains unverified. See workspace ADR 0076.
 
 ## Distribution
 

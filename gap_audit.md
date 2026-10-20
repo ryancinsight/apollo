@@ -1,5 +1,11 @@
 # Apollo gap audit
 
+## APOLLO-PYTHON-030-COHORT — FFI identity and unsupported floor [major]
+
+- Finding: the private binding selects PyO3 0.29 while the approved future Eunomia/NumPy boundary selects 0.30; the two FFI crates cannot share one Rust link graph. PyO3 0.30 has no Python 3.8 ABI feature.
+- Correction: one 0.30 identity, binding 0.3.0, Python/ABI floor 3.9 and an explicit GIL requirement; [ADR 0076](docs/adr/0076-python-030-ffi-cohort.md) precedes implementation. Native versions/kernels and existing gate limits remain unchanged.
+- Verification: current and qualified future source resolution, computed native/wheel/caller values and strict diagnostics remain required; final canonical cohort and Miri are not accepted.
+
 ## APOLLO-LETO-047-COMPAT — additive provider rejection [patch]
 
 - Finding: `^0.46.0` excludes Leto's compatible 0.47 borrowed-CSR addition and prevents one source identity across the Coeus/array/device graph.

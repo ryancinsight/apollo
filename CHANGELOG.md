@@ -1,5 +1,23 @@
 # Changelog
 
+## [apollo-python 0.3.0] - Unreleased
+
+### Breaking
+
+- [major] Select PyO3/build-config 0.30 with the coordinated NumPy 0.30 Rust
+  FFI cohort. Python 3.9 is the minimum supported interpreter and stable ABI;
+  Python 3.8 callers retain the previous binding. Rust embedding consumers
+  advance their Python FFI dependencies together. See ADR 0076.
+
+### Changed
+
+- Make the module GIL requirement explicit; free-threaded operation remains
+  unverified. Maturin selects extension-only linking while native Rust tests
+  retain interpreter linking. Remove the obsolete ABI3 interpreter-version
+  suppression. Python transform APIs and numerical contracts
+  retain their existing behavior. Native package versions remain published.
+
+
 ## [Dependency compatibility bridge] - Unreleased
 
 ### Changed
@@ -21,7 +39,7 @@
 
 ## [Leto 0.47 compatibility] - Earlier source qualification
 
-This section records PR #674 at `2b1bad5e`. Its native version proposals are
+This section records [PR #674](https://github.com/ryancinsight/apollo/pull/674). Its native version proposals are
 historical: PR #690 ships the compatibility admission and stricter published
 provider floors. They do not request republishing consumed native versions.
 The Python FFI renewal remains separate.

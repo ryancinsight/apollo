@@ -28,7 +28,7 @@ jobs:
       atlas-ref: 227ff172612b8aff553be22be89fabdf71838a03
       tag-prefix: apollo-fft-v
       abi3: true
-      abi3-python: "3.8"
+      abi3-python: "3.9"
       python-test-path: crates/apollo-python/tests/test_smoke.py
 
   publish:

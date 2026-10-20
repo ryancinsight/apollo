@@ -1,13 +1,21 @@
 # Apollo Backlog
 
+<a id="apollo-python-030-cohort"></a>
+## APOLLO-PYTHON-030-COHORT — One Python FFI identity [major] — review
+
+- Priority: correctness; target: private apollo-python 0.3.0; decision: [ADR 0076](docs/adr/0076-python-030-ffi-cohort.md).
+- Scope: PyO3/build-config 0.30, Python 3.9 stable ABI, explicit GIL requirement and existing wheel/native linking boundaries. Preserve all published native versions and transforms.
+- Acceptance: locked native boundary values, strict diagnostics, installed-wheel smoke values and a disposable common Rust caller using qualified Eunomia 0.11/NumPy 0.30 with actual Leto/Apollo sources.
+- Boundary: local preparation only; final canonical backend/Python cohort, full hosted wheel matrix, review, publication and Miri remain unverified.
+
 <a id="apollo-leto-047-compat"></a>
 ## APOLLO-LETO-047-COMPAT — Accept the additive borrowed-CSR provider [patch] — review
 
 - Outcome: retain Leto 0.46 compatibility and admit 0.47 through one canonical provider identity, without Rust or backend changes.
-- Target: apollo-fft 0.29.2; affected family patches in CHANGELOG.md. Coeus recovery #533 needs this binding after Leto #362.
+- Current source: PR #690 ships the native compatibility admission and stricter published floors; prior PR #674 version proposals remain historical. Reserved Leto 0.47/CSR and the complete downstream cohort still need final source qualification.
 - Acceptance: unchanged Rust/source identities; canonical locked resolution; native, strict Clippy, exact API and fresh-consumer checks; real 0.47 downstream integration.
 - Evidence: all actual hosted/source API and fresh review-consumer checks pass; the real Coeus 0.47 graph passes native/strict/memory gates.
-- Boundary: no main merge, registry publication or Pages authorization. See [verification](docs/verification/leto-borrowed-csr-compatibility.md).
+- Boundary: the native bridge publication is complete through PR #690; this preserved continuation does not authorize a Python publication or accept the final 0.47 cohort. See [historical verification](docs/verification/leto-borrowed-csr-compatibility.md).
 
 
 <a id="apollo-fft121-layout-recovery"></a>

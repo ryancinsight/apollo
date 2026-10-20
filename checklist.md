@@ -1,6 +1,14 @@
 # Apollo Checklist
 
-**Target Version**: apollo-fft 0.29.2; affected family patches in CHANGELOG.md
+**Target Version**: private apollo-python 0.3.0 [major]; native published versions unchanged
+
+## APOLLO-PYTHON-030-COHORT [major]
+
+- [x] Record the approved cohort decision, Python minimum and migration in ADR 0076 before implementation.
+- [x] Preserve PR #674 lineage while normally merging the published native compatibility cohort.
+- [ ] Verify locked native/FFI, strict diagnostics and installed-wheel computed values.
+- [ ] Qualify the future Eunomia/NumPy 0.30 common Rust caller without production pins.
+- [ ] Complete independent review and exact-head hosted gates before remote lifecycle acceptance.
 
 ## APOLLO-LETO-047-COMPAT [patch]
 

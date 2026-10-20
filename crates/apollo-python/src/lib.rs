@@ -27,7 +27,7 @@ use bindings::nufft::{
 use bindings::plans::{PyFftPlan1D, PyFftPlan2D, PyFftPlan3D};
 
 /// Python module entry point.
-#[pymodule]
+#[pymodule(gil_used = true)]
 fn _pyapollofft(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<PyFftPlan1D>()?;
     m.add_class::<PyFftPlan2D>()?;
