@@ -174,3 +174,15 @@ an unseeded external consumer with canonical Git sources and no path/patch
 substitutions. Registry publication retains its separate dependency order and
 release authority. The FFT correctness recovery and historical experiment
 remain independently reviewable in PRs #671 and #655.
+
+## Hephaestus 0.27.1 private compatibility preparation
+
+FFT 0.30 and the corresponding transform versions in ADR 0077 require
+Hephaestus ^0.27.1. Public accelerator consumers advance their direct provider
+and Apollo requirements together. The real ec650 review lock is private
+source evidence while #509 remains draft, unmerged and unpublished. Preserve
+the provider-first default/registry and no-overlay consumer gates above;
+independent exact-head/ADR review and one owner-selected release source remain
+pending. No numerical, performance, hardware, Python or publication acceptance
+follows from admission. Initial service-blocked Apollo LaneBuffer work is
+outside this increment and is not retried.

@@ -1,5 +1,18 @@
 # Apollo Backlog
 
+## APOLLO-HEPHAESTUS-0271-COMPATIBILITY [major] — private preparation
+
+- **Scope:** ^0.27.1 admission, FFT 0.30/public GPU family versions, atomic
+  internal edges, real-source review lock and Breaking migration (ADR 0077).
+- **Boundary:** private candidate prepared under the canonical-repair request;
+  independent exact-head/ADR sign-off and one owner-selected current/FFI
+  release source remain pending. Rust/tests/workflows/bounds stay unchanged.
+- **Gates:** CPU/source checks, actual API pairs, MSRV and normalized packages;
+  provider-first availability and fresh no-overlay consumers remain pending
+  while Hephaestus #509 is draft/unpublished. Preserve numerical-tail,
+  portable-bound, performance/hardware, final backend/Python/cohort, deferred
+  Coeus Miri and service holds. Do not retry initial Apollo LaneBuffer work.
+
 <a id="apollo-python-030-cohort"></a>
 ## APOLLO-PYTHON-030-COHORT — One Python FFI identity [major] — blocked
 

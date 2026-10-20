@@ -1,5 +1,51 @@
 # Changelog
 
+## [Hephaestus 0.27.1 compatibility] - Unreleased private preparation
+
+### Breaking
+
+- [major] Advance FFT to 0.30 and its public GPU transform families to the
+  compatibility lines below. Their device/error/trait boundaries now use
+  Hephaestus ^0.27.1. Update direct Apollo and provider requirements together
+  and rebuild accelerator callers against one source identity (ADR 0077).
+
+| Package | Previous | Prepared |
+| --- | --- | --- |
+| apollo-czt | 0.12.1 | 0.13.0 |
+| apollo-dctdst | 0.12.1 | 0.13.0 |
+| apollo-dht | 0.12.1 | 0.13.0 |
+| apollo-fft | 0.29.3 | 0.30.0 |
+| apollo-frft | 0.11.1 | 0.12.0 |
+| apollo-fwht | 0.11.1 | 0.12.0 |
+| apollo-gft | 0.12.1 | 0.13.0 |
+| apollo-hilbert | 0.14.1 | 0.15.0 |
+| apollo-mellin | 0.13.2 | 0.14.0 |
+| apollo-ntt | 0.11.1 | 0.12.0 |
+| apollo-nufft | 0.10.1 | 0.11.0 |
+| apollo-python | 0.3.0 | 0.3.1 |
+| apollo-qft | 0.11.2 | 0.12.0 |
+| apollo-radon | 0.12.2 | 0.13.0 |
+| apollo-sdft | 0.10.2 | 0.11.0 |
+| apollo-sft | 0.11.2 | 0.12.0 |
+| apollo-sht | 0.9.1 | 0.10.0 |
+| apollo-stft | 0.11.1 | 0.12.0 |
+| apollo-validation | 0.5.2 | 0.5.3 |
+| apollo-wavelet | 0.12.1 | 0.13.0 |
+
+### Changed
+
+- [patch] Advance opaque validation dependency content to 0.5.3 and the
+  private Python adapter to 0.3.1; retain its existing Python ABI/PyO3
+  lineage. Allocator, direct-DCT core, macros, interop and benchmark packages
+  keep their versions and source content. All Rust and numerical gates remain
+  unchanged. Current-source and accepted-FFI preparations are alternatives;
+  owner selection and independent exact-head/ADR review precede integration.
+- Keep official unpinned Git URLs and require the repaired provider floor.
+  A real ec650 review lock does not make draft Hephaestus #509 merged or
+  published. Registry/package/default-source qualification, hosted backends,
+  FFI runtime/wheels, numerical-tail/portable-bound/performance/hardware and
+  service holds remain. No public lifecycle action is authorized here.
+
 ## [apollo-python 0.3.0] - Unreleased
 
 ### Breaking

@@ -82,3 +82,4 @@
 | [0074](0074-sized-fallback-table-ownership.md) | Sized fallback table ownership | Accepted |
 | [0075](0075-provider-release-receipts.md) | Coordinated provider release receipts | Accepted |
 | [0076](0076-python-030-ffi-cohort.md) | Python binding in the PyO3 0.30 cohort | Accepted |
+| [0077](0077-hephaestus-0271-compatibility.md) | Hephaestus 0.27.1 public-provider compatibility line | Proposed |

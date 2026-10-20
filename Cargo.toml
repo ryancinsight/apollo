@@ -102,9 +102,9 @@ melinoe = { version = "0.10.0", git = "https://github.com/ryancinsight/melinoe.g
 hermes-simd = { version = "0.9.1", git = "https://github.com/ryancinsight/hermes.git" }
 leto = { version = ">=0.46.1, <0.48.0", git = "https://github.com/ryancinsight/leto.git" }
 leto-ops = { version = ">=0.46.1, <0.48.0", git = "https://github.com/ryancinsight/leto.git" }
-hephaestus-wgpu = { version = "0.22.2", git = "https://github.com/ryancinsight/hephaestus.git" }
-hephaestus-core = { version = "0.22.2", git = "https://github.com/ryancinsight/hephaestus.git" }
-hephaestus-cuda = { version = "0.22.2", git = "https://github.com/ryancinsight/hephaestus.git" }
+hephaestus-wgpu = { version = "0.27.1", git = "https://github.com/ryancinsight/hephaestus.git" }
+hephaestus-core = { version = "0.27.1", git = "https://github.com/ryancinsight/hephaestus.git" }
+hephaestus-cuda = { version = "0.27.1", git = "https://github.com/ryancinsight/hephaestus.git" }
 proc-macro2 = "1.0.106"
 once_cell = "1.21.4"
 parking_lot = "0.12.5"

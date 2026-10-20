@@ -1,5 +1,15 @@
 # Apollo Checklist
 
+## APOLLO-HEPHAESTUS-0271-COMPATIBILITY [major] — review gates
+
+- [ ] [major] Obtain independent exact-head/ADR sign-off and select one owner-approved current/FFI release source (ADR 0077).
+- [ ] [major] Verify real-source locked CPU, strict lint/docs/doctests, MSRV 1.95 and applicable API/package gates.
+- [ ] [major] Confirm provider-first default and registry availability, regenerate the final lock, and pass fresh no-overlay consumers.
+- [ ] [major] Complete required hosted backend/Python/wheel/performance gates; retain all numerical-tail, portable-bound, hardware/cohort and service holds.
+
+Private version/admission preparation does not mark these release gates done.
+No public push, PR edit, dispatch, acquisition retry, merge or publication occurs.
+
 **Target Version**: private apollo-python 0.3.0 [major]; native published versions unchanged
 
 ## APOLLO-PYTHON-030-COHORT [major]
@@ -19,7 +29,7 @@
 
 
 
-Active sprint target: `apollo-fft` 0.29.1 [patch], above published provider cohort 0.29.0.
+Active sprint target: `apollo-fft` 0.30.0 [major], private compatibility preparation; ADR sign-off pending.
 
 ## APOLLO-FFT121-LAYOUT-RECOVERY [patch]
 
