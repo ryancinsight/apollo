@@ -1,5 +1,12 @@
 # Apollo Checklist
 
+## APOLLO-HEPHAESTUS-0271-SUCCESSOR-RENEWAL [patch] — review gates
+
+- [ ] [patch] Verify the exact a735 consumer graph and renewed native/source/package/API receipt, retaining all existing gates.
+- [ ] [major] Obtain final owner source/Python-floor adoption record, ADR0077 sign-off and independent review before public integration.
+
+Private renewal preserves all ec650 receipts and does not rerun provider tests.
+
 ## APOLLO-HEPHAESTUS-0271-COMPATIBILITY [major] — review gates
 
 - [ ] [major] Obtain independent exact-head/ADR sign-off and select one owner-approved current/FFI release source (ADR 0077).

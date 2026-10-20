@@ -1,5 +1,16 @@
 # Apollo Backlog
 
+## APOLLO-HEPHAESTUS-0271-SUCCESSOR-RENEWAL [patch] — private source binding
+
++- Renew the accepted private preparation from ec650 to exact provider
+  `a735c608dd686bc665ef48ac329aca4872b8508f`, keeping all package versions,
+  floors, features, Rust/tests/workflows and Leto0.46.3/5051 identities.
+- Preserve sealed ec650 evidence; renew exact consumer CPU/source/strict/docs/
+  MSRV/package/API checks and independent review. No provider tests rerun.
+- ADR0077 remains Proposed. Final owner source/Python-floor adoption and
+  public release authority remain explicit decisions; numerical portable-bound,
+  performance, hardware, FFI/Python/cohort, deferred Miri and service holds persist.
+
 ## APOLLO-HEPHAESTUS-0271-COMPATIBILITY [major] — private preparation
 
 - **Scope:** ^0.27.1 admission, FFT 0.30/public GPU family versions, atomic

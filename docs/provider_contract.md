@@ -179,10 +179,17 @@ remain independently reviewable in PRs #671 and #655.
 
 FFT 0.30 and the corresponding transform versions in ADR 0077 require
 Hephaestus ^0.27.1. Public accelerator consumers advance their direct provider
-and Apollo requirements together. The real ec650 review lock is private
+and Apollo requirements together. The real a735 review lock is private
 source evidence while #509 remains draft, unmerged and unpublished. Preserve
 the provider-first default/registry and no-overlay consumer gates above;
 independent exact-head/ADR review and one owner-selected release source remain
 pending. No numerical, performance, hardware, Python or publication acceptance
 follows from admission. Initial service-blocked Apollo LaneBuffer work is
 outside this increment and is not retried.
+
+The authorized successor is a735c608dd686bc665ef48ac329aca4872b8508f,
+tree cce4ff3202a4b15405d928cc9d29a0ec4db224ff. Consumer Leto/LetoOps remain
+0.46.3 at 5051cd9577650a5712aa6a7effcd8955c9d8bcc7; the provider-own
+0.46.1/7fd6256f lock is a separate check graph. Prior ec650 consumer receipts
+remain scoped historical evidence, with successor checks and independent
+review recorded separately in the private delivery.

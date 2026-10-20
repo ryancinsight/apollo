@@ -65,8 +65,10 @@ rebuild their accelerator callers. Coeus consumes FFT ^0.30.0 from the
 owner-selected Apollo candidate. Do not translate duplicate provider types
 through adapters or retain old requirements to obtain green resolution.
 
-Manifests keep canonical unpinned Git sources. A review lock records the real
-provider commit ec650afef687e16f0563f351109a2c6ace22afe3. Hephaestus #509 is
+Manifests keep canonical unpinned Git sources. The renewed review lock records the real
+provider commit a735c608dd686bc665ef48ac329aca4872b8508f (tree cce4ff3202a4b15405d928cc9d29a0ec4db224ff).
+The previous ec650afef687e16f0563f351109a2c6ace22afe3 source and its accepted
+ec650 consumer receipts remain immutable historical evidence. Hephaestus #509 is
 draft, unmerged and unpublished: that exact-source lock is private source
 evidence, not default-branch or registry availability. Provider-first merge
 and publication, legitimate normalized package graphs and fresh no-overlay
@@ -83,10 +85,30 @@ reject real 0.27.0 and admit exact 0.27.1. Verify one source identity for every
 type-bearing provider; run native CPU, strict lint/docs/doctests, MSRV 1.95,
 before/after API and standard-package checks on the selected exact head.
 
-The normal-final/subnormal-erfc interval, six portable countermodels,
-performance, physical hardware, final consumer/backend/Python and broader
-cohort, publication and service holds remain. FFI runtime/wheels/common-FFI
+The successor normal-tail source/model correction has separate scoped review;
+consumer admission does not certify its portable numerical contract. The
+unchanged toward-zero handoff witnesses (367.359/328.240 ULP), six portable
+countermodels, performance, physical hardware, final consumer/backend/Python
+and broader cohort, publication and service holds remain. FFI runtime/wheels/common-FFI
 are separate gates; compilation does not prove them. Coeus Miri remains
 deferred and unverified. The initial service-blocked Apollo LaneBuffer task
 is not retried. No push, PR edit, dispatch, device acquisition, merge,
 publication, credential/settings or memory change occurs in this pass.
+
+## Successor provider renewal — 2026-10-20
+
+The separately authorized renewal selects the exact a735 provider above while
+retaining the 0.27.1 floor, every package version, feature and consumer source.
+The coordinator verifies the provider receipt
+`a67101b6813ee27717cf0e43b1802ddf1ddbbe973afe7f828c7964c060d0c869`
+(917 records) and actual source identity; no provider test is duplicated.
+Consumer Leto/LetoOps stay at 0.46.3, Git 5051cd9577650a5712aa6a7effcd8955c9d8bcc7.
+The provider's own source lock retains 0.46.1/7fd6256f; that is a distinct
+provider-check graph and does not justify downgrading this consumer graph.
+
+The four accepted ec650 preparations and their independent review remain
+bound to ec650. New exact consumer/source/native/package/API evidence and
+independent review are required for this successor. Status remains Proposed;
+no owner source adoption, ADR sign-off or public lifecycle permission is
+inferred. Both Apollo source alternatives remain private until one canonical
+owner source is explicitly recorded. See the co-located renewal record.

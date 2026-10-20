@@ -34,6 +34,11 @@
 
 ### Changed
 
+- [patch] Renew the private provider lock from ec650 to
+  `a735c608dd686bc665ef48ac329aca4872b8508f` without another version/floor change.
+  Keep consumer Leto/LetoOps 0.46.3/5051; the provider own 0.46.1/7fd6256f
+  source-lock graph is distinct. Prior ec650 receipts remain historical; new
+  exact consumer qualification and independent review are required.
 - [patch] Advance opaque validation dependency content to 0.5.3 and the
   private Python adapter to 0.3.1; retain its existing Python ABI/PyO3
   lineage. Allocator, direct-DCT core, macros, interop and benchmark packages
@@ -41,7 +46,7 @@
   unchanged. Current-source and accepted-FFI preparations are alternatives;
   owner selection and independent exact-head/ADR review precede integration.
 - Keep official unpinned Git URLs and require the repaired provider floor.
-  A real ec650 review lock does not make draft Hephaestus #509 merged or
+  A real a735 review lock does not make draft Hephaestus #509 merged or
   published. Registry/package/default-source qualification, hosted backends,
   FFI runtime/wheels, numerical-tail/portable-bound/performance/hardware and
   service holds remain. No public lifecycle action is authorized here.
