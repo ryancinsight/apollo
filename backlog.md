@@ -1,6 +1,8 @@
 # Apollo Backlog
 
-## APOLLO-HEPHAESTUS-0271-SUCCESSOR-RENEWAL [patch] — private source binding
+<a id="apollo-hephaestus-0271-successor-renewal"></a>
+## APOLLO-HEPHAESTUS-0271-SUCCESSOR-RENEWAL — private source binding [patch] — blocked
+- **priority:** verification.
 
 +- Renew the accepted private preparation from ec650 to exact provider
   `a735c608dd686bc665ef48ac329aca4872b8508f`, keeping all package versions,
@@ -11,7 +13,9 @@
   public release authority remain explicit decisions; numerical portable-bound,
   performance, hardware, FFI/Python/cohort, deferred Miri and service holds persist.
 
-## APOLLO-HEPHAESTUS-0271-COMPATIBILITY [major] — private preparation
+<a id="apollo-hephaestus-0271-compatibility"></a>
+## APOLLO-HEPHAESTUS-0271-COMPATIBILITY — private preparation [major] — blocked
+- **priority:** verification.
 
 - **Scope:** ^0.27.1 admission, FFT 0.30/public GPU family versions, atomic
   internal edges, real-source review lock and Breaking migration (ADR 0077).
