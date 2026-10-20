@@ -81,3 +81,4 @@
 | [0073](0073-lane-buffer-initialization.md) | Lane buffer initialization and ownership | Accepted |
 | [0074](0074-sized-fallback-table-ownership.md) | Sized fallback table ownership | Accepted |
 | [0075](0075-provider-release-receipts.md) | Coordinated provider release receipts | Accepted |
+| [0076](0076-python-030-ffi-cohort.md) | Python binding in the PyO3 0.30 cohort | Accepted |
