@@ -4,7 +4,7 @@
 
 - Finding: the private binding selects PyO3 0.29 while the approved future Eunomia/NumPy boundary selects 0.30; the two FFI crates cannot share one Rust link graph. PyO3 0.30 has no Python 3.8 ABI feature.
 - Correction: one 0.30 identity, binding 0.3.0, Python/ABI floor 3.9 and an explicit GIL requirement; [ADR 0076](docs/adr/0076-python-030-ffi-cohort.md) precedes implementation. Native versions/kernels and existing gate limits remain unchanged.
-- Verification: current and qualified future source resolution, computed native/wheel/caller values and strict diagnostics remain required; final canonical cohort and Miri are not accepted.
+- Verification: [local checks](docs/verification/python-030-cohort.md) pass current resolution/native/strict/docs/MSRV and qualified Eunomia0.11 caller/wheel values. Final canonical cohort, independent review, hosted matrix and Miri remain unaccepted.
 
 ## APOLLO-LETO-047-COMPAT — additive provider rejection [patch]
 

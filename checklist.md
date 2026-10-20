@@ -6,8 +6,8 @@
 
 - [x] Record the approved cohort decision, Python minimum and migration in ADR 0076 before implementation.
 - [x] Preserve PR #674 lineage while normally merging the published native compatibility cohort.
-- [ ] Verify locked native/FFI, strict diagnostics and installed-wheel computed values.
-- [ ] Qualify the future Eunomia/NumPy 0.30 common Rust caller without production pins.
+- [x] Verify locked native/FFI, strict diagnostics, Rust1.95 and installed-wheel computed values.
+- [x] Qualify the future Eunomia/NumPy0.30 common Rust caller and installed wheels without production pins; retain Aequitas0.3.1 scope.
 - [ ] Complete independent review and exact-head hosted gates before remote lifecycle acceptance.
 
 ## APOLLO-LETO-047-COMPAT [patch]
