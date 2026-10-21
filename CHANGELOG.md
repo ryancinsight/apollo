@@ -4,6 +4,13 @@
 
 ### Changed
 
+- [patch] Require the Hephaestus core/CUDA/WGPU 0.27.0 provider. The 0.22.2
+  compatibility bridge is superseded by the published 0.27.0 revision, and the
+  lock resolves Hephaestus, Hermes 0.9.2, Leto 0.46.4, and Themis 0.11.3 at
+  their current revisions with it. One git source resolves to one revision, so
+  every edge naming a provider repository has to agree on a version or the
+  resolver refuses the pair; the public Apollo operation signatures are
+  unchanged.
 - [patch] Require the Hephaestus core/CUDA/WGPU 0.22.2 compatibility bridge.
   Align the optional backend scalar boundary with Leto before admitting Eunomia 0.11.
 - [patch] Require Leto/Leto-ops 0.46.1 while admitting the reviewed 0.47 provider.
