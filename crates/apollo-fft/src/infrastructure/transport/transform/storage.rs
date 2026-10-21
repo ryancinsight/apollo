@@ -6,13 +6,20 @@
 //! onto an element (identity for the native type, promote/quantize for
 //! reduced-precision forms).
 
-use eunomia::{layout::Pod, F16};
+use eunomia::F16;
 use mnemosyne::scratch::ScratchPool;
 
 use crate::{Complex32, PrecisionProfile};
 
 mod sealed {
-    pub trait SealedElement {}
+    /// Collapsed bound for GPU element types.
+    pub(super) trait GpuPodBounds:
+        eunomia::layout::Pod + Default + core::fmt::Debug + Send + Sync + 'static
+    {}
+    impl GpuPodBounds for f32 {}
+    impl GpuPodBounds for crate::Complex32 {}
+
+    pub trait SealedElement: GpuPodBounds {}
 
     impl SealedElement for f32 {}
     impl SealedElement for crate::Complex32 {}
@@ -91,9 +98,7 @@ macro_rules! impl_identity_gpu_storage {
 /// Sealed to the element families the WGSL kernels execute: `f32` and
 /// [`Complex32`]. Each element owns thread-local input/output scratch
 /// pools so reduced-precision typed dispatch stays allocation-free.
-pub trait GpuElement:
-    Pod + Default + core::fmt::Debug + Send + Sync + 'static + sealed::SealedElement
-{
+pub trait GpuElement: sealed::SealedElement {
     /// Run `body` over reused input and output scratch of the given
     /// lengths.
     fn with_scratch<R>(

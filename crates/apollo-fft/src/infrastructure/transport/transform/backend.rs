@@ -10,7 +10,6 @@
 //! transforms (real in, complex out) state their contract in the types
 //! instead of forcing everything through `f32`.
 
-use eunomia::layout::Pod;
 use hephaestus_wgpu::WgpuDevice;
 
 use super::capabilities::WgpuCapabilities;
@@ -72,10 +71,10 @@ pub trait GpuTransformPlanner {
 /// trait on the aliased backend.
 pub trait GpuTransformExecutor: GpuTransformPlanner {
     /// Time/space-domain element accepted by the forward direction.
-    type Sample: Pod + Default + core::fmt::Debug + Send + Sync + 'static;
+    type Sample: GpuElement;
 
     /// Transform-domain element produced by the forward direction.
-    type Bin: Pod + Default + core::fmt::Debug + Send + Sync + 'static;
+    type Bin: GpuElement;
 
     /// Execute the unnormalized forward transform into caller-owned
     /// storage.
@@ -313,11 +312,7 @@ impl<X: GpuTransformExecutor> WgpuTransformBackend<X> {
     }
 }
 
-impl<X: GpuTransformExecutor> WgpuTransformBackend<X>
-where
-    X::Sample: GpuElement,
-    X::Bin: GpuElement,
-{
+impl<X: GpuTransformExecutor> WgpuTransformBackend<X> {
     /// Execute the unnormalized forward transform with caller-owned typed
     /// storage.
     ///

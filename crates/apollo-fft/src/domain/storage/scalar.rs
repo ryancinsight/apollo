@@ -134,7 +134,7 @@ impl CpuStorage for f32 {
     }
 
     fn from_cpu(value: f64) -> Self {
-        value as f32
+        value as f32 // intentional lossy quantisation: f64 result → f32 storage
     }
 }
 

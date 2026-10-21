@@ -47,7 +47,7 @@ impl WinogradScalar for f64 {
     }
     #[inline]
     fn sq2o2() -> Self {
-        std::f64::consts::SQRT_2 / 2.0
+        core::f64::consts::FRAC_1_SQRT_2
     }
     #[inline]
     fn with_winograd_scratch<R>(n: usize, f: impl FnOnce(&mut [eunomia::Complex<Self>]) -> R) -> R {
@@ -61,7 +61,7 @@ impl WinogradScalar for f32 {
     }
     #[inline]
     fn sq2o2() -> Self {
-        (std::f64::consts::SQRT_2 / 2.0) as f32
+        core::f32::consts::FRAC_1_SQRT_2
     }
     #[inline]
     fn with_winograd_scratch<R>(n: usize, f: impl FnOnce(&mut [eunomia::Complex<Self>]) -> R) -> R {
