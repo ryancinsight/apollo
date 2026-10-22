@@ -109,7 +109,7 @@ dependencies = [
 
 [[package]]
 name = "apollo-czt"
-version = "0.12.1"
+version = "0.12.2"
 dependencies = [
  "apollo-fft",
  "apollo-leto-interop",
@@ -127,7 +127,7 @@ dependencies = [
 
 [[package]]
 name = "apollo-dctdst"
-version = "0.12.1"
+version = "0.12.2"
 dependencies = [
  "apollo-dctdst-core",
  "apollo-fft",
@@ -153,7 +153,7 @@ dependencies = [
 
 [[package]]
 name = "apollo-dht"
-version = "0.12.1"
+version = "0.12.2"
 dependencies = [
  "apollo-fft",
  "apollo-leto-interop",
@@ -171,7 +171,7 @@ dependencies = [
 
 [[package]]
 name = "apollo-fft"
-version = "0.29.3"
+version = "0.29.4"
 dependencies = [
  "apollo-bench",
  "apollo-fft-macros",
@@ -211,7 +211,7 @@ dependencies = [
 
 [[package]]
 name = "apollo-frft"
-version = "0.11.1"
+version = "0.11.2"
 dependencies = [
  "apollo-fft",
  "apollo-leto-interop",
@@ -230,7 +230,7 @@ dependencies = [
 
 [[package]]
 name = "apollo-fwht"
-version = "0.11.1"
+version = "0.11.2"
 dependencies = [
  "apollo-fft",
  "apollo-leto-interop",
@@ -248,7 +248,7 @@ dependencies = [
 
 [[package]]
 name = "apollo-gft"
-version = "0.12.1"
+version = "0.12.2"
 dependencies = [
  "apollo-fft",
  "apollo-leto-interop",
@@ -267,7 +267,7 @@ dependencies = [
 
 [[package]]
 name = "apollo-hilbert"
-version = "0.14.1"
+version = "0.14.2"
 dependencies = [
  "apollo-fft",
  "apollo-leto-interop",
@@ -292,7 +292,7 @@ dependencies = [
 
 [[package]]
 name = "apollo-mellin"
-version = "0.13.2"
+version = "0.13.3"
 dependencies = [
  "apollo-bench",
  "apollo-fft",
@@ -311,7 +311,7 @@ dependencies = [
 
 [[package]]
 name = "apollo-ntt"
-version = "0.11.1"
+version = "0.11.2"
 dependencies = [
  "apollo-bench",
  "apollo-fft",
@@ -330,7 +330,7 @@ dependencies = [
 
 [[package]]
 name = "apollo-nufft"
-version = "0.10.1"
+version = "0.10.2"
 dependencies = [
  "apollo-bench",
  "apollo-fft",
@@ -367,7 +367,7 @@ dependencies = [
 
 [[package]]
 name = "apollo-qft"
-version = "0.11.2"
+version = "0.11.3"
 dependencies = [
  "apollo-bench",
  "apollo-fft",
@@ -387,7 +387,7 @@ dependencies = [
 
 [[package]]
 name = "apollo-radon"
-version = "0.12.2"
+version = "0.12.3"
 dependencies = [
  "apollo-bench",
  "apollo-fft",
@@ -406,7 +406,7 @@ dependencies = [
 
 [[package]]
 name = "apollo-sdft"
-version = "0.10.2"
+version = "0.10.3"
 dependencies = [
  "apollo-fft",
  "apollo-leto-interop",
@@ -424,7 +424,7 @@ dependencies = [
 
 [[package]]
 name = "apollo-sft"
-version = "0.11.2"
+version = "0.11.3"
 dependencies = [
  "apollo-bench",
  "apollo-fft",
@@ -443,7 +443,7 @@ dependencies = [
 
 [[package]]
 name = "apollo-sht"
-version = "0.9.1"
+version = "0.9.2"
 dependencies = [
  "apollo-fft",
  "apollo-leto-interop",
@@ -461,7 +461,7 @@ dependencies = [
 
 [[package]]
 name = "apollo-stft"
-version = "0.11.1"
+version = "0.11.2"
 dependencies = [
  "apollo-bench",
  "apollo-fft",
@@ -480,7 +480,7 @@ dependencies = [
 
 [[package]]
 name = "apollo-validation"
-version = "0.5.2"
+version = "0.5.3"
 dependencies = [
  "apollo-czt",
  "apollo-dctdst",
@@ -513,7 +513,7 @@ dependencies = [
 
 [[package]]
 name = "apollo-wavelet"
-version = "0.12.1"
+version = "0.12.2"
 dependencies = [
  "apollo-bench",
  "apollo-fft",
@@ -2399,9 +2399,9 @@ checksum = "fd3ca314f692efd6c868f8408f53fe444634a845f96c028b97d35f6a1f79f0ee"
 
 [[package]]
 name = "tokio"
-version = "1.54.0"
+version = "1.54.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a0c168a474b95bfecfe908a65d4bdffc523144b649a74c09c286afb35d53e0bc"
+checksum = "b52fd3255258d26fac7264ab5a76b53c13367136dc011d3d6ad4f8ed070396a3"
 dependencies = [
  "pin-project-lite",
 ]
