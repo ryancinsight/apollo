@@ -116,20 +116,25 @@ exact-capacity construction and unchanged twiddle bits and arithmetic. The
 2-D census's four X-axis lengths already use the planar route and fold the
 twiddle into vector stage loads; they bypass the scalar matrix transpose.
 
-At `3fe4c021a274c33efe21847cec5f7baf67a97d1f`, the unchanged census measures
-100 cases with 100 observations each. Eight complete runs on the Core Ultra
-9 285K, queried performance processor 1, use two counterbalanced replications.
-The native comparator establishes neither an Apollo gain nor a regression.
-The reverse comparison flags the unchanged PhastFT 4096 control instead;
-2-D between-process spread is large. These timings do not establish that
-allocation alignment removes a bottleneck, or attribute the control change.
+Against `3fe4c021a274c33efe21847cec5f7baf67a97d1f`, eight standard `bench`
+runs on the Core Ultra 9 285K, queried performance processor 1, use two
+counterbalanced replications: 100 cases with 100 observations each. Both
+library and census artifacts are rebuilt before retaining each executable;
+a shared-cache hit for the candidate is rejected before measurement.
+The native comparator flags three Apollo regressions and five gains, plus
+three regressions and five gains in unchanged reference controls. No 2-D
+case supports a change in either direction; between-process spread is large.
+The data do not establish bottleneck removal or causally attribute the mixed
+results to allocation alignment. Eight preliminary `bench-quick` runs are
+kept separately and do not substitute for the configured benchmark profile.
 
-The candidate passes 662 release-profile library tests, including bitwise
+The candidate passes 662 optimized `bench-quick` library tests, including bitwise
 table and alignment checks in both precisions, existing direct-DFT/RustFFT
 differentials and normalized inverses. Strict all-target Clippy and formatting
-pass. The census executable shrinks 1024 bytes; requested retained storage at
+pass. The standard census executable shrinks 512 bytes; requested retained storage at
 65536 grows 32 bytes and warm allocation remains zero. Reject this candidate
-as a performance change: static alignment and a smaller artifact do not
-substitute for a supported end-to-end gain. PR 697 carries commands and raw
+for performance acceptance: static alignment and a smaller artifact do not
+substitute for a supported 2-D gain without regressions. This is not a
+falsification of aligned storage as a design. PR 697 carries commands and raw
 evidence. Limits: one host and core class; caller affinity does not pin
 Moirai's workers, and endpoint load snapshots cannot exclude short-lived load.
