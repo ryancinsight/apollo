@@ -12,7 +12,7 @@ struct DirectionPlans<T> {
 }
 
 /// Lazily initialized tables retained by a reusable four-step operation.
-pub(crate) struct PlanarState<T> {
+pub(crate) struct PlanarState<T: BatchedPlanCache> {
     len: usize,
     directions: [OnceLock<DirectionPlans<T>>; 2],
     fold: OnceLock<Arc<FourStepFold<T>>>,

@@ -40,6 +40,7 @@ use super::sink::{stage_out, DIRECT_SINK_MAX_PLANE_BYTES, STAGED_SINK_MAX_LEN};
 use super::sweep::{block_columns, spread, sweep_lengths_descending};
 use crate::application::execution::kernel::mixed_radix::MixedRadixScalar;
 use hermes_simd::{LaneKernel, LaneScalar, Simd, SimdArch, SimdKernel, SimdStorage};
+use mnemosyne::scratch::ScratchElement;
 
 /// Section labels of the frequency-decimated stage set's sweeps, by sweep
 /// index; reported beneath `stages2`.
@@ -50,7 +51,7 @@ pub(super) const FREQUENCY_SWEEPS: [&str; 3] = ["f1", "f2", "f3"];
 ///
 /// Input rows in natural order; output rows bit-reversed. Dispatch happens once
 /// for the whole stage set, as [`super::dit::BatchedStages`] documents.
-pub(super) struct BatchedStagesDif<'a, T> {
+pub(super) struct BatchedStagesDif<'a, T: ScratchElement> {
     pub(super) re: &'a mut [T],
     pub(super) im: &'a mut [T],
     pub(super) tw: &'a [(T, T)],
@@ -187,7 +188,7 @@ pub(super) fn sweep_frequency<T, A>(
     stages: u32,
     simd: Simd<T, A>,
 ) where
-    T: LaneScalar + Lane,
+    T: LaneScalar + Lane + ScratchElement,
     A: SimdArch + SimdKernel<T>,
 {
     let lanes = <A as SimdStorage<T>>::LANE_COUNT;

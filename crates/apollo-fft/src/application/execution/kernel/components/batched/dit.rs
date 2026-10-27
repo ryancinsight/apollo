@@ -10,6 +10,7 @@ use super::seams::{Columns, Rows, Seams};
 use super::sweep::{block_columns, spread, sweep_lengths};
 use crate::application::execution::kernel::mixed_radix::MixedRadixScalar;
 use hermes_simd::{LaneKernel, LaneScalar, Simd, SimdArch, SimdKernel, SimdStorage};
+use mnemosyne::scratch::ScratchElement;
 
 /// Section labels of the time-decimated stage set's sweeps, by sweep index;
 /// the attribution probe reports them beneath `stages1`.
@@ -128,7 +129,7 @@ pub(super) fn sweep_time<T, A>(
     stages: u32,
     simd: Simd<T, A>,
 ) where
-    T: LaneScalar + Lane,
+    T: LaneScalar + Lane + ScratchElement,
     A: SimdArch + SimdKernel<T>,
 {
     let lanes = <A as SimdStorage<T>>::LANE_COUNT;

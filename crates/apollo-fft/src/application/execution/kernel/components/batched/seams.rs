@@ -2,6 +2,7 @@
 //! column block, and the seams a pass carries in its monomorphization.
 
 use super::fold::FourStepFold;
+use mnemosyne::scratch::ScratchElement;
 
 /// Which direction a fold seam serves.
 ///
@@ -79,7 +80,7 @@ impl SinkRows {
 /// two coincide. Each variant selects a monomorphized pass whose row loop
 /// carries no seam it does not use, which is what keeps the pass's
 /// addressing in registers.
-pub(super) enum Seams<'a, 'b, T> {
+pub(super) enum Seams<'a, 'b, T: ScratchElement> {
     /// Planes in, planes out.
     Planes,
     /// Interleaved rows in, `rows` bits wide; plane row `p` reads row `rev(p)`.
@@ -93,7 +94,7 @@ pub(super) enum Seams<'a, 'b, T> {
     FoldSink(&'a FourStepFold<T>, FoldDirection, &'b mut [T], SinkRows),
 }
 
-impl<'a, 'b, T> Seams<'a, 'b, T> {
+impl<'a, 'b, T: ScratchElement> Seams<'a, 'b, T> {
     /// The frequency-decimated set's seams for one pass.
     pub(super) fn frequency(
         fold: Option<(&'a FourStepFold<T>, FoldDirection)>,

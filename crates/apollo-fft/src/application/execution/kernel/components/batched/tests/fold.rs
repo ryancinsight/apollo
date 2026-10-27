@@ -6,6 +6,63 @@ use super::super::BatchedPlanCache;
 use eunomia::Complex64;
 use std::f64::consts::TAU;
 
+fn direct_components<T: super::super::super::winograd::ShortWinogradScalar>(
+    exponent: usize,
+    period: usize,
+) -> (T, T) {
+    let reduced = u32::try_from(exponent % period)
+        .expect("invariant: fold test dimensions fit exactly in u32");
+    let period = u32::try_from(period).expect("invariant: fold test dimensions fit exactly in u32");
+    let angle = -TAU * f64::from(reduced) / f64::from(period);
+    let (sin, cos) = angle.sin_cos();
+    (T::from_precise(cos), T::from_precise(sin))
+}
+
+fn assert_exact_components_are_cache_line_aligned<T>(bits: impl Fn(T) -> u64)
+where
+    T: BatchedPlanCache,
+{
+    let cases = [
+        (256usize, 16usize, 16usize, false),
+        (2_048, 64, 32, false),
+        (65_536, 256, 256, true),
+        (131_072, 512, 256, true),
+    ];
+    for (n, rows, cols, compact) in cases {
+        let order = LaneOrder::for_batch::<T>(cols);
+        let fold = FourStepFold::<T>::new(n, rows, cols, order);
+        assert_eq!(fold.lanes < cols, compact);
+        for table in [
+            &fold.fine_re,
+            &fold.fine_im,
+            &fold.coarse_re,
+            &fold.coarse_im,
+        ] {
+            assert_eq!(table.as_ptr().addr() % 64, 0);
+            assert_eq!(table.capacity(), table.len());
+        }
+        let groups = cols / fold.lanes;
+        for p in 0..rows {
+            for f in 0..fold.lanes {
+                let (re, im) = direct_components(p * order.column(f), n);
+                assert_eq!(bits(fold.fine_re[p * fold.lanes + f]), bits(re));
+                assert_eq!(bits(fold.fine_im[p * fold.lanes + f]), bits(im));
+            }
+            for g in 0..groups {
+                let (re, im) = direct_components(p * fold.lanes * g, n);
+                assert_eq!(bits(fold.coarse_re[p * groups + g]), bits(re));
+                assert_eq!(bits(fold.coarse_im[p * groups + g]), bits(im));
+            }
+        }
+    }
+}
+
+#[test]
+fn fold_components_preserve_values_and_cache_line_alignment() {
+    assert_exact_components_are_cache_line_aligned::<f32>(|value| u64::from(value.to_bits()));
+    assert_exact_components_are_cache_line_aligned::<f64>(f64::to_bits);
+}
+
 /// The two-level fold tables must reproduce the twiddle matrix entry for
 /// entry within the roundings the factoring adds.
 ///

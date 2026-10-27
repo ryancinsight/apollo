@@ -107,3 +107,29 @@ the transform level at `f32`.
 262144 `f64` gains about 6% of its whole transform and `f32` about 3%. The
 remaining fold cost at 65536 is the pass itself, not its table; the source
 sweep and the fold sweep's traffic are the prefetch item's.
+
+## Revision 2026-10-27: allocation-alignment experiment
+
+[PR 697](https://github.com/ryancinsight/apollo/pull/697) evaluates four
+64-byte-aligned Mnemosyne component tables in place of boxed slices, with
+exact-capacity construction and unchanged twiddle bits and arithmetic. The
+2-D census's four X-axis lengths already use the planar route and fold the
+twiddle into vector stage loads; they bypass the scalar matrix transpose.
+
+At `3fe4c021a274c33efe21847cec5f7baf67a97d1f`, the unchanged census measures
+100 cases with 100 observations each. Eight complete runs on the Core Ultra
+9 285K, queried performance processor 1, use two counterbalanced replications.
+The native comparator establishes neither an Apollo gain nor a regression.
+The reverse comparison flags the unchanged PhastFT 4096 control instead;
+2-D between-process spread is large. These timings do not establish that
+allocation alignment removes a bottleneck, or attribute the control change.
+
+The candidate passes 662 release-profile library tests, including bitwise
+table and alignment checks in both precisions, existing direct-DFT/RustFFT
+differentials and normalized inverses. Strict all-target Clippy and formatting
+pass. The census executable shrinks 1024 bytes; requested retained storage at
+65536 grows 32 bytes and warm allocation remains zero. Reject this candidate
+as a performance change: static alignment and a smaller artifact do not
+substitute for a supported end-to-end gain. PR 697 carries commands and raw
+evidence. Limits: one host and core class; caller affinity does not pin
+Moirai's workers, and endpoint load snapshots cannot exclude short-lived load.

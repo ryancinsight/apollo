@@ -3,6 +3,7 @@
 //! computes only the offsets it uses.
 
 use hermes_simd::{LaneScalar, Simd, SimdArch, SimdKernel, SimdStorage, Vector};
+use mnemosyne::scratch::ScratchElement;
 
 use super::fold::FourStepFold;
 use super::lane::Lane;
@@ -30,7 +31,7 @@ where
 
 /// The seam operands of one pass, empty where its monomorphization carries
 /// no such seam.
-struct SeamData<'a, 'b, T> {
+struct SeamData<'a, 'b, T: ScratchElement> {
     fold: Option<&'a FourStepFold<T>>,
     source: &'a [T],
     source_bits: u32,
@@ -38,7 +39,7 @@ struct SeamData<'a, 'b, T> {
     sink_rows: SinkRows,
 }
 
-impl<'a, 'b, T> SeamData<'a, 'b, T> {
+impl<'a, 'b, T: ScratchElement> SeamData<'a, 'b, T> {
     fn planes() -> Self {
         Self {
             fold: None,
@@ -119,7 +120,7 @@ pub(super) fn butterfly_rows<T, A, R, const N: usize, const NT: usize>(
     simd: Simd<T, A>,
     seams: Seams<'_, '_, T>,
 ) where
-    T: LaneScalar + Lane,
+    T: LaneScalar + Lane + ScratchElement,
     A: SimdArch + SimdKernel<T>,
     R: Radix<N, NT>,
 {
@@ -215,7 +216,7 @@ fn pass<
     ops: PassOperands<'_, T, A, NT>,
     seam: SeamData<'_, '_, T>,
 ) where
-    T: LaneScalar + Lane,
+    T: LaneScalar + Lane + ScratchElement,
     A: SimdArch + SimdKernel<T>,
     R: Radix<N, NT>,
 {

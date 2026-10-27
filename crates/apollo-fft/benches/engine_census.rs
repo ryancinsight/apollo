@@ -63,25 +63,25 @@
 //!
 //! The first census contained only 1-D arms, while the batched four-step layout
 //! was initially reachable only from 2-D and 3-D lane transforms. Standalone
-//! 1-D plans now enter the generic four-step route above 1024, but they still do
-//! not exercise the lower-size batched layout or multidimensional transpose
-//! passes. The 2-D shapes therefore remain necessary to measure those paths,
+//! 1-D plans select their own length-specific routes, so they do not establish
+//! the cost of multidimensional lane scheduling and transpose passes. The 2-D
+//! shapes therefore remain necessary to measure those paths,
 //! and the 3-D row pins the corresponding multi-plane Leto assignment and
 //! allocation contract.
 //!
-//! Which shape takes which route was established by instrumenting
-//! `four_step_fft` and `batched_four_step_applies` and reading the calls, not by
-//! inferring it from the gate conditions — inference gave the wrong answer twice
-//! while this was being worked out.
+//! The multidimensional lane owner retains `FourStepState`; its planar
+//! decomposition folds the four-step twiddle into the first loads of stage
+//! set 2. A separate scalar multiply-transpose belongs to the matrix
+//! decomposition outside the planar domain, not to these census shapes.
 //!
 //! ## Runtime budget
 //!
 //! ```text
 //! per case  = WARM_UP_MS + MEASUREMENT_MS  = 20 ms + 60 ms = 80 ms
-//! 1-D cases = 6 per size x 5 sizes                         = 30
-//! 2-D cases = 2 per shape x 4 shapes                       =  8
-//! 3-D cases = 1                                             =  1
-//! total     = 39 x 80 ms                   ~ 3.1 s, plus flush overhead
+//! 1-D cases = 11 per size x 5 sizes                        = 55
+//! 2-D cases = 8 per shape x 4 shapes                       = 32
+//! 3-D cases = 1 complex + 6 real per shape x 2 shapes       = 13
+//! total     = 100 x 80 ms                    = 8 s, plus flush overhead
 //! ```
 //!
 //! The peak-working-set section that precedes the timed sweep is allocation
@@ -120,13 +120,14 @@ const SIZES: [usize; 5] = [1_024, 4_096, 16_384, 65_536, 262_144];
 ///
 /// | shape | route taken by the `nx` axis |
 /// | --- | --- |
-/// | 4096 x 16, 4096 x 64, 16384 x 16 | four-step on the **batched** layout |
-/// | 65536 x 4 | four-step with threaded row transforms |
+/// | 4096 x 16, 4096 x 64, 16384 x 16 | planar four-step, full fold table |
+/// | 65536 x 4 | planar four-step, two-level fold table |
 ///
-/// The batched gate admits square splits with an even `log2` from 4 up to the
-/// threading threshold, so 65536 falls past it and gives the batched shapes a
-/// same-engine contrast at an equal element count. Three of the four hold
-/// 262144 elements for that reason.
+/// All four X-axis lengths fall within the planar domain. Lane groups can
+/// execute on workers, but the four-step inside each lane uses vector stage
+/// sets rather than the matrix decomposition's threaded row transforms.
+/// Three of the four shapes hold 262144 elements, permitting equal-volume
+/// comparisons across lane lengths and the full/compact table boundary.
 const TWO_D_SHAPES: [(usize, usize); 4] = [(4_096, 16), (4_096, 64), (16_384, 16), (65_536, 4)];
 
 /// Three-dimensional shape with a 4096-point X axis and sixteen independent

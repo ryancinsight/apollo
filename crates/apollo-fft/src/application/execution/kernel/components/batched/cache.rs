@@ -4,6 +4,7 @@ use super::fold::FourStepFold;
 use super::plan::BatchedPlan;
 use crate::application::execution::kernel::components::winograd::ShortWinogradScalar;
 use hermes_simd::LaneScalar;
+use mnemosyne::scratch::ScratchElement;
 use parking_lot::RwLock;
 use std::cell::RefCell;
 use std::collections::HashMap;
@@ -105,7 +106,7 @@ thread_local! {
 
 /// Scalar seam for acquiring reusable batched plan tables.
 pub trait BatchedPlanCache:
-    ShortWinogradScalar + LaneScalar + super::lane::Lane + eunomia::layout::Pod + Sized
+    ShortWinogradScalar + LaneScalar + super::lane::Lane + eunomia::layout::Pod + ScratchElement + Sized
 {
     fn cached_plan<const INVERSE: bool>(len: usize) -> Arc<BatchedPlan<Self>>;
     /// The forward four-step fold table for `n` (`rows x cols` planes); the

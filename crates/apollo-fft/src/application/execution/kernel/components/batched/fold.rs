@@ -12,6 +12,7 @@
 
 use super::lane_order::LaneOrder;
 use crate::application::execution::kernel::components::winograd::ShortWinogradScalar;
+use mnemosyne::scratch::{AlignedVec, ScratchElement};
 
 /// Shortest transform whose fold table is two-level.
 ///
@@ -43,18 +44,33 @@ const COMPACT_FOLD_MIN_LEN: usize = 1 << 16;
 /// product carries the two factors' roundings and the multiply's own:
 /// within `4u` of the exact twiddle, against `u` for the full matrix, which
 /// the transform's `O(log N · u)` bound absorbs.
-pub struct FourStepFold<T> {
+pub struct FourStepFold<T: ScratchElement> {
     /// Lanes per group, `F`: the fine table's row width.
     pub(crate) lanes: usize,
     /// `W_N^(p order(f))` for `f < F`, row-major by `p`.
-    pub(crate) fine_re: Box<[T]>,
-    pub(crate) fine_im: Box<[T]>,
+    pub(crate) fine_re: AlignedVec<T>,
+    pub(crate) fine_im: AlignedVec<T>,
     /// `W_N^(p F G)` for `G < cols / F`, row-major by `p`.
-    pub(crate) coarse_re: Box<[T]>,
-    pub(crate) coarse_im: Box<[T]>,
+    pub(crate) coarse_re: AlignedVec<T>,
+    pub(crate) coarse_im: AlignedVec<T>,
 }
 
-impl<T: ShortWinogradScalar> FourStepFold<T> {
+fn collect_components<T: ScratchElement>(
+    entries: usize,
+    values: impl IntoIterator<Item = (T, T)>,
+) -> (AlignedVec<T>, AlignedVec<T>) {
+    let mut re = AlignedVec::with_capacity(entries);
+    let mut im = AlignedVec::with_capacity(entries);
+    for (real, imaginary) in values {
+        re.push(real);
+        im.push(imaginary);
+    }
+    debug_assert_eq!(re.len(), entries);
+    debug_assert_eq!(im.len(), entries);
+    (re, im)
+}
+
+impl<T: ShortWinogradScalar + ScratchElement> FourStepFold<T> {
     /// Builds the forward table (`sign = -1`); the caller conjugates it in
     /// the pass for the inverse direction rather than requesting a second
     /// table (see the module doc).
@@ -76,27 +92,32 @@ impl<T: ShortWinogradScalar> FourStepFold<T> {
             let (sin, cos) = twiddle_components(SIGN, exponent, n);
             (T::from_precise(cos), T::from_precise(sin))
         };
-        let (fine_re, fine_im): (Vec<T>, Vec<T>) = (0..rows)
+        // Each component table starts on a cache-line boundary. Building into
+        // its final storage establishes that invariant without a temporary
+        // allocation, copy, or zero-initialization pass.
+        let fine = (0..rows)
             .flat_map(|p| (0..lanes).map(move |f| (p, f)))
-            .map(|(p, f)| entry(p * order.column(f)))
-            .unzip();
-        let (coarse_re, coarse_im): (Vec<T>, Vec<T>) = (0..rows)
+            .map(|(p, f)| entry(p * order.column(f)));
+        let (fine_re, fine_im) = collect_components(rows * lanes, fine);
+        let coarse = (0..rows)
             .flat_map(|p| (0..groups).map(move |g| (p, g)))
-            .map(|(p, g)| entry(p * lanes * g))
-            .unzip();
+            .map(|(p, g)| entry(p * lanes * g));
+        let (coarse_re, coarse_im) = collect_components(rows * groups, coarse);
         Self {
             lanes,
-            fine_re: fine_re.into_boxed_slice(),
-            fine_im: fine_im.into_boxed_slice(),
-            coarse_re: coarse_re.into_boxed_slice(),
-            coarse_im: coarse_im.into_boxed_slice(),
+            fine_re,
+            fine_im,
+            coarse_re,
+            coarse_im,
         }
     }
 
     #[cfg(test)]
     pub(super) fn retained_bytes(&self) -> usize {
-        let entries =
-            self.fine_re.len() + self.fine_im.len() + self.coarse_re.len() + self.coarse_im.len();
+        let entries = self.fine_re.capacity()
+            + self.fine_im.capacity()
+            + self.coarse_re.capacity()
+            + self.coarse_im.capacity();
         core::mem::size_of::<Self>() + entries * core::mem::size_of::<T>()
     }
 }
