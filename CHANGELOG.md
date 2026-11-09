@@ -4,6 +4,12 @@
 
 ### Changed
 
+- [patch] Admit Eunomia 0.12 and advance each package that depends on it by one
+  patch version. The Eunomia requirement widens to `>=0.10.0, <0.13.0`, which
+  admits the published 0.12 const-float factory while retaining the 0.10 and
+  0.11 provider lines; the lock resolves Eunomia 0.12.0, Hephaestus 0.28.0,
+  Leto 0.47.1, Moirai 0.11.3, and Hermes 0.9.2 at their fetched default heads.
+  The public Apollo operation signatures are unchanged.
 - [patch] Require the Hephaestus core/CUDA/WGPU 0.27.0 provider. The 0.22.2
   compatibility bridge is superseded by the published 0.27.0 revision, and the
   lock resolves Hephaestus, Hermes 0.9.2, Leto 0.46.4, and Themis 0.11.3 at
