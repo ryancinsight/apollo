@@ -4,6 +4,12 @@
 
 ### Changed
 
+- [patch] Admit Leto/Leto-ops 0.48.0 and widen the workspace requirement to
+  `>=0.46.1, <0.49.0`. The standalone lock resolves Leto/Leto-ops 0.48.0 and
+  the current default revisions of Aequitas 0.3.2, Eunomia 0.12.0,
+  Hephaestus 0.28.0, Hermes 0.9.2, Melinoe 0.10.0, Mnemosyne-memory 0.10.1,
+  Moirai 0.11.3, and Themis 0.11.5, with one source per provider repository.
+  The public Apollo operation signatures are unchanged.
 - [patch] Admit Eunomia 0.12 and advance each package that depends on it by one
   patch version. The Eunomia requirement widens to `>=0.10.0, <0.13.0`, which
   admits the published 0.12 const-float factory while retaining the 0.10 and
