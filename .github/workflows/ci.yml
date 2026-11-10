@@ -108,14 +108,13 @@ jobs:
     needs: scope
     if: ${{ !cancelled() && (github.event_name != 'pull_request' || !github.event.pull_request.draft) && needs.scope.outputs.code != 'false' }}
     name: SemVer gate
-    uses: ryancinsight/atlas/.github/workflows/semver-gate.yml@7a5a1036973b81dee0e20321942ce0c7e2bf9f9b
+    uses: ryancinsight/atlas/.github/workflows/semver-gate.yml@6808fcd7390ffecea09a50d5e295a2730a9c3c4a
     with:
       # Library APIs include the allocator; proc-macro protocols are covered
       # by compilation/tests because Rustdoc JSON has no library API for them.
       package: apollo-alloc,apollo-czt,apollo-dctdst,apollo-dht,apollo-fft,apollo-frft,apollo-fwht,apollo-gft,apollo-hilbert,apollo-leto-interop,apollo-mellin,apollo-ntt,apollo-nufft,apollo-qft,apollo-radon,apollo-sdft,apollo-sft,apollo-sht,apollo-stft,apollo-validation,apollo-wavelet
       rust-toolchain: 1.97.0
-      dependency-contract: locked
-      atlas-ref: 7a5a1036973b81dee0e20321942ce0c7e2bf9f9b
+      atlas-ref: 6808fcd7390ffecea09a50d5e295a2730a9c3c4a
     permissions:
       contents: read
 
@@ -257,7 +256,7 @@ jobs:
     name: native ARM correctness
     needs: scope
     if: ${{ !cancelled() && (github.event_name != 'pull_request' || !github.event.pull_request.draft) && needs.scope.outputs.code != 'false' }}
-    runs-on: macos-14
+    runs-on: macos-15
     timeout-minutes: 30
     steps:
       - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803

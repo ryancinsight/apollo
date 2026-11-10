@@ -66,6 +66,9 @@ public API or numerical kernels.
 
 ## Revisions
 
+- **2026-11-10.** Admit the compatible Leto 0.48 provider line while retaining
+  the 0.46.1 lower bound. The standalone lock records the reviewed provider
+  cohort; Apollo adds no source pin, adapter, or numerical-code change.
 - **2026-10-15.** Apply the same source-ownership rule to Eunomia 0.10,
   Mnemosyne-memory 0.10, Hermes 0.9, Leto/Leto-ops 0.46, Hephaestus 0.22
   and Moirai 0.9.3. Public Rust consumers advance their pre-1.0 provider and
