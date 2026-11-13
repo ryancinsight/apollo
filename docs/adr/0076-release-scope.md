@@ -26,8 +26,8 @@ the basis commit), In scope (a ladder exit or a ladder-current item serves it),
 or Non-goal for 1.0. Ladder milestones: `M-numpy-fft-semantics` (0.30.0),
 `M-spectral-analysis` (0.31.0), `M-imaging-transforms` (0.32.0),
 `M-backend-and-python-reach` (0.33.0), `M-stable-transform-suite` (1.0.0).
-Tightening, memory, ratchet, and verification items join the current
-milestone and gate no exit.
+Tightening, ratchet and verification items join the current milestone and
+gate no exit; the memory item with a public API (bounded caches) names one.
 
 | Member | Delivered | In scope for 1.0 | Non-goal for 1.0 |
 |---|---|---|---|

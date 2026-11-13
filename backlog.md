@@ -1,6 +1,6 @@
 # Apollo Backlog
 
-Milestone ladder; scope in [ADR 0076](docs/adr/0076-release-scope.md). Planned versions track `apollo-fft`, the highest-versioned member (manifest 0.29.5, newest tag by version `crate-apollo-fft-v0.29.4`): successive minors above that tag, then 1.0.0. Sibling crates version independently by change class and never fall below their manifest versions. Each exit names the test or example its serving item adds, so every exit fails at the basis commit and passes when that item lands. Release and publication need explicit authority.
+Milestone ladder; scope in [ADR 0076](docs/adr/0076-release-scope.md). Planned versions track `apollo-fft`, the highest-versioned member (manifest 0.29.5, newest tag by version `crate-apollo-fft-v0.29.4`): successive minors above that tag, then 1.0.0. Sibling crates version independently by change class and never fall below their manifest versions. Each exit names the test or example that proves it. The `exit:` field of a feature item names the test its work adds; a tour example is added by the last serving item of its milestone to land, and the tour of the final block has no serving item until that milestone is decomposed. At the basis commit every exit fails except the DCT core exit of `M-imaging-transforms`, which names a test that already passes. Release and publication need explicit authority.
 
 <a id="M-numpy-fft-semantics"></a>
 ## M-numpy-fft-semantics — 0.30.0 — call dense FFTs with NumPy and SciPy semantics
@@ -11,7 +11,7 @@ Milestone ladder; scope in [ADR 0076](docs/adr/0076-release-scope.md). Planned v
 - exit: shift and grid any axis set of a spectrum: `cargo nextest run -p apollo-fft --no-tests=fail -E 'binary_id(=apollo-fft::frequency_axes) & test(=ifftshift_inverts_fftshift_on_every_axis_subset)'`
 - exit: refuse empty and mismatched input with a typed error: `cargo nextest run -p apollo-fft --no-tests=fail -E 'binary_id(=apollo-fft::fallible_api) & test(=refusals_return_typed_errors_for_empty_and_mismatched_input)'`
 - exit: return retained plan and table bytes to baseline after a public clear: `cargo nextest run -p apollo-fft --no-tests=fail -E 'binary_id(=apollo-fft::cache_bounds) & test(=retained_bytes_return_to_baseline_after_clear)'`
-- standing: no open `correctness` item; the conformance scan's installed-state assertions pass; `oversized_files` in `python -I scripts/atlas-conformance.py report --repo apollo --json` stays at or below 36 (read 36 at the basis export).
+- standing: no open `correctness` item; the conformance scan's installed-state assertions pass; `oversized_files` in `python -I scripts/atlas-conformance.py report --repo apollo --json` stays at or below 36 (run from the Atlas root with `--member-path` at the apollo revision; read 36 at the basis export).
 - non-goals: GPU normalization (Hephaestus owns it); real-input N-D plans; new kernels.
 
 <a id="M-spectral-analysis"></a>
@@ -34,7 +34,7 @@ Milestone ladder; scope in [ADR 0076](docs/adr/0076-release-scope.md). Planned v
 - exit: transform rectangular 2-D and 3-D fields by DCT and DST: `cargo nextest run -p apollo-dctdst --no-tests=fail -E 'binary_id(=apollo-dctdst::rectangular) & test(=two_and_three_dimensional_results_equal_separable_composition)'`
 - exit: build an orthonormal DCT-III basis from the dependency-light core: `cargo nextest run -p apollo-dctdst-core --no-tests=fail -E 'test(=plan::tests::basis_is_orthonormal)'`
 - standing: no open `correctness` item.
-- non-goals: NUFFT Type-3 and GPU 2-D; DCT/DST types V-VIII; GPU fan-beam.
+- non-goals: NUFFT Type-3 and GPU 2-D; DCT/DST types V-VIII.
 
 <a id="M-backend-and-python-reach"></a>
 ## M-backend-and-python-reach — 0.33.0 — run one transform through any backend and from Python
