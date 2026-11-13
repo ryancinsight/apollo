@@ -22,7 +22,7 @@
 
 <a id="apollo-native-gate-repair"></a>
 ## APOLLO-NATIVE-GATE-REPAIR — retained fallback ownership and exact admission [patch] — todo
-- **priority:** verification.
+- **priority:** verification. **milestone:** M-fft-core.
 
 - Baseline `d5e83ca8`: 16 native failures and 14 distinct ARM lint sites.
 - The allocation trace identifies per-call four-step state and expired weak
@@ -41,7 +41,7 @@
 
 <a id="apollo-121-f32-simd-leaf"></a>
 ## APOLLO-121-F32-SIMD-LEAF — Close the N=121 f32 gap with a dispatched SIMD dft11 [patch] [perf] — todo
-- **priority:** tightening. **needs:** none.
+- **priority:** tightening. **needs:** none. **milestone:** M-transforms-capability.
 - **Outcome:** N=121 f32 at parity-or-better vs RustFFT via a runtime-dispatched SIMD dft11 leaf; the scalar pair form remains the fallback.
 - **Evidence (2026-10-11, pinned leaf probe + rustfft_comparison measurement):** apollo_f32/121 median 273569 vs rustfft 94004 (2.91x, replicated); f64/121 1.48x. Leaf probe on both core classes: leaf-11 f32/f64 = 0.76 performance / 0.87 efficiency — the narrow pair form is healthy, so the wide-form move is refuted; do not apply it. 121 cost = exactly 22x leaf-11: the CT layer adds nothing. f32/121 ~= f64/121 (no precision scaling) → the gap is leaf codegen width, matching RustFFT's hand-SIMD butterfly11. Bench builds carry no target-cpu (SSE2 baseline), so cfg-gated AVX stays dormant there.
 - **Scope:** `crates/apollo-fft/src/application/execution/kernel/components/winograd/` (SIMD dft11 + runtime dispatch following the column_route `new_if_supported`/framed-executor precedent), leaf probe + 121 bench rows, this item. Public APIs, formulas, scalar fallback unchanged.
@@ -50,7 +50,7 @@
 
 <a id="apollo-rescue-queue"></a>
 ## APOLLO-RESCUE-QUEUE — Complete or close the unclaimed rescue PRs [patch] — todo
-- **priority:** correctness. **needs:** none.
+- **priority:** correctness. **needs:** none. **milestone:** M-fft-core.
 - **Outcome:** each listed rescue PR is completed onto current main (ported, verified, merged) or closed once its diff resolves empty against main.
 - **Scope:** `ryancinsight/apollo` rescue PR head refs only; a claimant opens a new item branch from the fetched default and ports the work there.
 - **Rescues:**
@@ -60,7 +60,7 @@
 
 <a id="apollo-dht-verification-split"></a>
 ## APOLLO-DHT-VERIFICATION-SPLIT — Restore the DHT source-size ratchet [patch] — todo
-- **priority:** tightening.
+- **priority:** tightening. **milestone:** M-fft-core.
 - **Integrator:** Codex `/root/apollo_verification_split`; branch `refactor/apollo-dht-verification-split`.
 - **Scope:** `crates/apollo-dht/src/verification/` and this item only; public APIs, formulas, fixtures, and assertions remain unchanged.
 - **Outcome:** keep the verification module root as a manifest and partition its tests by one-dimensional laws and multidimensional behavior.
@@ -70,7 +70,7 @@
 
 <a id="apollo-raster-pointer-conformance"></a>
 ## APOLLO-RASTER-POINTER-CONFORMANCE — Restore the Atlas source-size ratchet [patch] — todo
-- **priority:** tightening.
+- **priority:** tightening. **milestone:** M-fft-core.
 - **Integrator:** Codex `/root/fit`; branch `refactor/apollo-pointer-conformance`.
 - **Scope:** `real_storage/{mod.rs,dimension_1d.rs,half_volume.rs,half_volume/routed.rs}`, `api/irfft/`, `dimension_1d/tests.rs`, and cohesive test sidecars; live Stockham and `Cargo.lock` edits are excluded.
 - **Outcome:** partition the two real-storage operation families and the STFT value-test families without changing public APIs, formulas, routing, fixtures, or assertions.
@@ -86,6 +86,7 @@
 
 <a id="atlas-apollo-n32-f64-liveness"></a>
 ## ATLAS-APOLLO-N32-F64-LIVENESS-2026-09-04 — Bound the n=32 codelet and reduce register pressure [patch] [perf] — todo
+- **milestone:** M-transforms-capability.
 - **Re-measured 2026-09-15 on both cores and both scalars, and the gap is one cell.** The probe bound the first processor class and `f64` alone, so no verdict here had ever read the efficiency core or `f32`; it now iterates the selection like its sibling probes. Over two runs per revision, `n = 32` `f64` is the only arm behind RustFFT — 1.057 and 1.074 of it on the efficiency core, whose paired runs spread under 1.5% — while `n = 16` reads 0.90, `n = 64` 0.94, and every `f32` arm 0.77 to 0.97. The performance core is too noisy to read here (identical revisions gave `f32`/64 1.034 and 0.939), so the efficiency core is the instrument. Evidence: `output/apollo-base128/small_codelet_liveness_2026-09-15.md`.
 - **The measured cause was a host probe inside the dispatched frame.** `ComplexReg::zero()` reaches `Vector::try_zero`, which calls `runtime_support_result` — an `is_x86_feature_detected!` probe — and expects it, so each site emits a cached-feature load, two tests, a branch and a cold panic block even though the dispatcher entered under `#[target_feature(enable = "avx2")]`. The 32-point leaf carried eight, from the phase-two column array it initialized from that zero and then overwrote. Building the columns from the transposes directly takes the emitted body from 389 to 280 instructions with no probe left, and the cell from 1.057/1.074 to 1.044/1.042, controls unchanged. Figures are `scripts/codegen_attribution.py compare` over assembly emitted per revision from a clean export and copied out of the shared target directory before the next emit overwrote it; an earlier pass in the same session reported 324 from an ad-hoc extraction that stopped at the first return and so dropped the cold probe blocks, and read one count off an artifact hours older than either build.
 - **What remains, and the next lead.** The cell is still 1.04: `n = 32` spends 8.75 instructions a sample against `n = 64`'s 3.84, because both leaves pay the same per-register load, twiddle and store overhead over half the data, and both round-trip a `mid` array between their phases (46 stack moves at `n = 32`). The next slice targets that round trip, and carries the two remaining probe sites in the 64-point leaf with a form that keeps its loop — removing that loop inflates it from 246 to 395 instructions, the same figure to the instruction whether the eight columns are built by `array::from_fn` or by eight explicit statements over constant indices, with stack moves 22 to 47 (both measured 2026-09-15, so the form is not the variable). Eight live registers do not fit beside the twiddles on AVX2, so the loop's stack array is cheaper there than its two probe sites; sourcing that leaf's zero from the capability token while keeping the loop is the untried form, and removing the loop is falsified.
@@ -103,6 +104,7 @@
 
 <a id="atlas-apollo-strided-gather-upstream"></a>
 ## ATLAS-APOLLO-STRIDED-GATHER-UPSTREAM-2026-09-03 — The split's gather is hand-rolled per block count instead of a substrate primitive [minor] [arch] — todo
+- **milestone:** M-transforms-capability.
 - **Re-bounded 2026-09-11 (slice 7 of [the two-pass base](#apollo-l1-base-two-pass)):** the four-lane width no longer gathers at all — each block reads its subsequence out of the parent — so the primitive this item asks for serves the eight-lane width only, where a strided block register costs up to four windows and three shuffles and the gather measured better. The acceptance's `GatherBlocks` deletion now means its eight-lane use; the eight-block split it names is deleted.
 - **The shape of the problem.** Apollo's base-128 split reorders its input by a strided gather: subsequence `b` of stride `blocks` starting at the bit-reversed offset `rev(b)`. That is a multi-slice read — `data[j * blocks + offset]` for every `j` — and it is written twice: once as a SIMD blend network in `split_boundary::GatherBlocks`, hand-written for `BLOCKS = 2` and `BLOCKS = 4` and asserting on anything else, and once as a scalar strided loop as the fallback. Every new block count needs a third hand-written network, which is exactly what stopped the eight-block split (`#atlas-apollo-eight-block-split`).
 - **It is worth a measured amount.** Disabling the four-block network at n = 512 costs f64 +7.5% and f32 +15.4%, so the network earns its place — the objection is to where it lives and that it is arity-bound, not to its existence.
@@ -113,6 +115,7 @@
 
 <a id="atlas-apollo-f32-nonpot-width"></a>
 ## ATLAS-APOLLO-F32-NONPOT-WIDTH-2026-09-03 — f32 loses far more than f64 on non-power-of-two lengths [patch] [perf] — todo
+- **milestone:** M-transforms-capability.
 - **Re-measured 2026-09-15 (`codelet_selection` and `short_winograd_leaves`, bench-quick, pinned; `output/apollo-base128/codelet_selection_2026-09-15.txt`, `short_winograd_leaves_2026-09-15.txt`):** the leaf 11 no longer carries the excess — f32 0.36x of f64 on the performance core, 0.39x on the efficiency core — yet the codelets built on it still do: n = 121 (11 x 11) f32 1.81x of f64 and n = 154 (2 x 7 x 11) 1.53x on the performance core, 1.42x and 1.50x on the efficiency core, with their composite arms slow in the same proportion. The other retained f32 codelet lengths run below f64 (222 0.86x, 246 0.86x, 259 0.93x, 296 0.89x; 96 is f32-only). Leaves over 1.1x on the performance core: 12 (1.25x), 23 (1.33x), 24 (1.54x), 144 (1.21x); on the efficiency core: 3 (2.0x at 3 ns), 29 (2.82x — the wide pair form pays the efficiency core's two-micro-op 256-bit cost, see `#apollo-chain-pass-e-core-census`) and 144 (1.34x). Next locus: the twiddle stage between the leaves in `dft121_impl` and the 154 Good-Thomas codelet, since their leaves are fast; then the 12/24 and 23 leaves on the performance core and the wide 29 on the efficiency core.
 - **Re-measured 2026-09-17, and the 121 codelet no longer lags.** On main, pinned, release: f32/f64 is 0.91 (P) and 0.94 (E) for the n = 121 codelet, 1.06 and 1.18 for the n = 154 codelet, 1.27 and 1.17 for the n = 121 composite route (`output/apollo-base128/pair_columns_2026-09-17.md`). Both routes reach radix 11 through the same scalar `dft_pair_impl` for both scalars (no scalar-dependent route at these lengths); on the composite route the f32 group loop is inlined into the AVX2 `FlatStockham` frame while f64's stays out of line at baseline, the next lead for the remaining composite gap. Rejected: interchanging `dft_pair_impl`'s loops (all H outputs of an accumulator advancing together, bit-identical) doubles the f32 11 leaf (11.5k to 22.9k ps on P) and slows every route that uses it.
 - **Frame placement falsified, 2026-09-17.** Calling the composite route's scalar radix stage out of line (`#[inline(never)]`, compiled at baseline like f64's) left `f32` 121 composite level on the performance core (502 to 508k against 510 to 514k ps) and 2.5% under on the efficiency core, 154 level on both (`codelet_selection`, three alternating runs; `output/apollo-base128/composite_scalar_stage_2026-09-17/`). Where the f32 radix-11 stage compiles is not what makes composite 121 1.27x its f64; not landed.
@@ -131,6 +134,7 @@
 
 <a id="atlas-apollo-beat-the-references"></a>
 ## ATLAS-APOLLO-BEAT-THE-REFERENCES-2026-09-03 — Apollo must be faster than RustFFT and PhastFT at every size [minor] [perf] — todo
+- **milestone:** M-transforms-capability.
 - **Standing bar.** Neither RustFFT nor PhastFT may be faster than apollo at any length. This item is the scoreboard and the parent of the work; each gap below becomes its own increment.
 - **Scoreboard 2026-09-18 (main `f480ecdc`, after #501 to #505; `small_sizes_against_the_references_by_core_type`, release, pinned, two runs, apollo over RustFFT, min to max; `../../output/apollo-scoreboard-2026-09-18/`).** At or above RustFFT: `f64` 32 1.04 to 1.08 (performance) and 1.03 to 1.05 (efficiency), 1000 0.93 to 1.01 / 1.00 to 1.01, 1024 0.98 to 1.01 on the efficiency core, 16 0.90 to 1.13 on the performance core (both arms spike in single runs); `f32` 8 1.00 to 1.04 (performance), 384 1.00 to 1.03 / 1.03 to 1.04, 1024 1.01 to 1.03 on the efficiency core. Closed since 2026-09-17: `f64` 8 (0.85 to 0.94), 180 (0.89 to 0.92), `f32` 16, 180, and the efficiency core's 8192 and 16384. Every other cell is below 1.0, among them `f64` 101 0.64 to 0.75, 384 0.65 to 0.99, 4096 0.74 to 0.93, `f32` 64 0.58 to 0.84. The open cells are `f64` 32, 1000, 1024 (efficiency) and `f32` 8, 384, 1024 (efficiency).
 - **Scoreboard 2026-09-11 (aligned tables, the pinned probe, performance core, apollo over RustFFT / PhastFT):** `f64` 128 1.02, 256 1.00, 512 0.96, 1024 1.01 to 1.05, 2048 1.11 to 1.24, 4096 1.07 / 1.22, 32768 0.99 / 0.84, 100 0.73, 101 0.62 to 0.68, 180 1.47, 384 1.26, 1000 0.99, 1009 0.80; `f32` 128 0.99 to 1.03, 256 1.01, 512 0.97, 1024 1.05, 2048 1.29 / 1.02, 4096 1.20 / 1.07, 32768 1.06 / 0.81, 100 0.75, 101 0.67 to 0.70, 180 1.63, 384 1.37, 1000 0.85, 1009 0.86; the small lengths after the call path and the rotation ([#432](https://github.com/ryancinsight/apollo/pull/432), [#433](https://github.com/ryancinsight/apollo/pull/433), [#434](https://github.com/ryancinsight/apollo/pull/434)): `f32` 8 1.07, 16 0.99 to 1.01, 32 0.95, 64 0.67 to 0.71, `f64` 8 1.11 to 1.22, 16 0.90, 32 1.07, 64 0.97 to 1.00; 180 at `f32` on the column route ([ADR 0062](docs/adr/0062-composite-bases-as-register-kernels.md)) 0.94 to 1.03 from 1.47, the efficiency core 0.98 from 1.25, `f64` 180 on the same route 1.06 / 0.68 from 1.48 to 1.52 and 0.95 on the efficiency core from 1.27; and the base routes with hermes' sign-flip rotation: `f64` 128 0.77 to 0.82, 256 0.86, 512 0.84 to 0.85, `f32` 128 0.92 to 0.94, 256 0.88 to 0.90, 512 0.88 to 0.91 (`../../output/apollo-base128/small_sizes_kernelgap2_run*_2026-09-11.txt`). Delivered today: the single-pass 512 base at both widths ([#420](https://github.com/ryancinsight/apollo/pull/420), [#421](https://github.com/ryancinsight/apollo/pull/421)), the aligned tables ([#423](https://github.com/ryancinsight/apollo/pull/423)), the 128 shape by width ([#424](https://github.com/ryancinsight/apollo/pull/424)), 2048 as four 512-blocks ([#425](https://github.com/ryancinsight/apollo/pull/425)), the Rader backend selection ([#427](https://github.com/ryancinsight/apollo/pull/427)). Open: [the composite census](#apollo-composite-radix-census) (180, 384), the 2048 sink and 4096, `f64` 8.
@@ -150,6 +154,7 @@
 
 <a id="apollo-audit-2026-09-18"></a>
 ## APOLLO-AUDIT-2026-09-18 — Memory and capability findings filed from the 2026-09-18 audits — todo
+- **Milestones:** memory-slice children (3d-scratch-roles, inverse-conjugate remainder, cache-bounds remainder, four-step-matrix, dead-interleaved, odd-power-scratch, sibling-thread-scratch remainder, static-layouts) join M-fft-core; capability-slice children (batch-axis-nd, normalization-modes, stft-windows, low-precision-truth, fallible-api, nufft-2d-type3, dctdst-shapes, wavelet-coverage, gpu-parity, python-surface, backend-execution, shift-freq, czt-zoom, frft-fast, radon-geometries, oracle-coverage, book-chapters remainder) and the two review children (real-split-2-mod-4, dct-core-001) join M-transforms-capability. Closed children stay closed.
 - **Basis:** main `f480ecdc`; evidence, acceptance oracles and scope per item in [../../output/apollo-memory-audit-2026-09-18.md](../../output/apollo-memory-audit-2026-09-18.md) and [../../output/apollo-capability-audit-2026-09-18.md](../../output/apollo-capability-audit-2026-09-18.md). The two correctness findings are [the NUFFT scale](#apollo-nufft-3d-type2-scale) and [the NTT fields](#apollo-ntt-field-validation). Each line below is one item; claim it by anchor.
 
 <a id="apollo-mem-3d-scratch-roles"></a>- **APOLLO-MEM-3D-SCRATCH-ROLES** — The 3-D C-order chain holds two full-volume scratch roles on the caller thread [patch] — todo. Measured 2.0x data retained after 64³ to 128³ (64 MiB at 128³ f64); one role serves. Acceptance: retained bytes 1.0x data under the audit's allocator probe, 3-D census level. [../../output/apollo-memory-audit-2026-09-18.md#f1]
