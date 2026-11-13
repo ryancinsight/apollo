@@ -17,23 +17,6 @@
 - **Evidence:** all nine default provider identities and all 209 registry records pass audit. Native/API/hosted gates pass at `8198d42d`; merge `730f6262` has the identical tree. Its automatic publisher and Pages run succeed, and all 21 cohort archives have verified source/checksum receipts. Fresh source consumers compute the exact analytic N=121 values.
 - **Record:** [PR #672](https://github.com/ryancinsight/apollo/pull/672) contains publication, default-branch CI and independent registry-consumer evidence. Integration, automatic publication and Pages effects have user approval. Correctness #671 and experiment #655 retain their independent scopes.
 
-## APOLLO-NATIVE-GATE-REPAIR — retained fallback ownership and exact admission [patch]
-
-- Baseline `d5e83ca8`: 16 native failures and 14 distinct ARM lint sites.
-- The allocation trace identifies per-call four-step state and expired weak
-  table indexes. Sized plans now execute through retained state while preserving
-  the power-of-two strategy classification, existing kernels, and thresholds.
-- Capability tests assert exact dispatch/no mutation and execute the public
-  fallback through unchanged direct-value and bitwise-layout checks.
-- Original zero-allocation assertions remain intact; the compatible Hephaestus
-  PR #465 merge fixes native dyld absence classification without suppressing
-  loaded-driver, symbol, or initialization faults.
-- Native full Nextest before the final version/absence-test addition: 1624
-  passed, zero failed, 15 existing ignored instruments. Strict all-feature,
-  all-target workspace Clippy passes. Final revision and hosted gates pending.
-- The SemVer comparison is being repaired in Atlas to build both committed
-  source graphs under `--locked`; fresh provider resolution is not a verdict.
-
 <a id="apollo-lane-buffer-safety"></a>
 ## APOLLO-LANE-BUFFER-SAFETY — Safe deterministic-lane element ownership [major] — implemented
 

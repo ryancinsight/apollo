@@ -62,16 +62,6 @@ Milestone ladder; scope in [ADR 0076](docs/adr/0076-release-scope.md). Planned v
 - **Integration:** [PR #672](https://github.com/ryancinsight/apollo/pull/672) merges as `730f6262` with the tested tree. Its [publisher](https://github.com/ryancinsight/apollo/actions/runs/38776177645) and [Pages](https://github.com/ryancinsight/apollo/actions/runs/38776174688) succeed; all 21 intended not-yanked archives identify that merge and match their checksums. The fresh unseeded default-source consumer computes all N=121 bins for two analytic impulses with unchanged input bits.
 - **Boundary:** source/version compatibility remains separate from correctness #671 and experiment #655. Ordered integration and automatic publication/Pages effects have explicit user approval; final default-branch check results and registry consumer evidence remain linked from PR #672.
 
-<a id="apollo-native-gate-repair"></a>
-## APOLLO-NATIVE-GATE-REPAIR — retained fallback ownership and exact admission [patch] — todo
-- **priority:** verification. **milestone:** M-numpy-fft-semantics.
-- Baseline `d5e83ca8`: 16 native failures and 14 distinct ARM lint sites.
-- The allocation trace identifies per-call four-step state and expired weak table indexes. Sized plans now execute through retained state while preserving the power-of-two strategy classification, existing kernels, and thresholds.
-- Capability tests assert exact dispatch/no mutation and execute the public fallback through unchanged direct-value and bitwise-layout checks.
-- Original zero-allocation assertions remain intact; the compatible Hephaestus PR #465 merge fixes native dyld absence classification without suppressing loaded-driver, symbol, or initialization faults.
-- Native full Nextest before the final version/absence-test addition: 1624 passed, zero failed, 15 existing ignored instruments. Strict all-feature, all-target workspace Clippy passes. Final revision and hosted gates pending.
-- The SemVer comparison is being repaired in Atlas to build both committed source graphs under `--locked`; fresh provider resolution is not a verdict.
-
 <a id="apollo-121-f32-simd-leaf"></a>
 ## APOLLO-121-F32-SIMD-LEAF — Close the N=121 f32 gap with a dispatched SIMD dft11 [patch] [perf] — todo
 - **priority:** tightening. **needs:** none. **milestone:** M-numpy-fft-semantics.
