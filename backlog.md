@@ -71,16 +71,6 @@ Milestone ladder; scope in [ADR 0076](docs/adr/0076-release-scope.md). Planned v
 - **Acceptance:** counterbalanced gate shows f32/121 at or under RustFFT with f64/121 unregressed; SIMD leaf agrees exactly with the scalar leaf; focused clippy/test/fmt green.
 - **Next step:** implement the AVX2/FMA dft11 variant behind runtime detection; measure leaf-11 then N=121.
 
-<a id="apollo-rescue-queue"></a>
-## APOLLO-RESCUE-QUEUE — Complete or close the unclaimed rescue PRs [patch] — todo
-- **priority:** correctness. **needs:** none. **milestone:** M-numpy-fft-semantics.
-- **Outcome:** each listed rescue PR is completed onto current main (ported, verified, merged) or closed once its diff resolves empty against main.
-- **Scope:** `ryancinsight/apollo` rescue PR head refs only; a claimant opens a new item branch from the fetched default and ports the work there.
-- **Rescues:**
-  - `ryancinsight/apollo#596` (`rescue/apollo-mem-planar-owner`, draft): unverified wip commit plus 15 commits of a stale lane for [APOLLO-MEM-CACHE-BOUNDS](#apollo-mem-cache-bounds) slice 2 (planar and Bluestein tables owned by plans, [ADR 0068](docs/adr/0068-bounded-plan-and-table-caches.md)). 60 files, +1852 -1512; code in `crates/apollo-fft`, one ADR; gate run 2026-10-11 by takeover review: merge is conflict-free but 4 warm-path contract tests fail (temp PlanarState per execution under Weak caches, 35 allocs vs 0) plus 18 dead_code warnings; diagnosis posted on the PR; lane `Cargo.lock` change excluded.
-- **Acceptance:** no open `rescue/` PR for this repository remains unaccounted for.
-- **Next step:** claim #596 through the APOLLO-MEM-CACHE-BOUNDS integrator, diff its head against the fetched default, port the unlanded hunks, run the gate.
-
 <a id="apollo-dht-verification-split"></a>
 ## APOLLO-DHT-VERIFICATION-SPLIT — Restore the DHT source-size ratchet [patch] — todo
 - **priority:** tightening. **milestone:** M-numpy-fft-semantics.
