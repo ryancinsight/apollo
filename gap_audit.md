@@ -17,6 +17,12 @@
 - **Evidence:** all nine default provider identities and all 209 registry records pass audit. Native/API/hosted gates pass at `8198d42d`; merge `730f6262` has the identical tree. Its automatic publisher and Pages run succeed, and all 21 cohort archives have verified source/checksum receipts. Fresh source consumers compute the exact analytic N=121 values.
 - **Record:** [PR #672](https://github.com/ryancinsight/apollo/pull/672) contains publication, default-branch CI and independent registry-consumer evidence. Integration, automatic publication and Pages effects have user approval. Correctness #671 and experiment #655 retain their independent scopes.
 
+## The PR-time SemVer comparison is a fresh-resolution non-verdict (2026-11-13) <a id="apollo-semver-fresh-resolution"></a>
+- **Risk:** `ci.yml` pins `semver-gate.yml@6808fcd7` without `dependency-contract: locked`; native baseline generation runs `cargo update`, so a provider that moves past the requirement makes the comparison fail with exit 101 while the job stays green.
+- **Evidence:** [Atlas ADR 0069](../../docs/adr/0069-locked-source-semver.md) (Accepted) treats locked-resolution API coverage as unsupported; Apollo `8d5ec1f6` removed `dependency-contract: locked`; [run 42876721455](https://github.com/ryancinsight/apollo/actions/runs/42876721455) job 130041920745 (head `14259c00`) logs 20 `failed to select a version for the requirement leto` errors and cargo exit 101, conclusion success.
+- **Re-open:** a PR-time comparison that builds both committed source graphs under `--locked`, or a supported replacement recorded in ADR 0069, reports an API verdict on an Apollo PR run.
+- **Owner:** `ATLAS-PUBLISHED-GIT-DEP-ROT-001` ([Atlas board](../../backlog.md#atlas-published-git-dep-rot-001)); its acceptance covers the release-gate baseline probe, not the PR-time comparison.
+
 <a id="apollo-lane-buffer-safety"></a>
 ## APOLLO-LANE-BUFFER-SAFETY — Safe deterministic-lane element ownership [major] — implemented
 
