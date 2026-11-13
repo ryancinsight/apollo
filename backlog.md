@@ -22,7 +22,7 @@ Milestone ladder; scope in [ADR 0076](docs/adr/0076-release-scope.md). Planned v
 - exit: evaluate a zoomed DTFT band: `cargo nextest run -p apollo-czt --no-tests=fail -E 'binary_id(=apollo-czt::zoom) & test(=zoom_equals_direct_dtft_at_band_frequencies)'`
 - exit: compute a fractional Fourier transform in O(N log N): `cargo nextest run -p apollo-frft --no-tests=fail -E 'binary_id(=apollo-frft::chirp_convolution) & test(=agrees_with_direct_kernel_to_512_and_is_additive)'`
 - exit: decompose and reconstruct at any length with each boundary mode: `cargo nextest run -p apollo-wavelet --no-tests=fail -E 'binary_id(=apollo-wavelet::families) & test(=perfect_reconstruction_in_every_mode_at_odd_lengths)'`
-- standing: no open `correctness` item.
+- standing: no open `correctness` item; `oversized_files` in `python -I scripts/atlas-conformance.py report --repo apollo --json` stays at or below 36 (run from the Atlas root with `--member-path` at the apollo revision; read 36 at the head export).
 - non-goals: streaming STFT; GPU window variants; wavelet packets, SWT and inverse CWT; fast and non-square CZT inverse.
 
 <a id="M-imaging-transforms"></a>
@@ -33,7 +33,7 @@ Milestone ladder; scope in [ADR 0076](docs/adr/0076-release-scope.md). Planned v
 - exit: reconstruct a disc phantom from fan-beam projections with each filter: `cargo nextest run -p apollo-radon --no-tests=fail -E 'binary_id(=apollo-radon::fan_beam) & test(=disc_phantom_reconstruction_within_bound_for_every_filter)'`
 - exit: transform rectangular 2-D and 3-D fields by DCT and DST: `cargo nextest run -p apollo-dctdst --no-tests=fail -E 'binary_id(=apollo-dctdst::rectangular) & test(=two_and_three_dimensional_results_equal_separable_composition)'`
 - exit: build an orthonormal DCT-III basis from the dependency-light core: `cargo nextest run -p apollo-dctdst-core --no-tests=fail -E 'test(=plan::tests::basis_is_orthonormal)'`
-- standing: no open `correctness` item.
+- standing: no open `correctness` item; `oversized_files` in `python -I scripts/atlas-conformance.py report --repo apollo --json` stays at or below 36 (run from the Atlas root with `--member-path` at the apollo revision; read 36 at the head export).
 - non-goals: NUFFT Type-3 and GPU 2-D; DCT/DST types V-VIII.
 
 <a id="M-backend-and-python-reach"></a>
@@ -43,27 +43,15 @@ Milestone ladder; scope in [ADR 0076](docs/adr/0076-release-scope.md). Planned v
 - exit: execute plans through the backend seam against the DFT oracle: `cargo nextest run -p apollo-fft --no-tests=fail -E 'binary_id(=apollo-fft::backend_execution) & test(=generic_conformance_passes_the_dft_oracle_on_cpu)'`
 - exit: transform a real signal on WGPU to the CPU half spectrum: `cargo nextest run -p apollo-fft --no-tests=fail -E 'binary_id(=apollo-fft::gpu_real_to_complex) & test(=wgpu_half_spectrum_matches_cpu_at_prime_composite_and_power_of_two_lengths)'`
 - exit: call NumPy-compatible `rfft` and `irfft` with `norm` and `axes` from Python bindings: `cargo nextest run -p apollo-python --no-tests=fail -E 'test(=bindings::support::tests::rfft_irfft_norm_axes_equal_native_reference)'`
-- standing: no open `correctness` item.
+- standing: no open `correctness` item; `oversized_files` in `python -I scripts/atlas-conformance.py report --repo apollo --json` stays at or below 36 (run from the Atlas root with `--member-path` at the apollo revision; read 36 at the head export).
 - non-goals: CUDA beyond 1-D `f32` powers of two; WGSL `f64`; Python bindings for STFT, wavelet, Hilbert and every other sibling.
 
 <a id="M-stable-transform-suite"></a>
 ## M-stable-transform-suite — 1.0.0 — use the whole transform suite from a tagged release on a stable API
 - needs: M-backend-and-python-reach
 - exit: run every transform crate's headline transform on one signal and check each result against its closed form: `cargo run -p apollo-validation --example transform_suite_tour`
-- standing: `cargo fmt --all -- --check`, `cargo clippy --workspace --locked --all-targets --all-features -- -D warnings`, `cargo nextest run --workspace --locked --profile ci --all-features`, `cargo test --workspace --locked --doc --all-features` and `cargo doc --workspace --locked --no-deps --all-features` pass; the SemVer gate and publish dry run of engineering_gates pass for each declared release; README, example (`cargo build --workspace --locked --examples`) and book (`mdbook test`) builds pass; no open `correctness` item.
+- standing: `cargo fmt --all -- --check`, `cargo clippy --workspace --locked --all-targets --all-features -- -D warnings`, `cargo nextest run --workspace --locked --profile ci --all-features`, `cargo test --workspace --locked --doc --all-features` and `cargo doc --workspace --locked --no-deps --all-features` pass; the SemVer gate and publish dry run of engineering_gates pass for each declared release; README, example (`cargo build --workspace --locked --examples`) and book (`mdbook test`) builds pass; no open `correctness` item; `oversized_files` in `python -I scripts/atlas-conformance.py report --repo apollo --json` stays at or below 36 (run from the Atlas root with `--member-path` at the apollo revision; read 36 at the head export).
 - non-goals: AVX-512 path; publication without release authority.
-
-<a id="apollo-fft121-layout-recovery"></a>
-## APOLLO-FFT121-LAYOUT-RECOVERY — recover #655 correctness coverage [patch] — verified
-- **priority:** verification. **milestone:** M-numpy-fft-semantics.
-
-- **Owner:** Codex, `codex/recover-fft121-layout-tests`; current main/provider base `730f6262` from PR #672.
-- **Scope:** 25 layout pairs × six input families × forward/unnormalized inverse, exact result/guard bits, finite/equal-length direct-DFT oracles, exact CPU admission and actual fallback execution.
-- **Version:** `apollo-fft` 0.29.1 is the correctness-only patch over published 0.29.0. Production kernels and numerical bounds remain unchanged; #655 retains its experiments/reports/workflow.
-- **Regression:** unchanged ARM baseline passes three focused cases; the historical AVX assertion and missing oracle guards produce three expected failures; the adaptation passes all five.
-- **Current evidence:** runtime `eb8184b7` passes the five focused native ARM tests, formatting, strict workspace Clippy and doctests. All 22 patch API pairs pass 223 applicable checks each. [Hosted run 38774215093](https://github.com/ryancinsight/apollo/actions/runs/38774215093) passes 1,679 x86 and 1,636 ARM cases (15 existing ignored instruments), both 664-case FFT library modes and every remaining configured gate.
-- **Availability:** provider owners are merged/published at Moirai `44a962f0`, Leto `8b4ab407`, Hephaestus `672c5abc` and Apollo `730f6262`. All intended archive checksums and source identities pass; fresh default-source N=121 consumers compute the analytic values and preserve input bits.
-- **Integration:** this records-only closure retains runtime Rust/manifests/lock blobs and the seven-file diff. Its own final hosted checks remain required. [PR #671](https://github.com/ryancinsight/apollo/pull/671) records the approved merge, resulting 0.29.1 publication, final registry/source consumers and Pages deployment.
 
 <a id="apollo-eunomia-010-cohort"></a>
 ## APOLLO-EUNOMIA-010-COHORT — restore clean provider resolution [minor] — done
