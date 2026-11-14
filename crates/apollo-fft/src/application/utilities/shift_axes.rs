@@ -3,7 +3,8 @@
 //! For shape `[n_0, …, n_{N-1}]` and axis set `A`, `y[k] = x[σ(k)]` with
 //! `σ(k)_a = (k_a + n_a − s_a) mod n_a` for `a ∈ A` and `k_a` otherwise: `numpy.roll` by
 //! `s_a` per axis, the convention of `numpy.fft.fftshift(x, axes)`. `s_a` is `⌊n_a/2⌋` for
-//! [`fftshift_axes`] and `⌈n_a/2⌉` for [`ifftshift_axes`]; since `⌊n/2⌋ + ⌈n/2⌉ = n` the pair
+//! [`fftshift_axes`](crate::fftshift_axes) and `⌈n_a/2⌉` for
+//! [`ifftshift_axes`](crate::ifftshift_axes); since `⌊n/2⌋ + ⌈n/2⌉ = n` the pair
 //! is the identity at every extent, and the two differ at odd extents. Elements move without
 //! arithmetic, so the shifts are exact for every element type.
 
