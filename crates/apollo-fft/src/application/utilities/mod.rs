@@ -7,3 +7,5 @@
 pub mod freq;
 /// Spectrum shift utilities: `fftshift` and `ifftshift`.
 pub mod shift;
+/// Axis-set spectrum shifts over Leto arrays: `fftshift_axes` and `ifftshift_axes`.
+pub mod shift_axes;

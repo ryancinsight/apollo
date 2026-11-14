@@ -10,7 +10,7 @@ use apollo_fft::{fftfreq, rfftfreq};
 
 fn main() {
     let fx = fftfreq(4, 1.0);
-    let fy = rfftfreq(4, 1.0);
+    let fy = rfftfreq(4, 1.0_f64);
     println!("fx bins : {}", fx.len());
     println!("fy bins : {}", fy.len());
     assert_eq!(fx.len(), 4);

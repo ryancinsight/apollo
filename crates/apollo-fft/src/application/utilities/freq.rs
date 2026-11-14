@@ -13,6 +13,11 @@
 //! `rfftfreq(n, d)` returns the n/2+1 non-negative frequency bins for a real-input FFT:
 //! - `k / (n·d)` for `k = 0, 1, …, n/2`
 //! - Output length is `n/2 + 1`.
+//!
+//! Both are generic over the eunomia float element `T` and compute in it: one rounded span
+//! `n·d` and one rounded quotient per bin.
+
+use eunomia::FloatElement;
 
 /// Frequency bin centers for a full complex DFT of length `n` with sample spacing `d`.
 ///
@@ -21,21 +26,24 @@
 /// - Bin `k ≥ (n+1)/2`: `(k − n) / (n·d)` (negative half)
 ///
 /// For `n = 0` returns an empty vector.
-/// For `d = 0.0` all finite outputs are undefined; no error is raised, matching numpy behavior.
+/// For `d = 0` all finite outputs are undefined; no error is raised, matching numpy behavior.
+///
+/// # Examples
+///
+/// ```
+/// let bins = apollo_fft::fftfreq(4, 0.5_f32);
+/// assert_eq!(bins, [0.0, 0.5, -1.0, -0.5]);
+/// ```
 #[must_use]
-pub fn fftfreq(n: usize, d: f64) -> Vec<f64> {
+pub fn fftfreq<T: FloatElement>(n: usize, d: T) -> Vec<T> {
     if n == 0 {
         return Vec::new();
     }
-    let nd = n as f64 * d;
-    let half = (n + 1) / 2; // positive bins: 0..half
+    let span = T::from_count(n) * d;
+    let positive = n.div_ceil(2);
     let mut bins = Vec::with_capacity(n);
-    for k in 0..half {
-        bins.push(k as f64 / nd);
-    }
-    for k in half..n {
-        bins.push((k as i64 - n as i64) as f64 / nd);
-    }
+    bins.extend((0..positive).map(|k| T::from_count(k) / span));
+    bins.extend((positive..n).map(|k| (T::ZERO - T::from_count(n - k)) / span));
     bins
 }
 
@@ -45,20 +53,22 @@ pub fn fftfreq(n: usize, d: f64) -> Vec<f64> {
 /// - Returns bins `0, 1, …, n/2` (all non-negative), length `n/2 + 1`.
 /// - Bin `k`: `k / (n·d)`.
 ///
-/// For `n = 0` returns `vec![0.0]` (the single DC bin).
-/// For `d = 0.0` behavior is undefined; no error is raised, matching numpy behavior.
+/// For `n = 0` returns the single DC bin `[0]`.
+/// For `d = 0` behavior is undefined; no error is raised, matching numpy behavior.
+///
+/// # Examples
+///
+/// ```
+/// let bins = apollo_fft::rfftfreq(4, 0.5_f64);
+/// assert_eq!(bins, [0.0, 0.5, 1.0]);
+/// ```
 #[must_use]
-pub fn rfftfreq(n: usize, d: f64) -> Vec<f64> {
+pub fn rfftfreq<T: FloatElement>(n: usize, d: T) -> Vec<T> {
     if n == 0 {
-        return vec![0.0];
+        return vec![T::ZERO];
     }
-    let nd = n as f64 * d;
-    let len = n / 2 + 1;
-    let mut bins = Vec::with_capacity(len);
-    for k in 0..len {
-        bins.push(k as f64 / nd);
-    }
-    bins
+    let span = T::from_count(n) * d;
+    (0..=n / 2).map(|k| T::from_count(k) / span).collect()
 }
 
 #[cfg(test)]

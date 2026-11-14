@@ -50,4 +50,6 @@ pub use icfft::{
 };
 
 pub use freq::{fftfreq, rfftfreq};
-pub use shift::{fftshift, fftshift_inplace, ifftshift, ifftshift_inplace};
+pub use shift::{
+    fftshift, fftshift_axes, fftshift_inplace, ifftshift, ifftshift_axes, ifftshift_inplace,
+};
