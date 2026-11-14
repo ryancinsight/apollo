@@ -8,7 +8,7 @@ extern crate apollo_fft;
 use apollo_fft::rfftfreq;
 
 fn main() {
-    let freqs = rfftfreq(8, 0.001);
+    let freqs = rfftfreq(8, 0.001_f64);
     println!("grid length : {}", freqs.len());
     println!("first bin   : {} Hz", freqs[0]);
     println!("last bin    : {} Hz", freqs[freqs.len() - 1]);

@@ -7,3 +7,4 @@
 pub use crate::application::utilities::shift::{
     fftshift, fftshift_inplace, ifftshift, ifftshift_inplace,
 };
+pub use crate::application::utilities::shift_axes::{fftshift_axes, ifftshift_axes};
