@@ -6,9 +6,8 @@
 //! core class.
 
 use apollo_bench::{BenchmarkCase, BenchmarkConfig, BenchmarkMode, BenchmarkSuite};
-use apollo_sft::SparseFftPlan;
+use apollo_sft::{SparseFftPlan, SparseSpectrum};
 use eunomia::Complex64;
-use std::f64::consts::TAU;
 use std::hint::black_box;
 use std::time::{Duration, Instant};
 
@@ -18,6 +17,11 @@ const MEASUREMENT_MS: u64 = 60;
 const SPARSITY: usize = 16;
 const LENGTHS: [usize; 5] = [1 << 12, 1 << 14, 1 << 16, 1 << 18, 1 << 20];
 
+/// Build the `k`-sparse fixture by inverse FFT of an exactly `k`-sparse
+/// spectrum: O(N log N) host synthesis with no per-sample trig loop, so the
+/// N=2^20 case no longer spends ~137s in fixture construction against the
+/// 60s budget (gap-audit residual 2026-09-25). The fixture stays exactly
+/// sparse, so both recovery routes keep their exactness guarantee.
 fn sparse_signal(n: usize, k: usize) -> Vec<Complex64> {
     let tones: Vec<(usize, Complex64)> = (0..k)
         .map(|i| {
@@ -27,17 +31,12 @@ fn sparse_signal(n: usize, k: usize) -> Vec<Complex64> {
             )
         })
         .collect();
-    (0..n)
-        .map(|t| {
-            tones
-                .iter()
-                .map(|&(f, a)| {
-                    let angle = TAU * ((f * t) % n) as f64 / n as f64;
-                    a * Complex64::new(angle.cos(), angle.sin())
-                })
-                .sum()
-        })
-        .collect()
+    let plan = SparseFftPlan::new(n, k.max(1)).expect("fixture plan");
+    let mut spectrum = SparseSpectrum::new(n);
+    for (frequency, value) in tones {
+        spectrum.insert(frequency, value).expect("fixture tone");
+    }
+    plan.inverse(&spectrum).expect("fixture synthesis")
 }
 
 fn main() -> Result<(), apollo_bench::BenchmarkError> {
