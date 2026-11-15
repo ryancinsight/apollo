@@ -4,6 +4,13 @@
 
 ### Changed
 
+- [patch] Require Moirai 0.12.0 and advance the provider lock to the current
+  default revisions. The Moirai requirement moves from 0.11.0 to 0.12.0; the
+  lock resolves Moirai 0.12.0, Mnemosyne-memory 0.10.1, and Themis 0.11.5 at
+  their current default heads, with one source per provider repository. The
+  public Apollo operation signatures are unchanged: Apollo re-exports no
+  Moirai type, and the 0.12 release removes only the `StateWord::get_mut`
+  requirement, which Apollo does not implement.
 - [patch] Admit Leto/Leto-ops 0.48.0 and widen the workspace requirement to
   `>=0.46.1, <0.49.0`. The standalone lock resolves Leto/Leto-ops 0.48.0 and
   the current default revisions of Aequitas 0.3.2, Eunomia 0.12.0,
