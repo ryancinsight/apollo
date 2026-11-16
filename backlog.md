@@ -196,6 +196,15 @@ Milestone ladder; scope in [ADR 0076](docs/adr/0076-release-scope.md). Planned v
 - **The provider side is ready:** hermes #98 closed the last permute gap, so a width-generic kernel would not fall to a stack-capture default at the wider width.
 - **Order if pursued:** parameterize over complex-per-register holding four-lane behaviour byte-identical and confirm on this host that it is free (the row-length precedent says it can be); restore the across-instance layout at eight lanes; measure elsewhere.
 
+<a id="apollo-leto-050-record-drift"></a>
+## APOLLO-LETO-050-RECORD-DRIFT — Correct the Leto 0.50 admission's manifest comment and changelog entry [patch] — todo
+- **priority:** verification. **needs:** none. **milestone:** M-numpy-fft-semantics. **basis:** b7bffe1ca79e105e3d794b36be8859d8038f39ed.
+- **Outcome:** `Cargo.toml` and `CHANGELOG.md` describe the Leto 0.50 admission ([PR #715](https://github.com/ryancinsight/apollo/pull/715)) as the lock records it: no branch name inside the provider comment, and the changelog entry names the whole Hephaestus move.
+- **Evidence (read at the basis; source: judge findings F4 and F2 on #715):** `Cargo.toml:100-101` reads "default sources. origin/main" above the `hermes-simd` requirement, a branch name left in a comment that says which provider PRs are merged. `CHANGELOG.md:7-13` says the lock moves "the Hephaestus core/CUDA/WGPU 0.28.0 source to the revision that admits Leto 0.50"; the `Cargo.lock` diff of #715 moves all three from `991237052e67` to `742cdb844be0`, and `git log --first-parent --merges 991237052e67..742cdb844be0` in hephaestus lists eight merged PRs (#544 to #552 without #551), among them the ROCm product-address bound (#544), the non-wrapping kernel ceiling (#546) and the exact WGSL scan ceiling (#548).
+- **Scope:** `Cargo.toml` comment lines only (no requirement, feature or lock change), `CHANGELOG.md` leto-0.50 entry.
+- **Acceptance:** `git grep -n 'origin/main' -- Cargo.toml` prints nothing (line 101 at the basis); the leto-0.50 entry names both Hephaestus revisions and the eight PR numbers, so `git grep -c '742cdb84' -- CHANGELOG.md` is at least 1 (0 at the basis); `cargo metadata --locked` and the lock blob are unchanged.
+- **Next step:** reword the comment, then extend the entry from `git log` of the two revisions in the hephaestus checkout.
+
 <a id="atlas-apollo-branch-debt"></a>
 ## ATLAS-APOLLO-BRANCH-DEBT-2026-08-27 — Eight stale local branches hold unique patches — blocked
 - **priority:** tightening. **milestone:** M-numpy-fft-semantics.
