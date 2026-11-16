@@ -66,6 +66,9 @@ public API or numerical kernels.
 
 ## Revisions
 
+- **2026-11-15.** Admit the Leto 0.50 provider line, widening the
+  requirement to `<0.51.0`. The lock moves Leto, Leto-ops, and the
+  Hephaestus source only; Apollo adds no adapter or numerical-code change.
 - **2026-11-10.** Admit the compatible Leto 0.48 provider line while retaining
   the 0.46.1 lower bound. The standalone lock records the reviewed provider
   cohort; Apollo adds no source pin, adapter, or numerical-code change.

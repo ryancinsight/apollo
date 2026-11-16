@@ -4,6 +4,13 @@
 
 ### Changed
 
+- [patch] Admit Leto/Leto-ops 0.50.0 and widen the workspace requirement to
+  `>=0.46.1, <0.51.0`. The standalone lock moves only Leto and Leto-ops
+  (0.48.0 to 0.50.0) and the Hephaestus core/CUDA/WGPU 0.28.0 source to the
+  revision that admits Leto 0.50; every other provider revision is unchanged.
+  Leto 0.50 removes the unsafe `VecStorage::uninit`, which Apollo does not
+  call, and zero-fills five allocating Leto-ops wrappers. The public Apollo
+  operation signatures are unchanged.
 - [patch] Require Moirai 0.12.0 and advance the provider lock to the current
   default revisions. The Moirai requirement moves from 0.11.0 to 0.12.0; the
   lock resolves Moirai 0.12.0, Mnemosyne-memory 0.10.1, and Themis 0.11.5 at
