@@ -56,6 +56,9 @@ use crate::domain::contracts::math::{bit_reverse_permute, mod_add, mod_mul, mod_
 use std::collections::hash_map::Entry;
 use std::collections::HashMap;
 
+mod twiddles;
+use twiddles::LevelTwiddles;
+
 /// A twin-coset domain of size `2^n` with the twiddles of both directions.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct CircleDomain {
@@ -67,11 +70,11 @@ pub struct CircleDomain {
     /// The forward `y` twiddles `1 / (2 y_i)`, `N/2` of them.
     forward_y: Vec<u64>,
     /// The forward `x` twiddles `1 / (2 x)` per level, `N/4, N/8, …, 1` long.
-    forward_x: Vec<Vec<u64>>,
+    forward_x: LevelTwiddles,
     /// The inverse `y` twiddles `y_i`.
     inverse_y: Vec<u64>,
     /// The inverse `x` twiddles `x` per level.
-    inverse_x: Vec<Vec<u64>>,
+    inverse_x: LevelTwiddles,
 }
 
 impl CircleDomain {
@@ -138,24 +141,27 @@ impl CircleDomain {
             .map(|&y| inverse(mod_mul(2, y, modulus), modulus))
             .collect();
         // The x levels: the ordered `S_n`, then `π` of its first half, and so on
-        // down to a single pair.
-        let mut inverse_x: Vec<Vec<u64>> = Vec::new();
+        // down to a single pair. They are written back to back into one buffer
+        // with the offset table beside them, so the transform walks levels in
+        // order instead of following one pointer per pass.
+        let mut inverse_values: Vec<u64> = Vec::with_capacity(half_size.saturating_sub(1));
+        let mut inverse_offsets: Vec<usize> = vec![0];
         let mut level: Vec<u64> = ordered;
         while level.len() >= 2 {
-            let twiddles: Vec<u64> = level[..level.len() / 2].to_vec();
-            let next: Vec<u64> = twiddles.iter().map(|&x| square_x(x, modulus)).collect();
-            inverse_x.push(twiddles);
-            level = next;
+            let twiddle_count = level.len() / 2;
+            inverse_values.extend_from_slice(&level[..twiddle_count]);
+            inverse_offsets.push(inverse_values.len());
+            level = level[..twiddle_count]
+                .iter()
+                .map(|&x| square_x(x, modulus))
+                .collect();
         }
-        let forward_x: Vec<Vec<u64>> = inverse_x
+        let forward_values: Vec<u64> = inverse_values
             .iter()
-            .map(|level| {
-                level
-                    .iter()
-                    .map(|&x| inverse(mod_mul(2, x, modulus), modulus))
-                    .collect()
-            })
+            .map(|&x| inverse(mod_mul(2, x, modulus), modulus))
             .collect();
+        let inverse_x = LevelTwiddles::from_parts(inverse_values, inverse_offsets.clone());
+        let forward_x = LevelTwiddles::from_parts(forward_values, inverse_offsets);
         Ok(Self {
             modulus,
             log_size,
@@ -216,7 +222,7 @@ impl CircleDomain {
             *b = mod_mul(difference, twiddle, p);
         }
         let mut block = half_len;
-        for twiddles in &self.forward_x {
+        for twiddles in self.forward_x.levels() {
             for chunk in data.chunks_exact_mut(block) {
                 let (even, odd) = chunk.split_at_mut(block / 2);
                 for ((a, b), &twiddle) in even.iter_mut().zip(odd.iter_mut()).zip(twiddles) {
@@ -241,7 +247,7 @@ impl CircleDomain {
         let p = self.modulus;
         bit_reverse_permute(data);
         let mut block = 2;
-        for twiddles in self.inverse_x.iter().rev() {
+        for twiddles in self.inverse_x.levels_reversed() {
             for chunk in data.chunks_exact_mut(block) {
                 let (even, odd) = chunk.split_at_mut(block / 2);
                 for ((a, b), &twiddle) in even.iter_mut().zip(odd.iter_mut()).zip(twiddles) {
@@ -364,6 +370,38 @@ mod tests {
                     }
                     assert_eq!(data[i], want, "n=2^{log_size} b_{k} at point {i}");
                 }
+            }
+        }
+    }
+
+    /// Both directions hold their `x` levels in one contiguous run: the level
+    /// count, every level's length and the total value count follow from the
+    /// domain size, so the layout cannot silently drift back to per-level
+    /// buffers.
+    #[test]
+    fn x_twiddle_levels_are_one_contiguous_run() {
+        for power in 1..=8usize {
+            let log_size = u32::try_from(power).expect("invariant: fixture power fits in u32");
+            let domain = CircleDomain::new(log_size, MERSENNE31).expect("domain");
+            let n = domain.len();
+            for twiddles in [&domain.forward_x, &domain.inverse_x] {
+                let expected_levels = power - 1;
+                assert_eq!(
+                    twiddles.level_count(),
+                    expected_levels,
+                    "level count at n=2^{log_size}"
+                );
+                let mut total = 0usize;
+                for (index, level) in twiddles.levels().enumerate() {
+                    let expected = (n / 4) >> index;
+                    assert_eq!(
+                        level.len(),
+                        expected,
+                        "level {index} length at n=2^{log_size}"
+                    );
+                    total += level.len();
+                }
+                assert_eq!(total, n / 2 - 1, "total twiddle values at n=2^{log_size}");
             }
         }
     }
