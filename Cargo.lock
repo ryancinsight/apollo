@@ -52,9 +52,9 @@ checksum = "320119579fcad9c21884f5c4861d16174d0e06250625266f50fe6898340abefa"
 
 [[package]]
 name = "aequitas"
-version = "0.4.0"
+version = "0.5.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "469b307baf5d2068d8f2952692ab1398aecfb9eb09503c17e111ce88eb527a8f"
+checksum = "aa1c7df9ce6ddf18b2f205cc24a2d9ce665434362dd015453b63f02283c3f619"
 dependencies = [
  "eunomia",
  "typenum",
@@ -1057,7 +1057,7 @@ checksum = "2304e00983f87ffb38b55b444b5e3b60a884b5d30c0fca7d82fe33449bbe55ea"
 [[package]]
 name = "hephaestus-core"
 version = "0.29.0"
-source = "git+https://github.com/ryancinsight/hephaestus.git#e499d4898d28d526d07c4bca2052b99854c49ce3"
+source = "git+https://github.com/ryancinsight/hephaestus.git#e6f9744bbba9ea8ecbcd4a2b7815605e55492092"
 dependencies = [
  "aequitas",
  "eunomia",
@@ -1069,7 +1069,7 @@ dependencies = [
 [[package]]
 name = "hephaestus-cuda"
 version = "0.29.0"
-source = "git+https://github.com/ryancinsight/hephaestus.git#e499d4898d28d526d07c4bca2052b99854c49ce3"
+source = "git+https://github.com/ryancinsight/hephaestus.git#e6f9744bbba9ea8ecbcd4a2b7815605e55492092"
 dependencies = [
  "eunomia",
  "hephaestus-core",
@@ -1085,7 +1085,7 @@ dependencies = [
 [[package]]
 name = "hephaestus-wgpu"
 version = "0.29.0"
-source = "git+https://github.com/ryancinsight/hephaestus.git#e499d4898d28d526d07c4bca2052b99854c49ce3"
+source = "git+https://github.com/ryancinsight/hephaestus.git#e6f9744bbba9ea8ecbcd4a2b7815605e55492092"
 dependencies = [
  "eunomia",
  "futures",
@@ -1194,8 +1194,8 @@ checksum = "20870f649af7073d53e38067b2a84312175d56ea15217e1b15bc83506ec50afb"
 
 [[package]]
 name = "leto"
-version = "0.51.0"
-source = "git+https://github.com/ryancinsight/leto.git#b65e6e07cbbc0cd2ec870ed781da72751f161806"
+version = "0.52.0"
+source = "git+https://github.com/ryancinsight/leto.git#31334bd0428b6363b7b94a2f5abd58616a80b3bd"
 dependencies = [
  "aequitas",
  "eunomia",
@@ -1206,8 +1206,8 @@ dependencies = [
 
 [[package]]
 name = "leto-ops"
-version = "0.51.0"
-source = "git+https://github.com/ryancinsight/leto.git#b65e6e07cbbc0cd2ec870ed781da72751f161806"
+version = "0.52.0"
+source = "git+https://github.com/ryancinsight/leto.git#31334bd0428b6363b7b94a2f5abd58616a80b3bd"
 dependencies = [
  "eunomia",
  "hermes-simd",
