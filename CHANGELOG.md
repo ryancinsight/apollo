@@ -1,5 +1,18 @@
 # Changelog
 
+## [0.30.0] - Registry provider migration
+
+### Breaking
+
+- [major] The transform crates share Leto 0.51 array views, Eunomia 0.12.1
+  scalars, and Mnemosyne Memory 0.10.2 scratch pools. Update the FFT and
+  sibling transforms together with `apollo-leto-interop` 0.21.0.
+- [major] Use the matching Hephaestus 0.29 backend packages when enabling GPU
+  features. Consumers exchange arrays and device values through one provider
+  version at each boundary.
+
+The provider change is recorded in [ADR 0076](docs/adr/0076-release-scope.md).
+
 ## [Dependency compatibility bridge] - Unreleased
 
 ### Changed

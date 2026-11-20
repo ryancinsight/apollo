@@ -23,9 +23,9 @@ the work.
 
 Each member's capability areas are classified below as Delivered (shipped at
 the basis commit), In scope (a ladder exit or a ladder-current item serves it),
-or Non-goal for 1.0. Ladder milestones: `M-numpy-fft-semantics` (0.30.0),
-`M-spectral-analysis` (0.31.0), `M-imaging-transforms` (0.32.0),
-`M-backend-and-python-reach` (0.33.0), `M-stable-transform-suite` (1.0.0).
+or Non-goal for 1.0. Ladder milestones: `M-numpy-fft-semantics` (0.31.0),
+`M-spectral-analysis` (0.32.0), `M-imaging-transforms` (0.33.0),
+`M-backend-and-python-reach` (0.34.0), `M-stable-transform-suite` (1.0.0).
 Tightening, ratchet and verification items join the current milestone and
 gate no exit; the memory item with a public API (bounded caches) names one.
 
@@ -60,12 +60,26 @@ gate no exit; the memory item with a public API (bounded caches) names one.
 
 ## Version basis
 
-Planned versions track `apollo-fft`, the highest-versioned member (manifest
-0.29.5; newest tag by version `crate-apollo-fft-v0.29.4`). The ladder uses
-successive minors above that tag, then 1.0.0. Sibling crates version
+Planned versions track `apollo-fft`, the highest-versioned member (0.30.0
+for the registry provider migration). The ladder uses successive minors
+above that release, then 1.0.0. Sibling crates version
 independently by the change class of their own changes and never fall below
 their manifest versions. The newest tag by date (`crate-apollo-dctdst-core-v0.17.2`)
 is not the basis: following it would roll `apollo-fft` back.
+
+## Registry provider migration
+
+The authorized provider release advances FFT to 0.30.0 and interop to 0.21.0.
+Each affected sibling advances its minor version and names the matching
+internal dependencies. A single Leto 0.51 instance connects the public array
+views to interop. Mnemosyne Memory 0.10.2 gives the same Eunomia 0.12.1 complex
+type its scratch trait implementation. Hephaestus 0.29 supplies the GPU type
+boundary. The numerical algorithms and capability exit tests are unchanged.
+
+A release must verify the normalized archives against the registry providers
+and the published API baselines. A fresh registry consumer must pass a Leto
+view through interop, run an FFT, and receive the expected impulse spectrum
+using the same scalar identity.
 
 ## Veto points
 

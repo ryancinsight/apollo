@@ -1,5 +1,17 @@
 # Apollo gap audit
 
+## Registry provider migration [major]
+
+- Published interop 0.20.1 and Mnemosyne Arena 0.7.1 introduce separate Leto
+  array and Eunomia scalar identities when Cargo packages Apollo with Leto 0.51
+  and Eunomia 0.12.1. The normalized archives must agree at both type boundaries.
+- Interop 0.21.0 and Mnemosyne Memory 0.10.2 close the array and scratch-buffer
+  gaps. Hephaestus 0.29.0 supplies the corresponding GPU packages.
+- Verify normalized package builds, compare public APIs from the published
+  archive locks, and check a fresh registry consumer before closing the release.
+  Reopen if dependency resolution introduces a second provider or the FFT
+  impulse spectrum or interop borrowing contract fails.
+
 ## N=121 layout coverage stranded in #655 <a id="apollo-fft121-layout-recovery"></a>
 
 - **Finding:** baseline `ae8b0b49` covers four dense pairs. Draft #655 adds 25 offset/permuted/padded pairs but assumes mandatory AVX2/FMA, rejecting ARM.

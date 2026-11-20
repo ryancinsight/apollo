@@ -1,6 +1,12 @@
 # Apollo Checklist
 
-Active sprint target: `apollo-fft` 0.29.1 [patch], above published provider cohort 0.29.0.
+Active sprint target: `apollo-fft` 0.30.0 and `apollo-leto-interop` 0.21.0 [major].
+
+## APOLLO-REGISTRY-PROVIDERS [major]
+
+- [ ] [major] Verify the Mnemosyne and Hephaestus releases and the locked provider identities.
+- [ ] [major] Pass source CI, package verification, and the SemVer release gate.
+- [ ] [major] Verify the published archives and a fresh registry consumer.
 
 ## APOLLO-FFT121-LAYOUT-RECOVERY [patch]
 
