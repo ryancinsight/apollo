@@ -1,5 +1,22 @@
 # Changelog
 
+## [0.30.0] - Registry provider migration
+
+### Breaking
+
+- [major] The transform crates share Leto 0.51 array views, Eunomia 0.12.1
+  scalars, and Mnemosyne Memory 0.10.2 scratch pools. Update the FFT and
+  sibling transforms together with `apollo-leto-interop` 0.21.0.
+- [major] Use the matching Hephaestus 0.29 backend packages when enabling GPU
+  features. Consumers exchange arrays and device values through one provider
+  version at each boundary.
+- [major] `fftfreq` and `rfftfreq` compute in the caller's `FloatElement`
+  precision. To retain double-precision results, pass `f64` sample spacing
+  or call `fftfreq::<f64>` or `rfftfreq::<f64>` explicitly. This change first
+  merged in [#709](https://github.com/ryancinsight/apollo/pull/709).
+
+The provider change is recorded in [ADR 0076](docs/adr/0076-release-scope.md).
+
 ## [Dependency compatibility bridge] - Unreleased
 
 ### Changed

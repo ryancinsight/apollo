@@ -1,9 +1,9 @@
 # Apollo Backlog
 
-Milestone ladder; scope in [ADR 0076](docs/adr/0076-release-scope.md). Planned versions track `apollo-fft`, the highest-versioned member (manifest 0.29.5, newest tag by version `crate-apollo-fft-v0.29.4`): successive minors above that tag, then 1.0.0. Sibling crates version independently by change class and never fall below their manifest versions. Each exit names the test or example that proves it. The `exit:` field of a feature item names the test its work adds; a tour example is added by the last serving item of its milestone to land, and the tour of the final block has no serving item until that milestone is decomposed. At the basis commit every exit fails except the DCT core exit of `M-imaging-transforms`, which names a test that already passes. Release and publication need explicit authority.
+Milestone ladder [ADR 0076](docs/adr/0076-release-scope.md). The registry provider migration uses `apollo-fft` 0.30.0 [major]. Capability milestones use successive minors above that release, then 1.0.0. Sibling crates version independently by change class and never fall below their manifest versions. Each exit names the test or example that proves it. The `exit:` field of a feature item names the test its work adds. A tour example is added by the last serving item of its milestone to land, and the tour of the final block has no serving item until that milestone is decomposed. At the basis commit every exit fails except the DCT core exit of `M-imaging-transforms`, which names a test that already passes. Release and publication need explicit authority.
 
 <a id="M-numpy-fft-semantics"></a>
-## M-numpy-fft-semantics — 0.30.0 — call dense FFTs with NumPy and SciPy semantics
+## M-numpy-fft-semantics — 0.31.0 — call dense FFTs with NumPy and SciPy semantics
 - needs: none
 - exit: run NumPy-semantics transforms that check their own results: `cargo run -p apollo-fft --example numpy_semantics_tour`
 - exit: scale a transform in orthonormal and forward modes at every rank: `cargo nextest run -p apollo-fft --no-tests=fail -E 'binary_id(=apollo-fft::normalization_modes) & test(=impulse_and_constant_spectra_in_every_mode_and_rank)'`
@@ -15,7 +15,7 @@ Milestone ladder; scope in [ADR 0076](docs/adr/0076-release-scope.md). Planned v
 - non-goals: GPU normalization (Hephaestus owns it); real-input N-D plans; new kernels.
 
 <a id="M-spectral-analysis"></a>
-## M-spectral-analysis — 0.31.0 — analyze signals in windowed, zoomed and multiresolution form
+## M-spectral-analysis — 0.32.0 — analyze signals in windowed, zoomed and multiresolution form
 - needs: M-numpy-fft-semantics
 - exit: run a windowed time-frequency analysis that checks its own results: `cargo run -p apollo-stft --example time_frequency_tour`
 - exit: invert the STFT of every window family at half and quarter hops: `cargo nextest run -p apollo-stft --no-tests=fail -E 'binary_id(=apollo-stft::windows) & test(=reconstruction_within_bound_for_every_window_at_half_and_quarter_hops)'`
@@ -26,7 +26,7 @@ Milestone ladder; scope in [ADR 0076](docs/adr/0076-release-scope.md). Planned v
 - non-goals: streaming STFT; GPU window variants; wavelet packets, SWT and inverse CWT; fast and non-square CZT inverse.
 
 <a id="M-imaging-transforms"></a>
-## M-imaging-transforms — 0.32.0 — grid, project and compress image data
+## M-imaging-transforms — 0.33.0 — grid, project and compress image data
 - needs: M-spectral-analysis
 - exit: reconstruct a disc phantom from projections that checks its own error: `cargo run -p apollo-radon --example disc_phantom_reconstruction`
 - exit: grid non-uniform 2-D samples to a requested tolerance: `cargo nextest run -p apollo-nufft --no-tests=fail -E 'binary_id(=apollo-nufft::plan_2d) & test(=fast_matches_direct_within_requested_tolerance)'`
@@ -37,7 +37,7 @@ Milestone ladder; scope in [ADR 0076](docs/adr/0076-release-scope.md). Planned v
 - non-goals: NUFFT Type-3 and GPU 2-D; DCT/DST types V-VIII.
 
 <a id="M-backend-and-python-reach"></a>
-## M-backend-and-python-reach — 0.33.0 — run one transform through any backend and from Python
+## M-backend-and-python-reach — 0.34.0 — run one transform through any backend and from Python
 - needs: M-imaging-transforms
 - exit: run a transform generically over a backend and check its own result: `cargo run -p apollo-fft --example backend_generic_roundtrip`
 - exit: execute plans through the backend seam against the DFT oracle: `cargo nextest run -p apollo-fft --no-tests=fail -E 'binary_id(=apollo-fft::backend_execution) & test(=generic_conformance_passes_the_dft_oracle_on_cpu)'`

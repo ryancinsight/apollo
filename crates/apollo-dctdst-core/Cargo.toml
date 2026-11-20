@@ -10,7 +10,7 @@ description = "Direct scalar DCT-III kernels"
 readme = "README.md"
 
 [dependencies]
-eunomia.workspace = true
+eunomia = { version = ">=0.10.0, <0.13.0", default-features = false, features = ["std"] }
 
 [lints]
 workspace = true
