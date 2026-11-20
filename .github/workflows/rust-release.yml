@@ -68,9 +68,33 @@ jobs:
   publish-pending:
     name: Publish pending versions
     if: github.event_name == 'push' || github.event_name == 'schedule'
-    uses: ryancinsight/atlas/.github/workflows/crates-publish-pending.yml@50802ef4c975bdb1e668b94a700d8310f0348e9c
+    uses: ryancinsight/atlas/.github/workflows/crates-publish-pending.yml@f90b48f6785c3235b805977da878eba5f9140c92
     permissions:
       contents: write # creates the crate-<package>-v<version> releases.
       id-token: write # OIDC trusted publishing; no stored registry token.
     with:
       rust-toolchain: "1.97.0"
+      semver-baseline-source: locked-registry
+      cohort-json: >-
+        {
+          "apollo-czt":"0.13.0",
+          "apollo-dctdst":"0.13.0",
+          "apollo-dht":"0.13.0",
+          "apollo-fft":"0.30.0",
+          "apollo-frft":"0.12.0",
+          "apollo-fwht":"0.12.0",
+          "apollo-gft":"0.13.0",
+          "apollo-hilbert":"0.15.0",
+          "apollo-leto-interop":"0.21.0",
+          "apollo-mellin":"0.14.0",
+          "apollo-ntt":"0.12.0",
+          "apollo-nufft":"0.11.0",
+          "apollo-qft":"0.12.0",
+          "apollo-radon":"0.13.0",
+          "apollo-sdft":"0.11.0",
+          "apollo-sft":"0.12.0",
+          "apollo-sht":"0.10.0",
+          "apollo-stft":"0.12.0",
+          "apollo-validation":"0.6.0",
+          "apollo-wavelet":"0.13.0"
+        }
