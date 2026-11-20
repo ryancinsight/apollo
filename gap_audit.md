@@ -11,6 +11,10 @@
   archive locks, and check a fresh registry consumer before closing the release.
   Reopen if dependency resolution introduces a second provider or the FFT
   impulse spectrum or interop borrowing contract fails.
+- The first automated release stopped when fresh baseline resolution chose
+  incompatible Leto dependencies for apollo-ntt 0.11.2. The release gate now
+  builds the published archive with its shipped lock. Fresh candidate package
+  compilation remains a separate prerequisite for publication.
 
 ## N=121 layout coverage stranded in #655 <a id="apollo-fft121-layout-recovery"></a>
 
