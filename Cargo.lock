@@ -1056,8 +1056,8 @@ checksum = "2304e00983f87ffb38b55b444b5e3b60a884b5d30c0fca7d82fe33449bbe55ea"
 
 [[package]]
 name = "hephaestus-core"
-version = "0.29.0"
-source = "git+https://github.com/ryancinsight/hephaestus.git#e6f9744bbba9ea8ecbcd4a2b7815605e55492092"
+version = "0.30.0"
+source = "git+https://github.com/ryancinsight/hephaestus.git#bef4f973ab38fd02585a62a91dc7051a0c74cff6"
 dependencies = [
  "aequitas",
  "eunomia",
@@ -1068,8 +1068,8 @@ dependencies = [
 
 [[package]]
 name = "hephaestus-cuda"
-version = "0.29.0"
-source = "git+https://github.com/ryancinsight/hephaestus.git#e6f9744bbba9ea8ecbcd4a2b7815605e55492092"
+version = "0.30.0"
+source = "git+https://github.com/ryancinsight/hephaestus.git#bef4f973ab38fd02585a62a91dc7051a0c74cff6"
 dependencies = [
  "eunomia",
  "hephaestus-core",
@@ -1084,8 +1084,8 @@ dependencies = [
 
 [[package]]
 name = "hephaestus-wgpu"
-version = "0.29.0"
-source = "git+https://github.com/ryancinsight/hephaestus.git#e6f9744bbba9ea8ecbcd4a2b7815605e55492092"
+version = "0.30.0"
+source = "git+https://github.com/ryancinsight/hephaestus.git#bef4f973ab38fd02585a62a91dc7051a0c74cff6"
 dependencies = [
  "eunomia",
  "futures",
