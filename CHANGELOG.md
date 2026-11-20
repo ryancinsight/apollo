@@ -10,6 +10,10 @@
 - [major] Use the matching Hephaestus 0.29 backend packages when enabling GPU
   features. Consumers exchange arrays and device values through one provider
   version at each boundary.
+- [major] `fftfreq` and `rfftfreq` compute in the caller's `FloatElement`
+  precision. To retain double-precision results, pass `f64` sample spacing
+  or call `fftfreq::<f64>` or `rfftfreq::<f64>` explicitly. This change first
+  merged in [#709](https://github.com/ryancinsight/apollo/pull/709).
 
 The provider change is recorded in [ADR 0076](docs/adr/0076-release-scope.md).
 
