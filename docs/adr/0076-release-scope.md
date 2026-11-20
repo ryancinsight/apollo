@@ -23,9 +23,9 @@ the work.
 
 Each member's capability areas are classified below as Delivered (shipped at
 the basis commit), In scope (a ladder exit or a ladder-current item serves it),
-or Non-goal for 1.0. Ladder milestones: `M-numpy-fft-semantics` (0.31.0),
-`M-spectral-analysis` (0.32.0), `M-imaging-transforms` (0.33.0),
-`M-backend-and-python-reach` (0.34.0), `M-stable-transform-suite` (1.0.0).
+or Non-goal for 1.0. Ladder milestones: `M-numpy-fft-semantics` (0.32.0),
+`M-spectral-analysis` (0.33.0), `M-imaging-transforms` (0.34.0),
+`M-backend-and-python-reach` (0.35.0), `M-stable-transform-suite` (1.0.0).
 Tightening, ratchet and verification items join the current milestone and
 gate no exit; the memory item with a public API (bounded caches) names one.
 
@@ -80,6 +80,14 @@ A release must verify the normalized archives against the registry providers
 and the published API baselines. A fresh registry consumer must pass a Leto
 view through interop, run an FFT, and receive the expected impulse spectrum
 using the same scalar identity.
+
+## Aequitas 0.5 provider migration
+
+FFT 0.31 and Leto interop 0.22 use Leto 0.52 and Hephaestus 0.30.
+Advance each affected sibling by one minor and update the automatic
+publication cohort to those exact releases. An unchanged published
+version with different public array or device types fails the version
+guard. The next capability milestones start above the provider release.
 
 ## Veto points
 

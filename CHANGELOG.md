@@ -1,5 +1,14 @@
 # Changelog
 
+## [0.31.0] - Aequitas 0.5 provider migration
+
+### Breaking
+
+- [major] Move the issued transform cohort to Leto and Leto Ops 0.52 and
+  Hephaestus 0.30. Consumers must update FFT views and accelerator packages
+  together so each Rust boundary receives the same provider type. Match
+  FFT 0.31 with Leto interop 0.22. The transform formulas are unchanged.
+
 ## [0.30.0] - Registry provider migration
 
 ### Breaking

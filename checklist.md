@@ -1,6 +1,12 @@
 # Apollo Checklist
 
-Active sprint target: `apollo-fft` 0.30.0 and `apollo-leto-interop` 0.21.0 [major].
+Active sprint target: `apollo-fft` 0.31.0 and `apollo-leto-interop` 0.22.0 [major].
+
+## APOLLO-AEQUITAS-050 [major]
+
+- [x] [major] Advance affected published transforms and their internal version requirements.
+- [ ] [major] Verify the locked published-provider cohort, native tests and release compatibility.
+- [ ] [major] Verify the issued registry archives and an independent FFT consumer.
 
 ## APOLLO-REGISTRY-PROVIDERS [major]
 
