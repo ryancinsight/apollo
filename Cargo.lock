@@ -110,7 +110,7 @@ dependencies = [
 
 [[package]]
 name = "apollo-czt"
-version = "0.13.0"
+version = "0.14.0"
 dependencies = [
  "apollo-fft",
  "apollo-leto-interop",
@@ -128,7 +128,7 @@ dependencies = [
 
 [[package]]
 name = "apollo-dctdst"
-version = "0.13.0"
+version = "0.14.0"
 dependencies = [
  "apollo-dctdst-core",
  "apollo-fft",
@@ -154,7 +154,7 @@ dependencies = [
 
 [[package]]
 name = "apollo-dht"
-version = "0.13.0"
+version = "0.14.0"
 dependencies = [
  "apollo-fft",
  "apollo-leto-interop",
@@ -172,7 +172,7 @@ dependencies = [
 
 [[package]]
 name = "apollo-fft"
-version = "0.30.0"
+version = "0.31.0"
 dependencies = [
  "apollo-bench",
  "apollo-fft-macros",
@@ -212,43 +212,6 @@ dependencies = [
 
 [[package]]
 name = "apollo-frft"
-version = "0.12.0"
-dependencies = [
- "apollo-fft",
- "apollo-leto-interop",
- "eunomia",
- "hephaestus-core",
- "hephaestus-wgpu",
- "hermes-simd",
- "leto",
- "leto-ops",
- "mnemosyne-memory",
- "moirai-runtime",
- "proptest",
- "serde",
- "thiserror 2.0.21",
-]
-
-[[package]]
-name = "apollo-fwht"
-version = "0.12.0"
-dependencies = [
- "apollo-fft",
- "apollo-leto-interop",
- "eunomia",
- "hephaestus-core",
- "hephaestus-wgpu",
- "hermes-simd",
- "leto",
- "mnemosyne-memory",
- "moirai-runtime",
- "proptest",
- "serde",
- "thiserror 2.0.21",
-]
-
-[[package]]
-name = "apollo-gft"
 version = "0.13.0"
 dependencies = [
  "apollo-fft",
@@ -267,8 +230,45 @@ dependencies = [
 ]
 
 [[package]]
+name = "apollo-fwht"
+version = "0.13.0"
+dependencies = [
+ "apollo-fft",
+ "apollo-leto-interop",
+ "eunomia",
+ "hephaestus-core",
+ "hephaestus-wgpu",
+ "hermes-simd",
+ "leto",
+ "mnemosyne-memory",
+ "moirai-runtime",
+ "proptest",
+ "serde",
+ "thiserror 2.0.21",
+]
+
+[[package]]
+name = "apollo-gft"
+version = "0.14.0"
+dependencies = [
+ "apollo-fft",
+ "apollo-leto-interop",
+ "eunomia",
+ "hephaestus-core",
+ "hephaestus-wgpu",
+ "hermes-simd",
+ "leto",
+ "leto-ops",
+ "mnemosyne-memory",
+ "moirai-runtime",
+ "proptest",
+ "serde",
+ "thiserror 2.0.21",
+]
+
+[[package]]
 name = "apollo-hilbert"
-version = "0.15.0"
+version = "0.16.0"
 dependencies = [
  "apollo-fft",
  "apollo-leto-interop",
@@ -286,14 +286,14 @@ dependencies = [
 
 [[package]]
 name = "apollo-leto-interop"
-version = "0.21.0"
+version = "0.22.0"
 dependencies = [
  "leto",
 ]
 
 [[package]]
 name = "apollo-mellin"
-version = "0.14.0"
+version = "0.15.0"
 dependencies = [
  "apollo-bench",
  "apollo-fft",
@@ -312,7 +312,7 @@ dependencies = [
 
 [[package]]
 name = "apollo-ntt"
-version = "0.12.0"
+version = "0.13.0"
 dependencies = [
  "apollo-bench",
  "apollo-fft",
@@ -331,7 +331,7 @@ dependencies = [
 
 [[package]]
 name = "apollo-nufft"
-version = "0.11.0"
+version = "0.12.0"
 dependencies = [
  "apollo-bench",
  "apollo-fft",
@@ -368,7 +368,7 @@ dependencies = [
 
 [[package]]
 name = "apollo-qft"
-version = "0.12.0"
+version = "0.13.0"
 dependencies = [
  "apollo-bench",
  "apollo-fft",
@@ -388,7 +388,7 @@ dependencies = [
 
 [[package]]
 name = "apollo-radon"
-version = "0.13.0"
+version = "0.14.0"
 dependencies = [
  "apollo-bench",
  "apollo-fft",
@@ -407,7 +407,7 @@ dependencies = [
 
 [[package]]
 name = "apollo-sdft"
-version = "0.11.0"
+version = "0.12.0"
 dependencies = [
  "apollo-fft",
  "apollo-leto-interop",
@@ -425,7 +425,7 @@ dependencies = [
 
 [[package]]
 name = "apollo-sft"
-version = "0.12.0"
+version = "0.13.0"
 dependencies = [
  "apollo-bench",
  "apollo-fft",
@@ -444,7 +444,7 @@ dependencies = [
 
 [[package]]
 name = "apollo-sht"
-version = "0.10.0"
+version = "0.11.0"
 dependencies = [
  "apollo-fft",
  "apollo-leto-interop",
@@ -462,7 +462,7 @@ dependencies = [
 
 [[package]]
 name = "apollo-stft"
-version = "0.12.0"
+version = "0.13.0"
 dependencies = [
  "apollo-bench",
  "apollo-fft",
@@ -481,7 +481,7 @@ dependencies = [
 
 [[package]]
 name = "apollo-validation"
-version = "0.6.0"
+version = "0.7.0"
 dependencies = [
  "apollo-czt",
  "apollo-dctdst",
@@ -514,7 +514,7 @@ dependencies = [
 
 [[package]]
 name = "apollo-wavelet"
-version = "0.13.0"
+version = "0.14.0"
 dependencies = [
  "apollo-bench",
  "apollo-fft",
