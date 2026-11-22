@@ -1,5 +1,14 @@
 # Apollo Checklist
 
+## Stable release checklist
+
+Basis `7b70b328f2bb`, representative manifest `apollo-fft 0.31.0`. Target 1.0.0. [Backlog item](backlog.md#apollo-stable-qualification).
+
+- [ ] [minor] Run the NumPy semantics tour and the milestone's impulse and constant-spectrum tests for each supported rank, normalization and selected axis. Record the input shape, expected normalization and maximum derived error.
+- [ ] [minor] Close the spectral analysis, imaging transforms, backend and Python milestones in their declared order. Exercise plans against direct transforms and real devices for each supported route.
+- [ ] [major] Qualify the stable transform suite against a registry-only caller of FFT and Leto Interop. Compare versions per crate before selecting the release cohort.
+- [ ] [patch] Run the [release scope](docs/adr/0076-release-scope.md) exits and attach reviewed, exact-revision evidence for this member’s [Atlas qualification criteria](https://github.com/ryancinsight/atlas/blob/17b0124a7548ad81e817284afc5cb115c1d1bc78/docs/parity/repositories.json).
+
 Active sprint target: `apollo-fft` 0.31.0 and `apollo-leto-interop` 0.22.0 [major].
 
 ## APOLLO-AEQUITAS-050 [major]
