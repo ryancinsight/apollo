@@ -1,5 +1,9 @@
 # Apollo gap audit
 
+## Verified downstream provider migration
+
+A new external Cargo project resolved the consuming package without a pre-existing lock or provider overrides. Its registry graph includes `hephaestus-core 0.32.0`, `hephaestus-cuda 0.32.0`, `hephaestus-wgpu 0.32.0`. The committed lock passes 682 executed tests covering FFT plan, transform and device-adapter contracts (15 tests excluded or skipped in that run). The full workspace check includes all targets with the Apollo FFT WGPU and CUDA features. The column-routing regression uses the same Hermes lane-width constant as production.
+
 ## Incremental release baseline
 
 Reviewed [apollo-fft 0.31.0](crates/apollo-fft/Cargo.toml) at [5226a46d73fd](https://github.com/ryancinsight/apollo/tree/5226a46d73fdc9481ff4bc29b084f91873c405e3). The exact version appears in the [registry](https://crates.io/crates/apollo-fft/0.31.0).
