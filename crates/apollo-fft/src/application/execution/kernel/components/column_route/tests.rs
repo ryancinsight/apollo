@@ -21,7 +21,7 @@ where
     /// Whether this host runs the route at this scalar: the frame, at four
     /// or two complexes a register.
     fn route_runs() -> bool {
-        matches!(Self::FRAME_LANES, 4 | 8) && vector_frame_available()
+        matches!(<Self as LaneScalar>::FRAME_LANES, 4 | 8) && vector_frame_available()
     }
 }
 
