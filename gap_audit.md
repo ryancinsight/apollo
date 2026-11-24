@@ -8,7 +8,7 @@ A new external Cargo project resolved the consuming package without a pre-existi
 
 Reviewed [apollo-fft 0.31.0](crates/apollo-fft/Cargo.toml) at [5226a46d73fd](https://github.com/ryancinsight/apollo/tree/5226a46d73fdc9481ff4bc29b084f91873c405e3). The exact version appears in the [registry](https://crates.io/crates/apollo-fft/0.31.0).
 
-The next [minor] checkpoint uses [book fft roundtrip](crates/apollo-fft/examples/book_fft_roundtrip.rs). [Target version and acceptance criteria](checklist.md#stable-release-checklist).
+The next [major] checkpoint uses [book fft roundtrip](crates/apollo-fft/examples/book_fft_roundtrip.rs). [Target version and acceptance criteria](checklist.md#stable-release-checklist).
 
 ## Registry provider migration [major]
 
