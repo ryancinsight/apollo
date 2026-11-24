@@ -131,8 +131,11 @@ impl CircleDomain {
             .iter()
             .map(|&x| CirclePoint { x, y: y_of(x) })
             .collect();
-        let conjugates: Vec<CirclePoint> = points.iter().map(|point| point.conj(modulus)).collect();
-        points.extend(conjugates);
+        let half_points = points.len();
+        points.reserve(half_points);
+        for index in 0..half_points {
+            points.push(points[index].conj(modulus));
+        }
 
         let half = inverse(2, modulus);
         let inverse_y: Vec<u64> = points[..half_size].iter().map(|point| point.y).collect();
@@ -140,28 +143,27 @@ impl CircleDomain {
             .iter()
             .map(|&y| inverse(mod_mul(2, y, modulus), modulus))
             .collect();
-        // The x levels: the ordered `S_n`, then `π` of its first half, and so on
-        // down to a single pair. They are written back to back into one buffer
-        // with the offset table beside them, so the transform walks levels in
-        // order instead of following one pointer per pass.
+        // The x levels: the ordered `S_n`, then `π` of its first half, and so
+        // on down to a single pair. They are written back to back. The
+        // geometric lengths derive their boundaries, and the shrinking work
+        // buffer is updated in place so plan construction never allocates one
+        // temporary per level.
         let mut inverse_values: Vec<u64> = Vec::with_capacity(half_size.saturating_sub(1));
-        let mut inverse_offsets: Vec<usize> = vec![0];
-        let mut level: Vec<u64> = ordered;
+        let mut level = ordered;
         while level.len() >= 2 {
             let twiddle_count = level.len() / 2;
             inverse_values.extend_from_slice(&level[..twiddle_count]);
-            inverse_offsets.push(inverse_values.len());
-            level = level[..twiddle_count]
-                .iter()
-                .map(|&x| square_x(x, modulus))
-                .collect();
+            for x in &mut level[..twiddle_count] {
+                *x = square_x(*x, modulus);
+            }
+            level.truncate(twiddle_count);
         }
         let forward_values: Vec<u64> = inverse_values
             .iter()
             .map(|&x| inverse(mod_mul(2, x, modulus), modulus))
             .collect();
-        let inverse_x = LevelTwiddles::from_parts(inverse_values, inverse_offsets.clone());
-        let forward_x = LevelTwiddles::from_parts(forward_values, inverse_offsets);
+        let inverse_x = LevelTwiddles::from_values(inverse_values);
+        let forward_x = LevelTwiddles::from_values(forward_values);
         Ok(Self {
             modulus,
             log_size,
@@ -214,24 +216,10 @@ impl CircleDomain {
         assert_eq!(data.len(), self.len(), "circle FFT length mismatch");
         let p = self.modulus;
         let half_len = data.len() / 2;
-        let (even, odd) = data.split_at_mut(half_len);
-        for ((a, b), &twiddle) in even.iter_mut().zip(odd.iter_mut()).zip(&self.forward_y) {
-            let sum = mod_add(*a, *b, p);
-            let difference = mod_sub(*a, *b, p);
-            *a = mod_mul(sum, self.half, p);
-            *b = mod_mul(difference, twiddle, p);
-        }
+        apply_forward_pair_stage(data, &self.forward_y, self.half, p);
         let mut block = half_len;
         for twiddles in self.forward_x.levels() {
-            for chunk in data.chunks_exact_mut(block) {
-                let (even, odd) = chunk.split_at_mut(block / 2);
-                for ((a, b), &twiddle) in even.iter_mut().zip(odd.iter_mut()).zip(twiddles) {
-                    let sum = mod_add(*a, *b, p);
-                    let difference = mod_sub(*a, *b, p);
-                    *a = mod_mul(sum, self.half, p);
-                    *b = mod_mul(difference, twiddle, p);
-                }
-            }
+            apply_forward_x_stage(data, block, twiddles, self.half, p);
             block /= 2;
         }
         bit_reverse_permute(data);
@@ -248,26 +236,71 @@ impl CircleDomain {
         bit_reverse_permute(data);
         let mut block = 2;
         for twiddles in self.inverse_x.levels_reversed() {
-            for chunk in data.chunks_exact_mut(block) {
-                let (even, odd) = chunk.split_at_mut(block / 2);
-                for ((a, b), &twiddle) in even.iter_mut().zip(odd.iter_mut()).zip(twiddles) {
-                    let scaled = mod_mul(*b, twiddle, p);
-                    let value = *a;
-                    *a = mod_add(value, scaled, p);
-                    *b = mod_sub(value, scaled, p);
-                }
-            }
+            apply_inverse_x_stage(data, block, twiddles, p);
             block *= 2;
         }
-        let half_len = data.len() / 2;
-        let (even, odd) = data.split_at_mut(half_len);
-        for ((a, b), &twiddle) in even.iter_mut().zip(odd.iter_mut()).zip(&self.inverse_y) {
-            let scaled = mod_mul(*b, twiddle, p);
-            let value = *a;
-            *a = mod_add(value, scaled, p);
-            *b = mod_sub(value, scaled, p);
+        apply_inverse_pair_stage(data, &self.inverse_y, p);
+    }
+}
+
+/// Apply the `y`-split stage for the conjugate pair layout: every first-half
+/// element is paired with its conjugate in the second half and updated with the
+/// same `1 / (2y)` twiddle used by the basis decomposition.
+fn apply_forward_pair_stage(data: &mut [u64], twiddles: &[u64], half: u64, modulus: u64) {
+    let (left, right) = data.split_at_mut(data.len() / 2);
+    for ((a, b), &twiddle) in left.iter_mut().zip(right.iter_mut()).zip(twiddles) {
+        let (sum, difference) = forward_butterfly_pair(*a, *b, twiddle, half, modulus);
+        *a = sum;
+        *b = difference;
+    }
+}
+
+/// Inverse of [`apply_forward_pair_stage`]: unwind the conjugate-split using the
+/// `y` twiddle values without moving data from the pair layout.
+fn apply_inverse_pair_stage(data: &mut [u64], twiddles: &[u64], modulus: u64) {
+    let (left, right) = data.split_at_mut(data.len() / 2);
+    for ((a, b), &twiddle) in left.iter_mut().zip(right.iter_mut()).zip(twiddles) {
+        let (value, scaled) = inverse_butterfly_pair(*a, *b, twiddle, modulus);
+        *a = value;
+        *b = scaled;
+    }
+}
+
+/// Apply one `x`-split stage to each block: each block is split in half, then
+/// the `±x` pair is combined with the matching twiddle and the block is kept in
+/// place so the bit-reversal permutation is still the single final reorder.
+fn apply_forward_x_stage(data: &mut [u64], block: usize, twiddles: &[u64], half: u64, modulus: u64) {
+    for chunk in data.chunks_exact_mut(block) {
+        let (even, odd) = chunk.split_at_mut(block / 2);
+        for ((a, b), &twiddle) in even.iter_mut().zip(odd.iter_mut()).zip(twiddles) {
+            let (sum, difference) = forward_butterfly_pair(*a, *b, twiddle, half, modulus);
+            *a = sum;
+            *b = difference;
         }
     }
+}
+
+fn apply_inverse_x_stage(data: &mut [u64], block: usize, twiddles: &[u64], modulus: u64) {
+    for chunk in data.chunks_exact_mut(block) {
+        let (even, odd) = chunk.split_at_mut(block / 2);
+        for ((a, b), &twiddle) in even.iter_mut().zip(odd.iter_mut()).zip(twiddles) {
+            let (value, scaled) = inverse_butterfly_pair(*a, *b, twiddle, modulus);
+            *a = value;
+            *b = scaled;
+        }
+    }
+}
+
+fn forward_butterfly_pair(a: u64, b: u64, twiddle: u64, half: u64, modulus: u64) -> (u64, u64) {
+    let sum = mod_add(a, b, modulus);
+    let difference = mod_sub(a, b, modulus);
+    (mod_mul(sum, half, modulus), mod_mul(difference, twiddle, modulus))
+}
+
+fn inverse_butterfly_pair(a: u64, b: u64, twiddle: u64, modulus: u64) -> (u64, u64) {
+    let scaled = mod_mul(b, twiddle, modulus);
+    let value = a;
+    (mod_add(value, scaled, modulus), mod_sub(value, scaled, modulus))
 }
 
 /// `π` on the `x` axis: `2x² − 1`.
@@ -314,7 +347,8 @@ fn order_for_splitting(values: &[u64], modulus: u64) -> Vec<u64> {
 
 #[cfg(test)]
 mod tests {
-    use super::{square_x, CircleDomain};
+    use super::{apply_forward_pair_stage, forward_butterfly_pair, square_x, CircleDomain};
+    use crate::domain::contracts::circle::inverse;
     use crate::domain::contracts::config::MERSENNE31;
     use crate::domain::contracts::math::mod_mul;
 
@@ -420,6 +454,25 @@ mod tests {
             domain.forward(&mut data);
             assert_eq!(data, original, "n=2^{log_size} the other way");
         }
+    }
+
+    #[test]
+    fn pair_stages_match_the_manual_butterfly_formula() {
+        let modulus = MERSENNE31;
+        let half = inverse(2, modulus);
+        let twiddle = 7u64;
+        let mut data = vec![17, 23, 31, 41];
+        let original = data.clone();
+
+        apply_forward_pair_stage(&mut data, &[twiddle; 2], half, modulus);
+        let expected = [
+            forward_butterfly_pair(original[0], original[2], twiddle, half, modulus),
+            forward_butterfly_pair(original[1], original[3], twiddle, half, modulus),
+        ];
+        assert_eq!(data[0], expected[0].0, "forward-left pair 0");
+        assert_eq!(data[2], expected[0].1, "forward-right pair 0");
+        assert_eq!(data[1], expected[1].0, "forward-left pair 1");
+        assert_eq!(data[3], expected[1].1, "forward-right pair 1");
     }
 
     #[test]

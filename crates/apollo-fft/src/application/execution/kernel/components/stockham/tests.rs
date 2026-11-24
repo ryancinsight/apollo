@@ -431,7 +431,7 @@ fn test_small_sizes_correctness() {
         for k in 0..n {
             let mut sum = eunomia::Complex::<T>::ZERO;
             for j in 0..n {
-                let theta = two_pi * T::from_f64((k * j) as f64) / T::from_f64((n) as f64);
+                let theta = two_pi * T::from_count(k * j) / T::from_count(n);
                 let w = eunomia::Complex::new(theta.cos(), sign * theta.sin());
                 sum += input[j] * w;
             }

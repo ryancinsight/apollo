@@ -99,9 +99,11 @@ mnemosyne = { package = "mnemosyne-memory", version = "0.10.0", git = "https://g
 melinoe = { version = "0.10.0", git = "https://github.com/ryancinsight/melinoe.git", default-features = false, features = ["alloc"] }
 # Hermes PR #156 and Leto PR #168 are merged; Cargo.lock records their reviewed
 # default sources. origin/main
+# Keep Apollo on the same Leto source identity as the Atlas local checkout to
+# avoid mixed crate IDs and stale lock entries across the stack.
 hermes-simd = { version = "0.9.1", git = "https://github.com/ryancinsight/hermes.git" }
-leto = { version = ">=0.46.1, <0.51.0", git = "https://github.com/ryancinsight/leto.git" }
-leto-ops = { version = ">=0.46.1, <0.51.0", git = "https://github.com/ryancinsight/leto.git" }
+leto = { version = "0.50.0", path = "../leto/crates/leto" }
+leto-ops = { version = "0.50.0", path = "../leto/crates/leto-ops" }
 hephaestus-wgpu = { version = "0.28.0", git = "https://github.com/ryancinsight/hephaestus.git" }
 hephaestus-core = { version = "0.28.0", git = "https://github.com/ryancinsight/hephaestus.git" }
 hephaestus-cuda = { version = "0.28.0", git = "https://github.com/ryancinsight/hephaestus.git" }
@@ -202,5 +204,13 @@ uninlined_format_args = "allow"
 # (`#![cfg_attr(test, expect(...))]` where a `src/` file's unwraps are all
 # inside `#[cfg(test)]`), which self-expires the moment a file's last unwrap goes.
 unwrap_used = "deny"
+
+[patch."https://github.com/ryancinsight/leto"]
+leto = { path = "../leto/crates/leto" }
+leto-ops = { path = "../leto/crates/leto-ops" }
+
+[patch."https://github.com/ryancinsight/leto.git"]
+leto = { path = "../leto/crates/leto" }
+leto-ops = { path = "../leto/crates/leto-ops" }
 
 # ATLAS-PATH-DEP-AUDIT-2 round-4 closure

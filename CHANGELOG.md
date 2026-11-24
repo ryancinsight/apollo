@@ -4,6 +4,17 @@
 
 ### Changed
 
+- [patch] `apollo-ntt` circle domains derive x-twiddle level boundaries from
+  their geometric value count, removing the offset table for each direction.
+  Construction also shrinks and rewrites one work buffer in place instead of
+  allocating a temporary for every level; transform arithmetic and the
+  contiguous layout are unchanged.
+- [patch] `apollo-ntt`'s forward and inverse butterfly passes now share a single
+  pairwise kernel helper, reducing duplicated modular arithmetic paths while
+  keeping the exact same residue schedule and twiddle ordering.
+- [patch] `apollo-ntt` avoids a temporary conjugate buffer when materializing
+  twin-coset points: the second half of the domain is appended directly from the
+  first half, shrinking peak memory during circle-domain construction.
 - [patch] Admit Leto/Leto-ops 0.50.0 and widen the workspace requirement to
   `>=0.46.1, <0.51.0`. The standalone lock moves only Leto and Leto-ops
   (0.48.0 to 0.50.0) and the Hephaestus core/CUDA/WGPU 0.28.0 source to the

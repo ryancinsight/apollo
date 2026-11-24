@@ -322,7 +322,7 @@ fn exact_half_bin_classification_tracks_the_image_for_every_scalar() {
 }
 
 fn sparse_on_bin_cosine<T: RealField>(len: usize, bin: usize) {
-    let n = T::from_f64(len as f64);
+    let n = T::from_count(len);
     let mut spectrum = vec![Complex::new(T::ZERO, T::ZERO); len];
     let coefficient = Complex::new(n / (T::ONE + T::ONE), T::ZERO);
     spectrum[bin] = coefficient;
