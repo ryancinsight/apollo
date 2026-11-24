@@ -82,3 +82,5 @@
 | [0074](0074-sized-fallback-table-ownership.md) | Sized fallback table ownership | Accepted |
 | [0075](0075-provider-release-receipts.md) | Coordinated provider release receipts | Accepted |
 | [0076](0076-release-scope.md) | Apollo release scope | Accepted |
+| [0077](0077-numpy-fft-semantics-surface.md) | NumPy FFT semantics surface | Proposed |
+| [0078](0078-release-sequence-and-consumers.md) | Release sequence and consumers of the 0.32.0 break | Proposed |

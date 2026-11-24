@@ -4,7 +4,11 @@
 
 Accepted (2026-11-12). Revised 2026-11-13: every workspace member now has a
 disposition, milestones are capabilities, and planned versions follow the
-highest manifest version (judge verdict on PR 705).
+highest manifest version (judge verdict on PR 705). Revised 2026-11-24: [ADR 0077](0077-numpy-fft-semantics-surface.md)
+(Proposed) plans to meet the `apollo-leto-interop` "axis views for the axis
+forms" row with Leto's rank-generic views, since `fft_axes` takes them
+directly (decision 2); the row stays In scope until that lands and the table
+is unchanged.
 
 ## Context
 
