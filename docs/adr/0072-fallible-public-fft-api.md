@@ -4,9 +4,7 @@ Status: Proposed  \
 Date: 2026-10-10  \
 Change class: [major]  \
 Board item: `APOLLO-CAP-FALLIBLE-API` (audit item 7)  \
-Revised: 2026-11-24, counts re-measured at `b5e8b70b`; [ADR 0077](0077-numpy-fft-semantics-surface.md)
-deletes 17 of the 49 plan methods, gives the rest `norm`, and fixes the
-error map and the 0.32.0 release
+Revised: 2026-11-24, counts re-measured at `b5e8b70b` and two claims corrected (silent output, Python checks) because the PR 731 judges found them false in `api/irfft/dimension_1d.rs:124` and `bindings/support.rs:136`; [ADR 0077](0077-numpy-fft-semantics-surface.md) deletes 17 of the 49 plan methods, gives the rest `norm`, adds the `RealFftData` methods and fixes the error map and the 0.32.0 release
 
 ## Context
 
@@ -18,8 +16,14 @@ measured in release at audit time and re-verified 2026-10-10:
 release), and the static-`N` entry panics on a length/`N` mismatch.
 36 lines of `api/*.rs` carry `debug_assert_eq!` shape checks at
 `b5e8b70b`, and `Shape*::new(..).expect(..)` appears at nearly every
-top-level entry. Nothing corrupts output silently — the failure mode
-is a panic where a service or binding needs an error.
+top-level entry. A missing release check usually ends in a panic where a
+service or binding needs an error, but not always: `ifft_1d_array_into`
+(`api/irfft/dimension_1d.rs:124`) with `field_hat` of length 10, `out` 8 and
+`scratch` 10 runs the real split over bins 0 to 4 and returns eight wrong
+reals without panicking, and `_into_spectrum_scratch` is silent in release
+(its only check is the `debug_assert_eq!` at :102). The 2-D and 3-D
+analogues were not read; `APOLLO-COR-IRFFT-SPLIT-LENGTH` classifies all 36
+sites.
 
 Two facts decide the shape of the fix. First, the acceptance oracle
 requires the API to *return* the specific `ApolloError` variant with
@@ -47,10 +51,12 @@ Make the fallibility total at the public boundary, with no
   static-`N` entries check the runtime length against `N` the same
   way.
 - The 32 public plan-level `forward_*`/`inverse_*` execute methods
-  that ADR 0077 keeps return `ApolloResult`, validating buffer length (and view shape)
-  against the plan before dispatching. Internal kernel callers,
-  which hold correctly-sized buffers by construction, propagate
-  with `?`; no `expect` shims remain on migrated paths.
+  that ADR 0077 keeps, and the `RealFftData` execute methods, return
+  `ApolloResult`, validating buffer length (and view shape) against the plan
+  before dispatching. Kernel callers inside the crate build the plan from the
+  data's own length, so a mismatch is unreachable there; they call a
+  `pub(crate)` core that the checked public method wraps, per ADR 0077
+  decision 3, and no `expect` shim remains on a migrated public path.
 - Kernel-internal invariants stay panics: the Leto
   contiguity/spectrum-shape expects inside the api bodies assert
   postconditions of Apollo's own construction, not input
@@ -59,8 +65,8 @@ Make the fallibility total at the public boundary, with no
   and touch nothing on the success path.
 
 This is [major]: every fallible signature changes, and downstream
-callers (including the Python bindings, which currently re-validate
-everything themselves and can then drop that duplication) update in
+callers (including the Python bindings, which check only C-contiguity and
+precision today, so an empty array reaches the panicking api) update in
 the same release.
 
 ## Alternatives rejected

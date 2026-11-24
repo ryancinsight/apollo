@@ -4,7 +4,10 @@
 
 Accepted (2026-11-12). Revised 2026-11-13: every workspace member now has a
 disposition, milestones are capabilities, and planned versions follow the
-highest manifest version (judge verdict on PR 705).
+highest manifest version (judge verdict on PR 705). Revised 2026-11-24: the
+`apollo-leto-interop` "axis views for the axis forms" row is delivered by
+Leto's rank-generic views, per [ADR 0077](0077-numpy-fft-semantics-surface.md)
+decision 2, because `fft_axes` takes them directly; the table is unchanged.
 
 ## Context
 

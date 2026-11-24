@@ -5,11 +5,9 @@
 - Revised 2026-09-18: slice 1 delivered. QFT and SHT already used the 1-D
   plans' unnormalized inverse, so the only workaround that moved is the 1-D
   NUFFT's normalize-then-multiply.
-- Revised 2026-11-24: slice 2's public shape is proposed in
-  [ADR 0077](0077-numpy-fft-semantics-surface.md): plans and the axis-set
-  `api` functions take the mode, the rank-named `api` functions keep
-  `Backward`, and the `inverse_*_unnorm_*` methods are deleted.
-- Items: `backlog.md#apollo-cap-normalization-modes`
+- Revised 2026-11-24: [ADR 0077](0077-numpy-fft-semantics-surface.md) (Proposed) narrows slice 2's "plans and `api` take the mode" to plans and the axis-set functions, with the rank-named `api` functions on `Backward`, and its fused scale to at most one unfused pass, and deletes the `inverse_*_unnorm_*` methods, because no signature was recorded and the judges of PR 731 found the body ambiguous; the body is rewritten on acceptance; slice 3 is owned by `APOLLO-CAP-KERNEL-SURFACE`.
+- Items: `backlog.md#apollo-cap-normalization-modes`,
+  `backlog.md#apollo-cap-kernel-surface`
 - Evidence: `output/apollo-capability-audit-2026-09-18.md` item 3
 
 ## Context
