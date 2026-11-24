@@ -98,38 +98,29 @@ and `gap_audit.md` now say [major] for 0.32.0, as the ladder and board do.
    entries, so with no plan held the value returns to its post-clear baseline.
    The counting rule is in `APOLLO-MEM-CACHE-BOUNDS`; it presumes
    [ADR 0068](0068-bounded-plan-and-table-caches.md) slice 2.
-5. **Release and consumers.** The first breaking slice to land
-   (`APOLLO-CAP-BATCH-AXIS-ND`) sets `apollo-fft` 0.32.0 and moves the 18
-   sibling `version = "0.31.0"` requirements (`apollo-python` is path-only) in
-   the same commit; publication needs release authority. The overlay patches
-   only the git source of `apollo-fft` (`.cargo/config.toml`) and the Cargo
-   Book says the patched version "will affect whether the patch is used", so
-   git-sourced consumers keep 0.31.0 until each migrates once, against the
-   finished surface. Reverse dependencies at the fetched defaults:
-   - direct `api` calls: kwavers 90 in 42 files (plus 14 plan calls, 2 axis
-     calls, 4 `RealFftData` calls, `FftwCompatible` once), CFDrs 8 in 3,
-     coeus 4 in 1, helios 3 in 1;
-   - requirement edge: ritk, with 10 `kernel::fft_*` calls in 5 files;
-   - transitive: asclepius, through the `coeus-autograd` lock;
-   - unaffected: the other 21 members (`consus` names only
-     `apollo-dctdst-core`); none has an `apollo-fft`/`-nufft`/`-sht` edge.
-
-   Migration order: siblings, coeus, ritk and asclepius, then helios, kwavers
-   and CFDrs. kwavers re-exports `Normalization` and `FftPlan1D/2D/3D`
-   (`kwavers-math/src/fft/mod.rs:18-21`) and exposes
-   `FourierBackend::normalization()`, so its published crates break too.
-   Siblings returning `ApolloResult` (apollo-nufft, apollo-sft) or implementing
-   `GpuTransformPlanner` (apollo-sht) version by `cargo-semver-checks` class,
-   and the CFDrs and ritk requirements follow.
+5. **Release and consumers.** The first breaking slice to land sets
+   `apollo-fft` 0.32.0 with its sibling requirements, so the one git-sourced
+   consumer, coeus (`Cargo.toml:47`, `0.31.0`, no `rev`), lags until
+   `COEUS-APOLLO-NUMPY-FFT` lands. Read from `atlas-stack-overlay.py` and not
+   run: for that window the overlay drops the `apollo-fft` patch and the
+   check exits 1 (REQUIREMENT LAG, PIN DRIFT, stale overlay), so the
+   `atlas-stack-overlay` workflow, not required and already red on Atlas
+   main, stays red. Owner: the upstream integrator, through
+   `ATLAS-APOLLO-NUMPY-FFT-SURFACE`, which records the window. The reverse
+   dependencies, migration order and an unrun hypothesis are in
+   [ADR 0078](0078-release-sequence-and-consumers.md).
 
 ## Rejected alternatives
 
 - **Additive 0.32.0**: a second mode type and fallible siblings beside the
   panicking forms; it contradicts Accepted ADR 0067 and moves the break on.
-- A type-parameter mode (a branch per lane); `norm` on the rank-named
-  functions; an `FftPlanNd`; keeping the plan axis methods;
-  `retained_plan_bytes::<T>()` (several tables have no scalar); bumping the
-  manifest in the last slice (overlay consumers meet each break as it lands).
+- **A type-parameter mode**: bindings choose `norm` at run time; a value
+  costs one branch per call, not the per-lane flag ADR 0067 rejected.
+- **`norm` on the rank-named functions**: a second migration of every caller
+  for a mode `fft_axes` gives at every rank.
+- **An `FftPlanNd`**: its state is per-axis `FftPlan1D`s the bounded plan
+  cache owns. **Keeping the plan axis methods**: a second, rank-limited API.
+- **`retained_plan_bytes::<T>()`**: several tables have no scalar.
 
 ## Consequences
 
@@ -141,7 +132,7 @@ and `gap_audit.md` now say [major] for 0.32.0, as the ladder and board do.
 - The rank-named family overlaps `fft_axes` at ranks 1-3; the stable-suite
   milestone decides whether 1.0 keeps both and files the break typing
   `ApolloError`'s `String` payloads. ADR 0076's interop "axis views" row is
-  delivered by Leto views and carries a revision note.
+  met by Leto views once `fft_axes` lands; its revision note says so.
 
 ## Overturning evidence
 

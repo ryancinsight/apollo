@@ -22,8 +22,8 @@ service or binding needs an error, but not always: `ifft_1d_array_into`
 `scratch` 10 runs the real split over bins 0 to 4 and returns eight wrong
 reals without panicking, and `_into_spectrum_scratch` is silent in release
 (its only check is the `debug_assert_eq!` at :102). The 2-D and 3-D
-analogues were not read; `APOLLO-COR-IRFFT-SPLIT-LENGTH` classifies all 36
-sites.
+analogues were not read; `APOLLO-COR-IRFFT-SPLIT-LENGTH` fixes the two
+forms above and classifies the other 35 sites.
 
 Two facts decide the shape of the fix. First, the acceptance oracle
 requires the API to *return* the specific `ApolloError` variant with
