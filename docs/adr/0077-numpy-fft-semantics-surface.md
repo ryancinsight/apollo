@@ -16,9 +16,10 @@ fixes (the frequency-axes test is in source):
   [ADR 0067](0067-normalization-modes.md) (Accepted) renames and extends it
   and says "plans and `api` take the mode", naming no signature.
 - Axis forms are eight asserting `FftPlan2D`/`FftPlan3D` methods
-  (`{forward,inverse}_axis_complex{,_leto}_inplace`, `axis < 3`). Leto 0.52
-  views are rank-generic (`ArrayViewMut<'_, T, N>`); `fftshift_axes` already
-  takes `ArrayView<'_, T, N>` and `axes: &[usize]` and returns `ApolloResult`.
+  (`{forward,inverse}_axis_complex{,_leto}_inplace`, axis below the plan's
+  rank). Leto 0.52 views are rank-generic (`ArrayViewMut<'_, T, N>`);
+  `fftshift_axes` takes `ArrayView<'_, T, N>` and `axes: &[usize]`, returning
+  `ApolloResult`.
 - None of the 78 `pub fn` in `api/` or the 49 `forward_*`/`inverse_*` methods
   of the 1-D, 2-D and 3-D plans returns a `Result`; inputs are checked by
   `Shape*::new(..).expect`, `assert_eq!` and `debug_assert_eq!`.
@@ -77,13 +78,13 @@ already breaks.
    owner for four-step lengths) over `n_a`: `axis2` when `inner = 1`, else
    `axis0` when `outer = 1`, else `axis1`; an extent of 1 is skipped. No
    kernel and no N-D plan type is added; the eight plan-level axis methods are
-   deleted. Real forms, delivered with the Python surface of
-   `M-backend-and-python-reach`: `rfft_axis(field: ArrayView<'_, T, N>, axis,
-   norm)` returns `ApolloResult<Array<Complex<T::PlanScalar>,
-   MnemosyneStorage<_>, N>>` with `n/2 + 1` bins along `axis`, and
-   `irfft_axis(spectrum, axis, len: Shape1D, norm)` takes the output length as
-   `numpy.fft.irfft(n=...)` does. NumPy's crop and pad (`n`, `s`) are out of
-   scope. Leto views carry every form; apollo-leto-interop adds nothing.
+   deleted. Real forms, delivered by `APOLLO-CAP-PYTHON-SURFACE`:
+   `rfft_axis(field: ArrayView<'_, T, N>, axis, norm)` returns
+   `ApolloResult<Array<Complex<T::PlanScalar>, MnemosyneStorage<_>, N>>` with
+   `n/2 + 1` bins along `axis`, and `irfft_axis(spectrum, axis, len: Shape1D,
+   norm)` takes the output length as `numpy.fft.irfft(n=...)` does. NumPy's
+   crop and pad (`n`, `s`) are out of scope. Leto views carry every form;
+   apollo-leto-interop adds nothing.
 3. **Fallibility.** ADR 0072 applies in place, with no `try_` family, to the
    78 `api` functions and to the 32 plan execute methods left once (1) and (2)
    delete 17 of the 49; `fft_axes` and `ifft_axes` are fallible from birth.
@@ -125,8 +126,7 @@ already breaks.
   the rank-named functions**: a second migration of every caller for a mode
   `fft_axes` gives at every rank.
 - **An `FftPlanNd`**: its state is per-axis `FftPlan1D`s the bounded plan
-  cache owns. **Keeping the plan axis methods**: a second, rank-limited axis
-  API.
+  cache owns. **Keeping plan axis methods**: a second, rank-limited API.
 - **`retained_plan_bytes::<T>()`**: factor, PFA and Rader-order tables have no
   scalar, and the clear it pairs with spans every scalar.
 
