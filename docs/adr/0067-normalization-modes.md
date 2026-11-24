@@ -1,10 +1,14 @@
-# 0067 — Normalization modes through a direction strategy
+# ADR 0067: Normalization modes through a direction strategy
 
 - Status: Accepted
 - Date: 2026-09-18
 - Revised 2026-09-18: slice 1 delivered. QFT and SHT already used the 1-D
   plans' unnormalized inverse, so the only workaround that moved is the 1-D
   NUFFT's normalize-then-multiply.
+- Revised 2026-11-24: slice 2's public shape is proposed in
+  [ADR 0077](0077-numpy-fft-semantics-surface.md): plans and the axis-set
+  `api` functions take the mode, the rank-named `api` functions keep
+  `Backward`, and the `inverse_*_unnorm_*` methods are deleted.
 - Items: `backlog.md#apollo-cap-normalization-modes`
 - Evidence: `output/apollo-capability-audit-2026-09-18.md` item 3
 

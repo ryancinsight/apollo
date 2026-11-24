@@ -3,7 +3,10 @@
 Status: Proposed  \
 Date: 2026-10-10  \
 Change class: [major]  \
-Board item: `APOLLO-CAP-FALLIBLE-API` (audit item 7)
+Board item: `APOLLO-CAP-FALLIBLE-API` (audit item 7)  \
+Revised: 2026-11-24, counts re-measured at `b5e8b70b`; [ADR 0077](0077-numpy-fft-semantics-surface.md)
+deletes 17 of the 49 plan methods, gives the rest `norm`, and fixes the
+error map and the 0.32.0 release
 
 ## Context
 
@@ -13,8 +16,8 @@ measured in release at audit time and re-verified 2026-10-10:
 `fft_1d_complex_into` with a length mismatch panics inside Leto
 `assign` (the API's own check is `debug_assert_eq!`, absent in
 release), and the static-`N` entry panics on a length/`N` mismatch.
-24 `debug_assert_eq!` shape checks remain in `api/*.rs` (down from 36
-at audit), and `Shape*::new(..).expect(..)` appears at nearly every
+36 lines of `api/*.rs` carry `debug_assert_eq!` shape checks at
+`b5e8b70b`, and `Shape*::new(..).expect(..)` appears at nearly every
 top-level entry. Nothing corrupts output silently — the failure mode
 is a panic where a service or binding needs an error.
 
@@ -27,7 +30,7 @@ cannot satisfy an oracle written in terms of returned errors.
 Second, the plan types are public API themselves (`FftPlan1D/2D/3D`
 and the static plans are re-exported from the crate root), so
 validating only at the `api` layer would leave the plan execute
-methods — 41 `forward_*`/`inverse_*` functions taking arbitrary
+methods — 49 `forward_*`/`inverse_*` functions taking arbitrary
 slices and views — panicking on the same mismatches for downstream
 plan holders.
 
@@ -36,15 +39,15 @@ plan holders.
 Make the fallibility total at the public boundary, with no
 `try_`-prefixed parallel API:
 
-- The 59 public `api` functions become fallible, returning
+- The 78 public `api` functions become fallible, returning
   `ApolloResult`, with `Shape*::new(..).expect(..)` replaced by `?`
   (the constructors already return `ApolloResult`) and every
   `debug_assert_eq!` length/shape check replaced by a release-checked
   typed error carrying the expected and actual values. The
   static-`N` entries check the runtime length against `N` the same
   way.
-- The 41 public plan-level `forward_*`/`inverse_*` execute methods
-  return `ApolloResult`, validating buffer length (and view shape)
+- The 32 public plan-level `forward_*`/`inverse_*` execute methods
+  that ADR 0077 keeps return `ApolloResult`, validating buffer length (and view shape)
   against the plan before dispatching. Internal kernel callers,
   which hold correctly-sized buffers by construction, propagate
   with `?`; no `expect` shims remain on migrated paths.
@@ -76,9 +79,10 @@ the same release.
 
 ## Consequences
 
-The executing change migrates all 59 `api` functions, all 41 plan
+The executing change migrates all 78 `api` functions, the 32 plan
 execute methods, and their in-repo callers (kernels composing plans,
-other transform crates, benches, tests, doctests) in one commit,
+other transform crates, benches, tests, doctests) in dependency-ordered
+slices, each compiling with its callers migrated,
 with the audit's decision table committed as a release-mode test
 asserting the exact `ApolloError` variant and values per cell, plus
 a bitwise-equality guard on valid inputs.

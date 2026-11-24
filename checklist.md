@@ -2,7 +2,7 @@
 
 ## Stable release checklist
 
-Basis `5226a46d73fd`, representative manifest `apollo-fft 0.31.0`. Target 1.0.0. [Backlog item](backlog.md#apollo-stable-qualification).
+Basis `5226a46d73fd`, representative manifest `apollo-fft 0.31.0`. Target 1.0.0. [Milestone ladder](backlog.md#M-numpy-fft-semantics).
 
 - [ ] [minor] Run the NumPy semantics tour and the milestone's impulse and constant-spectrum tests for each supported rank, normalization and selected axis. Record the input shape, expected normalization and maximum derived error.
 - [ ] [minor] Close the spectral analysis, imaging transforms, backend and Python milestones in their declared order. Exercise plans against direct transforms and real devices for each supported route.
