@@ -1,5 +1,7 @@
 # Apollo Workspace
 
+[Read the user manual](https://ryancinsight.github.io/apollo/) for concepts and examples.
+
 Apollo is a standalone workspace for reusable Fourier transform planning, execution, validation, backend adapters, and Python bindings.
 
 Warm FFT execution retains the tables required by its selected native route.

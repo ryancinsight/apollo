@@ -25,3 +25,8 @@ specialized transforms with a shared plan cache and GPU dispatch hooks.
 4. DHT, NTT, wavelet, and STFT transforms.
 5. The plan cache architecture.
 6. GPU transform dispatch.
+
+## Start here
+
+1. Read [Real and Complex FFT](fft.md) for the core concepts.
+2. Follow [FFT Round-Trip](examples/fft_roundtrip.md) for a worked Rust example.
