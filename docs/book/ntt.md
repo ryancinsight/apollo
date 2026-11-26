@@ -22,7 +22,7 @@ the crate default prime; `with_modulus` takes an explicit prime `p` with
 
 ## Polynomial Multiplication
 
-```rust
+```rust,edition2021
 {{#include ../../crates/apollo-ntt/examples/book_ntt_polymul.rs}}
 ```
 

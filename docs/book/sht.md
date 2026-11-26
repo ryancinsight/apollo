@@ -5,7 +5,7 @@ harmonics — the sphere's analogue of the Fourier basis — for analysis and
 synthesis of global fields. Apollo owns the transforms in `apollo-sht`,
 built around `ShtPlan`.
 
-```rust
+```rust,edition2021
 {{#include ../../crates/apollo-sht/examples/book_sht_constant.rs}}
 ```
 
