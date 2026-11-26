@@ -49,7 +49,10 @@ fn main() {
     assert_eq!(freqs.len(), n / 2 + 1);
     let nyquist = freqs[n / 2];
     assert!((nyquist - sample_rate / 2.0).abs() < 1e-12);
-    println!("search bins      : {} (0 Hz .. +{nyquist:.0} Hz)", freqs.len());
+    println!(
+        "search bins      : {} (0 Hz .. +{nyquist:.0} Hz)",
+        freqs.len()
+    );
 
     // ── Find the dominant bin (DC through Nyquist) ──
     let magnitudes: Vec<f64> = (0..freqs.len())
