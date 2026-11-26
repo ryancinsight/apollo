@@ -1,13 +1,27 @@
 # Apollo Provider Contract
 
-Apollo consumes provider crates through their Git default branches. Provider
-changes in Eunomia, Moirai, Mnemosyne, Melinoe, Hermes, Leto, or Hephaestus
-must be merged before Apollo refreshes its lockfile. `Cargo.lock` is the sole
-reproducibility pin; committed Apollo manifests must not carry provider
-revisions or local path overrides.
+The Git workspace takes provider requirements from `Cargo.toml`, and its
+committed `Cargo.lock` pins the resolved graph, including revisions for
+providers sourced from Git. Land upstream changes before refreshing that lock.
+Do not commit a local checkout override in a provider requirement. Every Apollo
+member inherits the workspace's Rust 1.95 minimum; repository validation uses
+the toolchain pinned in `rust-toolchain.toml`.
 
-The resolved provider graph requires Rust 1.95. Every Apollo member inherits
-that minimum version from the workspace package contract.
+## Git and registry compatibility
+
+Published `apollo-fft` 0.31.0 and the Git workspace at `e9a6c1a0` both
+resolve Eunomia 0.12.1 and Leto/Leto Ops 0.52. The published FFT crate declares
+optional Hephaestus core, WGPU, and CUDA requirements on the 0.30 line. The
+Git lock at that revision instead pins all three providers to 0.32.0.
+
+In an accelerator-enabled consumer, use `cargo tree -d` to look for duplicate
+versions and `cargo metadata --format-version 1` to compare the provider
+package IDs on each side of a typed boundary. A matching Apollo version
+string is not sufficient. For example, combining registry FFT 0.31.0 with
+`wgpu` enabled and a direct Hephaestus WGPU 0.32 dependency resolves both the
+0.30 and 0.32 Hephaestus types; values of those types cannot be interchanged.
+Before changing source, compile the consumer's actual typed buffer boundary
+with its accelerator feature enabled.
 
 ## Current Surface
 
@@ -158,7 +172,7 @@ The evidence tier is static source analysis; performance claims still require
 the native `apollo-bench` runner or a domain-specific benchmark with a recorded
 baseline comparison.
 
-## Eunomia 0.10 provider-cohort migration
+## Historical migration: Eunomia 0.10 provider cohort
 
 Apollo FFT 0.29 and the corresponding family versions in CHANGELOG.md consume
 Eunomia 0.10, Mnemosyne-memory 0.10, Hermes 0.9, Leto/Leto-ops 0.46,

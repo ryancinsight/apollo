@@ -14,7 +14,7 @@
 extern crate apollo_fft;
 extern crate leto;
 
-use apollo_fft::{fft_1d_array, fftfreq, ifft_1d_array};
+use apollo_fft::{fft_1d_array, ifft_1d_array, rfftfreq};
 use leto::Array1;
 
 /// Maximum absolute error tolerance for the FFT/IFFT round-trip.
@@ -44,13 +44,15 @@ fn main() {
     println!("signal length    : {}", signal.size());
     println!("spectrum length  : {}", spectrum.size());
 
-    // Frequency grid for the full complex spectrum; only positive half shown.
-    let freqs = fftfreq(n, dt);
-    println!("frequency bins   : {} (0 Hz .. Nyquist)", freqs.len());
+    // Label the one-sided search without truncating the spectrum used by the inverse.
+    let freqs = rfftfreq(n, dt);
+    assert_eq!(freqs.len(), n / 2 + 1);
+    let nyquist = freqs[n / 2];
+    assert!((nyquist - sample_rate / 2.0).abs() < 1e-12);
+    println!("search bins      : {} (0 Hz .. +{nyquist:.0} Hz)", freqs.len());
 
-    // ── Find the dominant bin (positive frequencies only) ──
-    let half_n = n / 2 + 1;
-    let magnitudes: Vec<f64> = (0..half_n)
+    // ── Find the dominant bin (DC through Nyquist) ──
+    let magnitudes: Vec<f64> = (0..freqs.len())
         .map(|i| {
             let c = spectrum[[i]];
             (c.re * c.re + c.im * c.im).sqrt()

@@ -8,31 +8,29 @@ Warm FFT execution retains the tables required by its selected native route.
 CI checks that ownership and exact SIMD admission on ARM as well as x86, and
 compares committed library APIs against their compatible locked providers.
 
-Apollo's next Rust provider cohort uses Eunomia 0.10 and FFT 0.29. Direct
-consumers align numeric, array and device-provider requirements together;
-transform implementations and numerical contracts remain unchanged. The
-[provider contract](docs/provider_contract.md) defines source identity and
-provider-first integration. This dependency increment remains separate from
-the N=121 correctness tests recovered in PR #671 and experiment record #655.
+## Install or build from source
+
+- **Registry:** `cargo add apollo-fft@=0.31.0` selects the
+  [published FFT crate](https://crates.io/crates/apollo-fft/0.31.0).
+  This release requires Eunomia 0.12.1 and Leto/Leto Ops 0.52, with optional
+  Hephaestus 0.30 dependencies for the `wgpu` and `cuda` features.
+- **Git checkout:** use the checked-out `Cargo.toml`, committed `Cargo.lock`,
+  and pinned Rust toolchain. The Git workspace can retain the same package
+  version while its provider graph changes; the Git FFT 0.31.0 workspace
+  lock uses Hephaestus 0.32.
+
+If you pass typed device buffers between Apollo and another crate, confirm
+the resolved Hephaestus package IDs before switching source. See the
+[provider contract](docs/provider_contract.md) for the compatibility check.
 
 ## Release contract
 
-Apollo releases from Git tags with its committed `Cargo.lock`, pinned Rust
-toolchain, and exact Atlas provider revisions. The workspace is not published
-as independent crates.io packages because its first-party provider crates are
-not available from that registry. See
-[`docs/adr/0002-git-source-release-contract.md`](docs/adr/0002-git-source-release-contract.md).
-
-The repository contains a dormant crates.io Trusted Publishing workflow for
-the point when those provider dependencies become registry-resolvable. A
-manual dispatch validates one package with `cargo publish --dry-run`. After a
-package's required first release is published locally and its trusted
-publisher is registered, a GitHub Release tagged
-`crate-<package>-v<version>` publishes that exact Cargo version with a
-short-lived OIDC token. Validation runs in a separate read-only job. The
-publish job is bound to the GitHub `crates-io` environment; register each
-package's Trusted Publisher with that environment. The workflow never stores a
-crates.io token.
+The [release workflow](.github/workflows/rust-release.yml) validates registry
+packages and publishes via the GitHub Actions `crates-io` environment and
+Trusted Publishing. An explicit package/version dispatch is a dry run. The
+published registry archive and the current Git checkout are separate source
+identities. [ADR 0002](docs/adr/0002-git-source-release-contract.md) records
+the earlier Git-only release contract.
 
 Stage 2 moves Apollo beyond the initial compatibility cut:
 
